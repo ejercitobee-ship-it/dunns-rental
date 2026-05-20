@@ -29,14 +29,34 @@ type Action =
   | { type: 'ADD_RENT_PAYMENT'; payload: RentPayment }
   | { type: 'UPDATE_PAYMENT_STATUS'; payload: { id: string; status: RentPayment['status']; paidDate?: string; receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string; uploadedAt?: string } };
 
-const initialState: AppState = {
-  properties: initialProperties,
-  units: initialUnits,
-  tenants: initialTenants,
-  rentPayments: initialRentPayments,
-  expenses: initialExpenses,
-  incomes: initialIncomes,
-};
+const STORAGE_KEY = 'rentmaster-data-v2';
+
+function getInitialState(): AppState {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Validate that it has the expected shape
+        if (parsed && Array.isArray(parsed.properties)) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse saved data:', e);
+      }
+    }
+  }
+  return {
+    properties: initialProperties,
+    units: initialUnits,
+    tenants: initialTenants,
+    rentPayments: initialRentPayments,
+    expenses: initialExpenses,
+    incomes: initialIncomes,
+  };
+}
+
+const initialState: AppState = getInitialState();
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -148,22 +168,9 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Load from localStorage on mount
+  // Save to localStorage on every state change
   useEffect(() => {
-    const saved = localStorage.getItem('rentmaster-data');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        dispatch({ type: 'SET_STATE', payload: parsed });
-      } catch (e) {
-        console.error('Failed to load saved data:', e);
-      }
-    }
-  }, []);
-
-  // Save to localStorage on changes
-  useEffect(() => {
-    localStorage.setItem('rentmaster-data', JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
   const getPropertyUnits = (propertyId: string) =>

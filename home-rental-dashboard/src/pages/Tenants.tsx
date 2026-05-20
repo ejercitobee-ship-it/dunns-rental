@@ -18,7 +18,7 @@ const statusColors = {
 } as const;
 
 export function Tenants() {
-  const { tenants, properties, units, updateTenant, deleteTenant } = useApp();
+  const { tenants, properties, units, updateTenant, deleteTenant, addTenant } = useApp();
   const { user } = useAuth();
   const { showToast } = useToast();
   const isSuperAdmin = user?.role?.name === 'Super Admin';
@@ -100,7 +100,21 @@ export function Tenants() {
 
   const handleAddTenant = (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Tenant added! (In a real app, this would save to the database)');
+    addTenant({
+      firstName: newTenant.firstName,
+      lastName: newTenant.lastName,
+      email: newTenant.email,
+      phone: newTenant.phone,
+      propertyId: newTenant.propertyId,
+      unitId: newTenant.unitId,
+      leaseStart: newTenant.leaseStart,
+      leaseEnd: newTenant.leaseEnd,
+      monthlyRent: Number(newTenant.monthlyRent),
+      securityDeposit: Number(newTenant.securityDeposit),
+      status: 'active',
+      notes: newTenant.notes,
+    });
+    showToast('Tenant added successfully!', 'success');
     setIsAddTenantOpen(false);
     setNewTenant({
       firstName: '',
