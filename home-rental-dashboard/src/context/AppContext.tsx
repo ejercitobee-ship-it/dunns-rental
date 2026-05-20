@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
 import type { Property, Unit, Tenant, RentPayment, Expense, Income } from '../types';
 import { properties as initialProperties, units as initialUnits, tenants as initialTenants, rentPayments as initialRentPayments, expenses as initialExpenses, incomes as initialIncomes } from '../data/mockData';
 
@@ -29,34 +29,31 @@ type Action =
   | { type: 'ADD_RENT_PAYMENT'; payload: RentPayment }
   | { type: 'UPDATE_PAYMENT_STATUS'; payload: { id: string; status: RentPayment['status']; paidDate?: string; receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string; uploadedAt?: string } };
 
-const STORAGE_KEY = 'rentmaster-data-v2';
+const STORAGE_KEY = 'rentmaster-data-v3';
 
-function getInitialState(): AppState {
-  if (typeof window !== 'undefined') {
+const defaultState: AppState = {
+  properties: initialProperties,
+  units: initialUnits,
+  tenants: initialTenants,
+  rentPayments: initialRentPayments,
+  expenses: initialExpenses,
+  incomes: initialIncomes,
+};
+
+function loadState(): AppState {
+  try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Validate that it has the expected shape
-        if (parsed && Array.isArray(parsed.properties)) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error('Failed to parse saved data:', e);
+      const parsed = JSON.parse(saved);
+      if (parsed && Array.isArray(parsed.properties)) {
+        return parsed;
       }
     }
+  } catch (e) {
+    console.error('Failed to load saved data:', e);
   }
-  return {
-    properties: initialProperties,
-    units: initialUnits,
-    tenants: initialTenants,
-    rentPayments: initialRentPayments,
-    expenses: initialExpenses,
-    incomes: initialIncomes,
-  };
+  return defaultState;
 }
-
-const initialState: AppState = getInitialState();
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -101,7 +98,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         tenants: state.tenants.map(t => t.id === action.payload.id ? action.payload : t),
       };
-    case 'DELETE_TENANT':
+    case 'DELETE_TENANT': {
       const tenant = state.tenants.find(t => t.id === action.payload);
       return {
         ...state,
@@ -112,6 +109,7 @@ function reducer(state: AppState, action: Action): AppState {
             )
           : state.units,
       };
+    }
     case 'ADD_EXPENSE':
       return { ...state, expenses: [...state.expenses, action.payload] };
     case 'UPDATE_EXPENSE':
@@ -161,31 +159,40 @@ interface AppContextType extends AppState {
   addIncome: (income: Omit<Income, 'id'>) => void;
   addRentPayment: (payment: Omit<RentPayment, 'id'>) => void;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => void;
+  resetData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, undefined, loadState);
+  const [isHydrated, setIsHydrated] = React.useState(false);
+
+  // Mark as hydrated after first render to avoid SSR/localStorage mismatch
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   // Save to localStorage on every state change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    if (isHydrated) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  }, [state, isHydrated]);
 
-  const getPropertyUnits = (propertyId: string) =>
-    state.units.filter(u => u.propertyId === propertyId);
+  const getPropertyUnits = useCallback((propertyId: string) =>
+    state.units.filter(u => u.propertyId === propertyId), [state.units]);
 
-  const getUnitTenant = (unitId: string) =>
-    state.tenants.find(t => t.unitId === unitId && t.status === 'active');
+  const getUnitTenant = useCallback((unitId: string) =>
+    state.tenants.find(t => t.unitId === unitId && t.status === 'active'), [state.tenants]);
 
-  const getPropertyTenants = (propertyId: string) =>
-    state.tenants.filter(t => t.propertyId === propertyId && t.status === 'active');
+  const getPropertyTenants = useCallback((propertyId: string) =>
+    state.tenants.filter(t => t.propertyId === propertyId && t.status === 'active'), [state.tenants]);
 
-  const getAvailableUnits = (propertyId?: string) =>
+  const getAvailableUnits = useCallback((propertyId?: string) =>
     state.units.filter(u =>
       u.status === 'vacant' && (!propertyId || u.propertyId === propertyId)
-    );
+    ), [state.units]);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -256,6 +263,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const resetData = () => {
+    dispatch({ type: 'SET_STATE', payload: defaultState });
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -278,6 +290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addIncome,
         addRentPayment,
         updatePaymentStatus,
+        resetData,
       }}
     >
       {children}
