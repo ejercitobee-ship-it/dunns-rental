@@ -263,23 +263,23 @@ export function Rents() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Rent Management</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Rent Management</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Track rent payments and outstanding balances
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="w-full sm:w-auto">
             <Upload className="h-4 w-4 mr-2" />
             Import
           </Button>
-          <Button variant="outline" onClick={exportToCSV}>
+          <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => setIsAddPaymentModalOpen(true)}>
+          <Button onClick={() => setIsAddPaymentModalOpen(true)} className="w-full sm:w-auto">
             <DollarSign className="h-4 w-4 mr-2" />
             Add Payment
           </Button>
@@ -287,7 +287,7 @@ export function Rents() {
       </div>
 
       {/* View Toggle */}
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b overflow-x-auto">
         <button
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
             view === 'payments'
@@ -346,7 +346,7 @@ export function Rents() {
       {view === 'payments' && (
         <>
           {/* Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
@@ -414,7 +414,7 @@ export function Rents() {
           </Card>
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
@@ -426,7 +426,7 @@ export function Rents() {
               />
             </div>
             <select
-              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as RentPayment['status'] | 'all')}
             >
@@ -437,7 +437,7 @@ export function Rents() {
               <option value="partial">Partial</option>
             </select>
             <select
-              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
               value={monthFilter}
               onChange={(e) => setMonthFilter(e.target.value)}
             >
@@ -447,7 +447,7 @@ export function Rents() {
               ))}
             </select>
             <select
-              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
               value={paymentYearFilter}
               onChange={(e) => setPaymentYearFilter(e.target.value)}
             >
@@ -470,8 +470,8 @@ export function Rents() {
           {/* Payments Table */}
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="w-full min-w-[900px] sm:min-w-0">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="text-left py-3 px-4 font-medium">Tenant</th>
@@ -610,7 +610,7 @@ export function Rents() {
       {view === 'annual' && (
         <>
           {/* Annual Summary Stats */}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Annual Expected</CardTitle>
@@ -723,7 +723,7 @@ export function Rents() {
       {view === 'tax' && (
         <>
           {/* Tax Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Rent Income</CardTitle>
@@ -944,7 +944,7 @@ export function Rents() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Payment Method *</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {(Object.keys(paymentMethodConfig) as PaymentMethod[]).map((method) => {
                   const config = paymentMethodConfig[method];
                   const Icon = config.icon;
@@ -1086,7 +1086,7 @@ export function Rents() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Amount *</label>
               <div className="relative">
@@ -1114,7 +1114,7 @@ export function Rents() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Month *</label>
               <select

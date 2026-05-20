@@ -201,21 +201,21 @@ export function Tenants() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tenants</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Tenants</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Manage your tenants and lease agreements
           </p>
         </div>
-        <Button onClick={() => setIsAddTenantOpen(true)}>
+        <Button onClick={() => setIsAddTenantOpen(true)} className="w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-2" />
           Add Tenant
         </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Tenants</CardTitle>
@@ -260,7 +260,7 @@ export function Tenants() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -272,7 +272,7 @@ export function Tenants() {
           />
         </div>
         <select
-          className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as Tenant['status'] | 'all')}
         >
@@ -287,8 +287,8 @@ export function Tenants() {
       {/* Tenants Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full min-w-[800px] sm:min-w-0">
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left py-3 px-4 font-medium">Tenant</th>
@@ -372,12 +372,13 @@ export function Tenants() {
                       </td>
                       
                       <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2 relative">
+                        <div className="flex items-center justify-end gap-1 sm:gap-2 relative">
                           <Button 
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleViewClick(tenant)}
                             title="View Details"
+                            className="px-2 sm:px-3"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -386,6 +387,7 @@ export function Tenants() {
                             size="sm"
                             onClick={() => handleEditClick(tenant)}
                             title="Edit Tenant"
+                            className="px-2 sm:px-3"
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
@@ -395,12 +397,13 @@ export function Tenants() {
                               size="sm"
                               onClick={() => setIsActionMenuOpen(isActionMenuOpen === tenant.id ? null : tenant.id)}
                               title="More Actions"
+                              className="px-2 sm:px-3"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                             
                             {isActionMenuOpen === tenant.id && (
-                              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border z-50 py-1">
+                              <div className="absolute right-0 top-full mt-1 w-44 sm:w-48 bg-white rounded-lg shadow-lg border z-50 py-1">
                                 <button
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
                                   onClick={() => {

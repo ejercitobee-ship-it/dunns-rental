@@ -21,7 +21,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
@@ -30,14 +30,14 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
       
       {/* Modal */}
       <div className={cn(
-        'relative z-50 w-full mx-4 bg-white rounded-2xl shadow-2xl',
+        'relative z-50 w-full mx-0 sm:mx-4 bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl',
         'transform transition-all duration-300 ease-out',
         'scale-100 opacity-100',
         sizeClasses[size]
       )}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-          <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">{title}</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-slate-100 rounded-xl transition-colors group"
@@ -47,7 +47,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
         </div>
         
         {/* Content */}
-        <div className="p-6 max-h-[70vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
           {children}
         </div>
       </div>

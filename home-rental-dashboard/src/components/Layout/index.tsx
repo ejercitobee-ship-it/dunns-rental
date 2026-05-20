@@ -65,13 +65,13 @@ export function Layout({ children }: LayoutProps) {
         )}
       >
         {/* Logo Section */}
-        <div className="flex items-center justify-between h-20 px-6 border-b border-slate-800">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-slate-800">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
               <Home className="h-5 w-5 text-white" />
             </div>
             <div>
-              <span className="font-bold text-xl tracking-tight">DUNN's Rental</span>
+              <span className="font-bold text-lg tracking-tight">DUNN's Rental</span>
               <p className="text-xs text-slate-400">Property Management</p>
             </div>
           </Link>
@@ -98,18 +98,18 @@ export function Layout({ children }: LayoutProps) {
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  'w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group',
+                  'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group',
                   isActive
                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/30'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 )}
               >
                 <Icon className={cn(
-                  "h-5 w-5 transition-colors",
+                  "h-5 w-5 transition-colors flex-shrink-0",
                   isActive ? "text-white" : "text-slate-500 group-hover:text-white"
                 )} />
-                <span className="flex-1 text-left">{item.name}</span>
-                {isActive && <ChevronRight className="h-4 w-4" />}
+                <span className="flex-1 text-left truncate">{item.name}</span>
+                {isActive && <ChevronRight className="h-4 w-4 flex-shrink-0" />}
               </Link>
             );
           })}
@@ -142,12 +142,12 @@ export function Layout({ children }: LayoutProps) {
       {/* Main content */}
       <main className="lg:ml-72 min-h-screen">
         {/* Mobile header */}
-        <header className="lg:hidden h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-30">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+        <header className="lg:hidden h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-30">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
               <Home className="h-4 w-4 text-white" />
             </div>
-            <span className="font-bold text-lg text-slate-800">DUNN's Rental</span>
+            <span className="font-bold text-base text-slate-800">DUNN's Rental</span>
           </Link>
           <button
             className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -158,7 +158,7 @@ export function Layout({ children }: LayoutProps) {
         </header>
 
         {/* Page Content */}
-        <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           {children}
         </div>
       </main>

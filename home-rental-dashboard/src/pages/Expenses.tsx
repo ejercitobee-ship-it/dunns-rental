@@ -171,19 +171,19 @@ export function Expenses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Finances</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Finances</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Track expenses and income across all properties
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" className="w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => setIsModalOpen(true)}>
+          <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add {view === 'expenses' ? 'Expense' : 'Income'}
           </Button>
@@ -191,7 +191,7 @@ export function Expenses() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Income</CardTitle>
@@ -240,7 +240,7 @@ export function Expenses() {
       </div>
 
       {/* Charts */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Income vs Expenses</CardTitle>
@@ -286,7 +286,7 @@ export function Expenses() {
       </div>
 
       {/* View Toggle */}
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b overflow-x-auto">
         <button
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
             view === 'expenses' 
@@ -310,7 +310,7 @@ export function Expenses() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -322,7 +322,7 @@ export function Expenses() {
           />
         </div>
         <select
-          className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
           value={propertyFilter}
           onChange={(e) => setPropertyFilter(e.target.value)}
         >
@@ -334,7 +334,7 @@ export function Expenses() {
         
         {view === 'expenses' && (
           <select
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as ExpenseCategory | 'all')}
           >
@@ -349,8 +349,8 @@ export function Expenses() {
       {/* Data Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full min-w-[700px] sm:min-w-0">
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left py-3 px-4 font-medium">Date</th>
@@ -459,7 +459,7 @@ export function Expenses() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Property *</label>
               <select
@@ -492,7 +492,7 @@ export function Expenses() {
 
           {view === 'expenses' ? (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Category *</label>
                   <select
@@ -555,7 +555,7 @@ export function Expenses() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Amount *</label>
               <div className="relative">

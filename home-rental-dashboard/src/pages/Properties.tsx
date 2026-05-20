@@ -185,19 +185,19 @@ export function Properties() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Properties</h1>
-          <p className="text-slate-500 mt-1">Manage your rental properties and units</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Properties</h1>
+          <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage your rental properties and units</p>
         </div>
-        <Button onClick={() => setIsAddPropertyOpen(true)}>
+        <Button onClick={() => setIsAddPropertyOpen(true)} className="w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-2" />
           Add Property
         </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Properties</CardTitle>
@@ -243,7 +243,7 @@ export function Properties() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
@@ -264,15 +264,15 @@ export function Properties() {
           
           return (
             <Card key={property.id} className="overflow-hidden">
-              <div className="h-32 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-between px-6 relative">
-                <div className="flex items-center gap-4">
-                  <Building2 className="h-12 w-12 text-white/50" />
-                  <div className="text-white">
-                    <h3 className="text-xl font-bold">{property.name}</h3>
-                    <p className="text-white/80 text-sm">{property.address}, {property.city}</p>
+              <div className="h-24 sm:h-32 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-between px-4 sm:px-6 relative">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <Building2 className="h-8 w-8 sm:h-12 sm:w-12 text-white/50 flex-shrink-0" />
+                  <div className="text-white min-w-0">
+                    <h3 className="text-lg sm:text-xl font-bold truncate">{property.name}</h3>
+                    <p className="text-white/80 text-xs sm:text-sm truncate">{property.address}, {property.city}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                   <Button 
                     size="sm" 
                     variant="secondary"
@@ -316,7 +316,7 @@ export function Properties() {
                   </div>
                 </div>
                 
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {propertyUnits.map(unit => {
                     const tenant = getUnitTenant(unit.id);
                     return (
@@ -418,7 +418,7 @@ export function Properties() {
               value={propertyForm.name} onChange={(e) => setPropertyForm({...propertyForm, name: e.target.value})} placeholder="e.g., Sunset Apartments" />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Address *</label>
               <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -431,7 +431,7 @@ export function Properties() {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">State *</label>
               <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -479,7 +479,7 @@ export function Properties() {
               value={propertyForm.name} onChange={(e) => setPropertyForm({...propertyForm, name: e.target.value})} />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Address *</label>
               <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -492,7 +492,7 @@ export function Properties() {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">State *</label>
               <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"

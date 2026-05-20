@@ -43,12 +43,12 @@ function StatCard({ title, value, subtitle, icon, gradient, onClick, trend }: St
       className="overflow-hidden border-0 shadow-md cursor-pointer transform transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
       onClick={onClick}
     >
-      <div className="p-6 relative overflow-hidden bg-white">
+      <div className="p-4 sm:p-6 relative overflow-hidden bg-white">
         {/* Subtle top accent bar */}
         <div className={`absolute top-0 left-0 right-0 h-1 ${gradient}`} />
         
-        <div className="flex items-start justify-between mb-4">
-          <div className={`p-3 rounded-xl ${gradient} bg-opacity-10`}>
+        <div className="flex items-start justify-between mb-3 sm:mb-4">
+          <div className={`p-2 sm:p-3 rounded-xl ${gradient} bg-opacity-10`}>
             <div className="text-white">
               {icon}
             </div>
@@ -63,9 +63,9 @@ function StatCard({ title, value, subtitle, icon, gradient, onClick, trend }: St
         </div>
         
         <div>
-          <p className="text-slate-500 text-sm font-medium mb-1">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-800 mb-1">{value}</h3>
-          {subtitle && <p className="text-slate-400 text-sm">{subtitle}</p>}
+          <p className="text-slate-500 text-xs sm:text-sm font-medium mb-1">{title}</p>
+          <h3 className="text-lg sm:text-2xl font-bold text-slate-800 mb-1">{value}</h3>
+          {subtitle && <p className="text-slate-400 text-xs sm:text-sm">{subtitle}</p>}
         </div>
       </div>
     </Card>
@@ -215,10 +215,10 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-slate-500 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Dashboard</h1>
+          <p className="text-slate-500 mt-1 text-sm sm:text-base">
             Welcome back! Here's what's happening with your properties.
           </p>
         </div>
@@ -229,7 +229,7 @@ export function Dashboard() {
       </div>
 
       {/* Stats Grid - All Clickable */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Properties"
           value={stats.totalProperties}
@@ -292,7 +292,7 @@ export function Dashboard() {
       )}
 
       {/* Charts Row - Clickable */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
         <ClickableCard onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -355,7 +355,7 @@ export function Dashboard() {
       </div>
 
       {/* Bottom Row */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
         {/* Expenses by Category - Clickable */}
         <ClickableCard onClick={() => navigate('/finances')}>
           <CardHeader>
