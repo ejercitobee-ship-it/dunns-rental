@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Users, Mail, Phone, Calendar, Home, DollarSign, MoreHorizontal, Edit2, DoorOpen, MapPin, Pause, Ban, Eye, Upload, User, Play } from 'lucide-react';
+import { Plus, Search, Users, Mail, Phone, Calendar, Home, DollarSign, MoreHorizontal, Edit2, DoorOpen, MapPin, Pause, Ban, Eye, Upload, User, Play, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import type { Tenant } from '../types';
 
 const statusColors = {
@@ -16,7 +18,10 @@ const statusColors = {
 } as const;
 
 export function Tenants() {
-  const { tenants, properties, units, updateTenant } = useApp();
+  const { tenants, properties, units, updateTenant, deleteTenant } = useApp();
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const isSuperAdmin = user?.role?.name === 'Super Admin';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<Tenant['status'] | 'all'>('all');
   const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
@@ -171,6 +176,14 @@ export function Tenants() {
     const tenant = tenants.find(t => t.id === tenantId);
     if (tenant) {
       updateTenant(tenantId, { ...tenant, status: 'active' });
+    }
+    setIsActionMenuOpen(null);
+  };
+
+  const handleDeleteTenant = (tenantId: string) => {
+    if (confirm('Are you sure you want to permanently delete this tenant? This action cannot be undone.')) {
+      deleteTenant(tenantId);
+      showToast('Tenant deleted successfully', 'success');
     }
     setIsActionMenuOpen(null);
   };
@@ -433,6 +446,18 @@ export function Tenants() {
                                     <Play className="h-4 w-4" />
                                     Resume Rent
                                   </button>
+                                )}
+                                {isSuperAdmin && (
+                                  <>
+                                    <hr className="my-1" />
+                                    <button
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600"
+                                      onClick={() => handleDeleteTenant(tenant.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Delete Tenant
+                                    </button>
+                                  </>
                                 )}
                                 <hr className="my-1" />
                                 <button
