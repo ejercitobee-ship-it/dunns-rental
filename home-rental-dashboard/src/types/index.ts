@@ -1,0 +1,143 @@
+export interface Property {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  type: 'apartment' | 'house' | 'condo' | 'townhouse' | 'multi-family';
+  description?: string;
+  image?: string;
+  purchaseDate?: string;
+  purchasePrice?: number;
+}
+
+export interface Unit {
+  id: string;
+  propertyId: string;
+  unitNumber: string;
+  bedrooms: number;
+  bathrooms: number;
+  squareFeet: number;
+  monthlyRent: number;
+  status: 'occupied' | 'vacant' | 'maintenance';
+  description?: string;
+}
+
+export interface Tenant {
+  id: string;
+  unitId: string;
+  propertyId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  leaseStart: string;
+  leaseEnd: string;
+  monthlyRent: number;
+  securityDeposit: number;
+  status: 'active' | 'inactive' | 'pending' | 'paused';
+  emergencyContact?: {
+    name: string;
+    phone: string;
+    relationship: string;
+  };
+  notes?: string;
+}
+
+export interface RentPayment {
+  id: string;
+  tenantId: string;
+  unitId: string;
+  propertyId: string;
+  amount: number;
+  dueDate: string;
+  paidDate?: string;
+  receivedDate?: string;
+  status: 'paid' | 'pending' | 'overdue' | 'partial';
+  month: number;
+  year: number;
+  notes?: string;
+  paymentMethod?: PaymentMethod;
+  uploadedBy?: string;
+  uploadedAt?: string;
+}
+
+export type PaymentMethod =
+  | 'check'
+  | 'money_order'
+  | 'zelle'
+  | 'venmo'
+  | 'cash'
+  | 'other';
+
+export interface Expense {
+  id: string;
+  propertyId: string;
+  unitId?: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string;
+  description: string;
+  receipt?: string;
+  vendor?: string;
+  isRecurring: boolean;
+  recurringFrequency?: 'monthly' | 'quarterly' | 'yearly';
+  taxDeductible?: boolean;
+  taxCategory?: string;
+}
+
+export type TaxDeductibleCategory =
+  | 'advertising'
+  | 'auto_travel'
+  | 'cleaning_maintenance'
+  | 'commissions'
+  | 'insurance'
+  | 'legal_professional'
+  | 'management_fees'
+  | 'mortgage_interest'
+  | 'other_interest'
+  | 'repairs'
+  | 'supplies'
+  | 'taxes'
+  | 'utilities'
+  | 'depreciation'
+  | 'other';
+
+export type ExpenseCategory = 
+  | 'maintenance'
+  | 'utilities'
+  | 'insurance'
+  | 'taxes'
+  | 'mortgage'
+  | 'repairs'
+  | 'cleaning'
+  | 'landscaping'
+  | 'management'
+  | 'other';
+
+export interface Income {
+  id: string;
+  propertyId: string;
+  unitId?: string;
+  source: 'rent' | 'late_fee' | 'deposit' | 'other';
+  amount: number;
+  date: string;
+  description: string;
+  relatedPaymentId?: string;
+}
+
+export interface DashboardStats {
+  totalProperties: number;
+  totalUnits: number;
+  occupiedUnits: number;
+  totalTenants: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  netIncome: number;
+  totalOwed: number;
+  occupancyRate: number;
+  projectedYearlyIncome?: number;
+}
+
+export type ViewType = 'dashboard' | 'properties' | 'tenants' | 'rents' | 'expenses' | 'income';
