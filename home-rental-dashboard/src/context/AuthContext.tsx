@@ -1,25 +1,18 @@
-import React, { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
-import type { User, Role, AuthState, Permission } from '../types/auth';
-import { DEFAULT_ROLES, DEFAULT_SUPER_ADMIN, SYSTEM_PERMISSIONS } from '../types/auth';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { authApi } from '../lib/api';
+import type { User, Role, Permission } from '../types/auth';
+import { DEFAULT_ROLES, SYSTEM_PERMISSIONS } from '../types/auth';
 
-type AuthAction =
-  | { type: 'LOGIN'; payload: { user: User; token: string } }
-  | { type: 'LOGOUT' }
-  | { type: 'UPDATE_USER'; payload: User }
-  | { type: 'SET_ROLES'; payload: Role[] }
-  | { type: 'ADD_ROLE'; payload: Role }
-  | { type: 'UPDATE_ROLE'; payload: Role }
-  | { type: 'DELETE_ROLE'; payload: string }
-  | { type: 'ADD_USER'; payload: User }
-  | { type: 'UPDATE_USER'; payload: User }
-  | { type: 'DELETE_USER'; payload: string };
-
-interface AuthContextType extends AuthState {
+interface AuthContextType {
+  isAuthenticated: boolean;
+  user: User | null;
+  isLoading: boolean;
   roles: Role[];
   users: User[];
   permissions: Permission[];
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   hasPermission: (permissionId: string) => boolean;
   hasAnyPermission: (permissionIds: string[]) => boolean;
   hasModuleAccess: (module: string) => boolean;
@@ -32,146 +25,107 @@ interface AuthContextType extends AuthState {
   isSuperAdmin: () => boolean;
 }
 
-const initialState: AuthState = {
-  isAuthenticated: false,
-  user: null,
-  token: null,
-};
-
-function authReducer(state: AuthState, action: AuthAction): AuthState {
-  switch (action.type) {
-    case 'LOGIN':
-      return {
-        ...state,
-        isAuthenticated: true,
-        user: action.payload.user,
-        token: action.payload.token,
-      };
-    case 'LOGOUT':
-      return {
-        ...state,
-        isAuthenticated: false,
-        user: null,
-        token: null,
-      };
-    case 'UPDATE_USER':
-      return {
-        ...state,
-        user: state.user?.id === action.payload.id ? action.payload : state.user,
-      };
-    default:
-      return state;
-  }
-}
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function mapSessionUser(sessionUser: Record<string, unknown>, role: Role): User {
+  const name = (sessionUser.name as string) || '';
+  const parts = name.split(' ');
+  return {
+    id: sessionUser.id as string,
+    firstName: (sessionUser.firstName as string) || parts[0] || '',
+    lastName: (sessionUser.lastName as string) || parts.slice(1).join(' ') || '',
+    email: sessionUser.email as string,
+    avatar: (sessionUser.image as string) || undefined,
+    roleId: (sessionUser.roleId as string) || 'viewer',
+    role,
+    isActive: true,
+    lastLogin: new Date().toISOString(),
+    createdAt: (sessionUser.createdAt as string) || new Date().toISOString(),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(authReducer, initialState);
-  const [roles, setRoles] = React.useState<Role[]>(DEFAULT_ROLES);
-  const [users, setUsers] = React.useState<User[]>([DEFAULT_SUPER_ADMIN]);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
+  const [users, setUsers] = useState<User[]>([]);
 
-  // Load from localStorage on mount
   useEffect(() => {
-    const savedAuth = localStorage.getItem('rentmaster-auth');
-    const savedRoles = localStorage.getItem('rentmaster-roles');
-    const savedUsers = localStorage.getItem('rentmaster-users');
-
-    if (savedAuth) {
+    const checkSession = async () => {
       try {
-        const parsed = JSON.parse(savedAuth);
-        dispatch({ type: 'LOGIN', payload: parsed });
-      } catch (e) {
-        console.error('Failed to load auth:', e);
+        const result = await authApi.getSession();
+        if (result?.data?.user) {
+          const sessionUser = result.data.user as Record<string, unknown>;
+          const role = roles.find(r => r.id === (sessionUser.roleId as string)) || DEFAULT_ROLES[0];
+          setUser(mapSessionUser(sessionUser, role));
+        }
+      } catch {
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
 
-    if (savedRoles) {
-      try {
-        setRoles(JSON.parse(savedRoles));
-      } catch (e) {
-        console.error('Failed to load roles:', e);
-      }
-    }
-
-    if (savedUsers) {
-      try {
-        setUsers(JSON.parse(savedUsers));
-      } catch (e) {
-        console.error('Failed to load users:', e);
-      }
-    }
+    checkSession();
   }, []);
 
-  // Save to localStorage on changes
-  useEffect(() => {
-    if (state.isAuthenticated) {
-      localStorage.setItem('rentmaster-auth', JSON.stringify({
-        user: state.user,
-        token: state.token,
-      }));
-    } else {
-      localStorage.removeItem('rentmaster-auth');
+  const login = async (email: string, password: string) => {
+    try {
+      const result = await authApi.signIn(email, password);
+      if (result?.data?.user) {
+        const sessionUser = result.data.user as Record<string, unknown>;
+        const role = roles.find(r => r.id === (sessionUser.roleId as string)) || DEFAULT_ROLES[0];
+        setUser(mapSessionUser(sessionUser, role));
+        return { success: true };
+      }
+      return { success: false, error: 'Invalid credentials' };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
     }
-  }, [state]);
-
-  useEffect(() => {
-    localStorage.setItem('rentmaster-roles', JSON.stringify(roles));
-  }, [roles]);
-
-  useEffect(() => {
-    localStorage.setItem('rentmaster-users', JSON.stringify(users));
-  }, [users]);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // Demo login - in production, this would call an API
-    const user = users.find(u => u.email === email && u.isActive);
-    
-    if (user && password === 'password') { // Demo password
-      const role = roles.find(r => r.id === user.roleId) || DEFAULT_ROLES[0];
-      const userWithRole = { ...user, role };
-      
-      dispatch({
-        type: 'LOGIN',
-        payload: {
-          user: userWithRole,
-          token: 'demo-token-' + Date.now(),
-        },
-      });
-      
-      // Update last login
-      const updatedUser = { ...userWithRole, lastLogin: new Date().toISOString() };
-      setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
-      
-      return true;
-    }
-    
-    return false;
   };
 
-  const logout = () => {
-    dispatch({ type: 'LOGOUT' });
+  const logout = async () => {
+    try {
+      await authApi.signOut();
+    } finally {
+      setUser(null);
+    }
+  };
+
+  const register = async (email: string, password: string, name: string) => {
+    try {
+      const result = await authApi.signUp(email, password, name);
+      if (result?.data?.user) {
+        const sessionUser = result.data.user as Record<string, unknown>;
+        const role = roles.find(r => r.id === (sessionUser.roleId as string)) || DEFAULT_ROLES[0];
+        setUser(mapSessionUser(sessionUser, role));
+        return { success: true };
+      }
+      return { success: false, error: 'Registration failed' };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
   };
 
   const hasPermission = (permissionId: string): boolean => {
-    if (!state.user) return false;
-    return state.user.role.permissions.includes(permissionId);
+    if (!user) return false;
+    return user.role.permissions.includes(permissionId);
   };
 
   const hasAnyPermission = (permissionIds: string[]): boolean => {
-    if (!state.user) return false;
-    return permissionIds.some(id => state.user!.role.permissions.includes(id));
+    if (!user) return false;
+    return permissionIds.some(id => user.role.permissions.includes(id));
   };
 
   const hasModuleAccess = (module: string): boolean => {
-    if (!state.user) return false;
+    if (!user) return false;
     return SYSTEM_PERMISSIONS.some(
-      p => p.module === module && state.user!.role.permissions.includes(p.id)
+      p => p.module === module && user.role.permissions.includes(p.id)
     );
   };
 
   const isSuperAdmin = (): boolean => {
-    return state.user?.roleId === 'super_admin';
+    return user?.roleId === 'super_admin';
   };
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -183,8 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateRole = (role: Role) => {
     setRoles(prev => prev.map(r => r.id === role.id ? role : r));
-    // Update users with this role
-    setUsers(prev => prev.map(u => 
+    setUsers(prev => prev.map(u =>
       u.roleId === role.id ? { ...u, role } : u
     ));
   };
@@ -193,10 +146,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles(prev => prev.filter(r => r.id !== id));
   };
 
-  const addUser = (user: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => {
-    const role = roles.find(r => r.id === user.roleId) || DEFAULT_ROLES[0];
+  const addUser = (userData: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => {
+    const role = roles.find(r => r.id === userData.roleId) || DEFAULT_ROLES[0];
     const newUser: User = {
-      ...user,
+      ...userData,
       id: generateId(),
       createdAt: new Date().toISOString(),
       role,
@@ -204,13 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers(prev => [...prev, newUser]);
   };
 
-  const updateUser = (user: User) => {
-    const role = roles.find(r => r.id === user.roleId) || DEFAULT_ROLES[0];
-    const updatedUser = { ...user, role };
-    setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
-    
-    if (state.user?.id === user.id) {
-      dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+  const updateUser = (updatedUser: User) => {
+    const role = roles.find(r => r.id === updatedUser.roleId) || DEFAULT_ROLES[0];
+    const userWithRole = { ...updatedUser, role };
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? userWithRole : u));
+    if (user?.id === updatedUser.id) {
+      setUser(userWithRole);
     }
   };
 
@@ -221,12 +173,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        ...state,
+        isAuthenticated: !!user,
+        user,
+        isLoading,
         roles,
         users,
         permissions: SYSTEM_PERMISSIONS,
         login,
         logout,
+        register,
         hasPermission,
         hasAnyPermission,
         hasModuleAccess,

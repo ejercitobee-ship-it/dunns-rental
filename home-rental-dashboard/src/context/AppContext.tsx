@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useState, type ReactNode } from 'react';
 import type { Property, Unit, Tenant, RentPayment, Expense, Income } from '../types';
-import { properties as initialProperties, units as initialUnits, tenants as initialTenants, rentPayments as initialRentPayments, expenses as initialExpenses, incomes as initialIncomes } from '../data/mockData';
+import {
+  propertiesApi,
+  unitsApi,
+  tenantsApi,
+  paymentsApi,
+  expensesApi,
+  incomesApi,
+} from '../lib/api';
 
 interface AppState {
   properties: Property[];
@@ -9,10 +16,14 @@ interface AppState {
   rentPayments: RentPayment[];
   expenses: Expense[];
   incomes: Income[];
+  isLoading: boolean;
+  error: string | null;
 }
 
 type Action =
-  | { type: 'SET_STATE'; payload: AppState }
+  | { type: 'SET_STATE'; payload: Partial<AppState> }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'ADD_PROPERTY'; payload: Property }
   | { type: 'UPDATE_PROPERTY'; payload: Property }
   | { type: 'DELETE_PROPERTY'; payload: string }
@@ -27,38 +38,27 @@ type Action =
   | { type: 'DELETE_EXPENSE'; payload: string }
   | { type: 'ADD_INCOME'; payload: Income }
   | { type: 'ADD_RENT_PAYMENT'; payload: RentPayment }
-  | { type: 'UPDATE_PAYMENT_STATUS'; payload: { id: string; status: RentPayment['status']; paidDate?: string; receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string; uploadedAt?: string } };
+  | { type: 'UPDATE_PAYMENT_STATUS'; payload: RentPayment };
 
-const STORAGE_KEY = 'rentmaster-data-v3';
-
-const defaultState: AppState = {
-  properties: initialProperties,
-  units: initialUnits,
-  tenants: initialTenants,
-  rentPayments: initialRentPayments,
-  expenses: initialExpenses,
-  incomes: initialIncomes,
+const initialState: AppState = {
+  properties: [],
+  units: [],
+  tenants: [],
+  rentPayments: [],
+  expenses: [],
+  incomes: [],
+  isLoading: false,
+  error: null,
 };
-
-function loadState(): AppState {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && Array.isArray(parsed.properties)) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load saved data:', e);
-  }
-  return defaultState;
-}
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_STATE':
-      return action.payload;
+      return { ...state, ...action.payload };
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload };
     case 'ADD_PROPERTY':
       return { ...state, properties: [...state.properties, action.payload] };
     case 'UPDATE_PROPERTY':
@@ -130,9 +130,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         rentPayments: state.rentPayments.map(p =>
-          p.id === action.payload.id
-            ? { ...p, status: action.payload.status, paidDate: action.payload.paidDate, receivedDate: action.payload.receivedDate, paymentMethod: action.payload.paymentMethod, uploadedBy: action.payload.uploadedBy, uploadedAt: action.payload.uploadedAt }
-            : p
+          p.id === action.payload.id ? action.payload : p
         ),
       };
     default:
@@ -142,43 +140,65 @@ function reducer(state: AppState, action: Action): AppState {
 
 interface AppContextType extends AppState {
   dispatch: React.Dispatch<Action>;
+  refreshData: () => Promise<void>;
   getPropertyUnits: (propertyId: string) => Unit[];
   getUnitTenant: (unitId: string) => Tenant | undefined;
   getPropertyTenants: (propertyId: string) => Tenant[];
   getAvailableUnits: (propertyId?: string) => Unit[];
-  addProperty: (property: Omit<Property, 'id'>) => void;
-  updateProperty: (property: Property) => void;
-  deleteProperty: (id: string) => void;
-  addUnit: (unit: Omit<Unit, 'id'>) => void;
-  updateUnit: (unit: Unit) => void;
-  deleteUnit: (id: string) => void;
-  addTenant: (tenant: Omit<Tenant, 'id'>) => void;
-  updateTenant: (id: string, updates: Partial<Tenant>) => void;
-  deleteTenant: (id: string) => void;
-  addExpense: (expense: Omit<Expense, 'id'>) => void;
-  addIncome: (income: Omit<Income, 'id'>) => void;
-  addRentPayment: (payment: Omit<RentPayment, 'id'>) => void;
-  updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => void;
+  addProperty: (property: Omit<Property, 'id'>) => Promise<void>;
+  updateProperty: (property: Property) => Promise<void>;
+  deleteProperty: (id: string) => Promise<void>;
+  addUnit: (unit: Omit<Unit, 'id'>) => Promise<void>;
+  updateUnit: (unit: Unit) => Promise<void>;
+  deleteUnit: (id: string) => Promise<void>;
+  addTenant: (tenant: Omit<Tenant, 'id'>) => Promise<void>;
+  updateTenant: (id: string, updates: Partial<Tenant>) => Promise<void>;
+  deleteTenant: (id: string) => Promise<void>;
+  addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
+  addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
+  addRentPayment: (payment: Omit<RentPayment, 'id'>) => Promise<void>;
+  updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
   resetData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadState);
-  const [isHydrated, setIsHydrated] = React.useState(false);
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Mark as hydrated after first render to avoid SSR/localStorage mismatch
   useEffect(() => {
     setIsHydrated(true);
   }, []);
 
-  // Save to localStorage on every state change
+  const refreshData = useCallback(async () => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const [properties, units, tenants, rentPayments, expenses, incomes] = await Promise.all([
+        propertiesApi.getAll(),
+        unitsApi.getAll(),
+        tenantsApi.getAll(),
+        paymentsApi.getAll(),
+        expensesApi.getAll(),
+        incomesApi.getAll(),
+      ]);
+      dispatch({
+        type: 'SET_STATE',
+        payload: { properties, units, tenants, rentPayments, expenses, incomes, isLoading: false },
+      });
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
+
+  // Load data on mount
   useEffect(() => {
     if (isHydrated) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      refreshData();
     }
-  }, [state, isHydrated]);
+  }, [isHydrated, refreshData]);
 
   const getPropertyUnits = useCallback((propertyId: string) =>
     state.units.filter(u => u.propertyId === propertyId), [state.units]);
@@ -194,78 +214,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
       u.status === 'vacant' && (!propertyId || u.propertyId === propertyId)
     ), [state.units]);
 
-  const generateId = () => Math.random().toString(36).substr(2, 9);
-
-  const addProperty = (property: Omit<Property, 'id'>) => {
-    dispatch({ type: 'ADD_PROPERTY', payload: { ...property, id: generateId() } });
+  const addProperty = async (property: Omit<Property, 'id'>) => {
+    const newProperty = await propertiesApi.create(property);
+    dispatch({ type: 'ADD_PROPERTY', payload: newProperty });
   };
 
-  const updateProperty = (property: Property) => {
-    dispatch({ type: 'UPDATE_PROPERTY', payload: property });
+  const updateProperty = async (property: Property) => {
+    const updated = await propertiesApi.update(property.id, property);
+    dispatch({ type: 'UPDATE_PROPERTY', payload: updated });
   };
 
-  const deleteProperty = (id: string) => {
+  const deleteProperty = async (id: string) => {
+    await propertiesApi.delete(id);
     dispatch({ type: 'DELETE_PROPERTY', payload: id });
   };
 
-  const addUnit = (unit: Omit<Unit, 'id'>) => {
-    dispatch({ type: 'ADD_UNIT', payload: { ...unit, id: generateId() } });
+  const addUnit = async (unit: Omit<Unit, 'id'>) => {
+    const newUnit = await unitsApi.create(unit);
+    dispatch({ type: 'ADD_UNIT', payload: newUnit });
   };
 
-  const updateUnit = (unit: Unit) => {
-    dispatch({ type: 'UPDATE_UNIT', payload: unit });
+  const updateUnit = async (unit: Unit) => {
+    const updated = await unitsApi.update(unit.id, unit);
+    dispatch({ type: 'UPDATE_UNIT', payload: updated });
   };
 
-  const deleteUnit = (id: string) => {
+  const deleteUnit = async (id: string) => {
+    await unitsApi.delete(id);
     dispatch({ type: 'DELETE_UNIT', payload: id });
   };
 
-  const addTenant = (tenant: Omit<Tenant, 'id'>) => {
-    dispatch({ type: 'ADD_TENANT', payload: { ...tenant, id: generateId() } });
+  const addTenant = async (tenant: Omit<Tenant, 'id'>) => {
+    const newTenant = await tenantsApi.create(tenant);
+    dispatch({ type: 'ADD_TENANT', payload: newTenant });
   };
 
-  const updateTenant = (id: string, updates: Partial<Tenant>) => {
+  const updateTenant = async (id: string, updates: Partial<Tenant>) => {
     const tenant = state.tenants.find(t => t.id === id);
     if (tenant) {
-      dispatch({ type: 'UPDATE_TENANT', payload: { ...tenant, ...updates } });
+      const updated = await tenantsApi.update(id, { ...tenant, ...updates });
+      dispatch({ type: 'UPDATE_TENANT', payload: updated });
     }
   };
 
-  const deleteTenant = (id: string) => {
+  const deleteTenant = async (id: string) => {
+    await tenantsApi.delete(id);
     dispatch({ type: 'DELETE_TENANT', payload: id });
   };
 
-  const addExpense = (expense: Omit<Expense, 'id'>) => {
-    dispatch({ type: 'ADD_EXPENSE', payload: { ...expense, id: generateId() } });
+  const addExpense = async (expense: Omit<Expense, 'id'>) => {
+    const newExpense = await expensesApi.create(expense);
+    dispatch({ type: 'ADD_EXPENSE', payload: newExpense });
   };
 
-  const addIncome = (income: Omit<Income, 'id'>) => {
-    dispatch({ type: 'ADD_INCOME', payload: { ...income, id: generateId() } });
+  const addIncome = async (income: Omit<Income, 'id'>) => {
+    const newIncome = await incomesApi.create(income);
+    dispatch({ type: 'ADD_INCOME', payload: newIncome });
   };
 
-  const addRentPayment = (payment: Omit<RentPayment, 'id'>) => {
-    dispatch({ type: 'ADD_RENT_PAYMENT', payload: { ...payment, id: generateId() } });
+  const addRentPayment = async (payment: Omit<RentPayment, 'id'>) => {
+    const newPayment = await paymentsApi.create(payment);
+    dispatch({ type: 'ADD_RENT_PAYMENT', payload: newPayment });
   };
 
-  const updatePaymentStatus = (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => {
-    const paidDate = status === 'paid' ? new Date().toISOString().split('T')[0] : undefined;
-    dispatch({
-      type: 'UPDATE_PAYMENT_STATUS',
-      payload: {
-        id,
-        status,
-        paidDate,
-        receivedDate: paymentDetails?.receivedDate,
-        paymentMethod: paymentDetails?.paymentMethod,
-        uploadedBy: paymentDetails?.uploadedBy,
-        uploadedAt: new Date().toISOString(),
-      }
+  const updatePaymentStatus = async (
+    id: string,
+    status: RentPayment['status'],
+    paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }
+  ) => {
+    const payment = state.rentPayments.find(p => p.id === id);
+    if (!payment) return;
+    const updated = await paymentsApi.update(id, {
+      ...payment,
+      status,
+      paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : undefined,
+      receivedDate: paymentDetails?.receivedDate,
+      paymentMethod: paymentDetails?.paymentMethod,
+      uploadedBy: paymentDetails?.uploadedBy,
+      uploadedAt: new Date().toISOString(),
     });
+    dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
   };
 
   const resetData = () => {
-    dispatch({ type: 'SET_STATE', payload: defaultState });
-    localStorage.removeItem(STORAGE_KEY);
+    dispatch({ type: 'SET_STATE', payload: initialState });
   };
 
   return (
@@ -273,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         ...state,
         dispatch,
+        refreshData,
         getPropertyUnits,
         getUnitTenant,
         getPropertyTenants,

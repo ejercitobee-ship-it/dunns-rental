@@ -89,12 +89,16 @@ export function Properties() {
     });
   };
 
-  const handleAddProperty = (e: React.FormEvent) => {
+  const handleAddProperty = async (e: React.FormEvent) => {
     e.preventDefault();
-    addProperty(propertyForm);
-    showToast('Property added successfully!', 'success');
-    setIsAddPropertyOpen(false);
-    resetPropertyForm();
+    try {
+      await addProperty(propertyForm);
+      showToast('Property added successfully!', 'success');
+      setIsAddPropertyOpen(false);
+      resetPropertyForm();
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+    }
   };
 
   const handleEditProperty = (property: Property) => {
@@ -111,33 +115,45 @@ export function Properties() {
     setIsEditPropertyOpen(true);
   };
 
-  const handleUpdateProperty = (e: React.FormEvent) => {
+  const handleUpdateProperty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedProperty) {
-      updateProperty({ ...selectedProperty, ...propertyForm });
-      showToast('Property updated successfully!', 'success');
-      setIsEditPropertyOpen(false);
-      setSelectedProperty(null);
-      resetPropertyForm();
+      try {
+        await updateProperty({ ...selectedProperty, ...propertyForm });
+        showToast('Property updated successfully!', 'success');
+        setIsEditPropertyOpen(false);
+        setSelectedProperty(null);
+        resetPropertyForm();
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
   };
 
-  const handleDeleteProperty = () => {
+  const handleDeleteProperty = async () => {
     if (propertyToDelete) {
-      deleteProperty(propertyToDelete.id);
-      showToast('Property deleted successfully!', 'success');
-      setPropertyToDelete(null);
+      try {
+        await deleteProperty(propertyToDelete.id);
+        showToast('Property deleted successfully!', 'success');
+        setPropertyToDelete(null);
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
   };
 
-  const handleAddUnit = (e: React.FormEvent) => {
+  const handleAddUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (propertyForUnit) {
-      addUnit({ ...unitForm, propertyId: propertyForUnit.id });
-      showToast('Unit added successfully!', 'success');
-      setIsAddUnitOpen(false);
-      setPropertyForUnit(null);
-      resetUnitForm();
+      try {
+        await addUnit({ ...unitForm, propertyId: propertyForUnit.id });
+        showToast('Unit added successfully!', 'success');
+        setIsAddUnitOpen(false);
+        setPropertyForUnit(null);
+        resetUnitForm();
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
   };
 
@@ -155,28 +171,40 @@ export function Properties() {
     setIsEditUnitOpen(true);
   };
 
-  const handleUpdateUnit = (e: React.FormEvent) => {
+  const handleUpdateUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedUnit) {
-      updateUnit({ ...selectedUnit, ...unitForm });
-      showToast('Unit updated successfully!', 'success');
-      setIsEditUnitOpen(false);
-      setSelectedUnit(null);
-      resetUnitForm();
+      try {
+        await updateUnit({ ...selectedUnit, ...unitForm });
+        showToast('Unit updated successfully!', 'success');
+        setIsEditUnitOpen(false);
+        setSelectedUnit(null);
+        resetUnitForm();
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
   };
 
-  const handleDeleteUnit = () => {
+  const handleDeleteUnit = async () => {
     if (unitToDelete) {
-      deleteUnit(unitToDelete.id);
-      showToast('Unit deleted successfully!', 'success');
-      setUnitToDelete(null);
+      try {
+        await deleteUnit(unitToDelete.id);
+        showToast('Unit deleted successfully!', 'success');
+        setUnitToDelete(null);
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
   };
 
-  const handleStatusChange = (unit: Unit, newStatus: Unit['status']) => {
-    updateUnit({ ...unit, status: newStatus });
-    showToast(`Unit status updated to ${newStatus}`, 'success');
+  const handleStatusChange = async (unit: Unit, newStatus: Unit['status']) => {
+    try {
+      await updateUnit({ ...unit, status: newStatus });
+      showToast(`Unit status updated to ${newStatus}`, 'success');
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+    }
   };
 
   const totalUnits = units.length;

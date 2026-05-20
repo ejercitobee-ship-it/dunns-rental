@@ -98,37 +98,41 @@ export function Tenants() {
     setAvailableUnits(units.filter(u => u.propertyId === propertyId && u.status === 'vacant'));
   };
 
-  const handleAddTenant = (e: React.FormEvent) => {
+  const handleAddTenant = async (e: React.FormEvent) => {
     e.preventDefault();
-    addTenant({
-      firstName: newTenant.firstName,
-      lastName: newTenant.lastName,
-      email: newTenant.email,
-      phone: newTenant.phone,
-      propertyId: newTenant.propertyId,
-      unitId: newTenant.unitId,
-      leaseStart: newTenant.leaseStart,
-      leaseEnd: newTenant.leaseEnd,
-      monthlyRent: Number(newTenant.monthlyRent),
-      securityDeposit: Number(newTenant.securityDeposit),
-      status: 'active',
-      notes: newTenant.notes,
-    });
-    showToast('Tenant added successfully!', 'success');
-    setIsAddTenantOpen(false);
-    setNewTenant({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      propertyId: '',
-      unitId: '',
-      leaseStart: '',
-      leaseEnd: '',
-      monthlyRent: 0,
-      securityDeposit: 0,
-      notes: '',
-    });
+    try {
+      await addTenant({
+        firstName: newTenant.firstName,
+        lastName: newTenant.lastName,
+        email: newTenant.email,
+        phone: newTenant.phone,
+        propertyId: newTenant.propertyId,
+        unitId: newTenant.unitId,
+        leaseStart: newTenant.leaseStart,
+        leaseEnd: newTenant.leaseEnd,
+        monthlyRent: Number(newTenant.monthlyRent),
+        securityDeposit: Number(newTenant.securityDeposit),
+        status: 'active',
+        notes: newTenant.notes,
+      });
+      showToast('Tenant added successfully!', 'success');
+      setIsAddTenantOpen(false);
+      setNewTenant({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        propertyId: '',
+        unitId: '',
+        leaseStart: '',
+        leaseEnd: '',
+        monthlyRent: 0,
+        securityDeposit: 0,
+        notes: '',
+      });
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+    }
   };
 
   const handleEditClick = (tenant: Tenant) => {
@@ -148,15 +152,20 @@ export function Tenants() {
     setIsActionMenuOpen(null);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedTenant) {
-      updateTenant(selectedTenant.id, {
-        ...selectedTenant,
-        ...editForm,
-      });
-      setIsEditTenantOpen(false);
-      setSelectedTenant(null);
+      try {
+        await updateTenant(selectedTenant.id, {
+          ...selectedTenant,
+          ...editForm,
+        });
+        showToast('Tenant updated successfully!', 'success');
+        setIsEditTenantOpen(false);
+        setSelectedTenant(null);
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
   };
 
@@ -166,38 +175,48 @@ export function Tenants() {
     setIsActionMenuOpen(null);
   };
 
-  const handleTerminateLease = (tenantId: string) => {
+  const handleTerminateLease = async (tenantId: string) => {
     if (confirm('Are you sure you want to terminate this lease? The tenant will be marked as inactive.')) {
-      const tenant = tenants.find(t => t.id === tenantId);
-      if (tenant) {
-        updateTenant(tenantId, { ...tenant, status: 'inactive' });
+      try {
+        await updateTenant(tenantId, { status: 'inactive' });
+        showToast('Lease terminated', 'success');
+      } catch (error) {
+        showToast((error as Error).message, 'error');
       }
     }
     setIsActionMenuOpen(null);
   };
 
-  const handlePauseRent = (tenantId: string) => {
+  const handlePauseRent = async (tenantId: string) => {
     if (confirm('Are you sure you want to pause rent for this tenant?')) {
-      const tenant = tenants.find(t => t.id === tenantId);
-      if (tenant) {
-        updateTenant(tenantId, { ...tenant, status: 'paused' });
+      try {
+        await updateTenant(tenantId, { status: 'paused' });
+        showToast('Rent paused', 'success');
+      } catch (error) {
+        showToast((error as Error).message, 'error');
       }
     }
     setIsActionMenuOpen(null);
   };
 
-  const handleResumeRent = (tenantId: string) => {
-    const tenant = tenants.find(t => t.id === tenantId);
-    if (tenant) {
-      updateTenant(tenantId, { ...tenant, status: 'active' });
+  const handleResumeRent = async (tenantId: string) => {
+    try {
+      await updateTenant(tenantId, { status: 'active' });
+      showToast('Rent resumed', 'success');
+    } catch (error) {
+      showToast((error as Error).message, 'error');
     }
     setIsActionMenuOpen(null);
   };
 
-  const handleDeleteTenant = (tenantId: string) => {
+  const handleDeleteTenant = async (tenantId: string) => {
     if (confirm('Are you sure you want to permanently delete this tenant? This action cannot be undone.')) {
-      deleteTenant(tenantId);
-      showToast('Tenant deleted successfully', 'success');
+      try {
+        await deleteTenant(tenantId);
+        showToast('Tenant deleted successfully', 'success');
+      } catch (error) {
+        showToast((error as Error).message, 'error');
+      }
     }
     setIsActionMenuOpen(null);
   };

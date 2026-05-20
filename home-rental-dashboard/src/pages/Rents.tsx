@@ -1008,24 +1008,28 @@ export function Rents() {
               </Button>
               <Button
                 className="flex-1"
-                onClick={() => {
+                onClick={async () => {
                   if (selectedPayment) {
-                    updatePaymentStatus(
-                      selectedPayment.id,
-                      'paid',
-                      {
-                        receivedDate: recordForm.receivedDate,
-                        paymentMethod: recordForm.paymentMethod,
-                        uploadedBy: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
-                      }
-                    );
-                    setIsRecordModalOpen(false);
-                    setSelectedPayment(null);
-                    setRecordForm({
-                      receivedDate: new Date().toISOString().split('T')[0],
-                      paymentMethod: 'check',
-                      notes: '',
-                    });
+                    try {
+                      await updatePaymentStatus(
+                        selectedPayment.id,
+                        'paid',
+                        {
+                          receivedDate: recordForm.receivedDate,
+                          paymentMethod: recordForm.paymentMethod,
+                          uploadedBy: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+                        }
+                      );
+                      setIsRecordModalOpen(false);
+                      setSelectedPayment(null);
+                      setRecordForm({
+                        receivedDate: new Date().toISOString().split('T')[0],
+                        paymentMethod: 'check',
+                        notes: '',
+                      });
+                    } catch (error) {
+                      alert((error as Error).message);
+                    }
                   }
                 }}
               >
@@ -1216,37 +1220,41 @@ export function Rents() {
             <Button
               className="flex-1"
               disabled={!newPaymentForm.tenantId || !newPaymentForm.amount || ((newPaymentForm.status === 'paid' || newPaymentForm.status === 'partial') && !newPaymentForm.receivedDate)}
-              onClick={() => {
+              onClick={async () => {
                 const tenant = tenants.find(t => t.id === newPaymentForm.tenantId);
                 if (tenant) {
-                  addRentPayment({
-                    tenantId: tenant.id,
-                    unitId: tenant.unitId,
-                    propertyId: tenant.propertyId,
-                    amount: parseFloat(newPaymentForm.amount),
-                    dueDate: newPaymentForm.dueDate,
-                    status: newPaymentForm.status,
-                    month: newPaymentForm.month,
-                    year: newPaymentForm.year,
-                    ...(newPaymentForm.status === 'paid' || newPaymentForm.status === 'partial' ? {
-                      paidDate: newPaymentForm.receivedDate,
-                      receivedDate: newPaymentForm.receivedDate,
-                      paymentMethod: newPaymentForm.paymentMethod,
-                      uploadedBy: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
-                      uploadedAt: new Date().toISOString(),
-                    } : {}),
-                  });
-                  setIsAddPaymentModalOpen(false);
-                  setNewPaymentForm({
-                    tenantId: '',
-                    amount: '',
-                    dueDate: new Date().toISOString().split('T')[0],
-                    month: new Date().getMonth() + 1,
-                    year: new Date().getFullYear(),
-                    status: 'pending',
-                    paymentMethod: 'check',
-                    receivedDate: '',
-                  });
+                  try {
+                    await addRentPayment({
+                      tenantId: tenant.id,
+                      unitId: tenant.unitId,
+                      propertyId: tenant.propertyId,
+                      amount: parseFloat(newPaymentForm.amount),
+                      dueDate: newPaymentForm.dueDate,
+                      status: newPaymentForm.status,
+                      month: newPaymentForm.month,
+                      year: newPaymentForm.year,
+                      ...(newPaymentForm.status === 'paid' || newPaymentForm.status === 'partial' ? {
+                        paidDate: newPaymentForm.receivedDate,
+                        receivedDate: newPaymentForm.receivedDate,
+                        paymentMethod: newPaymentForm.paymentMethod,
+                        uploadedBy: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+                        uploadedAt: new Date().toISOString(),
+                      } : {}),
+                    });
+                    setIsAddPaymentModalOpen(false);
+                    setNewPaymentForm({
+                      tenantId: '',
+                      amount: '',
+                      dueDate: new Date().toISOString().split('T')[0],
+                      month: new Date().getMonth() + 1,
+                      year: new Date().getFullYear(),
+                      status: 'pending',
+                      paymentMethod: 'check',
+                      receivedDate: '',
+                    });
+                  } catch (error) {
+                    alert((error as Error).message);
+                  }
                 }
               }}
             >

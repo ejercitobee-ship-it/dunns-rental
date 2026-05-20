@@ -140,33 +140,37 @@ export function Expenses() {
   const getProperty = (propertyId: string) => properties.find(p => p.id === propertyId);
   const getUnit = (unitId?: string) => unitId ? units.find(u => u.id === unitId) : null;
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    if (view === 'expenses') {
-      addExpense({
-        propertyId: formData.get('propertyId') as string,
-        unitId: (formData.get('unitId') as string) || undefined,
-        category: formData.get('category') as ExpenseCategory,
-        amount: Number(formData.get('amount')),
-        date: formData.get('date') as string,
-        description: formData.get('description') as string,
-        vendor: (formData.get('vendor') as string) || undefined,
-        isRecurring: formData.get('isRecurring') === 'on',
-        recurringFrequency: (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined,
-      });
-    } else {
-      addIncome({
-        propertyId: formData.get('propertyId') as string,
-        unitId: (formData.get('unitId') as string) || undefined,
-        source: formData.get('source') as 'rent' | 'late_fee' | 'deposit' | 'other',
-        amount: Number(formData.get('amount')),
-        date: formData.get('date') as string,
-        description: formData.get('description') as string,
-      });
+    try {
+      if (view === 'expenses') {
+        await addExpense({
+          propertyId: formData.get('propertyId') as string,
+          unitId: (formData.get('unitId') as string) || undefined,
+          category: formData.get('category') as ExpenseCategory,
+          amount: Number(formData.get('amount')),
+          date: formData.get('date') as string,
+          description: formData.get('description') as string,
+          vendor: (formData.get('vendor') as string) || undefined,
+          isRecurring: formData.get('isRecurring') === 'on',
+          recurringFrequency: (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined,
+        });
+      } else {
+        await addIncome({
+          propertyId: formData.get('propertyId') as string,
+          unitId: (formData.get('unitId') as string) || undefined,
+          source: formData.get('source') as 'rent' | 'late_fee' | 'deposit' | 'other',
+          amount: Number(formData.get('amount')),
+          date: formData.get('date') as string,
+          description: formData.get('description') as string,
+        });
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      alert((error as Error).message);
     }
-    setIsModalOpen(false);
   };
 
   return (

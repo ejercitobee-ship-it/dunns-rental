@@ -92,7 +92,15 @@ function ClickableCard({ children, onClick, className = '' }: ClickableCardProps
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { properties, units, tenants, rentPayments, expenses, incomes } = useApp();
+  const { properties, units, tenants, rentPayments, expenses, incomes, isLoading } = useApp();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;

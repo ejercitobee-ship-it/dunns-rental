@@ -22,14 +22,14 @@ export function Login() {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
+      const result = await login(email, password);
       
-      if (success) {
+      if (result.success) {
         showToast('Welcome back!', 'success');
         navigate('/');
       } else {
-        setError('Invalid email or password');
-        showToast('Invalid credentials', 'error');
+        setError(result.error || 'Invalid email or password');
+        showToast(result.error || 'Invalid credentials', 'error');
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
