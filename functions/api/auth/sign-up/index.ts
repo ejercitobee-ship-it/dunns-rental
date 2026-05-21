@@ -4,8 +4,11 @@ import { auth } from '../../../lib/auth';
 export const onRequestPost: PagesFunction<{ DB: D1Database; BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string }> = async (context) => {
   const { request, env } = context;
   
+  console.log('Sign-up request received');
+  
   try {
     if (!env.DB) {
+      console.error('DB binding not found');
       return new Response(JSON.stringify({ error: 'Database not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
