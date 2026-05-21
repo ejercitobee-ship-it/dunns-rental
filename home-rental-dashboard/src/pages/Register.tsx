@@ -45,7 +45,8 @@ export function Register() {
         showToast(result.error || 'Registration failed', 'error');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      console.error('Registration error:', err);
+      setError(`Error: ${(err as Error).message || 'An error occurred. Please try again.'}`);
       showToast('Registration failed', 'error');
     } finally {
       setIsLoading(false);
