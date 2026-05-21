@@ -30,13 +30,13 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
 // Auth API
 export const authApi = {
   signUp: (email: string, password: string, name: string) =>
-    apiRequest('/auth/sign-up', {
+    apiRequest('/auth/sign-up/email', {
       method: 'POST',
       body: JSON.stringify({ email, password, name }),
     }),
   
   signIn: (email: string, password: string) =>
-    apiRequest('/auth/sign-in', {
+    apiRequest('/auth/sign-in/email', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
