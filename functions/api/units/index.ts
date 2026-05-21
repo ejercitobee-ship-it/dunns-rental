@@ -30,7 +30,22 @@ export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) =
       'SELECT * FROM units ORDER BY created_at DESC'
     ).all();
     
-    return Response.json({ success: true, data: results });
+    // Transform snake_case to camelCase for frontend compatibility
+    const transformedResults = results?.map((unit: Record<string, unknown>) => ({
+      id: unit.id,
+      propertyId: unit.property_id,
+      unitNumber: unit.unit_number,
+      bedrooms: unit.bedrooms,
+      bathrooms: unit.bathrooms,
+      squareFeet: unit.square_feet,
+      monthlyRent: unit.monthly_rent,
+      description: unit.description,
+      status: unit.status,
+      createdAt: unit.created_at,
+      updatedAt: unit.updated_at,
+    })) || [];
+    
+    return Response.json({ success: true, data: transformedResults });
   } catch (error) {
     console.error('Error fetching units:', error);
     return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
