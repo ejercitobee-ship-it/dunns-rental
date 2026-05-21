@@ -92,7 +92,7 @@ function ClickableCard({ children, onClick, className = '' }: ClickableCardProps
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { properties, units, tenants, rentPayments, expenses, incomes, isLoading } = useApp();
+  const { properties, units, tenants, rentPayments, expenses, incomes, isLoading, error } = useApp();
 
   if (isLoading) {
     return (
@@ -101,6 +101,17 @@ export function Dashboard() {
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-500">Error loading data: {error}</div>
+      </div>
+    );
+  }
+
+  // Debug logging
+  console.log('Dashboard data:', { properties, units, tenants, rentPayments, expenses, incomes });
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
