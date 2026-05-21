@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { auth } from '../../lib/auth';
 
-export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) => {
+export const onRequestPost: PagesFunction<{ DB: D1Database; BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string }> = async (context) => {
   const { request, env } = context;
   
   try {
@@ -12,7 +12,7 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
       });
     }
     
-    const authInstance = auth(env.DB);
+    const authInstance = auth(env);
     return authInstance.handler(request);
   } catch (error) {
     console.error('Auth error:', error);
