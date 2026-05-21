@@ -24,7 +24,11 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
     throw new Error(error.error || `HTTP ${response.status}`);
   }
   
-  return response.json();
+  const data = await response.json();
+  
+  // If the response has a data property, return that (API format)
+  // Otherwise return the whole response (for custom endpoints)
+  return data.data !== undefined ? data.data : data;
 }
 
 // Auth API
