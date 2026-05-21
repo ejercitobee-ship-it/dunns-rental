@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
+import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Properties } from './pages/Properties';
 import { Tenants } from './pages/Tenants';
@@ -47,6 +48,12 @@ function AppRoutes() {
       <Route path="/login" element={
         <PublicRoute>
           <Login />
+        </PublicRoute>
+      } />
+
+      <Route path="/register" element={
+        <PublicRoute>
+          <Register />
         </PublicRoute>
       } />
       
