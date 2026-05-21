@@ -21,4 +21,27 @@ export const auth = (db: D1Database) => betterAuth({
     cookiePrefix: 'dunns-rental',
     generateId: () => crypto.randomUUID(),
   },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user, context) => {
+          // Check if this is the first user
+          const db = context.db as D1Database;
+          const userCount = await db.prepare('SELECT COUNT(*) as count FROM user').first('count');
+          
+          // If this is the first user, make them super_admin
+          if (userCount === 1) {
+            await db.prepare(
+              'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, unixepoch(), unixepoch())'
+            ).bind(crypto.randomUUID(), user.id, 'super_admin').run();
+          } else {
+            // Otherwise assign default viewer role
+            await db.prepare(
+              'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, unixepoch(), unixepoch())'
+            ).bind(crypto.randomUUID(), user.id, 'viewer').run();
+          }
+        },
+      },
+    },
+  },
 });

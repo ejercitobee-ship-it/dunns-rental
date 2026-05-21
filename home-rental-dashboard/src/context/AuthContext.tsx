@@ -97,13 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await authApi.signUp(email, password, name);
       if (result?.data?.user) {
         const sessionUser = result.data.user as Record<string, unknown>;
-        const role = roles.find(r => r.id === (sessionUser.roleId as string)) || DEFAULT_ROLES[0];
+        const role = roles.find(r => r.id === 'super_admin') || DEFAULT_ROLES[0];
         setUser(mapSessionUser(sessionUser, role));
         return { success: true };
       }
       return { success: false, error: 'Registration failed' };
     } catch (error) {
-      return { success: false, error: (error as Error).message };
+      console.error('Registration error:', error);
+      return { success: false, error: (error as Error).message || 'Registration failed. Please try again.' };
     }
   };
 
