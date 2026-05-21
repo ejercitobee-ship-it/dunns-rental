@@ -54,12 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkSession = async () => {
       try {
         const result = await authApi.getSession();
-        if (result?.data?.user) {
-          const sessionUser = result.data.user as Record<string, unknown>;
-          const role = roles.find(r => r.id === (sessionUser.roleId as string)) || DEFAULT_ROLES[0];
-          setUser(mapSessionUser(sessionUser, role));
+        console.log('Session check result:', result);
+        
+        // Handle both API formats
+        const userData = result?.user || result?.data?.user;
+        
+        if (userData) {
+          const sessionUser = userData as Record<string, unknown>;
+          const role = roles.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
+          setUser(mapSessionUser({ ...sessionUser, roleId: sessionUser.role }, role));
         }
-      } catch {
+      } catch (error) {
+        console.error('Session check error:', error);
         setUser(null);
       } finally {
         setIsLoading(false);
