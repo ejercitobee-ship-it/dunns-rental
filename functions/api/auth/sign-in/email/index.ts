@@ -22,25 +22,33 @@ interface Env {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   
-  console.log('Sign-in request received');
+  console.log('Sign-in request received - START');
   
   try {
+    console.log('Parsing request body...');
     const body = await request.json() as { email?: string; password?: string };
+    console.log('Request body parsed:', body);
+    
     const { email, password } = body;
     
     if (!email || !password) {
+      console.log('Missing email or password');
       return new Response(JSON.stringify({ error: 'Missing email or password' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
     
+    console.log('Looking up user:', email);
     // Find user by email
     const user = await env.DB.prepare('SELECT id, name, email FROM user WHERE email = ?')
       .bind(email)
       .first();
     
+    console.log('User found:', user);
+    
     if (!user) {
+      console.log('User not found');
       return new Response(JSON.stringify({ error: 'Invalid email or password' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
