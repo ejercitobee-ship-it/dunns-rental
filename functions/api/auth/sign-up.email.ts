@@ -35,8 +35,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
     
-    // Check if user already exists
-    const existingUser = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    // Check if user already exists (using Better-Auth's 'user' table)
+    const existingUser = await env.DB.prepare('SELECT id FROM user WHERE email = ?')
       .bind(email)
       .first();
     
@@ -50,29 +50,34 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Hash password
     const passwordHash = await hashPassword(password);
     
-    // Create user
+    // Create user using Better-Auth's schema
     const userId = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const now = Math.floor(Date.now() / 1000); // unix timestamp
     
     await env.DB.prepare(
-      'INSERT INTO users (id, email, name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(userId, email, name, passwordHash, now, now).run();
+      'INSERT INTO user (id, name, email, email_verified, image, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(userId, name, email, 0, null, now, now).run();
+    
+    // Store password in account table (Better-Auth's way)
+    await env.DB.prepare(
+      'INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(crypto.randomUUID(), email, 'credential', userId, passwordHash, now, now).run();
     
     // Check if this is the first user - make them super_admin
-    const userCount = await env.DB.prepare('SELECT COUNT(*) as count FROM users').first('count');
+    const userCount = await env.DB.prepare('SELECT COUNT(*) as count FROM user').first('count');
     const role = userCount === 1 ? 'super_admin' : 'viewer';
     
     await env.DB.prepare(
       'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
     ).bind(crypto.randomUUID(), userId, role, now, now).run();
     
-    // Create session
+    // Create session using Better-Auth's session table
     const sessionToken = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+    const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 7 days in unix timestamp
     
     await env.DB.prepare(
-      'INSERT INTO sessions (id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), userId, sessionToken, expiresAt, now).run();
+      'INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(crypto.randomUUID(), userId, sessionToken, expiresAt, now, now).run();
     
     // Return success with session cookie
     return new Response(JSON.stringify({ 
