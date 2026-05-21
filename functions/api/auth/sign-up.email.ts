@@ -22,6 +22,8 @@ interface Env {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   
+  console.log('Sign-up request received at sign-up.email.ts');
+  
   try {
     const body = await request.json() as { email?: string; password?: string; name?: string };
     const { email, password, name } = body;
