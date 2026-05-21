@@ -19,6 +19,8 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
   
   try {
     const body = await request.json();
+    console.log('Creating property:', body);
+    
     const id = crypto.randomUUID();
     
     await env.DB.prepare(
@@ -36,8 +38,10 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
       body.userId || 'system'
     ).run();
     
+    console.log('Property created successfully:', id);
     return Response.json({ success: true, data: { id, ...body } }, { status: 201 });
   } catch (error) {
+    console.error('Error creating property:', error);
     return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 };
