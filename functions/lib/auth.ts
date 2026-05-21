@@ -1,8 +1,7 @@
 import { betterAuth } from 'better-auth';
-import { d1Adapter } from 'better-auth/adapters/d1';
 
 export const auth = (db: D1Database) => betterAuth({
-  database: d1Adapter(db),
+  database: db, // D1 binding is auto-detected!
   secret: process.env.BETTER_AUTH_SECRET || 'your-secret-key-change-in-production',
   baseURL: process.env.BETTER_AUTH_URL || 'https://dunnrentalmanagement.pages.dev',
   emailAndPassword: {
