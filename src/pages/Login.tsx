@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const { showToast } = useToast();
   
@@ -15,6 +16,12 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Check if user was logged out due to inactivity
+  const logoutReason = searchParams.get('reason');
+  const inactiveMessage = logoutReason === 'inactive' 
+    ? 'You were logged out due to 30 minutes of inactivity. Please log in again.' 
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +66,13 @@ export function Login() {
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
               <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          {inactiveMessage && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <p className="text-sm text-amber-700">{inactiveMessage}</p>
             </div>
           )}
 

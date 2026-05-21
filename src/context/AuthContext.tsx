@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { authApi } from '../lib/api';
 import type { User, Role, Permission } from '../types/auth';
 import { DEFAULT_ROLES, SYSTEM_PERMISSIONS } from '../types/auth';
@@ -49,6 +49,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
   const [users, setUsers] = useState<User[]>([]);
+
+  // Auto-logout after 30 minutes of inactivity
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
+  const resetInactivityTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    
+    if (user) {
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log('Auto-logout due to inactivity');
+        logout();
+        window.location.href = '/login?reason=inactive';
+      }, INACTIVITY_TIMEOUT);
+    }
+  }, [user]);
+
+  const handleActivity = useCallback(() => {
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Track user activity
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll', 'mousemove'];
+    
+    events.forEach(event => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
+
+    // Start the timer
+    resetInactivityTimer();
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [user, handleActivity, resetInactivityTimer]);
 
   useEffect(() => {
     const checkSession = async () => {
