@@ -1,9 +1,15 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { auth } from '../../lib/auth';
 
-export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
+// Handle all HTTP methods
+export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) => handleAuth(context);
+export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) => handleAuth(context);
+export const onRequestPut: PagesFunction<{ DB: D1Database }> = async (context) => handleAuth(context);
+export const onRequestDelete: PagesFunction<{ DB: D1Database }> = async (context) => handleAuth(context);
+export const onRequestPatch: PagesFunction<{ DB: D1Database }> = async (context) => handleAuth(context);
+
+async function handleAuth(context: EventContext<{ DB: D1Database }, any, any>): Promise<Response> {
   const { request, env } = context;
-  const url = new URL(request.url);
   
   try {
     // Check if DB binding exists
@@ -26,4 +32,4 @@ export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-};
+}
