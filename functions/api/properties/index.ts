@@ -15,18 +15,25 @@ export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) =
 };
 
 export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) => {
-  const { env, request } = context;
+  console.log('Properties POST handler invoked');
   
   try {
+    const { env, request } = context;
+    
+    console.log('Parsing request body...');
     const body = await request.json();
-    console.log('Creating property:', body);
+    console.log('Request body:', JSON.stringify(body));
     
+    console.log('Generating UUID...');
     const id = crypto.randomUUID();
+    console.log('Generated ID:', id);
     
-    await env.DB.prepare(
-      `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
+    console.log('Preparing database query...');
+    const query = `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    console.log('Query:', query);
+    
+    const params = [
       id,
       body.name,
       body.address,
@@ -36,12 +43,22 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
       body.type,
       body.description || null,
       body.userId || 'system'
-    ).run();
+    ];
+    console.log('Params:', JSON.stringify(params));
+    
+    console.log('Executing database query...');
+    await env.DB.prepare(query).bind(...params).run();
     
     console.log('Property created successfully:', id);
     return Response.json({ success: true, data: { id, ...body } }, { status: 201 });
   } catch (error) {
-    console.error('Error creating property:', error);
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    console.error('Error in properties POST handler:', error);
+    console.error('Error message:', (error as Error).message);
+    console.error('Error stack:', (error as Error).stack);
+    return Response.json({ 
+      success: false, 
+      error: (error as Error).message,
+      stack: (error as Error).stack 
+    }, { status: 500 });
   }
 };
