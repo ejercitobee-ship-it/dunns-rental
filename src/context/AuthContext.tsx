@@ -72,14 +72,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const result = await authApi.signIn(email, password);
+      console.log('Login result:', result);
+      
+      // Our custom API returns { success: true, user: {...} }
+      if (result?.success && result?.user) {
+        const sessionUser = result.user as Record<string, unknown>;
+        const role = roles.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
+        setUser(mapSessionUser({ ...sessionUser, roleId: sessionUser.role }, role));
+        return { success: true };
+      }
+      
+      // Better-Auth format: { data: { user: ... } }
       if (result?.data?.user) {
         const sessionUser = result.data.user as Record<string, unknown>;
         const role = roles.find(r => r.id === (sessionUser.roleId as string)) || DEFAULT_ROLES[0];
         setUser(mapSessionUser(sessionUser, role));
         return { success: true };
       }
+      
       return { success: false, error: 'Invalid credentials' };
     } catch (error) {
+      console.error('Login error:', error);
       return { success: false, error: (error as Error).message };
     }
   };
