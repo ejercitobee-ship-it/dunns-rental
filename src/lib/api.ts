@@ -15,7 +15,7 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
   });
   
   if (response.status === 401) {
-    window.location.href = '/login';
+    // Don't redirect automatically - let the component handle it
     throw new Error('Unauthorized');
   }
   
