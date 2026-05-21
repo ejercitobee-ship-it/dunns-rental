@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { auth } from '../../../lib/auth';
+import { auth } from '../../../../lib/auth';
 
 export const onRequestPost: PagesFunction<{ DB: D1Database; BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string }> = async (context) => {
   const { request, env } = context;
