@@ -50,6 +50,24 @@ export const authApi = {
   
   getSession: () =>
     apiRequest('/auth/session'),
+  
+  forgotPassword: (email: string) =>
+    apiRequest('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  
+  resetPassword: (userId: string, newPassword: string, currentPassword?: string) =>
+    apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ userId, newPassword, currentPassword }),
+    }),
+};
+
+// Admin API
+export const adminApi = {
+  createUser: (data: { firstName: string; lastName: string; email: string; roleId: string; createdBy?: string }) =>
+    apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Properties API

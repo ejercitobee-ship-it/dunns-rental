@@ -81,6 +81,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(user.id)
       .first();
     
+    // Check if user needs to reset password
+    const forceReset = await env.DB.prepare(
+      'SELECT value FROM user_metadata WHERE user_id = ? AND key = ?'
+    ).bind(user.id, 'force_password_reset').first('value');
+    
     // Create session
     const sessionToken = generateToken();
     const now = Math.floor(Date.now() / 1000);
@@ -99,7 +104,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         name: user.name,
         role: userRole?.role || 'viewer'
       },
-      token: sessionToken 
+      token: sessionToken,
+      forcePasswordReset: forceReset === 'true'
     }), {
       status: 200,
       headers: { 

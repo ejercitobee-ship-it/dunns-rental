@@ -79,6 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const sessionUser = result.user as Record<string, unknown>;
         const role = roles.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
         setUser(mapSessionUser({ ...sessionUser, roleId: sessionUser.role }, role));
+        
+        // Check if user needs to reset password
+        if (result.forcePasswordReset) {
+          return { success: true, forcePasswordReset: true };
+        }
+        
         return { success: true };
       }
       
