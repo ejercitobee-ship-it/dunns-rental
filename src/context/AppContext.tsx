@@ -175,6 +175,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
+      console.log('Fetching data from API...');
       const [properties, units, tenants, rentPayments, expenses, incomes] = await Promise.all([
         propertiesApi.getAll(),
         unitsApi.getAll(),
@@ -183,11 +184,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         expensesApi.getAll(),
         incomesApi.getAll(),
       ]);
+      console.log('Fetched data:', { properties, units, tenants, rentPayments, expenses, incomes });
       dispatch({
         type: 'SET_STATE',
         payload: { properties, units, tenants, rentPayments, expenses, incomes, isLoading: false },
       });
     } catch (error) {
+      console.error('Error fetching data:', error);
       dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
       dispatch({ type: 'SET_LOADING', payload: false });
     }
