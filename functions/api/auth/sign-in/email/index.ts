@@ -81,10 +81,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(user.id)
       .first();
     
-    // Check if user needs to reset password
-    const forceReset = await env.DB.prepare(
-      'SELECT value FROM user_metadata WHERE user_id = ? AND key = ?'
-    ).bind(user.id, 'force_password_reset').first('value');
+    // Check if user needs to reset password (handle missing table gracefully)
+    let forceReset = false;
+    try {
+      const resetFlag = await env.DB.prepare(
+        'SELECT value FROM user_metadata WHERE user_id = ? AND key = ?'
+      ).bind(user.id, 'force_password_reset').first('value');
+      forceReset = resetFlag === 'true';
+    } catch (e) {
+      // Table doesn't exist yet, ignore
+      console.log('user_metadata table not found, skipping force_password_reset check');
+    }
     
     // Create session
     const sessionToken = generateToken();
@@ -105,7 +112,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         role: userRole?.role || 'viewer'
       },
       token: sessionToken,
-      forcePasswordReset: forceReset === 'true'
+      forcePasswordReset: forceReset
     }), {
       status: 200,
       headers: { 
