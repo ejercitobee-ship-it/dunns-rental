@@ -1,5 +1,27 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 
+// Helper to get user ID from session cookie
+async function getUserIdFromSession(env: { DB: D1Database }, request: Request): Promise<string | null> {
+  const cookieHeader = request.headers.get('Cookie');
+  if (!cookieHeader) return null;
+  
+  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+    const [key, value] = cookie.trim().split('=');
+    acc[key] = value;
+    return acc;
+  }, {} as Record<string, string>);
+  
+  const sessionToken = cookies['session'];
+  if (!sessionToken) return null;
+  
+  const now = Math.floor(Date.now() / 1000);
+  const session = await env.DB.prepare(
+    'SELECT user_id FROM session WHERE token = ? AND expires_at > ?'
+  ).bind(sessionToken, now).first();
+  
+  return session?.user_id as string || null;
+}
+
 export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) => {
   const { env } = context;
   
@@ -19,6 +41,16 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
   
   try {
     const { env, request } = context;
+    
+    // Get user ID from session
+    console.log('Getting user ID from session...');
+    const userId = await getUserIdFromSession(env, request);
+    console.log('User ID from session:', userId);
+    
+    if (!userId) {
+      console.error('No valid session found');
+      return Response.json({ success: false, error: 'Unauthorized - No valid session' }, { status: 401 });
+    }
     
     console.log('Parsing request body...');
     const body = await request.json();
@@ -42,7 +74,7 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
       body.zipCode,
       body.type,
       body.description || null,
-      body.userId || 'system'
+      userId
     ];
     console.log('Params:', JSON.stringify(params));
     
@@ -50,7 +82,7 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
     await env.DB.prepare(query).bind(...params).run();
     
     console.log('Property created successfully:', id);
-    return Response.json({ success: true, data: { id, ...body } }, { status: 201 });
+    return Response.json({ success: true, data: { id, ...body, user_id: userId } }, { status: 201 });
   } catch (error) {
     console.error('Error in properties POST handler:', error);
     console.error('Error message:', (error as Error).message);
