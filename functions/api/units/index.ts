@@ -56,6 +56,19 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) 
     const body = await request.json();
     console.log('Request body:', JSON.stringify(body));
     
+    // Verify the property exists
+    console.log('Verifying property exists:', body.propertyId);
+    const property = await env.DB.prepare('SELECT id FROM properties WHERE id = ?')
+      .bind(body.propertyId)
+      .first();
+    
+    if (!property) {
+      console.error('Property not found:', body.propertyId);
+      return Response.json({ success: false, error: 'Property not found' }, { status: 404 });
+    }
+    
+    console.log('Property verified:', property);
+    
     console.log('Generating UUID...');
     const id = crypto.randomUUID();
     console.log('Generated ID:', id);
