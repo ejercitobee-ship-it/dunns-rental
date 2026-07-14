@@ -220,7 +220,7 @@ export function TaxReport() {
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(taxYearData.totalIncome)}</div>
+            <div className="text-2xl font-bold text-positive">{formatCurrency(taxYearData.totalIncome)}</div>
             <p className="text-xs text-muted-foreground">Taxable rental income</p>
           </CardContent>
         </Card>
@@ -228,10 +228,10 @@ export function TaxReport() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Deductible Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <TrendingDown className="h-4 w-4 text-danger" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(taxYearData.totalDeductibleExpenses)}</div>
+            <div className="text-2xl font-bold text-danger">{formatCurrency(taxYearData.totalDeductibleExpenses)}</div>
             <p className="text-xs text-muted-foreground">Total deductions</p>
           </CardContent>
         </Card>
@@ -239,10 +239,10 @@ export function TaxReport() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Net Income</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-500" />
+            <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${taxYearData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-2xl font-bold ${taxYearData.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
               {formatCurrency(taxYearData.netIncome)}
             </div>
             <p className="text-xs text-muted-foreground">Income minus deductions</p>
@@ -336,7 +336,7 @@ export function TaxReport() {
             </div>
             <div className="flex justify-between items-center py-2 text-lg">
               <span className="font-bold">Total Income</span>
-              <span className="font-bold text-green-600">{formatCurrency(taxYearData.totalIncome)}</span>
+              <span className="font-bold text-positive">{formatCurrency(taxYearData.totalIncome)}</span>
             </div>
           </div>
         </CardContent>
@@ -413,9 +413,9 @@ export function TaxReport() {
                 {taxYearData.propertyBreakdown.map((p) => (
                   <tr key={p.name} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="py-3 px-4 font-medium">{p.name}</td>
-                    <td className="py-3 px-4 text-right text-green-600">{formatCurrency(p.income)}</td>
-                    <td className="py-3 px-4 text-right text-red-600">{formatCurrency(p.expenses)}</td>
-                    <td className={`py-3 px-4 text-right font-semibold ${p.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className="py-3 px-4 text-right text-positive">{formatCurrency(p.income)}</td>
+                    <td className="py-3 px-4 text-right text-danger">{formatCurrency(p.expenses)}</td>
+                    <td className={`py-3 px-4 text-right font-semibold ${p.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
                       {formatCurrency(p.netIncome)}
                     </td>
                   </tr>

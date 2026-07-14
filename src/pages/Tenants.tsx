@@ -265,7 +265,7 @@ export function Tenants() {
             <Badge variant="success" className="h-2 w-2 p-0" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-positive">
               {tenants.filter(t => t.status === 'active').length}
             </div>
           </CardContent>
@@ -277,7 +277,7 @@ export function Tenants() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{expiringSoon}</div>
+            <div className="text-2xl font-bold text-warning">{expiringSoon}</div>
           </CardContent>
         </Card>
 
@@ -320,7 +320,7 @@ export function Tenants() {
       {/* Tenants Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="overflow-x-auto sm:overflow-visible -mx-4 sm:mx-0">
             <table className="w-full min-w-[800px] sm:min-w-0">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -438,7 +438,7 @@ export function Tenants() {
                             {isActionMenuOpen === tenant.id && (
                               <div className="absolute right-0 top-full mt-1 w-44 sm:w-48 bg-white rounded-lg shadow-lg border z-50 py-1">
                                 <button
-                                  className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2"
                                   onClick={() => {
                                     handleViewClick(tenant);
                                   }}
@@ -447,7 +447,7 @@ export function Tenants() {
                                   View Details
                                 </button>
                                 <button
-                                  className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2"
                                   onClick={() => {
                                     handleEditClick(tenant);
                                   }}
@@ -459,14 +459,14 @@ export function Tenants() {
                                 {tenant.status === 'active' && (
                                   <>
                                     <button
-                                      className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-amber-600"
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2 text-warning"
                                       onClick={() => handlePauseRent(tenant.id)}
                                     >
                                       <Pause className="h-4 w-4" />
                                       Pause Rent
                                     </button>
                                     <button
-                                      className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600"
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2 text-danger"
                                       onClick={() => handleTerminateLease(tenant.id)}
                                     >
                                       <Ban className="h-4 w-4" />
@@ -476,7 +476,7 @@ export function Tenants() {
                                 )}
                                 {tenant.status === 'paused' && (
                                   <button
-                                    className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-green-600"
+                                    className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2 text-positive"
                                     onClick={() => handleResumeRent(tenant.id)}
                                   >
                                     <Play className="h-4 w-4" />
@@ -487,7 +487,7 @@ export function Tenants() {
                                   <>
                                     <hr className="my-1" />
                                     <button
-                                      className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600"
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2 text-danger"
                                       onClick={() => handleDeleteTenant(tenant.id)}
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -497,9 +497,9 @@ export function Tenants() {
                                 )}
                                 <hr className="my-1" />
                                 <button
-                                  className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-blue-600"
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2 text-primary"
                                   onClick={() => {
-                                    alert('Upload document feature - would open file picker');
+                                    showToast('Document upload is coming soon.', 'info');
                                     setIsActionMenuOpen(null);
                                   }}
                                 >
@@ -629,7 +629,7 @@ export function Tenants() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
-                  alert('Upload document feature - would open file picker');
+                  showToast('Document upload is coming soon.', 'info');
                 }}
               >
                 <Upload className="h-4 w-4 mr-2" />
@@ -698,7 +698,7 @@ export function Tenants() {
               </div>
             </div>
             
-            <hr className="border-gray-200" />
+            <hr className="border-line" />
             
             <h3 className="font-semibold flex items-center gap-2">
               <Calendar className="h-4 w-4" /> Lease Details
@@ -833,7 +833,7 @@ export function Tenants() {
             </div>
           </div>
           
-          <hr className="border-gray-200" />
+          <hr className="border-line" />
           
           <h3 className="font-semibold flex items-center gap-2">
             <MapPin className="h-4 w-4" /> Property Assignment
@@ -859,7 +859,7 @@ export function Tenants() {
               <select
                 required
                 disabled={!newTenant.propertyId}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-[#efece5]"
                 value={newTenant.unitId}
                 onChange={(e) => {
                   const unit = units.find(u => u.id === e.target.value);
@@ -878,12 +878,12 @@ export function Tenants() {
                 ))}
               </select>
               {newTenant.propertyId && availableUnits.length === 0 && (
-                <p className="text-xs text-red-500 mt-1">No vacant units available</p>
+                <p className="text-xs text-danger mt-1">No vacant units available</p>
               )}
             </div>
           </div>
           
-          <hr className="border-gray-200" />
+          <hr className="border-line" />
           
           <h3 className="font-semibold flex items-center gap-2">
             <Calendar className="h-4 w-4" /> Lease Details

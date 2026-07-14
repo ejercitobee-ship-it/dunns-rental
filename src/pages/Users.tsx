@@ -138,8 +138,8 @@ export function Users() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Team Members</h1>
-          <p className="text-slate-500 mt-1">Manage your team and their permissions</p>
+          <h1 className="text-3xl font-bold text-ink">Team Members</h1>
+          <p className="text-muted mt-1">Manage your team and their permissions</p>
         </div>
         {canManageUsers && (
           <Button onClick={() => { resetForm(); setIsAddUserOpen(true); }}>
@@ -165,7 +165,7 @@ export function Users() {
             <CardTitle className="text-sm font-medium">Active</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">{users.filter(u => u.isActive).length}</div>
+            <div className="text-2xl font-bold text-positive">{users.filter(u => u.isActive).length}</div>
           </CardContent>
         </Card>
 
@@ -183,7 +183,7 @@ export function Users() {
             <CardTitle className="text-sm font-medium">Admins</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-primary">
               {users.filter(u => u.roleId === 'super_admin' || u.roleId === 'admin').length}
             </div>
           </CardContent>
@@ -192,11 +192,11 @@ export function Users() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
         <input
           type="text"
           placeholder="Search team members..."
-          className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-10 pr-4 py-2 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -208,26 +208,26 @@ export function Users() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Member</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Contact</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Role</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Department</th>
-                  <th className="text-center py-3 px-4 font-semibold text-slate-700">Status</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Actions</th>
+                <tr className="border-b bg-canvas">
+                  <th className="text-left py-3 px-4 font-semibold text-ink">Member</th>
+                  <th className="text-left py-3 px-4 font-semibold text-ink">Contact</th>
+                  <th className="text-left py-3 px-4 font-semibold text-ink">Role</th>
+                  <th className="text-left py-3 px-4 font-semibold text-ink">Department</th>
+                  <th className="text-center py-3 px-4 font-semibold text-ink">Status</th>
+                  <th className="text-right py-3 px-4 font-semibold text-ink">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map(user => (
-                  <tr key={user.id} className="border-b last:border-0 hover:bg-slate-50">
+                  <tr key={user.id} className="border-b last:border-0 hover:bg-black/[0.03]">
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
                           {user.firstName[0]}{user.lastName[0]}
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">{user.firstName} {user.lastName}</p>
-                          <p className="text-xs text-slate-500">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
+                          <p className="font-medium text-ink">{user.firstName} {user.lastName}</p>
+                          <p className="text-xs text-muted">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                     </td>
@@ -235,13 +235,13 @@ export function Users() {
                     <td className="py-4 px-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 text-sm">
-                          <Mail className="h-3 w-3 text-slate-400" />
-                          <span className="text-slate-600">{user.email}</span>
+                          <Mail className="h-3 w-3 text-faint" />
+                          <span className="text-muted">{user.email}</span>
                         </div>
                         {user.phone && (
                           <div className="flex items-center gap-2 text-sm">
-                            <Phone className="h-3 w-3 text-slate-400" />
-                            <span className="text-slate-600">{user.phone}</span>
+                            <Phone className="h-3 w-3 text-faint" />
+                            <span className="text-muted">{user.phone}</span>
                           </div>
                         )}
                       </div>
@@ -253,7 +253,7 @@ export function Users() {
                       </Badge>
                     </td>
                     
-                    <td className="py-4 px-4 text-slate-600">
+                    <td className="py-4 px-4 text-muted">
                       {user.department || '-'}
                     </td>
                     
@@ -262,8 +262,8 @@ export function Users() {
                         onClick={() => handleToggleStatus(user)}
                         className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                           user.isActive
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-positive-soft text-positive'
+                            : 'bg-[#efece5] text-muted'
                         }`}
                       >
                         {user.isActive ? (
@@ -280,16 +280,16 @@ export function Users() {
                           <>
                             <button
                               onClick={() => handleEditUser(user)}
-                              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                              className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors"
                             >
-                              <Edit2 className="h-4 w-4 text-slate-500" />
+                              <Edit2 className="h-4 w-4 text-muted" />
                             </button>
                             {!user.role.isSystem && (
                               <button
                                 onClick={() => setUserToDelete(user)}
-                                className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-2 hover:bg-danger-soft rounded-lg transition-colors"
                               >
-                                <Trash2 className="h-4 w-4 text-red-500" />
+                                <Trash2 className="h-4 w-4 text-danger" />
                               </button>
                             )}
                           </>
@@ -310,31 +310,31 @@ export function Users() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">First Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
                 value={userForm.firstName} onChange={(e) => setUserForm({...userForm, firstName: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Last Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
                 value={userForm.lastName} onChange={(e) => setUserForm({...userForm, lastName: e.target.value})} />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Email *</label>
-            <input type="email" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <input type="email" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Phone</label>
-            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.phone} onChange={(e) => setUserForm({...userForm, phone: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Role *</label>
-            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
               {roles.map(role => (
                 <option key={role.id} value={role.id}>{role.name}</option>
@@ -344,18 +344,18 @@ export function Users() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Department</label>
-            <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})}
               placeholder="e.g., Property Management" />
           </div>
 
           <div className="flex items-center gap-2">
-            <input type="checkbox" id="isActive" className="w-4 h-4 rounded border-slate-300"
+            <input type="checkbox" id="isActive" className="w-4 h-4 rounded border-line-strong"
               checked={userForm.isActive} onChange={(e) => setUserForm({...userForm, isActive: e.target.checked})} />
-            <label htmlFor="isActive" className="text-sm text-slate-700">Active</label>
+            <label htmlFor="isActive" className="text-sm text-ink">Active</label>
           </div>
 
-          <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">
+          <p className="text-sm text-muted bg-canvas p-3 rounded-lg">
             A temporary password will be generated and shown to you after creating the user. Share it with them securely; they'll be prompted to change it on first login.
           </p>
 
@@ -372,31 +372,31 @@ export function Users() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">First Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
                 value={userForm.firstName} onChange={(e) => setUserForm({...userForm, firstName: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Last Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
                 value={userForm.lastName} onChange={(e) => setUserForm({...userForm, lastName: e.target.value})} />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Email *</label>
-            <input type="email" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <input type="email" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Phone</label>
-            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.phone} onChange={(e) => setUserForm({...userForm, phone: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Role *</label>
-            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
               {roles.map(role => (
                 <option key={role.id} value={role.id}>{role.name}</option>
@@ -406,14 +406,14 @@ export function Users() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Department</label>
-            <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})} />
           </div>
 
           <div className="flex items-center gap-2">
-            <input type="checkbox" id="editIsActive" className="w-4 h-4 rounded border-slate-300"
+            <input type="checkbox" id="editIsActive" className="w-4 h-4 rounded border-line-strong"
               checked={userForm.isActive} onChange={(e) => setUserForm({...userForm, isActive: e.target.checked})} />
-            <label htmlFor="editIsActive" className="text-sm text-slate-700">Active</label>
+            <label htmlFor="editIsActive" className="text-sm text-ink">Active</label>
           </div>
 
           <div className="flex gap-3 pt-4">

@@ -10,29 +10,29 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'default', ...props }, ref) => {
     const variants = {
-      default: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25',
-      destructive: 'bg-gradient-to-r from-red-500 to-rose-600 text-white hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25',
-      outline: 'border-2 border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300',
-      secondary: 'bg-slate-100 text-slate-700 hover:bg-slate-200',
-      ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-      link: 'text-blue-600 underline-offset-4 hover:underline hover:text-blue-700',
+      default: 'bg-primary text-white hover:bg-primary-hover shadow-sm',
+      destructive: 'bg-danger text-white hover:bg-[#8c2b21] shadow-sm',
+      outline: 'border border-line-strong bg-surface text-ink hover:bg-canvas hover:border-faint',
+      secondary: 'bg-primary-soft text-primary hover:bg-[#e0e9e2]',
+      ghost: 'text-muted hover:bg-black/[0.05] hover:text-ink',
+      link: 'text-primary underline-offset-4 hover:underline',
     };
 
     const sizes = {
-      default: 'h-11 px-6 py-2',
-      sm: 'h-9 rounded-lg px-4 text-xs',
-      lg: 'h-12 rounded-xl px-8 text-base',
+      default: 'h-10 px-5 py-2',
+      sm: 'h-9 rounded-lg px-3.5 text-xs',
+      lg: 'h-12 rounded-xl px-7 text-base',
       icon: 'h-10 w-10 rounded-lg',
     };
 
     return (
       <button
         className={cn(
-          'inline-flex items-center justify-center whitespace-nowrap rounded-xl text-sm font-semibold',
+          'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium',
           'transition-all duration-200 ease-out',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
           'disabled:pointer-events-none disabled:opacity-50',
-          'active:scale-[0.98]',
+          'active:scale-[0.985]',
           variants[variant],
           sizes[size],
           className

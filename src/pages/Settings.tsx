@@ -194,13 +194,13 @@ export function Settings() {
   ];
 
   const moduleColors: Record<string, string> = {
-    dashboard: 'bg-blue-100 text-blue-800',
-    properties: 'bg-emerald-100 text-emerald-800',
-    tenants: 'bg-violet-100 text-violet-800',
-    rents: 'bg-amber-100 text-amber-800',
-    finances: 'bg-cyan-100 text-cyan-800',
+    dashboard: 'bg-primary-soft text-primary',
+    properties: 'bg-positive-soft text-emerald-800',
+    tenants: 'bg-primary-soft text-violet-800',
+    rents: 'bg-warning-soft text-amber-800',
+    finances: 'bg-primary-soft text-cyan-800',
     users: 'bg-rose-100 text-rose-800',
-    settings: 'bg-slate-100 text-slate-800',
+    settings: 'bg-[#efece5] text-ink',
   };
 
   return (
@@ -433,7 +433,7 @@ export function Settings() {
                       checked={notificationSettings[item.key as keyof typeof notificationSettings]}
                       onChange={(e) => setNotificationSettings({...notificationSettings, [item.key]: e.target.checked})}
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-[#dcd9d1] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line-strong after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
               ))}
@@ -509,7 +509,7 @@ export function Settings() {
                               handleDeleteRole(role.id);
                             }}
                           >
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                            <Trash2 className="h-4 w-4 text-danger" />
                           </Button>
                         </>
                       )}
@@ -538,8 +538,8 @@ export function Settings() {
                               <div className="flex items-center gap-3">
                                 <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                   isChecked
-                                    ? 'bg-blue-600 border-blue-600'
-                                    : 'border-gray-400 bg-white'
+                                    ? 'bg-primary border-primary'
+                                    : 'border-line-strong bg-surface'
                                 }`}>
                                   {isChecked && <Check className="h-3.5 w-3.5 text-white stroke-[3]" />}
                                 </div>
@@ -612,8 +612,8 @@ export function Settings() {
                     <div className="flex items-center gap-3">
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                         isChecked
-                          ? 'bg-blue-600 border-blue-600'
-                          : 'border-gray-400 bg-white'
+                          ? 'bg-primary border-primary'
+                          : 'border-line-strong bg-surface'
                       }`}
                       >
                         {isChecked && <Check className="h-3.5 w-3.5 text-white stroke-[3]" />}

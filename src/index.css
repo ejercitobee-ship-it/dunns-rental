@@ -1,96 +1,117 @@
 @import "tailwindcss";
 
-/* Custom color palette for professional look */
-:root {
-  --background: 220 25% 97%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 221 83% 53%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 220 14% 96%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 221 83% 53%;
-  --radius: 0.5rem;
-  
-  /* Sidebar colors */
-  --sidebar-bg: 222 47% 11%;
-  --sidebar-text: 210 40% 98%;
-  --sidebar-muted: 220 9% 60%;
-  --sidebar-accent: 221 83% 53%;
+/*
+  "Estate" design system — a private property-office aesthetic.
+  Warm paper canvas, hairline structure, one deep evergreen accent,
+  a serif for figures and titles (Fraunces) over a clean grotesque
+  (Hanken Grotesk) for everything functional.
+*/
+@theme {
+  /* Neutrals — warm paper and ink */
+  --color-canvas: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-line: #e7e4dd;
+  --color-line-strong: #d8d4ca;
+  --color-ink: #1b1a17;
+  --color-muted: #75726a;
+  --color-faint: #a6a29a;
+
+  /* Evergreen accent */
+  --color-primary: #24503f;
+  --color-primary-hover: #1c4032;
+  --color-primary-soft: #eaf0ec;
+  --color-primary-line: #cddbd2;
+
+  /* Refined semantics */
+  --color-positive: #2c7a58;
+  --color-positive-soft: #e9f2ec;
+  --color-warning: #97671c;
+  --color-warning-soft: #f5edda;
+  --color-danger: #a23429;
+  --color-danger-soft: #f6e8e6;
+
+  /* Sidebar */
+  --color-sidebar: #1b1b18;
+  --color-sidebar-line: #302f2b;
+  --color-sidebar-muted: #8a887f;
+
+  /* Type */
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
 }
 
-body {
-  background: linear-gradient(135deg, #f0f4f8 0%, #e6eef7 50%, #edf2f7 100%);
-  min-height: 100vh;
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  /* Page titles get the display serif automatically */
+  h1 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: #fff;
+  }
 }
 
-/* Card hover effects */
-.card-hover {
-  transition: all 0.3s ease;
+/* Utility: display serif for hero figures and select headings */
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
 }
 
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+/* Tabular figures for aligned money/data columns */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
-/* Gradient backgrounds for stat cards */
-.stat-card-gradient-1 {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+/* Eyebrow: small, tracked, uppercase label */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-muted);
 }
 
-.stat-card-gradient-2 {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
-
-.stat-card-gradient-3 {
-  background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
-}
-
-.stat-card-gradient-4 {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-/* Glass effect for modals */
-.glass-effect {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-}
-
-/* Smooth transitions */
-* {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-/* Custom scrollbar */
+/* Scrollbar — quiet */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #d8d4ca;
+  border-radius: 7px;
+  border: 3px solid var(--color-canvas);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c2bdb1;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

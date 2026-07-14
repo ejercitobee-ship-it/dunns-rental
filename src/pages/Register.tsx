@@ -54,38 +54,38 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-canvas p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg shadow-blue-500/30 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl ring-1 ring-black/5 mb-4">
             <Building2 className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">DUNN's Rental</h1>
-          <p className="text-slate-500 mt-1">Property Management System</p>
+          <h1 className="text-2xl font-bold text-ink">DUNN's Rental</h1>
+          <p className="text-muted mt-1">Property Management System</p>
         </div>
 
         {/* Register Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-xl font-bold text-slate-800 mb-6">Create Account</h2>
+          <h2 className="text-xl font-bold text-ink mb-6">Create Account</h2>
 
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="mb-4 p-4 bg-danger-soft border border-[#e8cdc8] rounded-xl flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-danger flex-shrink-0" />
+              <p className="text-sm text-danger">{error}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
+              <label className="block text-sm font-medium text-ink mb-2">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-faint" />
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
                   placeholder="John Doe"
                   required
                 />
@@ -93,14 +93,14 @@ export function Register() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
+              <label className="block text-sm font-medium text-ink mb-2">Email Address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-faint" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
                   placeholder="Enter your email"
                   required
                 />
@@ -108,14 +108,14 @@ export function Register() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+              <label className="block text-sm font-medium text-ink mb-2">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-faint" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-12 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
                   placeholder="Min 8 characters"
                   required
                   minLength={8}
@@ -123,26 +123,26 @@ export function Register() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-black/[0.05] rounded-lg transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-400" />
+                    <EyeOff className="h-5 w-5 text-faint" />
                   ) : (
-                    <Eye className="h-5 w-5 text-slate-400" />
+                    <Eye className="h-5 w-5 text-faint" />
                   )}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Confirm Password</label>
+              <label className="block text-sm font-medium text-ink mb-2">Confirm Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-faint" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
                   placeholder="Confirm your password"
                   required
                 />
@@ -168,10 +168,10 @@ export function Register() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-200 text-center">
-            <p className="text-sm text-slate-500">
+          <div className="mt-6 pt-6 border-t border-line text-center">
+            <p className="text-sm text-muted">
               Already have an account?{' '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+              <Link to="/login" className="text-primary hover:text-primary-hover font-medium">
                 Sign in
               </Link>
             </p>
@@ -179,7 +179,7 @@ export function Register() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-slate-500 mt-8">
+        <p className="text-center text-sm text-muted mt-8">
           © 2024 DUNN's Rental. All rights reserved.
         </p>
       </div>

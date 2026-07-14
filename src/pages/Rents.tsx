@@ -457,7 +457,7 @@ export function Rents() {
                 <CheckCircle className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalPaid)}</div>
+                <div className="text-2xl font-bold text-positive">{formatCurrency(stats.totalPaid)}</div>
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
             </Card>
@@ -465,10 +465,10 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
-                <AlertCircle className="h-4 w-4 text-red-500" />
+                <AlertCircle className="h-4 w-4 text-danger" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">{formatCurrency(stats.totalOwed)}</div>
+                <div className="text-2xl font-bold text-danger">{formatCurrency(stats.totalOwed)}</div>
                 <p className="text-xs text-muted-foreground">Pending + Overdue</p>
               </CardContent>
             </Card>
@@ -487,7 +487,7 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
-                <XCircle className="h-4 w-4 text-red-500" />
+                <XCircle className="h-4 w-4 text-danger" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -637,7 +637,7 @@ export function Rents() {
                           <td className="py-4 px-4 text-sm">
                             {payment.receivedDate ? (
                               <div className="space-y-1">
-                                <span className="text-green-600 font-medium">{formatDate(payment.receivedDate)}</span>
+                                <span className="text-positive font-medium">{formatDate(payment.receivedDate)}</span>
                                 {payment.uploadedBy && (
                                   <div className="text-xs text-muted-foreground">
                                     by {payment.uploadedBy}
@@ -650,7 +650,7 @@ export function Rents() {
                                 )}
                               </div>
                             ) : payment.paidDate ? (
-                              <span className="text-green-600">{formatDate(payment.paidDate)}</span>
+                              <span className="text-positive">{formatDate(payment.paidDate)}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
@@ -718,7 +718,7 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Annual Expected</CardTitle>
-                <Calendar className="h-4 w-4 text-blue-500" />
+                <Calendar className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(annualData.reduce((s, m) => s + m.expected, 0))}</div>
@@ -732,7 +732,7 @@ export function Rents() {
                 <TrendingUp className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{formatCurrency(annualData.reduce((s, m) => s + m.collected, 0))}</div>
+                <div className="text-2xl font-bold text-positive">{formatCurrency(annualData.reduce((s, m) => s + m.collected, 0))}</div>
                 <p className="text-xs text-muted-foreground">Total rent collected</p>
               </CardContent>
             </Card>
@@ -740,10 +740,10 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Annual Outstanding</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-500" />
+                <TrendingDown className="h-4 w-4 text-danger" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">{formatCurrency(annualData.reduce((s, m) => s + m.outstanding, 0))}</div>
+                <div className="text-2xl font-bold text-danger">{formatCurrency(annualData.reduce((s, m) => s + m.outstanding, 0))}</div>
                 <p className="text-xs text-muted-foreground">Unpaid rent</p>
               </CardContent>
             </Card>
@@ -806,11 +806,11 @@ export function Rents() {
                       <tr key={month.month} className="border-b last:border-0 hover:bg-muted/50">
                         <td className="py-3 px-4 font-medium">{MONTHS[month.month - 1]}</td>
                         <td className="py-3 px-4 text-right">{formatCurrency(month.expected)}</td>
-                        <td className="py-3 px-4 text-right text-green-600">{formatCurrency(month.collected)}</td>
-                        <td className="py-3 px-4 text-right text-red-600">{formatCurrency(month.overdue)}</td>
-                        <td className="py-3 px-4 text-right text-amber-600">{formatCurrency(month.pending)}</td>
+                        <td className="py-3 px-4 text-right text-positive">{formatCurrency(month.collected)}</td>
+                        <td className="py-3 px-4 text-right text-danger">{formatCurrency(month.overdue)}</td>
+                        <td className="py-3 px-4 text-right text-warning">{formatCurrency(month.pending)}</td>
                         <td className="py-3 px-4 text-right">
-                          <span className={`font-semibold ${month.collectionRate >= 95 ? 'text-green-600' : month.collectionRate >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                          <span className={`font-semibold ${month.collectionRate >= 95 ? 'text-positive' : month.collectionRate >= 80 ? 'text-warning' : 'text-danger'}`}>
                             {month.collectionRate.toFixed(1)}%
                           </span>
                         </td>
@@ -834,7 +834,7 @@ export function Rents() {
                 <TrendingUp className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{formatCurrency(taxData.totalRentIncome)}</div>
+                <div className="text-2xl font-bold text-positive">{formatCurrency(taxData.totalRentIncome)}</div>
                 <p className="text-xs text-muted-foreground">Taxable income</p>
               </CardContent>
             </Card>
@@ -842,7 +842,7 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Expected</CardTitle>
-                <Calendar className="h-4 w-4 text-blue-500" />
+                <Calendar className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(taxData.totalExpected)}</div>
@@ -853,10 +853,10 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Overdue Amount</CardTitle>
-                <AlertCircle className="h-4 w-4 text-red-500" />
+                <AlertCircle className="h-4 w-4 text-danger" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">{formatCurrency(taxData.totalOverdue)}</div>
+                <div className="text-2xl font-bold text-danger">{formatCurrency(taxData.totalOverdue)}</div>
                 <p className="text-xs text-muted-foreground">Uncollected rent</p>
               </CardContent>
             </Card>
@@ -864,10 +864,10 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pending Collection</CardTitle>
-                <Clock className="h-4 w-4 text-amber-500" />
+                <Clock className="h-4 w-4 text-warning" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-amber-600">{formatCurrency(taxData.totalPending)}</div>
+                <div className="text-2xl font-bold text-warning">{formatCurrency(taxData.totalPending)}</div>
                 <p className="text-xs text-muted-foreground">Awaiting payment</p>
               </CardContent>
             </Card>
@@ -895,10 +895,10 @@ export function Rents() {
                       <tr key={q.name} className="border-b last:border-0 hover:bg-muted/50">
                         <td className="py-3 px-4 font-medium">{q.name}</td>
                         <td className="py-3 px-4 text-right">{formatCurrency(q.expected)}</td>
-                        <td className="py-3 px-4 text-right text-green-600 font-semibold">{formatCurrency(q.collected)}</td>
-                        <td className="py-3 px-4 text-right text-red-600">{formatCurrency(q.outstanding)}</td>
+                        <td className="py-3 px-4 text-right text-positive font-semibold">{formatCurrency(q.collected)}</td>
+                        <td className="py-3 px-4 text-right text-danger">{formatCurrency(q.outstanding)}</td>
                         <td className="py-3 px-4 text-right">
-                          <span className={`font-semibold ${(q.collected / q.expected * 100) >= 95 ? 'text-green-600' : 'text-amber-600'}`}>
+                          <span className={`font-semibold ${(q.collected / q.expected * 100) >= 95 ? 'text-positive' : 'text-warning'}`}>
                             {q.expected > 0 ? (q.collected / q.expected * 100).toFixed(1) : 0}%
                           </span>
                         </td>
@@ -919,9 +919,9 @@ export function Rents() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="bg-warning-soft border border-[#e9dcbe] rounded-lg p-4">
                 <h4 className="font-semibold text-amber-800 mb-2">Important Tax Information</h4>
-                <ul className="list-disc list-inside space-y-1 text-sm text-amber-700">
+                <ul className="list-disc list-inside space-y-1 text-sm text-warning">
                   <li>Rent income is taxable and must be reported on your tax return</li>
                   <li>Security deposits are not taxable income unless kept</li>
                   <li>Late fees collected are considered rental income</li>
@@ -974,12 +974,12 @@ export function Rents() {
         size="lg"
       >
         <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-800 mb-2">CSV Format</h4>
-            <p className="text-sm text-blue-700 mb-2">
+          <div className="bg-primary-soft border border-primary-line rounded-lg p-4">
+            <h4 className="font-semibold text-primary mb-2">CSV Format</h4>
+            <p className="text-sm text-primary-hover mb-2">
               Upload a CSV file with the following columns:
             </p>
-            <code className="text-xs bg-blue-100 px-2 py-1 rounded block">
+            <code className="text-xs bg-primary-soft px-2 py-1 rounded block">
               tenant_name,property,unit,amount,due_date,month,year
             </code>
           </div>
@@ -1028,9 +1028,9 @@ export function Rents() {
       >
         {selectedPayment && (
           <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-800 mb-1">Payment Details</h4>
-              <div className="text-sm text-blue-700 space-y-1">
+            <div className="bg-primary-soft border border-primary-line rounded-lg p-4">
+              <h4 className="font-semibold text-primary mb-1">Payment Details</h4>
+              <div className="text-sm text-primary-hover space-y-1">
                 <p>
                   <span className="font-medium">Tenant:</span>{' '}
                   {getTenant(selectedPayment.tenantId)?.firstName} {getTenant(selectedPayment.tenantId)?.lastName}
@@ -1060,7 +1060,7 @@ export function Rents() {
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
                         recordForm.paymentMethod === method
                           ? 'border-primary bg-primary/5 text-primary'
-                          : 'border-slate-200 hover:border-primary/50'
+                          : 'border-line hover:border-primary/50'
                       }`}
                     >
                       <Icon className="h-4 w-4" />
@@ -1092,8 +1092,8 @@ export function Rents() {
               />
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-sm text-amber-700">
+            <div className="bg-warning-soft border border-[#e9dcbe] rounded-lg p-3">
+              <p className="text-sm text-warning">
                 This payment will be recorded as received on {recordForm.receivedDate} via {paymentMethodConfig[recordForm.paymentMethod].label}.
               </p>
             </div>
@@ -1277,7 +1277,7 @@ export function Rents() {
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
                           newPaymentForm.paymentMethod === method
                             ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-slate-200 hover:border-primary/50'
+                            : 'border-line hover:border-primary/50'
                         }`}
                       >
                         <Icon className="h-4 w-4" />

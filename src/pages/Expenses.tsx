@@ -202,7 +202,7 @@ export function Expenses() {
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalIncome)}</div>
+            <div className="text-2xl font-bold text-positive">{formatCurrency(stats.totalIncome)}</div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
@@ -210,10 +210,10 @@ export function Expenses() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <TrendingDown className="h-4 w-4 text-danger" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(stats.totalExpenses)}</div>
+            <div className="text-2xl font-bold text-danger">{formatCurrency(stats.totalExpenses)}</div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
@@ -224,7 +224,7 @@ export function Expenses() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${stats.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-2xl font-bold ${stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
               {formatCurrency(stats.netIncome)}
             </div>
             <p className="text-xs text-muted-foreground">Overall profit/loss</p>
@@ -402,7 +402,7 @@ export function Expenses() {
                         <td className="py-4 px-4 text-sm text-muted-foreground">
                           {expense.vendor || '-'}
                         </td>
-                        <td className="py-4 px-4 text-right font-semibold text-red-600">
+                        <td className="py-4 px-4 text-right font-semibold text-danger">
                           -{formatCurrency(expense.amount)}
                         </td>
                       </tr>
@@ -434,7 +434,7 @@ export function Expenses() {
                           <Badge variant="success" className="capitalize">{income.source}</Badge>
                         </td>
                         <td className="py-4 px-4 text-sm">{income.description}</td>
-                        <td className="py-4 px-4 text-right font-semibold text-green-600">
+                        <td className="py-4 px-4 text-right font-semibold text-positive">
                           +{formatCurrency(income.amount)}
                         </td>
                       </tr>
@@ -527,7 +527,7 @@ export function Expenses() {
                   <input
                     type="checkbox"
                     name="isRecurring"
-                    className="w-4 h-4 rounded border-gray-300"
+                    className="w-4 h-4 rounded border-line-strong"
                   />
                   <span className="text-sm">Recurring Expense</span>
                 </label>

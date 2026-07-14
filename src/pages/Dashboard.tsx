@@ -24,7 +24,10 @@ import {
   Line,
 } from 'recharts';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#24503f', '#2c7a58', '#97671c', '#a23429', '#7e8b83'];
+const INCOME_COLOR = '#2c7a58';
+const EXPENSE_COLOR = '#b98a5e';
+const NET_COLOR = '#24503f';
 
 // Stat Card Component
 interface StatCardProps {
@@ -32,41 +35,30 @@ interface StatCardProps {
   value: string | number;
   subtitle?: string;
   icon: React.ReactNode;
-  gradient: string;
   onClick?: () => void;
   trend?: { value: string; positive: boolean };
 }
 
-function StatCard({ title, value, subtitle, icon, gradient, onClick, trend }: StatCardProps) {
+function StatCard({ title, value, subtitle, icon, onClick, trend }: StatCardProps) {
   return (
-    <Card 
-      className="overflow-hidden border-0 shadow-md cursor-pointer transform transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+    <Card
+      className="cursor-pointer hover:border-line-strong hover:shadow-[0_2px_12px_rgba(27,26,23,0.07)]"
       onClick={onClick}
     >
-      <div className="p-4 sm:p-6 relative overflow-hidden bg-white">
-        {/* Subtle top accent bar */}
-        <div className={`absolute top-0 left-0 right-0 h-1 ${gradient}`} />
-        
-        <div className="flex items-start justify-between mb-3 sm:mb-4">
-          <div className={`p-2 sm:p-3 rounded-xl ${gradient} bg-opacity-10`}>
-            <div className="text-white">
-              {icon}
-            </div>
-          </div>
+      <div className="p-5">
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">{title}</span>
+          <span className="text-faint [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
+        </div>
+        <div className="mt-3.5 flex items-end gap-2">
+          <span className="font-display text-[27px] leading-none font-medium text-ink tnum">{value}</span>
           {trend && (
-            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-              trend.positive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-            }`}>
+            <span className={`mb-1 text-xs font-medium ${trend.positive ? 'text-positive' : 'text-danger'}`}>
               {trend.positive ? '↑' : '↓'} {trend.value}
-            </div>
+            </span>
           )}
         </div>
-        
-        <div>
-          <p className="text-slate-500 text-xs sm:text-sm font-medium mb-1">{title}</p>
-          <h3 className="text-lg sm:text-2xl font-bold text-slate-800 mb-1">{value}</h3>
-          {subtitle && <p className="text-slate-400 text-xs sm:text-sm">{subtitle}</p>}
-        </div>
+        {subtitle && <p className="mt-1.5 text-[13px] text-muted">{subtitle}</p>}
       </div>
     </Card>
   );
@@ -223,7 +215,7 @@ export function Dashboard() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-red-500">Error loading data: {error}</div>
+        <div className="text-danger">Error loading data: {error}</div>
       </div>
     );
   }
@@ -233,14 +225,14 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-slate-500 mt-1 text-sm sm:text-base">
-            Welcome back! Here's what's happening with your properties.
+          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Dashboard</h1>
+          <p className="text-muted mt-1 text-sm">
+            An overview of your properties, tenants, and cash flow.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          Last updated: {formatDate(new Date().toISOString())}
+        <div className="flex items-center gap-2 text-[13px] text-muted">
+          <span className="w-1.5 h-1.5 bg-positive rounded-full"></span>
+          Updated {formatDate(new Date().toISOString())}
         </div>
       </div>
 
@@ -251,7 +243,6 @@ export function Dashboard() {
           value={stats.totalProperties}
           subtitle={`${stats.totalUnits} total units`}
           icon={<Building2 className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-blue-500 to-blue-600"
           trend={{ value: "12%", positive: true }}
           onClick={() => navigate('/properties')}
         />
@@ -261,7 +252,6 @@ export function Dashboard() {
           value={`${stats.occupancyRate.toFixed(0)}%`}
           subtitle={`${stats.occupiedUnits} of ${stats.totalUnits} units occupied`}
           icon={<Percent className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-emerald-500 to-emerald-600"
           trend={{ value: "5%", positive: true }}
           onClick={() => navigate('/properties')}
         />
@@ -271,7 +261,6 @@ export function Dashboard() {
           value={stats.totalTenants}
           subtitle="Across all properties"
           icon={<Users className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-violet-500 to-violet-600"
           onClick={() => navigate('/tenants')}
         />
 
@@ -280,7 +269,6 @@ export function Dashboard() {
           value={formatCurrency(stats.projectedYearlyIncome || 0)}
           subtitle="From active tenants"
           icon={<TrendingUp className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-cyan-500 to-blue-500"
           onClick={() => navigate('/rents')}
         />
       </div>
@@ -288,15 +276,15 @@ export function Dashboard() {
       {/* Alerts - Clickable */}
       {stats.totalOwed > 0 && (
         <div 
-          className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 rounded-xl p-5 flex items-start gap-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+          className="bg-danger-soft border border-[#e8cdc8] rounded-xl p-5 flex items-start gap-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
           onClick={() => navigate('/rents')}
         >
-          <div className="p-2 bg-red-100 rounded-lg">
-            <AlertCircle className="h-5 w-5 text-red-600" />
+          <div className="p-2 bg-danger-soft rounded-lg">
+            <AlertCircle className="h-5 w-5 text-danger" />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold text-red-900">Outstanding Payments</h3>
-            <p className="text-red-700 mt-1">
+            <p className="text-danger mt-1">
               You have {formatCurrency(stats.totalOwed)} in overdue or pending rent payments.
             </p>
           </div>
@@ -312,25 +300,26 @@ export function Dashboard() {
         <ClickableCard onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <TrendingUp className="h-5 w-5 text-primary" />
               </div>
               Income vs Expenses
-              <ArrowRight className="h-4 w-4 text-slate-400 ml-auto" />
+              <ArrowRight className="h-4 w-4 text-faint ml-auto" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#64748b" fontSize={12} />
-                <Tooltip 
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e4dd" vertical={false} />
+                <XAxis dataKey="name" stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
                   formatter={(value) => formatCurrency(Number(value))}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)' }}
+                  cursor={{ fill: 'rgba(27,26,23,0.04)' }}
+                  contentStyle={{ borderRadius: '10px', border: '1px solid #e7e4dd', boxShadow: '0 8px 30px -8px rgba(27,26,23,0.18)' }}
                 />
-                <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" fill={INCOME_COLOR} radius={[3, 3, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="expenses" fill={EXPENSE_COLOR} radius={[3, 3, 0, 0]} maxBarSize={22} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -339,30 +328,30 @@ export function Dashboard() {
         <ClickableCard onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <Wallet className="h-5 w-5 text-indigo-600" />
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <Wallet className="h-5 w-5 text-primary" />
               </div>
               Net Income Trend
-              <ArrowRight className="h-4 w-4 text-slate-400 ml-auto" />
+              <ArrowRight className="h-4 w-4 text-faint ml-auto" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#64748b" fontSize={12} />
-                <Tooltip 
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e4dd" vertical={false} />
+                <XAxis dataKey="name" stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
                   formatter={(value) => formatCurrency(Number(value))}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)' }}
+                  contentStyle={{ borderRadius: '10px', border: '1px solid #e7e4dd', boxShadow: '0 8px 30px -8px rgba(27,26,23,0.18)' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="net" 
-                  stroke="#6366f1" 
-                  strokeWidth={3}
-                  dot={{ fill: '#6366f1', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, strokeWidth: 0 }}
+                <Line
+                  type="monotone"
+                  dataKey="net"
+                  stroke={NET_COLOR}
+                  strokeWidth={2}
+                  dot={{ fill: NET_COLOR, strokeWidth: 0, r: 3 }}
+                  activeDot={{ r: 5, strokeWidth: 0 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -376,8 +365,8 @@ export function Dashboard() {
         <ClickableCard onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <TrendingDown className="h-5 w-5 text-amber-600" />
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <TrendingDown className="h-5 w-5 text-primary" />
               </div>
               Expenses by Category
             </CardTitle>
@@ -409,9 +398,9 @@ export function Dashboard() {
                       className="w-3 h-3 rounded-full" 
                       style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                     />
-                    <span className="capitalize text-slate-600">{cat.name}</span>
+                    <span className="capitalize text-muted">{cat.name}</span>
                   </div>
-                  <span className="font-semibold text-slate-800">{formatCurrency(cat.value)}</span>
+                  <span className="font-semibold text-ink">{formatCurrency(cat.value)}</span>
                 </div>
               ))}
             </div>
@@ -422,8 +411,8 @@ export function Dashboard() {
         <Card className="md:col-span-2 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-emerald-100 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <TrendingUp className="h-5 w-5 text-primary" />
               </div>
               Recent Activity
             </CardTitle>
@@ -433,14 +422,14 @@ export function Dashboard() {
               {recentActivity.slice(0, 6).map((activity, idx) => (
                 <div 
                   key={idx} 
-                  className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors"
+                  className="flex items-center justify-between py-3 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.03] rounded-lg px-2 -mx-2 transition-colors"
                   onClick={() => activity.type === 'payment' ? navigate('/rents') : navigate('/finances')}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl ${
-                      activity.type === 'payment' 
-                        ? 'bg-emerald-100 text-emerald-600' 
-                        : 'bg-red-100 text-red-600'
+                    <div className={`p-2.5 rounded-lg ${
+                      activity.type === 'payment'
+                        ? 'bg-positive-soft text-positive'
+                        : 'bg-danger-soft text-danger'
                     }`}>
                       {activity.type === 'payment' ? (
                         <TrendingUp className="h-4 w-4" />
@@ -449,17 +438,17 @@ export function Dashboard() {
                       )}
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800">{activity.description}</p>
-                      <p className="text-sm text-slate-500">{activity.property}</p>
+                      <p className="font-medium text-ink">{activity.description}</p>
+                      <p className="text-sm text-muted">{activity.property}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`font-bold ${
-                      activity.amount > 0 ? 'text-emerald-600' : 'text-red-600'
+                    <p className={`font-semibold tnum ${
+                      activity.amount > 0 ? 'text-positive' : 'text-danger'
                     }`}>
                       {activity.amount > 0 ? '+' : ''}{formatCurrency(activity.amount)}
                     </p>
-                    <p className="text-xs text-slate-400">{formatDate(activity.date)}</p>
+                    <p className="text-xs text-faint">{formatDate(activity.date)}</p>
                   </div>
                 </div>
               ))}
@@ -470,11 +459,11 @@ export function Dashboard() {
 
       {/* Vacant Units Quick View */}
       {vacantUnits.length > 0 && (
-        <ClickableCard onClick={() => navigate('/properties')} className="border-dashed border-2 border-slate-300">
+        <ClickableCard onClick={() => navigate('/properties')} className="border-dashed border-2 border-line-strong">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-slate-600">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <DoorOpen className="h-5 w-5 text-amber-600" />
+            <CardTitle className="flex items-center gap-2 text-muted">
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <DoorOpen className="h-5 w-5 text-primary" />
               </div>
               Vacant Units ({vacantUnits.length})
               <ArrowRight className="h-4 w-4 ml-auto" />
@@ -487,19 +476,19 @@ export function Dashboard() {
                 return (
                   <div 
                     key={unit.id} 
-                    className="flex-shrink-0 p-4 bg-slate-50 rounded-xl min-w-[200px] cursor-pointer hover:bg-slate-100 transition-colors"
+                    className="flex-shrink-0 p-4 bg-canvas rounded-xl min-w-[200px] cursor-pointer hover:bg-black/[0.05] transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate('/properties');
                     }}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <Home className="h-4 w-4 text-slate-400" />
-                      <span className="font-semibold text-slate-700">Unit {unit.unitNumber}</span>
+                      <Home className="h-4 w-4 text-faint" />
+                      <span className="font-semibold text-ink">Unit {unit.unitNumber}</span>
                     </div>
-                    <p className="text-sm text-slate-500 mb-1">{property?.name}</p>
-                    <p className="text-lg font-bold text-emerald-600">{formatCurrency(unit.monthlyRent)}<span className="text-sm text-slate-400 font-normal">/mo</span></p>
-                    <div className="flex gap-2 mt-2 text-xs text-slate-500">
+                    <p className="text-sm text-muted mb-1">{property?.name}</p>
+                    <p className="text-lg font-semibold text-primary tnum">{formatCurrency(unit.monthlyRent)}<span className="text-sm text-faint font-normal">/mo</span></p>
+                    <div className="flex gap-2 mt-2 text-xs text-muted">
                       <span>{unit.bedrooms} bd</span>
                       <span>•</span>
                       <span>{unit.bathrooms} ba</span>
@@ -514,14 +503,14 @@ export function Dashboard() {
 
       {/* Overdue Payments Table - Clickable */}
       {overduePayments.length > 0 && (
-        <Card className="shadow-lg border-red-200">
+        <Card className="shadow-lg border-[#e8cdc8]">
           <CardHeader>
             <CardTitle 
-              className="flex items-center gap-2 text-red-700 cursor-pointer hover:text-red-800 transition-colors"
+              className="flex items-center gap-2 text-danger cursor-pointer hover:text-red-800 transition-colors"
               onClick={() => navigate('/rents')}
             >
-              <div className="p-2 bg-red-100 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-red-600" />
+              <div className="p-2 bg-danger-soft rounded-lg">
+                <AlertCircle className="h-5 w-5 text-danger" />
               </div>
               Overdue Payments ({overduePayments.length})
               <ArrowRight className="h-4 w-4 ml-auto" />
@@ -531,31 +520,31 @@ export function Dashboard() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Tenant</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Property</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Due Date</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-700">Amount</th>
-                    <th className="text-center py-3 px-4 font-semibold text-slate-700">Status</th>
+                  <tr className="border-b border-line">
+                    <th className="text-left py-3 px-4 font-semibold text-ink">Tenant</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink">Property</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink">Due Date</th>
+                    <th className="text-right py-3 px-4 font-semibold text-ink">Amount</th>
+                    <th className="text-center py-3 px-4 font-semibold text-ink">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {overduePayments.slice(0, 5).map(payment => (
                     <tr 
                       key={payment.id} 
-                      className="border-b border-slate-100 last:border-0 hover:bg-red-50/50 cursor-pointer transition-colors"
+                      className="border-b border-line last:border-0 hover:bg-danger-soft/50 cursor-pointer transition-colors"
                       onClick={() => navigate('/rents')}
                     >
-                      <td className="py-3 px-4 font-medium text-slate-800">
+                      <td className="py-3 px-4 font-medium text-ink">
                         {payment.tenant?.firstName} {payment.tenant?.lastName}
                       </td>
-                      <td className="py-3 px-4 text-slate-600">
+                      <td className="py-3 px-4 text-muted">
                         {payment.property?.name}
                       </td>
-                      <td className="py-3 px-4 text-slate-600">
+                      <td className="py-3 px-4 text-muted">
                         {formatDate(payment.dueDate)}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-slate-800">
+                      <td className="py-3 px-4 text-right font-bold text-ink">
                         {formatCurrency(payment.amount)}
                       </td>
                       <td className="py-3 px-4 text-center">

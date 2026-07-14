@@ -23,26 +23,27 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+      <div
+        className="fixed inset-0 bg-ink/40 backdrop-blur-[2px] transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className={cn(
-        'relative z-50 w-full mx-0 sm:mx-4 bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl',
+        'relative z-50 w-full mx-0 sm:mx-4 bg-surface border border-line rounded-t-2xl sm:rounded-2xl',
+        'shadow-[0_24px_60px_-12px_rgba(27,26,23,0.28)]',
         'transform transition-all duration-300 ease-out',
         'scale-100 opacity-100',
         sizeClasses[size]
       )}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-800">{title}</h2>
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-line">
+          <h2 className="font-display text-lg sm:text-xl font-medium text-ink">{title}</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors group"
+            className="p-2 -mr-2 hover:bg-black/[0.05] rounded-lg transition-colors group"
           >
-            <X className="h-5 w-5 text-slate-400 group-hover:text-slate-600" />
+            <X className="h-5 w-5 text-faint group-hover:text-ink" />
           </button>
         </div>
         

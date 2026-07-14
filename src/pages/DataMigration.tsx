@@ -387,7 +387,7 @@ export function DataMigration() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+            <div className="bg-canvas rounded-lg p-4 space-y-2">
               <p className="text-sm font-medium">Your CSV file should have sections separated by headers:</p>
               <code className="block bg-slate-900 text-green-400 px-4 py-3 rounded-lg text-xs font-mono overflow-x-auto">
                 === PROPERTIES ===<br/>
@@ -490,14 +490,14 @@ export function DataMigration() {
         <div className="space-y-6">
           {/* Errors */}
           {errors.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="bg-danger-soft border border-[#e8cdc8] rounded-lg p-4">
               <h4 className="font-semibold text-red-800 flex items-center gap-2 mb-2">
                 <AlertCircle className="h-4 w-4" />
                 Validation Errors ({errors.length})
               </h4>
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {errors.map((err, i) => (
-                  <div key={i} className="text-sm text-red-700">
+                  <div key={i} className="text-sm text-danger">
                     Row {err.row} in {err.sheet}: {err.message}
                   </div>
                 ))}
@@ -522,7 +522,7 @@ export function DataMigration() {
                     className={`p-3 rounded-lg border text-center transition-colors ${
                       activeTab === item.key
                         ? 'border-primary bg-primary/5'
-                        : 'border-slate-200 hover:border-primary/50'
+                        : 'border-line hover:border-primary/50'
                     }`}
                   >
                     <item.icon className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
