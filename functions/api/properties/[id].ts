@@ -1,61 +1,69 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
+import { serializeProperty } from '../../lib/serializers';
 
-export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) => {
-  const { env, params } = context;
-  const id = params.id as string;
-  
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const { env, request, params } = context;
+  const auth = await requirePermission(env, request, 'properties_view');
+  if (auth instanceof Response) return auth;
+
   try {
-    const result = await env.DB.prepare(
-      'SELECT * FROM properties WHERE id = ?'
-    ).bind(id).first();
-    
-    if (!result) {
-      return Response.json({ success: false, error: 'Property not found' }, { status: 404 });
-    }
-    
-    return Response.json({ success: true, data: result });
-  } catch (error) {
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    const row = await env.DB.prepare('SELECT * FROM properties WHERE id = ?')
+      .bind(params.id as string)
+      .first();
+    if (!row) return jsonError('Property not found', 404);
+    return jsonOk({ success: true, data: serializeProperty(row as Record<string, unknown>) });
+  } catch {
+    return serverError();
   }
 };
 
-export const onRequestPut: PagesFunction<{ DB: D1Database }> = async (context) => {
+export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const id = params.id as string;
-  
+  const auth = await requirePermission(env, request, 'properties_edit');
+  if (auth instanceof Response) return auth;
+
   try {
-    const body = await request.json();
-    
+    const id = params.id as string;
+    const body = (await request.json()) as Record<string, unknown>;
+
     await env.DB.prepare(
       `UPDATE properties SET
         name = ?, address = ?, city = ?, state = ?, zip_code = ?, type = ?, description = ?,
-        updated_at = unixepoch()
+        purchase_date = ?, purchase_price = ?, updated_at = unixepoch()
        WHERE id = ?`
-    ).bind(
-      body.name,
-      body.address,
-      body.city,
-      body.state,
-      body.zipCode,
-      body.type,
-      body.description || null,
-      id
-    ).run();
-    
-    return Response.json({ success: true, data: { id, ...body } });
-  } catch (error) {
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    )
+      .bind(
+        body.name,
+        body.address,
+        body.city ?? '',
+        body.state ?? '',
+        body.zipCode ?? '',
+        body.type ?? 'house',
+        body.description ?? null,
+        body.purchaseDate ?? null,
+        body.purchasePrice ?? null,
+        id
+      )
+      .run();
+
+    const row = await env.DB.prepare('SELECT * FROM properties WHERE id = ?').bind(id).first();
+    if (!row) return jsonError('Property not found', 404);
+    return jsonOk({ success: true, data: serializeProperty(row as Record<string, unknown>) });
+  } catch {
+    return serverError();
   }
 };
 
-export const onRequestDelete: PagesFunction<{ DB: D1Database }> = async (context) => {
-  const { env, params } = context;
-  const id = params.id as string;
-  
+export const onRequestDelete: PagesFunction<Env> = async (context) => {
+  const { env, request, params } = context;
+  const auth = await requirePermission(env, request, 'properties_delete');
+  if (auth instanceof Response) return auth;
+
   try {
-    await env.DB.prepare('DELETE FROM properties WHERE id = ?').bind(id).run();
-    return Response.json({ success: true });
-  } catch (error) {
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    await env.DB.prepare('DELETE FROM properties WHERE id = ?').bind(params.id as string).run();
+    return jsonOk({ success: true });
+  } catch {
+    return serverError();
   }
 };

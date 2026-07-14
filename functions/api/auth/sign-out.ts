@@ -1,24 +1,16 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { auth } from '../../lib/auth';
+import { type Env, parseCookies, clearSessionCookie, jsonOk, serverError } from '../../lib/session';
 
-export const onRequestPost: PagesFunction<{ DB: D1Database; BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string }> = async (context) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
-  
+
   try {
-    if (!env.DB) {
-      return new Response(JSON.stringify({ error: 'Database not configured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    const token = parseCookies(request)['session'];
+    if (token) {
+      await env.DB.prepare('DELETE FROM session WHERE token = ?').bind(token).run();
     }
-    
-    const authInstance = auth(env);
-    return authInstance.handler(request);
-  } catch (error) {
-    console.error('Auth error:', error);
-    return new Response(JSON.stringify({ error: 'Auth service error', details: (error as Error).message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonOk({ success: true }, 200, { 'Set-Cookie': clearSessionCookie() });
+  } catch {
+    return serverError();
   }
 };

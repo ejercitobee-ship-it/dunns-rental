@@ -1,111 +1,104 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
+import {
+  type Env,
+  getSessionUser,
+  hashPassword,
+  jsonOk,
+  jsonError,
+  forbidden,
+  unauthorized,
+  serverError,
+} from '../../lib/session';
+import { roleCan } from '../../lib/permissions';
 
-// Generate a random temporary password
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+  const random = crypto.getRandomValues(new Uint8Array(16));
   let password = '';
-  for (let i = 0; i < 12; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 16; i++) {
+    password += chars.charAt(random[i] % chars.length);
   }
   return password;
 }
 
-// Simple password hashing using Web Crypto API
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-interface Env {
-  DB: D1Database;
-}
+const ASSIGNABLE_ROLES = new Set(['super_admin', 'admin', 'manager', 'accountant', 'viewer']);
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
-  
+
   try {
-    const body = await request.json() as {
+    const caller = await getSessionUser(env, request);
+    if (!caller) return unauthorized();
+    if (!roleCan(caller.role, 'users_create')) return forbidden();
+
+    const body = (await request.json()) as {
       firstName?: string;
       lastName?: string;
       email?: string;
       roleId?: string;
-      createdBy?: string;
     };
-    
-    const { firstName, lastName, email, roleId, createdBy } = body;
-    
+
+    const firstName = body.firstName?.trim();
+    const lastName = body.lastName?.trim();
+    const email = body.email?.trim().toLowerCase();
+    const roleId = body.roleId;
+
     if (!firstName || !lastName || !email || !roleId) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonError('Missing required fields', 400);
     }
-    
-    // Check if user already exists
+    if (!ASSIGNABLE_ROLES.has(roleId)) {
+      return jsonError('Invalid role', 400);
+    }
+
     const existingUser = await env.DB.prepare('SELECT id FROM user WHERE email = ?')
       .bind(email)
       .first();
-    
+
     if (existingUser) {
-      return new Response(JSON.stringify({ error: 'User already exists' }), {
-        status: 409,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonError('An account with this email already exists', 409);
     }
-    
-    // Generate temporary password
+
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
-    
-    // Create user
     const userId = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);
     const name = `${firstName} ${lastName}`;
-    
+
     await env.DB.prepare(
       'INSERT INTO user (id, name, email, email_verified, image, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(userId, name, email, 0, null, now, now).run();
-    
-    // Store password in account table
+    )
+      .bind(userId, name, email, 0, null, now, now)
+      .run();
+
     await env.DB.prepare(
       'INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), email, 'credential', userId, passwordHash, now, now).run();
-    
-    // Assign role
+    )
+      .bind(crypto.randomUUID(), email, 'credential', userId, passwordHash, now, now)
+      .run();
+
     await env.DB.prepare(
       'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), userId, roleId, now, now).run();
-    
-    // Store temp password flag - user must reset on first login
+    )
+      .bind(crypto.randomUUID(), userId, roleId, now, now)
+      .run();
+
+    // Require the new user to change the temporary password on first login.
     await env.DB.prepare(
       'INSERT INTO user_metadata (id, user_id, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), userId, 'force_password_reset', 'true', now, now).run();
-    
-    // Return success with temp password (admin should share this with user)
-    return new Response(JSON.stringify({ 
-      success: true, 
-      user: { 
-        id: userId, 
-        email, 
-        name,
-        role: roleId
+    )
+      .bind(crypto.randomUUID(), userId, 'force_password_reset', 'true', now, now)
+      .run();
+
+    return jsonOk(
+      {
+        success: true,
+        user: { id: userId, email, name, role: roleId },
+        tempPassword,
+        message: 'User created. Share the temporary password with them securely.',
       },
-      tempPassword,
-      message: 'User created successfully. Please share the temporary password with the user.'
-    }), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' },
-    });
-    
-  } catch (error) {
-    console.error('Create user error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error', details: (error as Error).message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+      201
+    );
+  } catch {
+    return serverError();
   }
 };

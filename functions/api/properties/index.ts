@@ -1,96 +1,56 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
+import { type Env, requirePermission, jsonOk, serverError } from '../../lib/session';
+import { serializeProperty } from '../../lib/serializers';
 
-// Helper to get user ID from session cookie
-async function getUserIdFromSession(env: { DB: D1Database }, request: Request): Promise<string | null> {
-  const cookieHeader = request.headers.get('Cookie');
-  if (!cookieHeader) return null;
-  
-  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-    const [key, value] = cookie.trim().split('=');
-    acc[key] = value;
-    return acc;
-  }, {} as Record<string, string>);
-  
-  const sessionToken = cookies['session'];
-  if (!sessionToken) return null;
-  
-  const now = Math.floor(Date.now() / 1000);
-  const session = await env.DB.prepare(
-    'SELECT user_id FROM session WHERE token = ? AND expires_at > ?'
-  ).bind(sessionToken, now).first();
-  
-  return session?.user_id as string || null;
-}
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
+  const auth = await requirePermission(env, request, 'properties_view');
+  if (auth instanceof Response) return auth;
 
-export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) => {
-  const { env } = context;
-  
   try {
     const { results } = await env.DB.prepare(
       'SELECT * FROM properties ORDER BY created_at DESC'
     ).all();
-    
-    return Response.json({ success: true, data: results });
-  } catch (error) {
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return jsonOk({ success: true, data: (results || []).map(serializeProperty) });
+  } catch {
+    return serverError();
   }
 };
 
-export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) => {
-  console.log('Properties POST handler invoked');
-  
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
+  const auth = await requirePermission(env, request, 'properties_create');
+  if (auth instanceof Response) return auth;
+
   try {
-    const { env, request } = context;
-    
-    // Get user ID from session
-    console.log('Getting user ID from session...');
-    const userId = await getUserIdFromSession(env, request);
-    console.log('User ID from session:', userId);
-    
-    if (!userId) {
-      console.error('No valid session found');
-      return Response.json({ success: false, error: 'Unauthorized - No valid session' }, { status: 401 });
+    const body = (await request.json()) as Record<string, unknown>;
+    if (!body.name || !body.address) {
+      return jsonOk({ success: false, error: 'Name and address are required' }, 400);
     }
-    
-    console.log('Parsing request body...');
-    const body = await request.json();
-    console.log('Request body:', JSON.stringify(body));
-    
-    console.log('Generating UUID...');
+
     const id = crypto.randomUUID();
-    console.log('Generated ID:', id);
-    
-    console.log('Preparing database query...');
-    const query = `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    console.log('Query:', query);
-    
-    const params = [
-      id,
-      body.name,
-      body.address,
-      body.city,
-      body.state,
-      body.zipCode,
-      body.type,
-      body.description || null,
-      userId
-    ];
-    console.log('Params:', JSON.stringify(params));
-    
-    console.log('Executing database query...');
-    await env.DB.prepare(query).bind(...params).run();
-    
-    console.log('Property created successfully:', id);
-    return Response.json({ success: true, data: { id, ...body, user_id: userId } }, { status: 201 });
-  } catch (error) {
-    console.error('Error in properties POST handler:', error);
-    console.error('Error message:', (error as Error).message);
-    console.error('Error stack:', (error as Error).stack);
-    return Response.json({ 
-      success: false, 
-      error: (error as Error).message,
-      stack: (error as Error).stack 
-    }, { status: 500 });
+    await env.DB.prepare(
+      `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, purchase_date, purchase_price, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        id,
+        body.name,
+        body.address,
+        body.city ?? '',
+        body.state ?? '',
+        body.zipCode ?? '',
+        body.type ?? 'house',
+        body.description ?? null,
+        body.purchaseDate ?? null,
+        body.purchasePrice ?? null,
+        auth.id
+      )
+      .run();
+
+    const row = await env.DB.prepare('SELECT * FROM properties WHERE id = ?').bind(id).first();
+    return jsonOk({ success: true, data: serializeProperty(row as Record<string, unknown>) }, 201);
+  } catch {
+    return serverError();
   }
 };

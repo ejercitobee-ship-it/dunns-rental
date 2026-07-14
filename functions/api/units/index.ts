@@ -1,124 +1,61 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
+import { serializeUnit } from '../../lib/serializers';
 
-// Helper to get user ID from session cookie
-async function getUserIdFromSession(env: { DB: D1Database }, request: Request): Promise<string | null> {
-  const cookieHeader = request.headers.get('Cookie');
-  if (!cookieHeader) return null;
-  
-  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-    const [key, value] = cookie.trim().split('=');
-    acc[key] = value;
-    return acc;
-  }, {} as Record<string, string>);
-  
-  const sessionToken = cookies['session'];
-  if (!sessionToken) return null;
-  
-  const now = Math.floor(Date.now() / 1000);
-  const session = await env.DB.prepare(
-    'SELECT user_id FROM session WHERE token = ? AND expires_at > ?'
-  ).bind(sessionToken, now).first();
-  
-  return session?.user_id as string || null;
-}
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
+  const auth = await requirePermission(env, request, 'units_view');
+  if (auth instanceof Response) return auth;
 
-export const onRequestGet: PagesFunction<{ DB: D1Database }> = async (context) => {
-  const { env } = context;
-  
   try {
     const { results } = await env.DB.prepare(
       'SELECT * FROM units ORDER BY created_at DESC'
     ).all();
-    
-    // Transform snake_case to camelCase for frontend compatibility
-    const transformedResults = results?.map((unit: Record<string, unknown>) => ({
-      id: unit.id,
-      propertyId: unit.property_id,
-      unitNumber: unit.unit_number,
-      bedrooms: unit.bedrooms,
-      bathrooms: unit.bathrooms,
-      squareFeet: unit.square_feet,
-      monthlyRent: unit.monthly_rent,
-      description: unit.description,
-      status: unit.status,
-      createdAt: unit.created_at,
-      updatedAt: unit.updated_at,
-    })) || [];
-    
-    return Response.json({ success: true, data: transformedResults });
-  } catch (error) {
-    console.error('Error fetching units:', error);
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return jsonOk({ success: true, data: (results || []).map(serializeUnit) });
+  } catch {
+    return serverError();
   }
 };
 
-export const onRequestPost: PagesFunction<{ DB: D1Database }> = async (context) => {
-  console.log('Units POST handler invoked');
-  
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
+  const auth = await requirePermission(env, request, 'units_create');
+  if (auth instanceof Response) return auth;
+
   try {
-    const { env, request } = context;
-    
-    // Get user ID from session
-    const userId = await getUserIdFromSession(env, request);
-    console.log('User ID from session:', userId);
-    
-    if (!userId) {
-      console.error('No valid session found');
-      return Response.json({ success: false, error: 'Unauthorized - No valid session' }, { status: 401 });
+    const body = (await request.json()) as Record<string, unknown>;
+
+    if (!body.propertyId) {
+      return jsonError('propertyId is required', 400);
     }
-    
-    console.log('Parsing request body...');
-    const body = await request.json();
-    console.log('Request body:', JSON.stringify(body));
-    
-    // Verify the property exists
-    console.log('Verifying property exists:', body.propertyId);
     const property = await env.DB.prepare('SELECT id FROM properties WHERE id = ?')
       .bind(body.propertyId)
       .first();
-    
     if (!property) {
-      console.error('Property not found:', body.propertyId);
-      return Response.json({ success: false, error: 'Property not found' }, { status: 404 });
+      return jsonError('Property not found', 404);
     }
-    
-    console.log('Property verified:', property);
-    
-    console.log('Generating UUID...');
+
     const id = crypto.randomUUID();
-    console.log('Generated ID:', id);
-    
-    console.log('Preparing database query...');
-    const query = `INSERT INTO units (id, property_id, unit_number, bedrooms, bathrooms, square_feet, monthly_rent, description, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())`;
-    console.log('Query:', query);
-    
-    const params = [
-      id,
-      body.propertyId,
-      body.unitNumber,
-      body.bedrooms || 1,
-      body.bathrooms || 1,
-      body.squareFeet || 0,
-      body.monthlyRent || 0,
-      body.description || null,
-      body.status || 'vacant'
-    ];
-    console.log('Params:', JSON.stringify(params));
-    
-    console.log('Executing database query...');
-    await env.DB.prepare(query).bind(...params).run();
-    
-    console.log('Unit created successfully:', id);
-    return Response.json({ success: true, data: { id, ...body } }, { status: 201 });
-  } catch (error) {
-    console.error('Error creating unit:', error);
-    console.error('Error message:', (error as Error).message);
-    console.error('Error stack:', (error as Error).stack);
-    return Response.json({ 
-      success: false, 
-      error: (error as Error).message,
-      stack: (error as Error).stack 
-    }, { status: 500 });
+    await env.DB.prepare(
+      `INSERT INTO units (id, property_id, unit_number, bedrooms, bathrooms, square_feet, monthly_rent, description, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())`
+    )
+      .bind(
+        id,
+        body.propertyId,
+        body.unitNumber ?? '',
+        body.bedrooms ?? 1,
+        body.bathrooms ?? 1,
+        body.squareFeet ?? 0,
+        body.monthlyRent ?? 0,
+        body.description ?? null,
+        body.status ?? 'vacant'
+      )
+      .run();
+
+    const row = await env.DB.prepare('SELECT * FROM units WHERE id = ?').bind(id).first();
+    return jsonOk({ success: true, data: serializeUnit(row as Record<string, unknown>) }, 201);
+  } catch {
+    return serverError();
   }
 };

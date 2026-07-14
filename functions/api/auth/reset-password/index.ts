@@ -1,94 +1,126 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
+import {
+  type Env,
+  getSessionUser,
+  hashPassword,
+  verifyPassword,
+  jsonOk,
+  jsonError,
+  forbidden,
+  unauthorized,
+  serverError,
+} from '../../../lib/session';
+import { roleCan } from '../../../lib/permissions';
 
-// Simple password hashing using Web Crypto API
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-interface Env {
-  DB: D1Database;
-}
-
-// POST /api/auth/reset-password - Reset password (for logged-in users)
+// POST /api/auth/reset-password
+// Authorization is required in one of two ways:
+//   1. A valid reset `token` (from the forgot-password flow), or
+//   2. A valid session, in which case a user may reset their OWN password
+//      (verifying their current password), and an admin with `users_edit`
+//      may reset another user's password.
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
-  
+
   try {
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       userId?: string;
       currentPassword?: string;
       newPassword?: string;
+      token?: string;
     };
-    
-    const { userId, currentPassword, newPassword } = body;
-    
-    if (!userId || !newPassword) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    const { userId, currentPassword, newPassword, token } = body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return jsonError('Password must be at least 8 characters', 400);
     }
-    
-    if (newPassword.length < 8) {
-      return new Response(JSON.stringify({ error: 'Password must be at least 8 characters' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    
-    // If current password is provided, verify it
-    if (currentPassword) {
-      const account = await env.DB.prepare(
-        'SELECT password FROM account WHERE user_id = ? AND provider_id = ?'
-      ).bind(userId, 'credential').first();
-      
-      if (!account) {
-        return new Response(JSON.stringify({ error: 'User not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      
-      const currentHash = await hashPassword(currentPassword);
-      if (currentHash !== account.password) {
-        return new Response(JSON.stringify({ error: 'Current password is incorrect' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-    }
-    
-    // Update password
-    const newHash = await hashPassword(newPassword);
+
     const now = Math.floor(Date.now() / 1000);
-    
+    let targetUserId: string | null = null;
+    let usedTokenId: string | null = null;
+
+    if (token) {
+      const row = await env.DB.prepare(
+        'SELECT id, user_id FROM password_reset_tokens WHERE token = ? AND expires_at > ? AND used_at IS NULL'
+      )
+        .bind(token, now)
+        .first<{ id: string; user_id: string }>();
+
+      if (!row) {
+        return jsonError('Invalid or expired reset token', 400);
+      }
+      targetUserId = row.user_id;
+      usedTokenId = row.id;
+    } else {
+      const sessionUser = await getSessionUser(env, request);
+      if (!sessionUser) {
+        return unauthorized();
+      }
+
+      const requested = userId || sessionUser.id;
+      if (requested !== sessionUser.id) {
+        // Resetting someone else's password requires admin rights.
+        if (!roleCan(sessionUser.role, 'users_edit')) {
+          return forbidden();
+        }
+        targetUserId = requested;
+      } else {
+        targetUserId = sessionUser.id;
+
+        // Self-service reset: verify current password, unless the account is
+        // flagged for a forced reset (temp password on first login).
+        let forced = false;
+        try {
+          const flag = await env.DB.prepare(
+            'SELECT value FROM user_metadata WHERE user_id = ? AND key = ?'
+          )
+            .bind(targetUserId, 'force_password_reset')
+            .first<{ value: string }>();
+          forced = flag?.value === 'true';
+        } catch {
+          // metadata table may not exist; treat as not forced.
+        }
+
+        if (!forced) {
+          if (!currentPassword) {
+            return jsonError('Current password is required', 400);
+          }
+          const account = await env.DB.prepare(
+            'SELECT password FROM account WHERE user_id = ? AND provider_id = ?'
+          )
+            .bind(targetUserId, 'credential')
+            .first<{ password: string }>();
+
+          if (!account?.password) {
+            return jsonError('Account not found', 404);
+          }
+          const { valid } = await verifyPassword(currentPassword, account.password);
+          if (!valid) {
+            return jsonError('Current password is incorrect', 401);
+          }
+        }
+      }
+    }
+
+    const newHash = await hashPassword(newPassword);
     await env.DB.prepare(
       'UPDATE account SET password = ?, updated_at = ? WHERE user_id = ? AND provider_id = ?'
-    ).bind(newHash, now, userId, 'credential').run();
-    
-    // Remove force_password_reset flag if exists
-    await env.DB.prepare(
-      'DELETE FROM user_metadata WHERE user_id = ? AND key = ?'
-    ).bind(userId, 'force_password_reset').run();
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Password reset successfully'
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-    
-  } catch (error) {
-    console.error('Reset password error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error', details: (error as Error).message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    )
+      .bind(newHash, now, targetUserId, 'credential')
+      .run();
+
+    // Clear the forced-reset flag and invalidate the used token.
+    await env.DB.prepare('DELETE FROM user_metadata WHERE user_id = ? AND key = ?')
+      .bind(targetUserId, 'force_password_reset')
+      .run();
+
+    if (usedTokenId) {
+      await env.DB.prepare('UPDATE password_reset_tokens SET used_at = ? WHERE id = ?')
+        .bind(now, usedTokenId)
+        .run();
+    }
+
+    return jsonOk({ success: true, message: 'Password reset successfully' });
+  } catch {
+    return serverError();
   }
 };

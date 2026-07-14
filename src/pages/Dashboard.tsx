@@ -92,26 +92,7 @@ function ClickableCard({ children, onClick, className = '' }: ClickableCardProps
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { properties, units, tenants, rentPayments, expenses, incomes, isLoading, error } = useApp();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-red-500">Error loading data: {error}</div>
-      </div>
-    );
-  }
-
-  // Debug logging
-  console.log('Dashboard data:', { properties, units, tenants, rentPayments, expenses, incomes });
+  const { properties, units, tenants, rentPayments, expenses, isLoading, error } = useApp();
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
@@ -155,7 +136,7 @@ export function Dashboard() {
       occupancyRate: totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0,
       projectedYearlyIncome,
     };
-  }, [properties, units, tenants, incomes, expenses, rentPayments]);
+  }, [properties, units, tenants, expenses, rentPayments]);
 
   const monthlyData = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -230,6 +211,22 @@ export function Dashboard() {
   const vacantUnits = useMemo(() => {
     return units.filter(u => u.status === 'vacant').slice(0, 5);
   }, [units]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-500">Error loading data: {error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

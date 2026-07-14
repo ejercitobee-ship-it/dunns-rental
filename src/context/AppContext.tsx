@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
 import type { Property, Unit, Tenant, RentPayment, Expense, Income } from '../types';
 import {
   propertiesApi,
@@ -8,6 +8,7 @@ import {
   expensesApi,
   incomesApi,
 } from '../lib/api';
+import { useAuth } from './AuthContext';
 
 interface AppState {
   properties: Property[];
@@ -165,17 +166,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
+  const { isAuthenticated } = useAuth();
 
   const refreshData = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      console.log('Fetching data from API...');
       const [properties, units, tenants, rentPayments, expenses, incomes] = await Promise.all([
         propertiesApi.getAll(),
         unitsApi.getAll(),
@@ -184,24 +180,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         expensesApi.getAll(),
         incomesApi.getAll(),
       ]);
-      console.log('Fetched data:', { properties, units, tenants, rentPayments, expenses, incomes });
       dispatch({
         type: 'SET_STATE',
         payload: { properties, units, tenants, rentPayments, expenses, incomes, isLoading: false },
       });
     } catch (error) {
-      console.error('Error fetching data:', error);
       dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, []);
 
-  // Load data on mount
+  // Load data once the user is authenticated. When they sign out, clear it so
+  // no stale data lingers and we never fire unauthenticated (401) requests.
   useEffect(() => {
-    if (isHydrated) {
+    if (isAuthenticated) {
       refreshData();
+    } else {
+      dispatch({
+        type: 'SET_STATE',
+        payload: {
+          properties: [], units: [], tenants: [], rentPayments: [], expenses: [], incomes: [],
+          isLoading: false, error: null,
+        },
+      });
     }
-  }, [isHydrated, refreshData]);
+  }, [isAuthenticated, refreshData]);
 
   const getPropertyUnits = useCallback((propertyId: string) =>
     state.units.filter(u => u.propertyId === propertyId), [state.units]);

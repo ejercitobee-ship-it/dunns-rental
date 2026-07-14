@@ -64,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       inactivityTimerRef.current = setTimeout(() => {
-        console.log('Auto-logout due to inactivity');
         logout();
         window.location.href = '/login?reason=inactive';
       }, INACTIVITY_TIMEOUT);
@@ -102,8 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkSession = async () => {
       try {
         const result = await authApi.getSession();
-        console.log('Session check result:', result);
-        
+
         // Handle both API formats
         const userData = result?.user || result?.data?.user;
         
@@ -112,8 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const role = roles.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
           setUser(mapSessionUser({ ...sessionUser, roleId: sessionUser.role }, role));
         }
-      } catch (error) {
-        console.error('Session check error:', error);
+      } catch {
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -126,8 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const result = await authApi.signIn(email, password);
-      console.log('Login result:', result);
-      
+
       // Our custom API returns { success: true, user: {...} }
       if (result?.success && result?.user) {
         const sessionUser = result.user as Record<string, unknown>;
@@ -152,7 +148,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return { success: false, error: 'Invalid credentials' };
     } catch (error) {
-      console.error('Login error:', error);
       return { success: false, error: (error as Error).message };
     }
   };
@@ -168,15 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (email: string, password: string, name: string) => {
     try {
       const result = await authApi.signUp(email, password, name);
-      if (result?.data?.user) {
-        const sessionUser = result.data.user as Record<string, unknown>;
-        const role = roles.find(r => r.id === 'super_admin') || DEFAULT_ROLES[0];
-        setUser(mapSessionUser(sessionUser, role));
+      if (result?.success && result?.user) {
+        const sessionUser = result.user as Record<string, unknown>;
+        const role = roles.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
+        setUser(mapSessionUser({ ...sessionUser, roleId: sessionUser.role }, role));
         return { success: true };
       }
       return { success: false, error: 'Registration failed' };
     } catch (error) {
-      console.error('Registration error:', error);
       return { success: false, error: (error as Error).message || 'Registration failed. Please try again.' };
     }
   };

@@ -1,73 +1,90 @@
-# React + TypeScript + Vite
+# Dunn's Rental
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A property management dashboard for tracking properties, units, tenants, rent
+payments, expenses, income, and tax reports. It is a shared workspace: everyone
+on the team sees the same data, and what each person can change is controlled by
+their role.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS, React Router,
+  Recharts.
+- **Backend:** Cloudflare Pages Functions (the `functions/` directory).
+- **Database:** Cloudflare D1 (SQLite), bound as `DB`.
+- **Auth:** Custom session-cookie auth. Passwords are hashed with PBKDF2
+  (salted, 100k iterations) via the Web Crypto API.
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
 
-## Expanding the ESLint configuration
+# Create the local D1 database and apply migrations (first time only)
+npx wrangler d1 execute dunns-rental-db --local --file=migrations/0001_initial.sql
+npx wrangler d1 execute dunns-rental-db --local --file=migrations/0002_password_reset.sql
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Build the app, then run the Pages dev server (frontend + functions + D1)
+npm run build
+npx wrangler pages dev dist --port 8788
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open http://127.0.0.1:8788. The **first account you register becomes the super
+admin**; everyone after that starts as a read-only viewer until an admin
+changes their role.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+For fast frontend-only iteration you can also run `npm run dev`, but the `/api`
+routes are only served by `wrangler pages dev`.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Scripts
+
+- `npm run dev` — Vite dev server (frontend only).
+- `npm run build` — typecheck the app **and** the Pages Functions, then build.
+- `npm run typecheck` — typecheck only (app + functions).
+- `npm run lint` — ESLint.
+- `npm run preview` — preview the production build.
+
+## Deployment (Cloudflare Pages)
+
+1. Apply migrations to the **remote** D1 database (drop `--local`):
+   ```bash
+   npx wrangler d1 execute dunns-rental-db --file=migrations/0001_initial.sql
+   npx wrangler d1 execute dunns-rental-db --file=migrations/0002_password_reset.sql
+   ```
+2. Push to the branch connected to your Pages project, or run
+   `npx wrangler pages deploy dist` after `npm run build`.
+
+The D1 binding and database id are configured in `wrangler.jsonc`.
+
+## Authentication & roles
+
+- Sessions are stored in the `session` table and referenced by an `HttpOnly`,
+  `Secure`, `SameSite=Strict` cookie. Sign-in and sign-up set this cookie.
+- Every `/api/*` data endpoint requires a valid session. Read endpoints require
+  the matching `*_view` permission; write endpoints require the create/edit/
+  delete permission for that resource.
+- System roles (`super_admin`, `admin`, `manager`, `accountant`, `viewer`) and
+  their permissions are defined in `src/types/auth.ts`. The server enforces the
+  same map in `functions/lib/permissions.ts` — **update both** if you change a
+  role.
+
+### Password reset email (not yet wired)
+
+`POST /api/auth/forgot-password` stores a reset token but does **not** email it
+(no email provider is configured). To finish the flow, deliver the token from
+that endpoint to the user's email, then have a reset page submit
+`{ token, newPassword }` to `POST /api/auth/reset-password`.
+
+## Project layout
+
+```
+functions/
+  _middleware.ts        Same-origin CORS handling
+  lib/
+    session.ts          Session lookup, password hashing, response helpers, guards
+    permissions.ts      Server-side role -> permission map
+    serializers.ts      D1 row (snake_case) -> API shape (camelCase)
+  api/                  REST endpoints (auth, properties, units, tenants,
+                        payments, expenses, incomes, admin/users)
+migrations/             D1 schema
+src/                    React app (pages, components, contexts, types)
 ```
