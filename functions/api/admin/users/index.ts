@@ -2,40 +2,91 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import {
   type Env,
   getSessionUser,
+  requirePermission,
   hashPassword,
   jsonOk,
   jsonError,
   forbidden,
   unauthorized,
   serverError,
-} from '../../lib/session';
-import { roleCan } from '../../lib/permissions';
+} from '../../../lib/session';
+import { roleCan } from '../../../lib/permissions';
+
+interface UserRow {
+  id: string;
+  name: string | null;
+  email: string;
+  is_active: number | null;
+  phone: string | null;
+  department: string | null;
+  created_at: number | null;
+  role: string | null;
+}
+
+export function serializeUser(r: UserRow) {
+  const name = r.name || '';
+  const parts = name.split(' ');
+  return {
+    id: r.id,
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || '',
+    email: r.email,
+    phone: r.phone ?? undefined,
+    department: r.department ?? undefined,
+    roleId: r.role || 'viewer',
+    isActive: r.is_active !== 0,
+    createdAt: r.created_at ? new Date(r.created_at * 1000).toISOString() : new Date().toISOString(),
+  };
+}
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
   const random = crypto.getRandomValues(new Uint8Array(16));
   let password = '';
-  for (let i = 0; i < 16; i++) {
-    password += chars.charAt(random[i] % chars.length);
-  }
+  for (let i = 0; i < 16; i++) password += chars.charAt(random[i] % chars.length);
   return password;
 }
 
 const ASSIGNABLE_ROLES = new Set(['super_admin', 'admin', 'manager', 'accountant', 'viewer']);
 
-export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { request, env } = context;
+// GET /api/admin/users - list team members.
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
+  const auth = await requirePermission(env, request, 'users_view');
+  if (auth instanceof Response) return auth;
 
   try {
-    const caller = await getSessionUser(env, request);
-    if (!caller) return unauthorized();
-    if (!roleCan(caller.role, 'users_create')) return forbidden();
+    const { results } = await env.DB.prepare(
+      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.created_at, r.role AS role
+         FROM user u
+         LEFT JOIN user_roles r ON r.user_id = u.id
+        ORDER BY u.created_at DESC`
+    ).all<UserRow>();
+    return jsonOk({ success: true, data: (results || []).map(serializeUser) });
+  } catch {
+    return serverError();
+  }
+};
 
+// POST /api/admin/users - create a team member with a temporary password.
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
+
+  const caller = await getSessionUser(env, request);
+  if (!caller) return unauthorized();
+  const allowed = caller.permissions
+    ? caller.permissions.includes('users_create')
+    : roleCan(caller.role, 'users_create');
+  if (!allowed) return forbidden();
+
+  try {
     const body = (await request.json()) as {
       firstName?: string;
       lastName?: string;
       email?: string;
       roleId?: string;
+      phone?: string;
+      department?: string;
     };
 
     const firstName = body.firstName?.trim();
@@ -47,13 +98,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('Missing required fields', 400);
     }
     if (!ASSIGNABLE_ROLES.has(roleId)) {
-      return jsonError('Invalid role', 400);
+      // Allow custom roles that exist in the roles table.
+      const role = await env.DB.prepare('SELECT id FROM roles WHERE id = ?').bind(roleId).first();
+      if (!role) return jsonError('Invalid role', 400);
     }
 
     const existingUser = await env.DB.prepare('SELECT id FROM user WHERE email = ?')
       .bind(email)
       .first();
-
     if (existingUser) {
       return jsonError('An account with this email already exists', 409);
     }
@@ -65,9 +117,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const name = `${firstName} ${lastName}`;
 
     await env.DB.prepare(
-      'INSERT INTO user (id, name, email, email_verified, image, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO user (id, name, email, email_verified, image, is_active, phone, department, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)'
     )
-      .bind(userId, name, email, 0, null, now, now)
+      .bind(userId, name, email, 0, null, body.phone ?? null, body.department ?? null, now, now)
       .run();
 
     await env.DB.prepare(
@@ -82,7 +134,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(crypto.randomUUID(), userId, roleId, now, now)
       .run();
 
-    // Require the new user to change the temporary password on first login.
     await env.DB.prepare(
       'INSERT INTO user_metadata (id, user_id, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
     )

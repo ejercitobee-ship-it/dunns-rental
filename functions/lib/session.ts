@@ -10,6 +10,8 @@ export interface SessionUser {
   email: string;
   name: string;
   role: string;
+  /** Permissions for the user's role, loaded from the roles table. */
+  permissions: string[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,21 +60,44 @@ export async function getSessionUser(
 
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
-    `SELECT u.id AS id, u.email AS email, u.name AS name, r.role AS role
+    `SELECT u.id AS id, u.email AS email, u.name AS name, u.is_active AS is_active,
+            r.role AS role, ro.permissions AS permissions
        FROM session s
        JOIN user u ON u.id = s.user_id
        LEFT JOIN user_roles r ON r.user_id = u.id
+       LEFT JOIN roles ro ON ro.id = r.role
       WHERE s.token = ? AND s.expires_at > ?`
   )
     .bind(token, now)
-    .first<{ id: string; email: string; name: string; role: string | null }>();
+    .first<{
+      id: string;
+      email: string;
+      name: string;
+      is_active: number | null;
+      role: string | null;
+      permissions: string | null;
+    }>();
 
   if (!row) return null;
+  // Deactivated users are treated as signed out.
+  if (row.is_active === 0) return null;
+
+  let permissions: string[] | null = null;
+  if (row.permissions) {
+    try {
+      const parsed = JSON.parse(row.permissions);
+      if (Array.isArray(parsed)) permissions = parsed as string[];
+    } catch {
+      permissions = null;
+    }
+  }
+
   return {
     id: row.id,
     email: row.email,
     name: row.name,
     role: row.role || 'viewer',
+    permissions,
   };
 }
 
@@ -118,7 +143,12 @@ export async function requirePermission(
 ): Promise<SessionUser | Response> {
   const user = await getSessionUser(env, request);
   if (!user) return unauthorized();
-  if (!roleCan(user.role, permission)) return forbidden();
+  // Prefer the role's live permissions from the DB; fall back to the built-in
+  // map if the role predates the roles table (e.g. before migration 0004).
+  const allowed = user.permissions
+    ? user.permissions.includes(permission)
+    : roleCan(user.role, permission);
+  if (!allowed) return forbidden();
   return user;
 }
 

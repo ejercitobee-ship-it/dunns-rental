@@ -12,6 +12,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import type { RentPayment, PaymentMethod } from '../types';
 import {
   BarChart,
@@ -44,9 +45,35 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+// Parse a single CSV line, honoring double-quoted fields (so values containing
+// commas survive). Matches the format produced by the Export button.
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } else inQuotes = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      result.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
 export function Rents() {
   const { rentPayments, tenants, properties, units, updatePaymentStatus, addRentPayment } = useApp();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RentPayment['status'] | 'all'>('all');
   const [monthFilter, setMonthFilter] = useState('all');
@@ -219,17 +246,94 @@ export function Rents() {
   const getProperty = (propertyId: string) => properties.find(p => p.id === propertyId);
   const getUnit = (unitId: string) => units.find(u => u.id === unitId);
 
-  const handleImport = () => {
-    try {
-      const lines = importData.trim().split('\n');
-      const headers = lines[0].split(',').map(h => h.trim());
+  const handleImport = async () => {
+    const lines = importData.trim().split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) {
+      showToast('Nothing to import. Paste CSV rows (with a header row).', 'error');
+      return;
+    }
 
-      // TODO: Process import data
-      console.log('Importing data:', { headers, rowCount: lines.length - 1 });
-      setIsImportModalOpen(false);
-      setImportData('');
-    } catch (error) {
-      console.error('Import failed:', error);
+    // Map columns by header name so column order is flexible. Expected headers
+    // match the Export format: Tenant, Property, Unit, Month, Year, Due Date,
+    // Paid Date, Amount, Status.
+    // Normalize headers (lowercase, strip spaces/underscores) so both the
+    // Export format ("Due Date") and the documented format ("due_date") work.
+    const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, '');
+    const headers = parseCsvLine(lines[0]).map(norm);
+    const col = (...aliases: string[]) => headers.findIndex(h => aliases.includes(h));
+    const iTenant = col('tenant', 'tenantname');
+    const iProperty = col('property', 'propertyname');
+    const iUnit = col('unit', 'unitnumber');
+    const iMonth = col('month');
+    const iYear = col('year');
+    const iDue = col('duedate');
+    const iPaid = col('paiddate');
+    const iAmount = col('amount');
+    const iStatus = col('status');
+
+    if (iAmount === -1) {
+      showToast('CSV needs an "Amount" column. Try exporting first to see the format.', 'error');
+      return;
+    }
+
+    const validStatuses: RentPayment['status'][] = ['paid', 'pending', 'overdue', 'partial'];
+    let imported = 0;
+    let skipped = 0;
+
+    try {
+      for (let i = 1; i < lines.length; i++) {
+        const cells = parseCsvLine(lines[i]);
+        const amount = parseFloat((cells[iAmount] || '').replace(/[$,]/g, ''));
+        if (isNaN(amount)) { skipped++; continue; }
+
+        const tenantName = iTenant >= 0 ? (cells[iTenant] || '').trim().toLowerCase() : '';
+        const propertyName = iProperty >= 0 ? (cells[iProperty] || '').trim().toLowerCase() : '';
+        const unitNumber = iUnit >= 0 ? (cells[iUnit] || '').trim().toLowerCase() : '';
+
+        const property = properties.find(p => p.name.trim().toLowerCase() === propertyName);
+        const tenant = tenants.find(
+          t => `${t.firstName} ${t.lastName}`.trim().toLowerCase() === tenantName
+        );
+        const unit = units.find(
+          u => (u.unitNumber || '').trim().toLowerCase() === unitNumber &&
+            (!property || u.propertyId === property.id)
+        );
+
+        const monthStr = iMonth >= 0 ? (cells[iMonth] || '').trim() : '';
+        let month = MONTHS.findIndex(m => m.toLowerCase() === monthStr.toLowerCase()) + 1;
+        if (month === 0) month = parseInt(monthStr, 10) || (new Date().getMonth() + 1);
+        const year = (iYear >= 0 && parseInt(cells[iYear], 10)) || new Date().getFullYear();
+
+        const rawStatus = (iStatus >= 0 ? cells[iStatus] || '' : '').trim().toLowerCase() as RentPayment['status'];
+        const status = validStatuses.includes(rawStatus) ? rawStatus : 'pending';
+        const paidDate = iPaid >= 0 ? (cells[iPaid] || '').trim() : '';
+
+        await addRentPayment({
+          tenantId: tenant?.id || '',
+          unitId: unit?.id || '',
+          propertyId: property?.id || '',
+          amount,
+          dueDate: iDue >= 0 ? (cells[iDue] || '').trim() : '',
+          paidDate: paidDate || undefined,
+          status,
+          month,
+          year,
+        });
+        imported++;
+      }
+
+      if (imported > 0) {
+        showToast(
+          `Imported ${imported} payment${imported === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}` : ''}.`,
+          'success'
+        );
+        setIsImportModalOpen(false);
+        setImportData('');
+      } else {
+        showToast('No valid rows found to import. Check the Amount column.', 'error');
+      }
+    } catch {
+      showToast('Import failed partway through. Please check the CSV and try again.', 'error');
     }
   };
 

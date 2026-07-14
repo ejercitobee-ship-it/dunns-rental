@@ -64,10 +64,73 @@ export const authApi = {
     }),
 };
 
-// Admin API
+// Admin (users) API
+export interface ApiUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  department?: string;
+  roleId: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export const adminApi = {
-  createUser: (data: { firstName: string; lastName: string; email: string; roleId: string; createdBy?: string }) =>
-    apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  listUsers: (): Promise<ApiUser[]> => apiRequest('/admin/users'),
+  createUser: (data: {
+    firstName: string; lastName: string; email: string; roleId: string;
+    phone?: string; department?: string;
+  }) => apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: string, data: {
+    firstName: string; lastName: string; phone?: string; department?: string;
+    isActive: boolean; roleId: string;
+  }): Promise<ApiUser> =>
+    apiRequest(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id: string) =>
+    apiRequest(`/admin/users/${id}`, { method: 'DELETE' }),
+};
+
+// Roles API
+export interface ApiRole {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  isSystem: boolean;
+}
+
+export const rolesApi = {
+  getAll: (): Promise<ApiRole[]> => apiRequest('/roles'),
+  create: (data: { name: string; description: string; permissions: string[] }): Promise<ApiRole> =>
+    apiRequest('/roles', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { name?: string; description?: string; permissions: string[] }): Promise<ApiRole> =>
+    apiRequest(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/roles/${id}`, { method: 'DELETE' }),
+};
+
+// Settings API
+export interface AppSettings {
+  company: {
+    companyName: string; address: string; city: string; state: string;
+    zipCode: string; phone: string; email: string; taxId: string;
+  };
+  rent: {
+    lateFeeAmount: number; lateFeeDay: number; gracePeriod: number;
+    defaultLeaseTerm: number; securityDepositMultiplier: number;
+  };
+  notifications: {
+    emailNotifications: boolean; smsNotifications: boolean; rentReminders: boolean;
+    leaseExpiryAlerts: boolean; maintenanceAlerts: boolean; paymentConfirmations: boolean;
+  };
+}
+
+export const settingsApi = {
+  get: (): Promise<AppSettings> => apiRequest('/settings'),
+  update: (data: Partial<AppSettings>): Promise<AppSettings> =>
+    apiRequest('/settings', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // Properties API

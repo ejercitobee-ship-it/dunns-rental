@@ -54,12 +54,20 @@ export function Users() {
     });
   };
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    addUser(userForm);
-    showToast('User added successfully!', 'success');
-    setIsAddUserOpen(false);
-    resetForm();
+    try {
+      const result = await addUser(userForm);
+      if (result?.tempPassword) {
+        showToast(`User created. Temporary password: ${result.tempPassword} — share it securely.`, 'success');
+      } else {
+        showToast('User added successfully!', 'success');
+      }
+      setIsAddUserOpen(false);
+      resetForm();
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to add user', 'error');
+    }
   };
 
   const handleEditUser = (user: User) => {
@@ -76,28 +84,38 @@ export function Users() {
     setIsEditUserOpen(true);
   };
 
-  const handleUpdateUser = (e: React.FormEvent) => {
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedUser) {
-      updateUser({ ...selectedUser, ...userForm });
+    if (!selectedUser) return;
+    try {
+      await updateUser({ ...selectedUser, ...userForm });
       showToast('User updated successfully!', 'success');
       setIsEditUserOpen(false);
       setSelectedUser(null);
       resetForm();
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to update user', 'error');
     }
   };
 
-  const handleDeleteUser = () => {
-    if (userToDelete) {
-      deleteUser(userToDelete.id);
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      await deleteUser(userToDelete.id);
       showToast('User deleted successfully!', 'success');
       setUserToDelete(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to delete user', 'error');
     }
   };
 
-  const handleToggleStatus = (user: User) => {
-    updateUser({ ...user, isActive: !user.isActive });
-    showToast(`User ${user.isActive ? 'deactivated' : 'activated'}!`, 'success');
+  const handleToggleStatus = async (user: User) => {
+    try {
+      await updateUser({ ...user, isActive: !user.isActive });
+      showToast(`User ${user.isActive ? 'deactivated' : 'activated'}!`, 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to update user', 'error');
+    }
   };
 
   const getRoleBadgeColor = (roleId: string) => {
@@ -338,7 +356,7 @@ export function Users() {
           </div>
 
           <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">
-            Default password will be "password". User will be prompted to change on first login.
+            A temporary password will be generated and shown to you after creating the user. Share it with them securely; they'll be prompted to change it on first login.
           </p>
 
           <div className="flex gap-3 pt-4">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Settings as SettingsIcon,
   Building2,
@@ -22,6 +22,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { settingsApi } from '../lib/api';
 import { SYSTEM_PERMISSIONS } from '../types/auth';
 import type { Role } from '../types/auth';
 
@@ -67,38 +68,84 @@ export function Settings() {
     permissions: [] as string[],
   });
 
-  const handleSave = () => {
-    showToast('Settings saved successfully!', 'success');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved settings from the server on mount.
+  useEffect(() => {
+    let active = true;
+    settingsApi
+      .get()
+      .then((data) => {
+        if (!active || !data) return;
+        if (data.company) setCompanySettings(data.company);
+        if (data.rent) setRentSettings(data.rent);
+        if (data.notifications) setNotificationSettings(data.notifications);
+      })
+      .catch(() => {
+        // Leave defaults in place if the load fails.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await settingsApi.update({
+        company: companySettings,
+        rent: rentSettings,
+        notifications: notificationSettings,
+      });
+      showToast('Settings saved successfully!', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to save settings', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleTogglePermission = (roleId: string, permissionId: string) => {
+  const handleTogglePermission = async (roleId: string, permissionId: string) => {
     const role = roles.find(r => r.id === roleId);
     if (!role) return;
 
-    const newPermissions = role.permissions.includes(permissionId)
+    const hadPermission = role.permissions.includes(permissionId);
+    const newPermissions = hadPermission
       ? role.permissions.filter(p => p !== permissionId)
       : [...role.permissions, permissionId];
 
-    updateRole({ ...role, permissions: newPermissions });
-    showToast(`Permission ${role.permissions.includes(permissionId) ? 'removed' : 'added'}`, 'success');
+    try {
+      await updateRole({ ...role, permissions: newPermissions });
+      showToast(`Permission ${hadPermission ? 'removed' : 'added'}`, 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to update permission', 'error');
+    }
   };
 
-  const handleAddRole = () => {
+  const handleAddRole = async () => {
     if (!roleForm.name.trim()) return;
-    addRole({
-      name: roleForm.name,
-      description: roleForm.description,
-      permissions: roleForm.permissions,
-    });
-    setRoleForm({ name: '', description: '', permissions: [] });
-    setIsRoleModalOpen(false);
-    showToast('Role created successfully!', 'success');
+    try {
+      await addRole({
+        name: roleForm.name,
+        description: roleForm.description,
+        permissions: roleForm.permissions,
+      });
+      setRoleForm({ name: '', description: '', permissions: [] });
+      setIsRoleModalOpen(false);
+      showToast('Role created successfully!', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to create role', 'error');
+    }
   };
 
-  const handleDeleteRole = (roleId: string) => {
+  const handleDeleteRole = async (roleId: string) => {
     if (confirm('Are you sure you want to delete this role?')) {
-      deleteRole(roleId);
-      showToast('Role deleted!', 'success');
+      try {
+        await deleteRole(roleId);
+        showToast('Role deleted!', 'success');
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to delete role', 'error');
+      }
     }
   };
 
@@ -112,18 +159,22 @@ export function Settings() {
     setIsRoleModalOpen(true);
   };
 
-  const handleUpdateRole = () => {
+  const handleUpdateRole = async () => {
     if (!editingRole || !roleForm.name.trim()) return;
-    updateRole({
-      ...editingRole,
-      name: roleForm.name,
-      description: roleForm.description,
-      permissions: roleForm.permissions,
-    });
-    setEditingRole(null);
-    setRoleForm({ name: '', description: '', permissions: [] });
-    setIsRoleModalOpen(false);
-    showToast('Role updated successfully!', 'success');
+    try {
+      await updateRole({
+        ...editingRole,
+        name: roleForm.name,
+        description: roleForm.description,
+        permissions: roleForm.permissions,
+      });
+      setEditingRole(null);
+      setRoleForm({ name: '', description: '', permissions: [] });
+      setIsRoleModalOpen(false);
+      showToast('Role updated successfully!', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to update role', 'error');
+    }
   };
 
   const toggleRolePermission = (permissionId: string) => {
@@ -270,9 +321,9 @@ export function Settings() {
               </div>
             </div>
 
-            <Button onClick={handleSave} className="mt-4">
+            <Button onClick={handleSave} className="mt-4" disabled={isSaving}>
               <Save className="h-4 w-4 mr-2" />
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </CardContent>
         </Card>
@@ -340,9 +391,9 @@ export function Settings() {
               />
             </div>
 
-            <Button onClick={handleSave} className="mt-4">
+            <Button onClick={handleSave} className="mt-4" disabled={isSaving}>
               <Save className="h-4 w-4 mr-2" />
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </CardContent>
         </Card>
@@ -388,9 +439,9 @@ export function Settings() {
               ))}
             </div>
 
-            <Button onClick={handleSave} className="mt-4">
+            <Button onClick={handleSave} className="mt-4" disabled={isSaving}>
               <Save className="h-4 w-4 mr-2" />
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </CardContent>
         </Card>

@@ -1,7 +1,25 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { authApi } from '../lib/api';
+import { authApi, rolesApi, adminApi, type ApiUser } from '../lib/api';
 import type { User, Role, Permission } from '../types/auth';
 import { DEFAULT_ROLES, SYSTEM_PERMISSIONS } from '../types/auth';
+
+// Map a user record from the API into the app's User shape, attaching the
+// full Role object resolved from the roles list.
+function mapApiUser(apiUser: ApiUser, rolesList: Role[]): User {
+  const role = rolesList.find(r => r.id === apiUser.roleId) || DEFAULT_ROLES[0];
+  return {
+    id: apiUser.id,
+    firstName: apiUser.firstName,
+    lastName: apiUser.lastName,
+    email: apiUser.email,
+    phone: apiUser.phone,
+    department: apiUser.department,
+    roleId: apiUser.roleId,
+    role,
+    isActive: apiUser.isActive,
+    createdAt: apiUser.createdAt,
+  };
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -16,12 +34,13 @@ interface AuthContextType {
   hasPermission: (permissionId: string) => boolean;
   hasAnyPermission: (permissionIds: string[]) => boolean;
   hasModuleAccess: (module: string) => boolean;
-  addRole: (role: Omit<Role, 'id'>) => void;
-  updateRole: (role: Role) => void;
-  deleteRole: (id: string) => void;
-  addUser: (user: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => void;
-  updateUser: (user: User) => void;
-  deleteUser: (id: string) => void;
+  addRole: (role: Omit<Role, 'id'>) => Promise<void>;
+  updateRole: (role: Role) => Promise<void>;
+  deleteRole: (id: string) => Promise<void>;
+  addUser: (user: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => Promise<{ tempPassword?: string }>;
+  updateUser: (user: User) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  refreshTeam: () => Promise<void>;
   isSuperAdmin: () => boolean;
 }
 
@@ -120,6 +139,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkSession();
   }, []);
 
+  // Load roles (and, if permitted, the team member list) from the server once
+  // the user is authenticated. Roles drive permission checks in the UI.
+  const refreshTeam = useCallback(async () => {
+    let currentRoles: Role[] = DEFAULT_ROLES;
+    try {
+      const apiRoles = await rolesApi.getAll();
+      if (apiRoles?.length) {
+        currentRoles = apiRoles;
+        setRoles(apiRoles);
+        // Re-resolve the signed-in user's role in case it is a custom role.
+        setUser(prev =>
+          prev ? { ...prev, role: apiRoles.find(r => r.id === prev.roleId) || prev.role } : prev
+        );
+      }
+    } catch {
+      // Keep the built-in defaults if roles can't be loaded.
+    }
+    try {
+      const apiUsers = await adminApi.listUsers();
+      setUsers(apiUsers.map(u => mapApiUser(u, currentRoles)));
+    } catch {
+      // No permission to list users (e.g. viewers) or request failed.
+      setUsers([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    // refreshTeam only updates state after its async fetches resolve, so the
+    // "setState in effect" cascade warning does not apply.
+    if (user) refreshTeam(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [user?.id, refreshTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const login = async (email: string, password: string) => {
     try {
       const result = await authApi.signIn(email, password);
@@ -196,45 +247,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user?.roleId === 'super_admin';
   };
 
-  const generateId = () => Math.random().toString(36).substr(2, 9);
-
-  const addRole = (role: Omit<Role, 'id'>) => {
-    const newRole = { ...role, id: generateId() };
-    setRoles(prev => [...prev, newRole]);
+  const addRole = async (role: Omit<Role, 'id'>) => {
+    const created = await rolesApi.create({
+      name: role.name,
+      description: role.description,
+      permissions: role.permissions,
+    });
+    setRoles(prev => [...prev, created]);
   };
 
-  const updateRole = (role: Role) => {
-    setRoles(prev => prev.map(r => r.id === role.id ? role : r));
-    setUsers(prev => prev.map(u =>
-      u.roleId === role.id ? { ...u, role } : u
-    ));
+  const updateRole = async (role: Role) => {
+    const updated = await rolesApi.update(role.id, {
+      name: role.name,
+      description: role.description,
+      permissions: role.permissions,
+    });
+    setRoles(prev => prev.map(r => (r.id === updated.id ? updated : r)));
+    setUsers(prev => prev.map(u => (u.roleId === updated.id ? { ...u, role: updated } : u)));
+    // If the change affected the current user's role, refresh their permissions.
+    setUser(prev => (prev && prev.roleId === updated.id ? { ...prev, role: updated } : prev));
   };
 
-  const deleteRole = (id: string) => {
+  const deleteRole = async (id: string) => {
+    await rolesApi.delete(id);
     setRoles(prev => prev.filter(r => r.id !== id));
   };
 
-  const addUser = (userData: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => {
-    const role = roles.find(r => r.id === userData.roleId) || DEFAULT_ROLES[0];
-    const newUser: User = {
-      ...userData,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-      role,
-    };
-    setUsers(prev => [...prev, newUser]);
+  const addUser = async (userData: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => {
+    const result = await adminApi.createUser({
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      email: userData.email,
+      roleId: userData.roleId,
+      phone: userData.phone,
+      department: userData.department,
+    });
+    await refreshTeam();
+    return { tempPassword: (result as { tempPassword?: string })?.tempPassword };
   };
 
-  const updateUser = (updatedUser: User) => {
-    const role = roles.find(r => r.id === updatedUser.roleId) || DEFAULT_ROLES[0];
-    const userWithRole = { ...updatedUser, role };
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? userWithRole : u));
-    if (user?.id === updatedUser.id) {
-      setUser(userWithRole);
-    }
+  const updateUser = async (updatedUser: User) => {
+    const saved = await adminApi.updateUser(updatedUser.id, {
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      phone: updatedUser.phone,
+      department: updatedUser.department,
+      isActive: updatedUser.isActive,
+      roleId: updatedUser.roleId,
+    });
+    const mapped = mapApiUser(saved, roles);
+    setUsers(prev => prev.map(u => (u.id === mapped.id ? mapped : u)));
+    if (user?.id === mapped.id) setUser(mapped);
   };
 
-  const deleteUser = (id: string) => {
+  const deleteUser = async (id: string) => {
+    await adminApi.deleteUser(id);
     setUsers(prev => prev.filter(u => u.id !== id));
   };
 
@@ -259,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         addUser,
         updateUser,
         deleteUser,
+        refreshTeam,
         isSuperAdmin,
       }}
     >

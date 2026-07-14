@@ -43,6 +43,19 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  const { isLoading } = useAuth();
+
+  // While the initial session check is in flight, show a loader instead of
+  // routing. Otherwise a hard refresh or deep link briefly reads as
+  // "logged out" and bounces the user to /login and then to the dashboard.
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/login" element={

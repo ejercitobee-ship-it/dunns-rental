@@ -21,12 +21,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('Missing email or password', 400);
     }
 
-    const user = await env.DB.prepare('SELECT id, name, email FROM user WHERE email = ?')
+    const user = await env.DB.prepare('SELECT id, name, email, is_active FROM user WHERE email = ?')
       .bind(email)
-      .first<{ id: string; name: string; email: string }>();
+      .first<{ id: string; name: string; email: string; is_active: number | null }>();
 
     if (!user) {
       return jsonError('Invalid email or password', 401);
+    }
+
+    if (user.is_active === 0) {
+      return jsonError('This account has been deactivated', 403);
     }
 
     const account = await env.DB.prepare(
