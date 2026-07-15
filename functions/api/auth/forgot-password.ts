@@ -1,15 +1,13 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, jsonOk, serverError } from '../../lib/session';
+import { sendEmail, passwordResetEmail } from '../../lib/email';
 
 const GENERIC_MESSAGE =
   'If an account exists with this email, you will receive password reset instructions.';
 
-// POST /api/auth/forgot-password - request a password reset.
-//
-// Security note: this stores a reset token but intentionally does NOT return it
-// to the caller. To complete the flow you must wire an email provider that
-// sends the token to the account's email address, then have the reset page
-// submit `{ token, newPassword }` to /api/auth/reset-password.
+// POST /api/auth/forgot-password - request a password reset link by email.
+// Always responds with the same generic message so we never reveal which
+// addresses have accounts.
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
@@ -17,15 +15,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const body = (await request.json()) as { email?: string };
     const email = body.email?.trim().toLowerCase();
 
-    // Always return the same generic message so we never reveal which emails
-    // have accounts.
+    // Tells the UI whether reset-by-email actually works yet, so it can point
+    // people at their admin instead of promising an email that never arrives.
+    const emailConfigured = !!env.RESEND_API_KEY;
+
     if (!email) {
-      return jsonOk({ success: true, message: GENERIC_MESSAGE });
+      return jsonOk({ success: true, message: GENERIC_MESSAGE, emailConfigured });
     }
 
-    const user = await env.DB.prepare('SELECT id FROM user WHERE email = ?')
+    const user = await env.DB.prepare('SELECT id, name FROM user WHERE email = ? AND is_active != 0')
       .bind(email)
-      .first<{ id: string }>();
+      .first<{ id: string; name: string | null }>();
 
     if (user) {
       const resetToken = crypto.randomUUID();
@@ -38,10 +38,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .bind(crypto.randomUUID(), user.id, resetToken, expiresAt, now)
         .run();
 
-      // TODO: deliver `resetToken` to the user's email via your email provider.
+      const origin = new URL(request.url).origin;
+      const resetUrl = `${origin}/reset-password?token=${resetToken}`;
+      const firstName = (user.name || '').split(' ')[0] || undefined;
+      const mail = passwordResetEmail(resetUrl, firstName);
+
+      // Never let a mail failure change the response (that would leak which
+      // addresses exist) but do surface it in the logs.
+      try {
+        await sendEmail(env, { to: email, ...mail });
+      } catch {
+        // swallowed on purpose
+      }
     }
 
-    return jsonOk({ success: true, message: GENERIC_MESSAGE });
+    return jsonOk({ success: true, message: GENERIC_MESSAGE, emailConfigured });
   } catch {
     return serverError();
   }

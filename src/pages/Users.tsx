@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { adminApi } from '../lib/api';
 import type { User } from '../types/auth';
 
 export function Users() {
@@ -18,6 +19,7 @@ export function Users() {
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [tempPasswordInfo, setTempPasswordInfo] = useState<{ name: string; password: string } | null>(null);
 
   const [userForm, setUserForm] = useState({
     firstName: '',
@@ -106,6 +108,17 @@ export function Users() {
       setUserToDelete(null);
     } catch (err) {
       showToast((err as Error).message || 'Failed to delete user', 'error');
+    }
+  };
+
+  const handleResetPassword = async (user: User) => {
+    const name = `${user.firstName} ${user.lastName}`;
+    if (!confirm(`Generate a new temporary password for ${name}?\n\nTheir current password stops working immediately and they will be signed out.`)) return;
+    try {
+      const res = await adminApi.resetUserPassword(user.id);
+      setTempPasswordInfo({ name, password: res.tempPassword });
+    } catch (err) {
+      showToast((err as Error).message || 'Could not reset the password', 'error');
     }
   };
 
@@ -280,9 +293,17 @@ export function Users() {
                           <>
                             <button
                               onClick={() => handleEditUser(user)}
+                              title="Edit member"
                               className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors"
                             >
                               <Edit2 className="h-4 w-4 text-muted" />
+                            </button>
+                            <button
+                              onClick={() => handleResetPassword(user)}
+                              title="Reset password"
+                              className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
+                            >
+                              <KeyRound className="h-4 w-4 text-muted" />
                             </button>
                             {!user.role.isSystem && (
                               <button
@@ -433,6 +454,39 @@ export function Users() {
         confirmText="Delete"
         variant="danger"
       />
+
+      {/* Temporary password result */}
+      <Modal
+        isOpen={!!tempPasswordInfo}
+        onClose={() => setTempPasswordInfo(null)}
+        title="Temporary password"
+      >
+        {tempPasswordInfo && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              A new temporary password has been set for <span className="font-medium text-ink">{tempPasswordInfo.name}</span>.
+              Share it with them securely. They'll be asked to choose a new one when they sign in.
+            </p>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-canvas border border-line rounded-lg">
+              <code className="text-base text-ink tracking-wide break-all">{tempPasswordInfo.password}</code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard?.writeText(tempPasswordInfo.password);
+                  showToast('Copied to clipboard', 'success');
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            <p className="text-xs text-muted">
+              This is shown once. If you lose it, just reset the password again.
+            </p>
+            <Button className="w-full" onClick={() => setTempPasswordInfo(null)}>Done</Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
 import { Properties } from './pages/Properties';
 import { Tenants } from './pages/Tenants';
@@ -71,6 +73,16 @@ function AppRoutes() {
           <Register />
         </PublicRoute>
       } />
+
+      <Route path="/forgot-password" element={
+        <PublicRoute>
+          <ForgotPassword />
+        </PublicRoute>
+      } />
+
+      {/* Reachable from an emailed link, so it must work even if a stale
+          session cookie is present. */}
+      <Route path="/reset-password" element={<ResetPassword />} />
       
       <Route path="/" element={
         <ProtectedRoute>

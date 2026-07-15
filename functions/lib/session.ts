@@ -4,6 +4,10 @@ import { roleCan } from './permissions';
 export interface Env {
   DB: D1Database;
   DOCS?: R2Bucket;
+  /** Resend API key. When unset, password reset emails are not sent. */
+  RESEND_API_KEY?: string;
+  /** From address for outgoing mail, e.g. "Dunn's Rental <info@mhdunnproperty.net>" */
+  MAIL_FROM?: string;
 }
 
 export interface SessionUser {
@@ -188,6 +192,15 @@ async function pbkdf2(password: string, salt: Uint8Array, iterations: number): P
     PBKDF2_KEYLEN * 8
   );
   return new Uint8Array(bits);
+}
+
+/** Generate a random temporary password to hand to a user out of band. */
+export function generateTempPassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+  const random = crypto.getRandomValues(new Uint8Array(16));
+  let password = '';
+  for (let i = 0; i < 16; i++) password += chars.charAt(random[i] % chars.length);
+  return password;
 }
 
 /** Hash a password for storage. Format: pbkdf2$<iterations>$<saltB64>$<hashB64> */

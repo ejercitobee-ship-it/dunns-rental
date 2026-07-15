@@ -62,6 +62,12 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ userId, newPassword, currentPassword }),
     }),
+
+  resetPasswordWithToken: (token: string, newPassword: string) =>
+    apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
 };
 
 // Admin (users) API
@@ -90,6 +96,8 @@ export const adminApi = {
     apiRequest(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: string) =>
     apiRequest(`/admin/users/${id}`, { method: 'DELETE' }),
+  resetUserPassword: (userId: string): Promise<{ tempPassword: string; message: string }> =>
+    apiRequest('/admin/reset-user-password', { method: 'POST', body: JSON.stringify({ userId }) }),
 };
 
 // Roles API
