@@ -163,16 +163,16 @@ interface AppContextType extends AppState {
   getLeaseTenants: (leaseId: string) => Tenant[];
   getTenantLeases: (tenantId: string) => Lease[];
   getAvailableUnits: (propertyId?: string) => Unit[];
-  addProperty: (property: Omit<Property, 'id'>) => Promise<void>;
+  addProperty: (property: Omit<Property, 'id'>) => Promise<Property>;
   updateProperty: (property: Property) => Promise<void>;
   deleteProperty: (id: string) => Promise<void>;
-  addUnit: (unit: Omit<Unit, 'id'>) => Promise<void>;
+  addUnit: (unit: Omit<Unit, 'id'>) => Promise<Unit>;
   updateUnit: (unit: Unit) => Promise<void>;
   deleteUnit: (id: string) => Promise<void>;
   addTenant: (tenant: Omit<Tenant, 'id'>) => Promise<Tenant>;
   updateTenant: (tenant: Tenant) => Promise<void>;
   deleteTenant: (id: string) => Promise<void>;
-  addLease: (lease: Omit<Lease, 'id'>) => Promise<void>;
+  addLease: (lease: Omit<Lease, 'id'>) => Promise<Lease>;
   updateLease: (lease: Lease) => Promise<void>;
   deleteLease: (id: string) => Promise<void>;
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
@@ -261,6 +261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addProperty = async (property: Omit<Property, 'id'>) => {
     const newProperty = await propertiesApi.create(property);
     dispatch({ type: 'ADD_PROPERTY', payload: newProperty });
+    return newProperty;
   };
 
   const updateProperty = async (property: Property) => {
@@ -276,6 +277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addUnit = async (unit: Omit<Unit, 'id'>) => {
     const newUnit = await unitsApi.create(unit);
     dispatch({ type: 'ADD_UNIT', payload: newUnit });
+    return newUnit;
   };
 
   const updateUnit = async (unit: Unit) => {
@@ -307,6 +309,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addLease = async (lease: Omit<Lease, 'id'>) => {
     const created = await leasesApi.create(lease);
     dispatch({ type: 'ADD_LEASE', payload: created });
+    return created;
   };
 
   const updateLease = async (lease: Lease) => {
