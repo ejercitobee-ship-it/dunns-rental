@@ -21,7 +21,7 @@ import {
   Cell,
 } from 'recharts';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+const COLORS = ['#24503f', '#2c7a58', '#97671c', '#b98a5e', '#7e8b83', '#5a7d6c', '#a23429', '#c2a878'];
 
 const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   advertising: { label: 'Advertising', description: 'Marketing and advertising costs' },
@@ -42,25 +42,25 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
 };
 
 export function TaxReport() {
-  const { expenses, incomes, properties } = useApp();
-  const [yearFilter, setYearFilter] = useState('2024');
+  const { expenses, incomes, properties, rentPayments } = useApp();
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
 
   const taxYearData = useMemo(() => {
     const year = parseInt(yearFilter);
     const yearExpenses = expenses.filter(e => new Date(e.date).getFullYear() === year);
     const yearIncome = incomes.filter(i => new Date(i.date).getFullYear() === year);
+    // Rent actually collected lives in rent payments, not the incomes table.
+    const yearPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === year);
 
     // Income summary
-    const totalIncome = yearIncome.reduce((sum, i) => sum + i.amount, 0);
-    const rentIncome = yearIncome
-      .filter(i => i.source === 'rent')
-      .reduce((sum, i) => sum + i.amount, 0);
+    const rentIncome = yearPaidRent.reduce((sum, p) => sum + p.amount, 0);
     const lateFeeIncome = yearIncome
       .filter(i => i.source === 'late_fee')
       .reduce((sum, i) => sum + i.amount, 0);
     const otherIncome = yearIncome
-      .filter(i => i.source === 'other')
+      .filter(i => i.source === 'other' || i.source === 'deposit')
       .reduce((sum, i) => sum + i.amount, 0);
+    const totalIncome = rentIncome + lateFeeIncome + otherIncome;
 
     // Expense summary by tax category
     const expensesByCategory: Record<string, number> = {};
@@ -81,9 +81,13 @@ export function TaxReport() {
       const propertyExpenses = yearExpenses
         .filter(e => e.propertyId === p.id)
         .reduce((sum, e) => sum + (e.taxDeductible !== false ? e.amount : 0), 0);
-      const propertyIncome = yearIncome
-        .filter(i => i.propertyId === p.id)
+      const propertyRent = yearPaidRent
+        .filter(pmt => pmt.propertyId === p.id)
+        .reduce((sum, pmt) => sum + pmt.amount, 0);
+      const propertyOther = yearIncome
+        .filter(i => i.propertyId === p.id && i.source !== 'rent')
         .reduce((sum, i) => sum + i.amount, 0);
+      const propertyIncome = propertyRent + propertyOther;
 
       return {
         name: p.name,
@@ -102,9 +106,15 @@ export function TaxReport() {
     ];
 
     const quarterlyData = quarters.map(q => {
-      const qIncome = yearIncome
-        .filter(i => q.months.includes(new Date(i.date).getMonth()))
+      // rentPayments store month as 1-12; quarters here are 0-indexed months.
+      const qMonths = q.months.map(m => m + 1);
+      const qRent = yearPaidRent
+        .filter(p => qMonths.includes(p.month))
+        .reduce((sum, p) => sum + p.amount, 0);
+      const qOther = yearIncome
+        .filter(i => i.source !== 'rent' && q.months.includes(new Date(i.date).getMonth()))
         .reduce((sum, i) => sum + i.amount, 0);
+      const qIncome = qRent + qOther;
       const qExpenses = yearExpenses
         .filter(e => q.months.includes(new Date(e.date).getMonth()))
         .reduce((sum, e) => sum + (e.taxDeductible !== false ? e.amount : 0), 0);
@@ -128,7 +138,7 @@ export function TaxReport() {
       propertyBreakdown,
       quarterlyData,
     };
-  }, [expenses, incomes, properties, yearFilter]);
+  }, [expenses, incomes, properties, rentPayments, yearFilter]);
 
   const expenseChartData = useMemo(() => {
     return Object.entries(taxYearData.expensesByCategory)
@@ -182,7 +192,7 @@ export function TaxReport() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tax Report</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted mt-1">
             Annual tax summary and deductible expenses
           </p>
         </div>
@@ -217,11 +227,11 @@ export function TaxReport() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <TrendingUp className="h-4 w-4 text-positive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-positive">{formatCurrency(taxYearData.totalIncome)}</div>
-            <p className="text-xs text-muted-foreground">Taxable rental income</p>
+            <p className="text-xs text-muted">Taxable rental income</p>
           </CardContent>
         </Card>
 
@@ -232,7 +242,7 @@ export function TaxReport() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-danger">{formatCurrency(taxYearData.totalDeductibleExpenses)}</div>
-            <p className="text-xs text-muted-foreground">Total deductions</p>
+            <p className="text-xs text-muted">Total deductions</p>
           </CardContent>
         </Card>
 
@@ -245,14 +255,14 @@ export function TaxReport() {
             <div className={`text-2xl font-bold ${taxYearData.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
               {formatCurrency(taxYearData.netIncome)}
             </div>
-            <p className="text-xs text-muted-foreground">Income minus deductions</p>
+            <p className="text-xs text-muted">Income minus deductions</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Effective Tax Rate</CardTitle>
-            <Percent className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Expense Ratio</CardTitle>
+            <Percent className="h-4 w-4 text-faint" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -260,7 +270,7 @@ export function TaxReport() {
                 ? ((taxYearData.totalDeductibleExpenses / taxYearData.totalIncome) * 100).toFixed(1)
                 : 0}%
             </div>
-            <p className="text-xs text-muted-foreground">Expense to income ratio</p>
+            <p className="text-xs text-muted">Expense to income ratio</p>
           </CardContent>
         </Card>
       </div>
@@ -278,9 +288,9 @@ export function TaxReport() {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Bar dataKey="income" fill="#10b981" name="Income" />
-                <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
-                <Bar dataKey="netIncome" fill="#3b82f6" name="Net Income" />
+                <Bar dataKey="income" fill="#2c7a58" name="Income" />
+                <Bar dataKey="expenses" fill="#b98a5e" name="Expenses" />
+                <Bar dataKey="netIncome" fill="#24503f" name="Net Income" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -354,7 +364,7 @@ export function TaxReport() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b bg-muted/50">
+                <tr className="border-b bg-canvas">
                   <th className="text-left py-3 px-4 font-medium">Category</th>
                   <th className="text-left py-3 px-4 font-medium">Description</th>
                   <th className="text-right py-3 px-4 font-medium">Amount</th>
@@ -365,11 +375,11 @@ export function TaxReport() {
                 {Object.entries(taxYearData.expensesByCategory)
                   .sort(([, a], [, b]) => b - a)
                   .map(([key, value]) => (
-                    <tr key={key} className="border-b last:border-0 hover:bg-muted/50">
+                    <tr key={key} className="border-b last:border-0 hover:bg-canvas">
                       <td className="py-3 px-4 font-medium">
                         {TAX_CATEGORIES[key]?.label || key}
                       </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
+                      <td className="py-3 px-4 text-sm text-muted">
                         {TAX_CATEGORIES[key]?.description || ''}
                       </td>
                       <td className="py-3 px-4 text-right font-semibold">
@@ -402,7 +412,7 @@ export function TaxReport() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b bg-muted/50">
+                <tr className="border-b bg-canvas">
                   <th className="text-left py-3 px-4 font-medium">Property</th>
                   <th className="text-right py-3 px-4 font-medium">Income</th>
                   <th className="text-right py-3 px-4 font-medium">Expenses</th>
@@ -411,7 +421,7 @@ export function TaxReport() {
               </thead>
               <tbody>
                 {taxYearData.propertyBreakdown.map((p) => (
-                  <tr key={p.name} className="border-b last:border-0 hover:bg-muted/50">
+                  <tr key={p.name} className="border-b last:border-0 hover:bg-canvas">
                     <td className="py-3 px-4 font-medium">{p.name}</td>
                     <td className="py-3 px-4 text-right text-positive">{formatCurrency(p.income)}</td>
                     <td className="py-3 px-4 text-right text-danger">{formatCurrency(p.expenses)}</td>
@@ -438,7 +448,7 @@ export function TaxReport() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <h4 className="font-semibold">Income to Report</h4>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted">
                 <li>All rent payments received</li>
                 <li>Late fees and penalties</li>
                 <li>Security deposits kept (not returned)</li>
@@ -447,7 +457,7 @@ export function TaxReport() {
             </div>
             <div className="space-y-2">
               <h4 className="font-semibold">Common Deductions</h4>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted">
                 <li>Mortgage interest and points</li>
                 <li>Property taxes</li>
                 <li>Operating expenses</li>
