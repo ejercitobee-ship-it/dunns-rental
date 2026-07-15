@@ -10,6 +10,7 @@ import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
 import { Properties } from './pages/Properties';
 import { Tenants } from './pages/Tenants';
+import { TenantDetail } from './pages/TenantDetail';
 import { Rents } from './pages/Rents';
 import { Maintenance } from './pages/Maintenance';
 import { Reports } from './pages/Reports';
@@ -101,7 +102,13 @@ function AppRoutes() {
           <Layout><Tenants /></Layout>
         </ProtectedRoute>
       } />
-      
+
+      <Route path="/tenants/:id" element={
+        <ProtectedRoute requiredPermission="tenants_view">
+          <Layout><TenantDetail /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/rents" element={
         <ProtectedRoute requiredPermission="rents_view">
           <Layout><Rents /></Layout>
