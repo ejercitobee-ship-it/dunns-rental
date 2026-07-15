@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS lease_tenants (
 -- Rent is owed by the lease. paid_by_tenant_id records who the money came from.
 CREATE TABLE IF NOT EXISTS rent_payments (
   id TEXT PRIMARY KEY,
-  lease_id TEXT REFERENCES leases(id) ON DELETE CASCADE,
+  lease_id TEXT NOT NULL REFERENCES leases(id) ON DELETE CASCADE,
   paid_by_tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL,
   amount REAL NOT NULL,
   due_date TEXT,
