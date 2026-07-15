@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
@@ -66,6 +66,12 @@ export function Tenants() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Synchronous re-entry guard for handleAddTenancy. isSubmitting (state)
+  // only flips the disabled prop after a re-render, so a fast double-click
+  // or double-Enter can start a second overlapping submit before that
+  // render lands. This ref is set the instant the first submit starts, so
+  // the second invocation sees it immediately and bails out.
+  const isSubmittingRef = useRef(false);
   const [tenancyForm, setTenancyForm] = useState(emptyTenancyForm);
   const [personRows, setPersonRows] = useState<PersonRow[]>(() => [createPersonRow()]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -118,15 +124,15 @@ export function Tenants() {
     { label: 'Monthly Revenue', value: formatCurrency(stats.revenue), icon: <DollarSign /> },
   ];
 
-  // Units without an active lease: no lease at all, or a lease that exists
-  // but isn't currently active (e.g. paused). getUnitLease already excludes
-  // ended leases, so we only need to check the status of what it returns.
+  // A unit is only free for a brand new tenancy once its current lease has
+  // ended. A paused lease still has people living there (paused just means
+  // rent collection is on hold), so it must keep the unit off this list, or
+  // resuming that lease later would leave the unit double booked and
+  // monthlyRevenue would double count its rent. getUnitLease already excludes
+  // ended leases, so any lease it returns (active or paused) blocks the unit.
   const availableUnits = useMemo(() => {
     return units
-      .filter(unit => {
-        const lease = getUnitLease(unit.id);
-        return !lease || lease.status !== 'active';
-      })
+      .filter(unit => !getUnitLease(unit.id))
       .map(unit => ({ unit, property: properties.find(p => p.id === unit.propertyId) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [units, leases, properties]);
@@ -166,12 +172,20 @@ export function Tenants() {
 
   const handleAddTenancy = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Bail out immediately if a submit is already in flight. This check has
+    // to happen synchronously, before any state update, or a fast
+    // double-click/double-Enter can slip a second invocation through while
+    // both read the same personRows snapshot (no tenantId yet on either
+    // read) and both call addTenant for the same person.
+    if (isSubmittingRef.current) return;
+
     const unit = units.find(u => u.id === tenancyForm.unitId);
     if (!unit) {
       showToast('Please choose a unit.', 'error');
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       // Create each person who doesn't already have an id from a previous,
@@ -210,6 +224,7 @@ export function Tenants() {
     } catch (err) {
       showToast((err as Error).message, 'error');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -450,8 +465,19 @@ export function Tenants() {
         <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
       )}
 
-      {/* Add Tenancy modal: pick a unit, set the rent once, add one or more people. */}
-      <Modal isOpen={isAddOpen} onClose={closeTenancyModal} title="Add Tenancy" size="xl">
+      {/* Add Tenancy modal: pick a unit, set the rent once, add one or more people.
+          The backdrop click and header X both call onClose directly and aren't
+          gated by isSubmitting the way the in-form Cancel button is, so while a
+          submit is in flight this is a no-op: otherwise addLease could still
+          resolve and silently create a lease after the user thought they'd
+          cancelled, and the abandoned closure's setPersonRows call could
+          clobber whatever the user typed after reopening the modal. */}
+      <Modal
+        isOpen={isAddOpen}
+        onClose={isSubmitting ? () => {} : closeTenancyModal}
+        title="Add Tenancy"
+        size="xl"
+      >
         <form onSubmit={handleAddTenancy} className="space-y-6">
           <div className="space-y-4">
             <h3 className="font-semibold text-ink">The tenancy</h3>
