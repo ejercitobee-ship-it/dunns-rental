@@ -998,6 +998,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 In `functions/api/payments/[id].ts`, replace the `UPDATE` statement and its bindings inside `onRequestPut` with:
 
 ```ts
+    // lease_id is NOT NULL: reject a payment with no lease here rather than
+    // letting D1 raise a raw constraint error.
+    if (!body.leaseId) return jsonError('A lease is required', 400);
+    if (body.amount === undefined || body.amount === null) {
+      return jsonError('Amount is required', 400);
+    }
+
     await env.DB.prepare(
       `UPDATE rent_payments SET
         lease_id = ?, paid_by_tenant_id = ?, amount = ?, due_date = ?, paid_date = ?,
@@ -1006,7 +1013,7 @@ In `functions/api/payments/[id].ts`, replace the `UPDATE` statement and its bind
        WHERE id = ?`
     )
       .bind(
-        body.leaseId ?? null,
+        body.leaseId,
         body.paidByTenantId ?? null,
         body.amount,
         body.dueDate ?? null,

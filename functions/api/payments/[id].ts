@@ -26,6 +26,12 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   try {
     const id = params.id as string;
     const body = (await request.json()) as Record<string, unknown>;
+    // lease_id is NOT NULL: reject a payment with no lease here rather than
+    // letting D1 raise a raw constraint error.
+    if (!body.leaseId) return jsonError('A lease is required', 400);
+    if (body.amount === undefined || body.amount === null) {
+      return jsonError('Amount is required', 400);
+    }
 
     await env.DB.prepare(
       `UPDATE rent_payments SET
@@ -35,7 +41,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
        WHERE id = ?`
     )
       .bind(
-        body.leaseId ?? null,
+        body.leaseId,
         body.paidByTenantId ?? null,
         body.amount,
         body.dueDate ?? null,
