@@ -1,12 +1,44 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign } from 'lucide-react';
+import {
+  Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
+  Plus, MoreVertical, Trash2, UserPlus,
+} from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
 import { monthlyRevenue } from '../lib/rent';
 import type { Lease, LeaseStatus } from '../types';
+
+interface PersonRow {
+  key: string;
+  /** Set once addTenant succeeds for this row, so a retry after a partial
+   * failure reuses the person instead of creating a duplicate. */
+  tenantId?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}
+
+let personRowSeq = 0;
+function createPersonRow(): PersonRow {
+  personRowSeq += 1;
+  return { key: `person-${personRowSeq}`, firstName: '', lastName: '', email: '', phone: '' };
+}
+
+const emptyTenancyForm = {
+  unitId: '',
+  startDate: '',
+  endDate: '',
+  monthlyRent: '',
+  securityDeposit: '',
+  notes: '',
+};
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -23,9 +55,20 @@ const leaseStatusLabel: Record<LeaseStatus, string> = {
 const DAY_MS = 1000 * 60 * 60 * 24;
 
 export function Tenants() {
-  const { tenants, properties, units, leases, getLeaseTenants, getTenantLeases } = useApp();
+  const {
+    tenants, properties, units, leases,
+    getLeaseTenants, getTenantLeases, getUnitLease,
+    addTenant, addLease, updateLease,
+  } = useApp();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tenancyForm, setTenancyForm] = useState(emptyTenancyForm);
+  const [personRows, setPersonRows] = useState<PersonRow[]>(() => [createPersonRow()]);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     return tenants.map(tenant => {
@@ -75,6 +118,113 @@ export function Tenants() {
     { label: 'Monthly Revenue', value: formatCurrency(stats.revenue), icon: <DollarSign /> },
   ];
 
+  // Units without an active lease: no lease at all, or a lease that exists
+  // but isn't currently active (e.g. paused). getUnitLease already excludes
+  // ended leases, so we only need to check the status of what it returns.
+  const availableUnits = useMemo(() => {
+    return units
+      .filter(unit => {
+        const lease = getUnitLease(unit.id);
+        return !lease || lease.status !== 'active';
+      })
+      .map(unit => ({ unit, property: properties.find(p => p.id === unit.propertyId) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [units, leases, properties]);
+
+  const resetTenancyModal = () => {
+    setTenancyForm(emptyTenancyForm);
+    setPersonRows([createPersonRow()]);
+  };
+
+  const closeTenancyModal = () => {
+    setIsAddOpen(false);
+    resetTenancyModal();
+  };
+
+  const updatePersonRow = (key: string, patch: Partial<PersonRow>) => {
+    setPersonRows(prev => prev.map(row => (row.key === key ? { ...row, ...patch } : row)));
+  };
+
+  const addPersonRow = () => {
+    setPersonRows(prev => [...prev, createPersonRow()]);
+  };
+
+  const removePersonRow = (key: string) => {
+    setPersonRows(prev => prev.filter(row => row.key !== key));
+  };
+
+  const handleUnitChange = (unitId: string) => {
+    const unit = units.find(u => u.id === unitId);
+    setTenancyForm(prev => ({
+      ...prev,
+      unitId,
+      // Prefill the unit's listed rent as a starting point, but never
+      // overwrite a value the user already typed in.
+      monthlyRent: prev.monthlyRent || (unit ? String(unit.monthlyRent) : ''),
+    }));
+  };
+
+  const handleAddTenancy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const unit = units.find(u => u.id === tenancyForm.unitId);
+    if (!unit) {
+      showToast('Please choose a unit.', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Create each person who doesn't already have an id from a previous,
+      // partially failed attempt. Reusing ids on retry means a failed
+      // addLease call never leaves duplicate people behind.
+      const nextRows = [...personRows];
+      for (let i = 0; i < nextRows.length; i++) {
+        const row = nextRows[i];
+        if (row.tenantId) continue;
+        const created = await addTenant({
+          firstName: row.firstName.trim(),
+          lastName: row.lastName.trim(),
+          email: row.email.trim() || undefined,
+          phone: row.phone.trim() || undefined,
+        });
+        nextRows[i] = { ...row, tenantId: created.id };
+        setPersonRows([...nextRows]);
+      }
+
+      const tenantIds = nextRows.map(row => row.tenantId).filter((id): id is string => !!id);
+
+      await addLease({
+        unitId: unit.id,
+        propertyId: unit.propertyId,
+        startDate: tenancyForm.startDate || undefined,
+        endDate: tenancyForm.endDate || undefined,
+        monthlyRent: Number(tenancyForm.monthlyRent) || 0,
+        securityDeposit: tenancyForm.securityDeposit ? Number(tenancyForm.securityDeposit) : undefined,
+        status: 'active',
+        notes: tenancyForm.notes.trim() || undefined,
+        tenantIds,
+      });
+
+      showToast('Tenancy added.', 'success');
+      closeTenancyModal();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLeaseStatusChange = async (lease: Lease, status: LeaseStatus, confirmMessage: string, successMessage: string) => {
+    setOpenMenuId(null);
+    if (!confirm(confirmMessage)) return;
+    try {
+      await updateLease({ ...lease, status });
+      showToast(successMessage, 'success');
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -82,6 +232,10 @@ export function Tenants() {
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tenants</h1>
           <p className="text-muted mt-1 text-sm">People, their households and where they live.</p>
         </div>
+        <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Tenancy
+        </Button>
       </div>
 
       {/* Stats */}
@@ -126,6 +280,7 @@ export function Tenants() {
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Lease Term</th>
                   <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Rent</th>
                   <th className="text-center py-3 px-4 font-semibold text-ink text-sm">Status</th>
+                  <th className="w-12 py-3 px-4"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -212,6 +367,68 @@ export function Tenants() {
                         <Badge variant="outline">No tenancy</Badge>
                       )}
                     </td>
+
+                    <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      {lease ? (
+                        <div className="relative inline-block">
+                          <button
+                            type="button"
+                            onClick={() => setOpenMenuId(openMenuId === tenant.id ? null : tenant.id)}
+                            className="p-1.5 hover:bg-black/[0.05] rounded-lg transition-colors"
+                          >
+                            <MoreVertical className="h-4 w-4 text-faint" />
+                          </button>
+                          {openMenuId === tenant.id && (
+                            <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-line bg-surface shadow-[0_12px_28px_-8px_rgba(27,26,23,0.28)] py-1">
+                              {lease.status === 'active' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLeaseStatusChange(
+                                    lease,
+                                    'paused',
+                                    'Pause rent for this tenancy? You can resume it later.',
+                                    'Rent paused.'
+                                  )}
+                                  className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-black/[0.04]"
+                                >
+                                  Pause rent
+                                </button>
+                              )}
+                              {lease.status === 'paused' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLeaseStatusChange(
+                                    lease,
+                                    'active',
+                                    'Resume this tenancy?',
+                                    'Tenancy resumed.'
+                                  )}
+                                  className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-black/[0.04]"
+                                >
+                                  Resume
+                                </button>
+                              )}
+                              {lease.status !== 'ended' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLeaseStatusChange(
+                                    lease,
+                                    'ended',
+                                    'End this tenancy? This cannot be undone.',
+                                    'Tenancy ended.'
+                                  )}
+                                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-danger-soft"
+                                >
+                                  End tenancy
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-faint">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -227,6 +444,183 @@ export function Tenants() {
           )}
         </CardContent>
       </Card>
+
+      {/* Click anywhere outside an open row menu to close it. */}
+      {openMenuId && (
+        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+      )}
+
+      {/* Add Tenancy modal: pick a unit, set the rent once, add one or more people. */}
+      <Modal isOpen={isAddOpen} onClose={closeTenancyModal} title="Add Tenancy" size="xl">
+        <form onSubmit={handleAddTenancy} className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-ink">The tenancy</h3>
+
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Unit *</label>
+              <select
+                required
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.unitId}
+                onChange={(e) => handleUnitChange(e.target.value)}
+              >
+                <option value="">Select a unit</option>
+                {availableUnits.map(({ unit, property }) => (
+                  <option key={unit.id} value={unit.id}>
+                    {property ? `${property.name}, Unit ${unit.unitNumber}` : `Unit ${unit.unitNumber}`}
+                  </option>
+                ))}
+              </select>
+              {availableUnits.length === 0 && (
+                <p className="text-xs text-muted mt-1.5">No units are free right now. Every unit already has an active tenancy.</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Start Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={tenancyForm.startDate}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={tenancyForm.endDate}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Monthly Rent *</label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={tenancyForm.monthlyRent}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, monthlyRent: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Security Deposit</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={tenancyForm.securityDeposit}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, securityDeposit: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
+              <textarea
+                rows={2}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.notes}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, notes: e.target.value })}
+                placeholder="Any additional notes..."
+              />
+            </div>
+          </div>
+
+          <hr className="border-line" />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-ink">The people</h3>
+              <button
+                type="button"
+                onClick={addPersonRow}
+                className="text-sm font-medium text-primary hover:text-primary-hover flex items-center gap-1.5"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add another person
+              </button>
+            </div>
+
+            {personRows.map((row, index) => (
+              <div key={row.key} className="border border-line rounded-lg p-4 space-y-3 relative">
+                {index > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => removePersonRow(row.key)}
+                    className="absolute top-3 right-3 p-1 text-faint hover:text-danger hover:bg-danger-soft rounded transition-colors"
+                    title="Remove person"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+                <p className="eyebrow">Person {index + 1}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-1.5">First Name *</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      value={row.firstName}
+                      onChange={(e) => updatePersonRow(row.key, { firstName: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-1.5">Last Name *</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      value={row.lastName}
+                      onChange={(e) => updatePersonRow(row.key, { lastName: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
+                    <input
+                      type="email"
+                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      value={row.email}
+                      onChange={(e) => updatePersonRow(row.key, { email: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
+                    <input
+                      type="tel"
+                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      value={row.phone}
+                      onChange={(e) => updatePersonRow(row.key, { phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={closeTenancyModal} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Add Tenancy'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
