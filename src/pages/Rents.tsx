@@ -12,7 +12,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -88,10 +88,22 @@ function csvField(value: string | number): string {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
+// A CSV "tenant"/"occupants" cell may name one person or several (the Export
+// button joins every occupant with ", "). Attribute the payment only when
+// exactly one of the named people is actually on this lease: with zero or
+// several matches we cannot tell who paid, so paidByTenantId is left unset
+// rather than guessed at.
+function matchSinglePayer(cell: string, occupants: Tenant[]): Tenant | undefined {
+  const names = cell.split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
+  if (names.length === 0) return undefined;
+  const matches = occupants.filter(t => names.includes(`${t.firstName} ${t.lastName}`.trim().toLowerCase()));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 export function Rents() {
   const {
     properties, units, leases, rentPayments,
-    getUnitLease, getLeaseTenants, addRentPayment,
+    getLeaseTenants, addRentPayment,
   } = useApp();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -208,6 +220,7 @@ export function Rents() {
       const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
       const occupants = getLeaseTenants(lease.id);
       for (let month = 1; month <= 12; month++) {
+        if (!leaseCoversMonth(lease, month, year)) continue;
         rows.push({
           lease,
           unit,
@@ -257,6 +270,7 @@ export function Rents() {
 
     for (const lease of activeLeases(leases)) {
       for (const month of elapsedMonths) {
+        if (!leaseCoversMonth(lease, month, year)) continue;
         const s = settleMonth(lease, rentPayments, month, year);
         totalDue += s.due;
         totalPaidElapsed += s.paid;
@@ -265,14 +279,14 @@ export function Rents() {
       }
     }
 
-    const totalCollected = rentPayments
-      .filter(p => p.year === year)
-      .reduce((sum, p) => sum + p.amount, 0);
+    // Sum the same settlements the table renders (leaseMonthRows), so this
+    // top-line figure can never disagree with the rows beneath it.
+    const totalCollected = leaseMonthRows.reduce((sum, row) => sum + row.settlement.paid, 0);
 
     const collectionRate = totalDue > 0 ? (totalPaidElapsed / totalDue) * 100 : 0;
 
     return { totalCollected, outstanding, collectionRate, overdueCount };
-  }, [leases, rentPayments, yearFilter]);
+  }, [leases, rentPayments, yearFilter, leaseMonthRows]);
 
   const statCards = [
     { label: 'Total Collected', value: formatCurrency(yearStats.totalCollected), icon: <DollarSign />, valueClass: 'text-ink' },
@@ -394,17 +408,15 @@ export function Rents() {
             (!property || u.propertyId === property.id)
         );
 
-        // A unit with no active lease has no one to bill: skip it rather
-        // than creating an orphaned payment the app can't attribute.
-        const lease = unit ? getUnitLease(unit.id) : undefined;
+        // A unit with no ACTIVE lease has no one to bill: skip it rather
+        // than creating an orphaned payment against a unit that's vacant,
+        // paused, or between tenants. Paused leases are deliberately
+        // excluded here, they never appear as a row on this page.
+        const lease = unit ? activeLeases(leases).find(l => l.unitId === unit.id) : undefined;
         if (!lease) { skippedNoLease++; continue; }
 
-        const tenantName = iTenant >= 0 ? (cells[iTenant] || '').trim().toLowerCase() : '';
-        const matchedTenant = tenantName
-          ? getLeaseTenants(lease.id).find(
-              t => `${t.firstName} ${t.lastName}`.trim().toLowerCase() === tenantName
-            )
-          : undefined;
+        const tenantCell = iTenant >= 0 ? (cells[iTenant] || '').trim() : '';
+        const matchedTenant = matchSinglePayer(tenantCell, getLeaseTenants(lease.id));
 
         const monthStr = iMonth >= 0 ? (cells[iMonth] || '').trim() : '';
         let month = MONTHS.findIndex(m => m.toLowerCase() === monthStr.toLowerCase()) + 1;

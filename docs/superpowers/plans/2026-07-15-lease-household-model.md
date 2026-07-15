@@ -38,6 +38,7 @@ The one place rent is calculated. Everything else reads from here.
   - `activeLeases(leases: Lease[]): Lease[]`
   - `monthlyRevenue(leases: Lease[]): number`
   - `settleMonth(lease: Lease, payments: RentPayment[], month: number, year: number): MonthSettlement`
+  - `leaseCoversMonth(lease: Lease, month: number, year: number): boolean`
   - `type MonthSettlement = { due: number; paid: number; balance: number; status: 'paid' | 'partial' | 'unpaid' }`
   - Types `Lease` and `RentPayment` are created in Task 6. For this task, define the minimal structural types inline in `src/lib/rent.ts` as shown, then Task 6 replaces them with imports.
 
@@ -77,7 +78,7 @@ Create `src/lib/rent.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth } from './rent';
 import type { Lease, RentPayment } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -187,6 +188,47 @@ describe('settleMonth', () => {
     expect(s.balance).toBe(0);
   });
 });
+
+describe('leaseCoversMonth', () => {
+  // A lease starting April 10 and ending August 20: full months either way,
+  // no proration.
+  const midYearLease = lease({ startDate: '2026-04-10', endDate: '2026-08-20' });
+
+  it('is false for a month before the start', () => {
+    expect(leaseCoversMonth(midYearLease, 3, 2026)).toBe(false);
+  });
+
+  it('is true for the start month itself', () => {
+    expect(leaseCoversMonth(midYearLease, 4, 2026)).toBe(true);
+  });
+
+  it('is true for a month in the middle of the term', () => {
+    expect(leaseCoversMonth(midYearLease, 6, 2026)).toBe(true);
+  });
+
+  it('is true for the end month itself', () => {
+    expect(leaseCoversMonth(midYearLease, 8, 2026)).toBe(true);
+  });
+
+  it('is false for a month after the end', () => {
+    expect(leaseCoversMonth(midYearLease, 9, 2026)).toBe(false);
+  });
+
+  it('is true far in the future when there is no endDate', () => {
+    const ongoing = lease({ startDate: '2026-04-10', endDate: undefined });
+    expect(leaseCoversMonth(ongoing, 12, 2030)).toBe(true);
+  });
+
+  it('is true with no lower bound when there is no startDate', () => {
+    const noStart = lease({ startDate: undefined, endDate: '2027-01-01' });
+    expect(leaseCoversMonth(noStart, 1, 2020)).toBe(true);
+  });
+
+  it('is true for the one month a lease both starts and ends in', () => {
+    const oneMonth = lease({ startDate: '2026-04-10', endDate: '2026-04-20' });
+    expect(leaseCoversMonth(oneMonth, 4, 2026)).toBe(true);
+  });
+});
 ```
 
 - [ ] **Step 5: Run the tests to verify they fail**
@@ -256,6 +298,31 @@ export function activeLeases(leases: Lease[]): Lease[] {
 }
 
 /**
+ * Parses the leading "YYYY-MM" of an ISO date string as plain numbers, with
+ * no `Date` object and no timezone shift. `new Date('2026-04-10')` is UTC
+ * midnight and can land in the previous month for a user behind UTC, which
+ * would wrongly exclude the start month from a lease's coverage.
+ */
+function yearMonthOf(dateStr: string): number {
+  const [year, month] = dateStr.split('-').map(Number);
+  return year * 12 + month;
+}
+
+/**
+ * Whether a lease's term overlaps a given month at all, no proration: a
+ * lease that starts or ends mid-month owes the whole month on either end.
+ * A missing `startDate` means no lower bound; a missing `endDate` means the
+ * lease is ongoing and has no upper bound. The start and end months are
+ * both inclusive.
+ */
+export function leaseCoversMonth(lease: Lease, month: number, year: number): boolean {
+  const target = year * 12 + month;
+  if (lease.startDate && target < yearMonthOf(lease.startDate)) return false;
+  if (lease.endDate && target > yearMonthOf(lease.endDate)) return false;
+  return true;
+}
+
+/**
  * Total rent per month across active leases. Counted once per lease, which is
  * what stops income doubling when more than one person lives in a unit.
  */
@@ -297,7 +364,7 @@ export function settleMonth(
 - [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `npm test`
-Expected: PASS, 13 tests.
+Expected: PASS, 20 tests.
 
 - [ ] **Step 8: Commit**
 
@@ -1374,12 +1441,12 @@ git commit -m "feat: add a tenancy with rent set once and any number of people"
 - Modify: `src/pages/Rents.tsx`
 
 **Interfaces:**
-- Consumes: `settleMonth`, `monthlyRevenue` (Task 1); `leases`, `getLeaseTenants` (Task 7).
+- Consumes: `settleMonth`, `monthlyRevenue`, `activeLeases`, `leaseCoversMonth` (Task 1); `leases`, `getLeaseTenants` (Task 7).
 - Produces: none (leaf page).
 
 - [ ] **Step 1: Rebuild the payments table around leases**
 
-The table lists **one row per active lease per month** for the selected year, not one row per payment. Each row shows: unit and property, the occupants' names, the period, rent due, paid so far, balance, and a status badge from `settleMonth(lease, rentPayments, month, year).status` (`paid`, `partial`, `unpaid`). Keep the year filter and the search box (match unit, property or occupant name).
+The table lists **one row per active lease per month** for the selected year, not one row per payment, and only for months the lease's term actually covers. A month is owed whenever the lease term overlaps that month at all, checked with `leaseCoversMonth(lease, month, year)`: no proration, so a lease starting April 10 owes all of April and a lease ending May 20 owes all of May, but a lease starting in April owes nothing for January through March. Each row shows: unit and property, the occupants' names, the period, rent due, paid so far, balance, and a status badge from `settleMonth(lease, rentPayments, month, year).status` (`paid`, `partial`, `unpaid`). Keep the year filter and the search box (match unit, property or occupant name).
 
 - [ ] **Step 2: Record a payment against a lease**
 
@@ -1387,7 +1454,7 @@ The "Record Payment" action on a row opens a modal with: amount (defaulting to t
 
 - [ ] **Step 3: Fix the stat cards and the CSV export**
 
-Stat cards: Total Collected (sum of payments in the year), Outstanding (sum of `settleMonth(...).balance` across active leases and elapsed months of the year), Collection Rate, Overdue count. Update `exportToCSV` headers to `Property, Unit, Occupants, Month, Year, Due, Paid, Balance, Status` and build rows from the lease rows. Update the CSV import to resolve a unit to its active lease and set `leaseId` (and `paidByTenantId` when the named person is on that lease), skipping rows whose unit has no active lease and reporting the count.
+Stat cards: Total Collected (the sum of `settlement.paid` across the same lease-month rows the table renders, so this top-line figure can never disagree with the rows beneath it), Outstanding (sum of `settleMonth(...).balance` across active leases and elapsed, lease-covered months of the year), Collection Rate, Overdue count (also scoped to elapsed, lease-covered months). Update `exportToCSV` headers to `Property, Unit, Occupants, Month, Year, Due, Paid, Balance, Status` and build rows from the lease rows. Update the CSV import to resolve a unit to its ACTIVE lease only (not paused or ended) and set `leaseId`, skipping rows whose unit has no active lease and reporting the count. Because the Occupants column can list several people, only set `paidByTenantId` when exactly one of the named people can be identified as an occupant of that lease; otherwise leave it unset rather than guessing.
 
 - [ ] **Step 4: Verify by hand**
 

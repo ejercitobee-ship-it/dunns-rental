@@ -26,6 +26,31 @@ export function activeLeases(leases: Lease[]): Lease[] {
 }
 
 /**
+ * Parses the leading "YYYY-MM" of an ISO date string as plain numbers, with
+ * no `Date` object and no timezone shift. `new Date('2026-04-10')` is UTC
+ * midnight and can land in the previous month for a user behind UTC, which
+ * would wrongly exclude the start month from a lease's coverage.
+ */
+function yearMonthOf(dateStr: string): number {
+  const [year, month] = dateStr.split('-').map(Number);
+  return year * 12 + month;
+}
+
+/**
+ * Whether a lease's term overlaps a given month at all, no proration: a
+ * lease that starts or ends mid-month owes the whole month on either end.
+ * A missing `startDate` means no lower bound; a missing `endDate` means the
+ * lease is ongoing and has no upper bound. The start and end months are
+ * both inclusive.
+ */
+export function leaseCoversMonth(lease: Lease, month: number, year: number): boolean {
+  const target = year * 12 + month;
+  if (lease.startDate && target < yearMonthOf(lease.startDate)) return false;
+  if (lease.endDate && target > yearMonthOf(lease.endDate)) return false;
+  return true;
+}
+
+/**
  * Total rent per month across active leases. Counted once per lease, which is
  * what stops income doubling when more than one person lives in a unit.
  */

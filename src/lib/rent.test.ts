@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth } from './rent';
 import type { Lease, RentPayment } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -107,5 +107,46 @@ describe('settleMonth', () => {
     const s = settleMonth(lease(), [payment({ amount: 1400 })], 7, 2026);
     expect(s.status).toBe('paid');
     expect(s.balance).toBe(0);
+  });
+});
+
+describe('leaseCoversMonth', () => {
+  // A lease starting April 10 and ending August 20: full months either way,
+  // no proration.
+  const midYearLease = lease({ startDate: '2026-04-10', endDate: '2026-08-20' });
+
+  it('is false for a month before the start', () => {
+    expect(leaseCoversMonth(midYearLease, 3, 2026)).toBe(false);
+  });
+
+  it('is true for the start month itself', () => {
+    expect(leaseCoversMonth(midYearLease, 4, 2026)).toBe(true);
+  });
+
+  it('is true for a month in the middle of the term', () => {
+    expect(leaseCoversMonth(midYearLease, 6, 2026)).toBe(true);
+  });
+
+  it('is true for the end month itself', () => {
+    expect(leaseCoversMonth(midYearLease, 8, 2026)).toBe(true);
+  });
+
+  it('is false for a month after the end', () => {
+    expect(leaseCoversMonth(midYearLease, 9, 2026)).toBe(false);
+  });
+
+  it('is true far in the future when there is no endDate', () => {
+    const ongoing = lease({ startDate: '2026-04-10', endDate: undefined });
+    expect(leaseCoversMonth(ongoing, 12, 2030)).toBe(true);
+  });
+
+  it('is true with no lower bound when there is no startDate', () => {
+    const noStart = lease({ startDate: undefined, endDate: '2027-01-01' });
+    expect(leaseCoversMonth(noStart, 1, 2020)).toBe(true);
+  });
+
+  it('is true for the one month a lease both starts and ends in', () => {
+    const oneMonth = lease({ startDate: '2026-04-10', endDate: '2026-04-20' });
+    expect(leaseCoversMonth(oneMonth, 4, 2026)).toBe(true);
   });
 });
