@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
+import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
 
 const API_BASE = '/api';
 
@@ -175,6 +175,17 @@ export const tenantsApi = {
     apiRequest(`/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/tenants/${id}`, { method: 'DELETE' }),
+};
+
+// Leases API
+export const leasesApi = {
+  getAll: (): Promise<Lease[]> => apiRequest('/leases'),
+  getById: (id: string): Promise<Lease> => apiRequest(`/leases/${id}`),
+  create: (data: Omit<Lease, 'id'>): Promise<Lease> =>
+    apiRequest('/leases', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Lease): Promise<Lease> =>
+    apiRequest(`/leases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiRequest(`/leases/${id}`, { method: 'DELETE' }),
 };
 
 // Payments API

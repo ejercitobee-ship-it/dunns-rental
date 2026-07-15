@@ -4,36 +4,8 @@
 // Task 6 moves Lease and RentPayment into src/types and this file imports them
 // instead of declaring them.
 
-export type LeaseStatus = 'active' | 'paused' | 'ended';
-
-export interface Lease {
-  id: string;
-  unitId: string;
-  propertyId?: string;
-  startDate?: string;
-  endDate?: string;
-  monthlyRent: number;
-  securityDeposit?: number;
-  status: LeaseStatus;
-  notes?: string;
-  /** Ids of the people on this lease. Must match the shared type in Task 6. */
-  tenantIds: string[];
-}
-
-export interface RentPayment {
-  id: string;
-  leaseId: string;
-  paidByTenantId?: string;
-  amount: number;
-  month: number;
-  year: number;
-  status?: string;
-  dueDate?: string;
-  paidDate?: string;
-  receivedDate?: string;
-  paymentMethod?: string;
-  notes?: string;
-}
+import type { Lease, RentPayment } from '../types';
+export type { Lease, RentPayment };
 
 export interface MonthSettlement {
   due: number;

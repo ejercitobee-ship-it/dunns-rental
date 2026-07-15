@@ -24,34 +24,42 @@ export interface Unit {
   description?: string;
 }
 
-export interface Tenant {
+export type LeaseStatus = 'active' | 'paused' | 'ended';
+
+export interface Lease {
   id: string;
   unitId: string;
-  propertyId: string;
+  propertyId?: string;
+  startDate?: string;
+  endDate?: string;
+  monthlyRent: number;
+  securityDeposit?: number;
+  status: LeaseStatus;
+  notes?: string;
+  tenantIds: string[];
+}
+
+/** A person. Rent and lease dates live on the Lease. */
+export interface Tenant {
+  id: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
-  leaseStart: string;
-  leaseEnd: string;
-  monthlyRent: number;
-  securityDeposit: number;
-  status: 'active' | 'inactive' | 'pending' | 'paused';
+  email?: string;
+  phone?: string;
+  notes?: string;
   emergencyContact?: {
     name: string;
     phone: string;
     relationship: string;
   };
-  notes?: string;
 }
 
 export interface RentPayment {
   id: string;
-  tenantId: string;
-  unitId: string;
-  propertyId: string;
+  leaseId: string;
+  paidByTenantId?: string;
   amount: number;
-  dueDate: string;
+  dueDate?: string;
   paidDate?: string;
   receivedDate?: string;
   status: 'paid' | 'pending' | 'overdue' | 'partial';
