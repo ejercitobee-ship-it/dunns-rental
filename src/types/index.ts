@@ -28,7 +28,8 @@ export type LeaseStatus = 'active' | 'paused' | 'ended';
 
 export interface Lease {
   id: string;
-  unitId: string;
+  /** Cleared if the unit is deleted, so lease and payment history survive. */
+  unitId?: string;
   propertyId?: string;
   startDate?: string;
   endDate?: string;

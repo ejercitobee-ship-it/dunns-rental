@@ -209,7 +209,8 @@ export type LeaseStatus = 'active' | 'paused' | 'ended';
 
 export interface Lease {
   id: string;
-  unitId: string;
+  /** Cleared if the unit is deleted, so lease and payment history survive. */
+  unitId?: string;
   propertyId?: string;
   startDate?: string;
   endDate?: string;
@@ -1065,7 +1066,8 @@ export type LeaseStatus = 'active' | 'paused' | 'ended';
 
 export interface Lease {
   id: string;
-  unitId: string;
+  /** Cleared if the unit is deleted, so lease and payment history survive. */
+  unitId?: string;
   propertyId?: string;
   startDate?: string;
   endDate?: string;
@@ -1489,6 +1491,76 @@ Expected: PASS, 13 tests.
 ```bash
 git add src/pages/Dashboard.tsx src/pages/Reports.tsx src/pages/TaxReport.tsx
 git commit -m "feat: dashboard, reports and tax report count rent per lease"
+```
+
+---
+
+### Task 14: Rework the CSV importer for the lease model
+
+Added mid-execution. The plan originally missed `src/pages/DataMigration.tsx`, whose
+CSV format has the old model baked in: the TENANTS section carries `unitId`,
+`leaseStart`, `leaseEnd`, `monthlyRent` and `securityDeposit` on each person, and
+RENT_PAYMENTS keys off `tenantId`. Belle chose to rework the importer rather than
+remove it. `src/data/mockData.ts` was the other missed file; nothing imported it, so
+it was deleted as dead code.
+
+This task runs after Task 12 and before Task 13, so the final verification covers it.
+
+**Files:**
+- Modify: `src/pages/DataMigration.tsx`
+
+**Interfaces:** consumes `Lease`, `Tenant`, `RentPayment` from `src/types`, and
+`leasesApi` from `src/lib/api.ts` (Task 6). Consumes whatever `addLease`/`addTenant`
+AppContext exposes after Task 7.
+
+- [ ] **Step 1: Change the CSV format to carry a LEASES section**
+
+The sample CSV (`SAMPLE_CSV`) and the parser must move tenancy fields off TENANTS and
+onto a new LEASES section. New format:
+
+```
+=== TENANTS ===
+id,firstName,lastName,email,phone
+1,John,Doe,john@email.com,(555) 123-4567
+2,Jane,Doe,jane@email.com,(555) 987-6543
+
+=== LEASES ===
+id,unitId,propertyId,startDate,endDate,monthlyRent,securityDeposit,status,tenantIds
+L1,u1,1,2024-01-01,2024-12-31,2500,5000,active,1|2
+
+=== RENT_PAYMENTS ===
+id,leaseId,paidByTenantId,amount,dueDate,paidDate,status,month,year
+1,L1,1,2500,2024-01-01,2024-01-01,paid,1,2024
+```
+
+`tenantIds` is pipe-separated so several people share one lease, which is the whole
+point of the model. This is what lets an import express "two adults, one rent."
+
+- [ ] **Step 2: Validate the new relationships**
+
+The importer already reports per-row validation errors. Extend it to reject:
+- a LEASES row whose `tenantIds` names a tenant id absent from the TENANTS section
+- a LEASES row whose `unitId` names a unit absent from the UNITS section
+- a RENT_PAYMENTS row whose `leaseId` names a lease absent from the LEASES section
+- a RENT_PAYMENTS row with no `leaseId` (the API rejects these with a 400)
+
+- [ ] **Step 3: Import in dependency order**
+
+Properties, then units, then tenants, then leases (which need tenant and unit ids),
+then rent payments (which need lease ids), then expenses. Map imported CSV ids to the
+real ids the API returns, the way the importer already does for properties and units.
+
+- [ ] **Step 4: Verify**
+
+Run: `npm run build` and `npm test`. Then import the sample CSV against the local dev
+server and confirm one lease with two tenants appears, and that revenue counts its
+rent once rather than twice.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/pages/DataMigration.tsx
+git commit -m "feat: CSV importer understands leases and shared tenancies"
 ```
 
 ---
