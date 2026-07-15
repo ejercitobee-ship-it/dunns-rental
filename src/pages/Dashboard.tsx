@@ -318,7 +318,7 @@ export function Dashboard() {
           <div className="flex-1">
             <h3 className="font-semibold text-red-900">Outstanding Payments</h3>
             <p className="text-danger mt-1">
-              You have {formatCurrency(stats.totalOwed)} in overdue or pending rent payments.
+              You have {formatCurrency(stats.totalOwed)} in unpaid rent so far this year.
             </p>
           </div>
           <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2">
