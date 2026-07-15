@@ -42,7 +42,7 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
 };
 
 export function TaxReport() {
-  const { expenses, incomes, properties, rentPayments } = useApp();
+  const { expenses, incomes, properties, rentPayments, leases } = useApp();
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
 
   const taxYearData = useMemo(() => {
@@ -76,13 +76,17 @@ export function TaxReport() {
 
     const netIncome = totalIncome - totalDeductibleExpenses;
 
+    // RentPayment no longer carries its own propertyId: join through the
+    // lease it belongs to instead.
+    const leasePropertyId = new Map(leases.map(l => [l.id, l.propertyId]));
+
     // Property breakdown
     const propertyBreakdown = properties.map(p => {
       const propertyExpenses = yearExpenses
         .filter(e => e.propertyId === p.id)
         .reduce((sum, e) => sum + (e.taxDeductible !== false ? e.amount : 0), 0);
       const propertyRent = yearPaidRent
-        .filter(pmt => pmt.propertyId === p.id)
+        .filter(pmt => leasePropertyId.get(pmt.leaseId) === p.id)
         .reduce((sum, pmt) => sum + pmt.amount, 0);
       const propertyOther = yearIncome
         .filter(i => i.propertyId === p.id && i.source !== 'rent')
@@ -138,7 +142,7 @@ export function TaxReport() {
       propertyBreakdown,
       quarterlyData,
     };
-  }, [expenses, incomes, properties, rentPayments, yearFilter]);
+  }, [expenses, incomes, properties, rentPayments, leases, yearFilter]);
 
   const expenseChartData = useMemo(() => {
     return Object.entries(taxYearData.expensesByCategory)

@@ -129,54 +129,44 @@ export function Rents() {
   // a double-click on "Record Payment" must not create two payments.
   const isRecordingRef = useRef(false);
 
-  // Annual rent collection data
+  // Annual rent collection data. Walks every month of the year, but only
+  // counts a month against a lease when leaseCoversMonth says the lease's
+  // term actually overlaps it, so a lease that starts in April is never
+  // billed for January through March. This is what fixes the old reading of
+  // near 100% collection: the previous version summed raw payment rows,
+  // which only ever exist for months someone actually paid, so "expected"
+  // and "collected" were nearly the same number by construction.
   const annualData = useMemo(() => {
-    const year = parseInt(yearFilter);
+    const year = parseInt(yearFilter, 10);
     return MONTHS.map((monthName, index) => {
       const month = index + 1;
-      const monthPayments = rentPayments.filter(r => r.month === month && r.year === year);
-      const collected = monthPayments
-        .filter(r => r.status === 'paid')
-        .reduce((sum, r) => sum + r.amount, 0);
-      const expected = monthPayments.reduce((sum, r) => sum + r.amount, 0);
-      const overdue = monthPayments
-        .filter(r => r.status === 'overdue')
-        .reduce((sum, r) => sum + r.amount, 0);
-      const pending = monthPayments
-        .filter(r => r.status === 'pending')
-        .reduce((sum, r) => sum + r.amount, 0);
+      let expected = 0;
+      let collected = 0;
+      let outstanding = 0;
+      for (const lease of activeLeases(leases)) {
+        if (!leaseCoversMonth(lease, month, year)) continue;
+        const s = settleMonth(lease, rentPayments, month, year);
+        expected += s.due;
+        collected += s.paid;
+        outstanding += s.balance;
+      }
 
       return {
         name: monthName.substring(0, 3),
         month,
         collected,
         expected,
-        outstanding: expected - collected,
-        overdue,
-        pending,
+        outstanding,
         collectionRate: expected > 0 ? (collected / expected) * 100 : 0,
       };
     });
-  }, [rentPayments, yearFilter]);
+  }, [leases, rentPayments, yearFilter]);
 
-  // Tax summary data
+  // Tax summary data. Same lease-term gating as annualData above: expected
+  // rent only accrues for the months a lease's term actually covers.
   const taxData = useMemo(() => {
-    const year = parseInt(yearFilter);
-    const yearPayments = rentPayments.filter(r => r.year === year);
+    const year = parseInt(yearFilter, 10);
 
-    const totalRentIncome = yearPayments
-      .filter(r => r.status === 'paid')
-      .reduce((sum, r) => sum + r.amount, 0);
-
-    const totalExpected = yearPayments.reduce((sum, r) => sum + r.amount, 0);
-    const totalOverdue = yearPayments
-      .filter(r => r.status === 'overdue')
-      .reduce((sum, r) => sum + r.amount, 0);
-    const totalPending = yearPayments
-      .filter(r => r.status === 'pending')
-      .reduce((sum, r) => sum + r.amount, 0);
-
-    // Quarterly breakdown
     const quarters = [
       { name: 'Q1', months: [1, 2, 3] },
       { name: 'Q2', months: [4, 5, 6] },
@@ -185,12 +175,16 @@ export function Rents() {
     ];
 
     const quarterlyData = quarters.map(q => {
-      const qPayments = yearPayments.filter(r => q.months.includes(r.month));
-      const qCollected = qPayments
-        .filter(r => r.status === 'paid')
-        .reduce((sum, r) => sum + r.amount, 0);
-      const qExpected = qPayments.reduce((sum, r) => sum + r.amount, 0);
-
+      let qExpected = 0;
+      let qCollected = 0;
+      for (const lease of activeLeases(leases)) {
+        for (const month of q.months) {
+          if (!leaseCoversMonth(lease, month, year)) continue;
+          const s = settleMonth(lease, rentPayments, month, year);
+          qExpected += s.due;
+          qCollected += s.paid;
+        }
+      }
       return {
         name: q.name,
         collected: qCollected,
@@ -199,14 +193,17 @@ export function Rents() {
       };
     });
 
+    const totalRentIncome = quarterlyData.reduce((sum, q) => sum + q.collected, 0);
+    const totalExpected = quarterlyData.reduce((sum, q) => sum + q.expected, 0);
+    const totalOutstanding = quarterlyData.reduce((sum, q) => sum + q.outstanding, 0);
+
     return {
       totalRentIncome,
       totalExpected,
-      totalOverdue,
-      totalPending,
+      totalOutstanding,
       quarterlyData,
     };
-  }, [rentPayments, yearFilter]);
+  }, [leases, rentPayments, yearFilter]);
 
   // One row per active lease per month of the selected year. This, not the
   // raw payment list, is what the Payments table renders: rent is owed once
@@ -750,7 +747,7 @@ export function Rents() {
           {/* Annual Chart */}
           <Card>
             <CardHeader>
-              <CardTitle>Annual Rent Collection - {yearFilter}</CardTitle>
+              <CardTitle>Annual Rent Collection for {yearFilter}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={350}>
@@ -761,8 +758,7 @@ export function Rents() {
                   <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                   <Bar dataKey="expected" fill="#3b82f6" name="Expected" />
                   <Bar dataKey="collected" fill="#10b981" name="Collected" />
-                  <Bar dataKey="overdue" fill="#ef4444" name="Overdue" />
-                  <Bar dataKey="pending" fill="#f59e0b" name="Pending" />
+                  <Bar dataKey="outstanding" fill="#ef4444" name="Outstanding" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -781,8 +777,7 @@ export function Rents() {
                       <th className="text-left py-3 px-4 font-medium">Month</th>
                       <th className="text-right py-3 px-4 font-medium">Expected</th>
                       <th className="text-right py-3 px-4 font-medium">Collected</th>
-                      <th className="text-right py-3 px-4 font-medium">Overdue</th>
-                      <th className="text-right py-3 px-4 font-medium">Pending</th>
+                      <th className="text-right py-3 px-4 font-medium">Outstanding</th>
                       <th className="text-right py-3 px-4 font-medium">Collection Rate</th>
                     </tr>
                   </thead>
@@ -792,8 +787,7 @@ export function Rents() {
                         <td className="py-3 px-4 font-medium">{MONTHS[month.month - 1]}</td>
                         <td className="py-3 px-4 text-right">{formatCurrency(month.expected)}</td>
                         <td className="py-3 px-4 text-right text-positive">{formatCurrency(month.collected)}</td>
-                        <td className="py-3 px-4 text-right text-danger">{formatCurrency(month.overdue)}</td>
-                        <td className="py-3 px-4 text-right text-warning">{formatCurrency(month.pending)}</td>
+                        <td className="py-3 px-4 text-right text-danger">{formatCurrency(month.outstanding)}</td>
                         <td className="py-3 px-4 text-right">
                           <span className={`font-semibold ${month.collectionRate >= 95 ? 'text-positive' : month.collectionRate >= 80 ? 'text-warning' : 'text-danger'}`}>
                             {month.collectionRate.toFixed(1)}%
@@ -837,23 +831,25 @@ export function Rents() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Overdue Amount</CardTitle>
+                <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
                 <AlertCircle className="h-4 w-4 text-danger" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-danger">{formatCurrency(taxData.totalOverdue)}</div>
+                <div className="text-2xl font-bold text-danger">{formatCurrency(taxData.totalOutstanding)}</div>
                 <p className="text-xs text-muted-foreground">Uncollected rent</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Collection</CardTitle>
+                <CardTitle className="text-sm font-medium">Collection Rate</CardTitle>
                 <Clock className="h-4 w-4 text-warning" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-warning">{formatCurrency(taxData.totalPending)}</div>
-                <p className="text-xs text-muted-foreground">Awaiting payment</p>
+                <div className="text-2xl font-bold">
+                  {taxData.totalExpected > 0 ? ((taxData.totalRentIncome / taxData.totalExpected) * 100).toFixed(1) : '0.0'}%
+                </div>
+                <p className="text-xs text-muted-foreground">Collected of expected</p>
               </CardContent>
             </Card>
           </div>
@@ -861,7 +857,7 @@ export function Rents() {
           {/* Quarterly Breakdown */}
           <Card>
             <CardHeader>
-              <CardTitle>Quarterly Summary for Tax Filing - {yearFilter}</CardTitle>
+              <CardTitle>Quarterly Summary for Tax Filing, {yearFilter}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
