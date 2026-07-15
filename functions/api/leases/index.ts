@@ -33,6 +33,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
+/**
+ * Confirm every id in tenantIds exists in tenants, in one query. Returns the
+ * ids that could NOT be found (empty when all are valid).
+ */
+export async function findMissingTenantIds(env: Env, tenantIds: string[]): Promise<string[]> {
+  if (!tenantIds.length) return [];
+  const placeholders = tenantIds.map(() => '?').join(', ');
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM tenants WHERE id IN (${placeholders})`
+  )
+    .bind(...tenantIds)
+    .all<{ id: string }>();
+  const found = new Set((results || []).map(r => r.id));
+  return tenantIds.filter(tid => !found.has(tid));
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requirePermission(env, request, 'tenants_create');
@@ -50,12 +66,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .first<{ id: string; property_id: string }>();
     if (!unit) return jsonError('Unit not found', 404);
 
+    const tenantIds = Array.isArray(body.tenantIds) ? (body.tenantIds as string[]) : [];
+    if (tenantIds.length) {
+      const missing = await findMissingTenantIds(env, tenantIds);
+      if (missing.length) return jsonError('One or more tenants could not be found', 400);
+    }
+
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, notes, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
+    const statements = [
+      env.DB.prepare(
+        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, notes, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
         id,
         body.unitId,
         body.propertyId ?? unit.property_id ?? null,
@@ -66,17 +88,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.status ?? 'active',
         body.notes ?? null,
         auth.id
-      )
-      .run();
-
-    const tenantIds = Array.isArray(body.tenantIds) ? (body.tenantIds as string[]) : [];
-    for (const tid of tenantIds) {
-      await env.DB.prepare(
-        'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
-      )
-        .bind(crypto.randomUUID(), id, tid)
-        .run();
-    }
+      ),
+      ...tenantIds.map(tid =>
+        env.DB.prepare(
+          'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
+        ).bind(crypto.randomUUID(), id, tid)
+      ),
+    ];
+    await env.DB.batch(statements);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     const [data] = await withTenantIds(env, [row as Record<string, unknown>]);

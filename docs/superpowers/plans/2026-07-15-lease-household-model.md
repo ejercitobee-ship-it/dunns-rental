@@ -561,6 +561,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
+/**
+ * Confirm every id in tenantIds exists in tenants, in one query. Returns the
+ * ids that could NOT be found (empty when all are valid).
+ */
+export async function findMissingTenantIds(env: Env, tenantIds: string[]): Promise<string[]> {
+  if (!tenantIds.length) return [];
+  const placeholders = tenantIds.map(() => '?').join(', ');
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM tenants WHERE id IN (${placeholders})`
+  )
+    .bind(...tenantIds)
+    .all<{ id: string }>();
+  const found = new Set((results || []).map(r => r.id));
+  return tenantIds.filter(tid => !found.has(tid));
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requirePermission(env, request, 'tenants_create');
@@ -578,12 +594,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .first<{ id: string; property_id: string }>();
     if (!unit) return jsonError('Unit not found', 404);
 
+    // Validate every tenant id BEFORE any write, so a bad id never reaches
+    // the insert (an FK violation there would happen mid-batch).
+    const tenantIds = Array.isArray(body.tenantIds) ? (body.tenantIds as string[]) : [];
+    if (tenantIds.length) {
+      const missing = await findMissingTenantIds(env, tenantIds);
+      if (missing.length) return jsonError('One or more tenants could not be found', 400);
+    }
+
+    // The lease row and its occupant links commit or fail together: batch()
+    // runs D1 statements as a single atomic transaction (raw BEGIN/COMMIT are
+    // not supported here). Without this, a failure partway through leaves an
+    // orphaned lease with no occupants.
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, notes, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
+    const statements = [
+      env.DB.prepare(
+        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, notes, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
         id,
         body.unitId,
         body.propertyId ?? unit.property_id ?? null,
@@ -594,17 +622,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.status ?? 'active',
         body.notes ?? null,
         auth.id
-      )
-      .run();
-
-    const tenantIds = Array.isArray(body.tenantIds) ? (body.tenantIds as string[]) : [];
-    for (const tid of tenantIds) {
-      await env.DB.prepare(
-        'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
-      )
-        .bind(crypto.randomUUID(), id, tid)
-        .run();
-    }
+      ),
+      ...tenantIds.map(tid =>
+        env.DB.prepare(
+          'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
+        ).bind(crypto.randomUUID(), id, tid)
+      ),
+    ];
+    await env.DB.batch(statements);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     const [data] = await withTenantIds(env, [row as Record<string, unknown>]);
@@ -622,7 +647,7 @@ Create `functions/api/leases/[id].ts`:
 ```ts
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { withTenantIds } from './index';
+import { withTenantIds, findMissingTenantIds } from './index';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -650,13 +675,26 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const id = params.id as string;
     const body = (await request.json()) as Record<string, unknown>;
 
-    await env.DB.prepare(
-      `UPDATE leases SET
-        unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
-        security_deposit = ?, status = ?, notes = ?, updated_at = unixepoch()
-       WHERE id = ?`
-    )
-      .bind(
+    // Validate BEFORE any write. `tenantIds` is null when the caller sent no
+    // list at all (occupants are left untouched); it is an array (possibly
+    // empty, to clear the list) when the caller sent one.
+    const tenantIds = Array.isArray(body.tenantIds) ? (body.tenantIds as string[]) : null;
+    if (tenantIds && tenantIds.length) {
+      const missing = await findMissingTenantIds(env, tenantIds);
+      if (missing.length) return jsonError('One or more tenants could not be found', 400);
+    }
+
+    // The lease update, the occupant DELETE and the re-inserts commit or fail
+    // together via batch(). Previously the DELETE committed independently, so
+    // a later insert failure silently wiped the occupant list while the
+    // caller saw a 500 and assumed nothing changed.
+    const statements = [
+      env.DB.prepare(
+        `UPDATE leases SET
+          unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
+          security_deposit = ?, status = ?, notes = ?, updated_at = unixepoch()
+         WHERE id = ?`
+      ).bind(
         body.unitId ?? null,
         body.propertyId ?? null,
         body.startDate ?? null,
@@ -666,20 +704,22 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.status ?? 'active',
         body.notes ?? null,
         id
-      )
-      .run();
+      ),
+    ];
 
     // Replace the occupant list when the caller sends one.
-    if (Array.isArray(body.tenantIds)) {
-      await env.DB.prepare('DELETE FROM lease_tenants WHERE lease_id = ?').bind(id).run();
-      for (const tid of body.tenantIds as string[]) {
-        await env.DB.prepare(
-          'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
-        )
-          .bind(crypto.randomUUID(), id, tid)
-          .run();
+    if (tenantIds) {
+      statements.push(env.DB.prepare('DELETE FROM lease_tenants WHERE lease_id = ?').bind(id));
+      for (const tid of tenantIds) {
+        statements.push(
+          env.DB.prepare(
+            'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
+          ).bind(crypto.randomUUID(), id, tid)
+        );
       }
     }
+
+    await env.DB.batch(statements);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Lease not found', 404);
