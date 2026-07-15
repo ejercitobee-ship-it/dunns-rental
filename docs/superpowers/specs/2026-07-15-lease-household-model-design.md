@@ -37,15 +37,19 @@ Taken from the design conversation with Belle:
 
 **leases** (new)
 : `id`, `unit_id`, `property_id`, `start_date`, `end_date`, `monthly_rent`,
-  `security_deposit`, `status` (`active` | `ended`), `notes`, `created_at`,
-  `updated_at`.
-  Owns all money and dates for a tenancy on one unit.
+  `security_deposit`, `status` (`active` | `paused` | `ended`), `notes`,
+  `created_at`, `updated_at`.
+  Owns all money, dates and state for a tenancy on one unit. "Pause rent" and
+  "terminate lease" act on the lease, because they are things that happen to a
+  tenancy rather than to a person. Only `active` leases count toward revenue.
 
 **tenants** (people, reshaped)
 : `id`, `first_name`, `last_name`, `email`, `phone`, emergency contact fields,
-  `notes`, `status`, timestamps.
-  The `monthly_rent`, `security_deposit`, `lease_start`, `lease_end`, `unit_id`
-  and `property_id` columns are removed. A person is only a person.
+  `notes`, timestamps.
+  The `monthly_rent`, `security_deposit`, `lease_start`, `lease_end`, `unit_id`,
+  `property_id` and `status` columns are removed. A person is only a person. A
+  person is "current" when they are on an active lease, which is derived rather
+  than stored, so the two cannot disagree.
 
 **lease_tenants** (new join)
 : `id`, `lease_id`, `tenant_id`, `created_at`. Unique on (`lease_id`, `tenant_id`).
