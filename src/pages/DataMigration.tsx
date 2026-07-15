@@ -235,10 +235,18 @@ export function DataMigration() {
               const unitId = cols[1] || undefined;
               const tenantIds = (cols[8] || '').split('|').map(t => t.trim()).filter(Boolean);
 
-              // A lease's unitId is optional (a unit can be deleted while
-              // its lease history survives), but when a CSV row does name
-              // one, it must be a unit this import actually declared.
-              if (unitId && !data.units.some(u => u.id === unitId)) {
+              // A lease can outlive its unit (the column is cleared if the unit
+              // is deleted), but it cannot be created without one: the API
+              // rejects that with a 400. Catch it here so the row is reported
+              // alongside the others rather than failing mid import.
+              if (!unitId) {
+                errors.push({
+                  row: rowNum,
+                  sheet: currentSection,
+                  message: 'A lease needs a unitId. Name the unit this tenancy is on.',
+                  data: line,
+                });
+              } else if (!data.units.some(u => u.id === unitId)) {
                 errors.push({
                   row: rowNum,
                   sheet: currentSection,
@@ -591,7 +599,7 @@ export function DataMigration() {
           <div className="space-y-4">
             <div className="bg-canvas rounded-lg p-4 space-y-2">
               <p className="text-sm font-medium text-ink">Your CSV file should have sections separated by headers.</p>
-              <code className="block bg-[#1b1a17] text-[#a8e0bd] px-4 py-3 rounded-lg text-xs font-mono overflow-x-auto">
+              <code className="block bg-sidebar text-primary-soft px-4 py-3 rounded-lg text-xs font-mono overflow-x-auto">
                 === PROPERTIES ===<br/>
                 id,name,address,city,state,zipCode,type,description<br/>
                 <br/>
