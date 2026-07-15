@@ -94,6 +94,25 @@ export function serializeExpense(r: Row) {
   };
 }
 
+export function serializeMaintenance(r: Row) {
+  return {
+    id: r.id,
+    propertyId: r.property_id ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    tenantId: r.tenant_id ?? undefined,
+    title: r.title,
+    description: r.description ?? undefined,
+    category: r.category ?? undefined,
+    priority: r.priority ?? 'medium',
+    status: r.status ?? 'open',
+    cost: r.cost ?? 0,
+    vendor: r.vendor ?? undefined,
+    reportedDate: r.reported_date ?? undefined,
+    resolvedDate: r.resolved_date ?? undefined,
+    notes: r.notes ?? undefined,
+  };
+}
+
 export function serializeIncome(r: Row) {
   return {
     id: r.id,

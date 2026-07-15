@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Plus, Search, Users, Mail, Phone, Calendar, Home, DollarSign, MoreHorizontal, Edit2, DoorOpen, MapPin, Pause, Ban, Eye, Upload, User, Play, Trash2 } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Plus, Search, Users, Mail, Phone, Calendar, Home, DollarSign, MoreHorizontal, Edit2, DoorOpen, MapPin, Pause, Ban, Eye, Upload, User, Play, Trash2, FileText, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { documentsApi, type AppDocument } from '../lib/api';
 import type { Tenant } from '../types';
 
 const statusColors = {
@@ -29,6 +30,9 @@ export function Tenants() {
   const [isViewTenantOpen, setIsViewTenantOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState<string | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [tenantDocs, setTenantDocs] = useState<AppDocument[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [newTenant, setNewTenant] = useState({
@@ -173,6 +177,34 @@ export function Tenants() {
     setSelectedTenant(tenant);
     setIsViewTenantOpen(true);
     setIsActionMenuOpen(null);
+    setTenantDocs([]);
+    documentsApi.list(tenant.id).then(setTenantDocs).catch(() => setTenantDocs([]));
+  };
+
+  const handleUploadDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedTenant) return;
+    setUploadingDoc(true);
+    try {
+      await documentsApi.upload(file, { tenantId: selectedTenant.id, propertyId: selectedTenant.propertyId });
+      setTenantDocs(await documentsApi.list(selectedTenant.id));
+      showToast('Document uploaded', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Upload failed', 'error');
+    } finally {
+      setUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    try {
+      await documentsApi.delete(id);
+      setTenantDocs(prev => prev.filter(d => d.id !== id));
+      showToast('Document removed', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete', 'error');
+    }
   };
 
   const handleTerminateLease = async (tenantId: string) => {
@@ -498,13 +530,10 @@ export function Tenants() {
                                 <hr className="my-1" />
                                 <button
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-black/[0.03] flex items-center gap-2 text-primary"
-                                  onClick={() => {
-                                    showToast('Document upload is coming soon.', 'info');
-                                    setIsActionMenuOpen(null);
-                                  }}
+                                  onClick={() => handleViewClick(tenant)}
                                 >
                                   <Upload className="h-4 w-4" />
-                                  Upload Document
+                                  Documents
                                 </button>
                               </div>
                             )}
@@ -608,32 +637,71 @@ export function Tenants() {
 
             {selectedTenant.notes && (
               <div className="space-y-2">
-                <h4 className="font-semibold">Notes</h4>
-                <p className="text-sm text-muted-foreground">{selectedTenant.notes}</p>
+                <h4 className="font-semibold text-ink">Notes</h4>
+                <p className="text-sm text-muted">{selectedTenant.notes}</p>
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
+            {/* Documents */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-ink flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted" /> Documents
+                </h4>
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleUploadDoc} />
+                <button
+                  type="button"
+                  disabled={uploadingDoc}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-sm font-medium text-primary hover:text-primary-hover flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  {uploadingDoc ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+              {tenantDocs.length === 0 ? (
+                <p className="text-sm text-muted">No documents yet. Upload a lease, ID, or receipt.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {tenantDocs.map(doc => (
+                    <div key={doc.id} className="flex items-center justify-between px-3 py-2 border border-line rounded-lg">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-faint flex-shrink-0" />
+                        <span className="text-sm text-ink truncate">{doc.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <a
+                          href={documentsApi.downloadUrl(doc.id)}
+                          className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors"
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={() => handleDeleteDoc(doc.id)}
+                          className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4">
               <Button
                 variant="outline"
-                className="flex-1"
+                className="w-full"
                 onClick={() => {
                   setIsViewTenantOpen(false);
                   handleEditClick(selectedTenant);
                 }}
               >
                 <Edit2 className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  showToast('Document upload is coming soon.', 'info');
-                }}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Document
+                Edit Tenant
               </Button>
             </div>
           </div>

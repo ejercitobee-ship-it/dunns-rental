@@ -127,6 +127,26 @@ export interface Income {
   relatedPaymentId?: string;
 }
 
+export type MaintenanceStatus = 'open' | 'in_progress' | 'resolved' | 'cancelled';
+export type MaintenancePriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface MaintenanceRequest {
+  id: string;
+  propertyId?: string;
+  unitId?: string;
+  tenantId?: string;
+  title: string;
+  description?: string;
+  category?: string;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  cost: number;
+  vendor?: string;
+  reportedDate?: string;
+  resolvedDate?: string;
+  notes?: string;
+}
+
 export interface DashboardStats {
   totalProperties: number;
   totalUnits: number;

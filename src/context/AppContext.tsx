@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
-import type { Property, Unit, Tenant, RentPayment, Expense, Income } from '../types';
+import type { Property, Unit, Tenant, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
 import {
   propertiesApi,
   unitsApi,
@@ -7,6 +7,7 @@ import {
   paymentsApi,
   expensesApi,
   incomesApi,
+  maintenanceApi,
 } from '../lib/api';
 import { useAuth } from './AuthContext';
 
@@ -17,6 +18,7 @@ interface AppState {
   rentPayments: RentPayment[];
   expenses: Expense[];
   incomes: Income[];
+  maintenance: MaintenanceRequest[];
   isLoading: boolean;
   error: string | null;
 }
@@ -39,7 +41,10 @@ type Action =
   | { type: 'DELETE_EXPENSE'; payload: string }
   | { type: 'ADD_INCOME'; payload: Income }
   | { type: 'ADD_RENT_PAYMENT'; payload: RentPayment }
-  | { type: 'UPDATE_PAYMENT_STATUS'; payload: RentPayment };
+  | { type: 'UPDATE_PAYMENT_STATUS'; payload: RentPayment }
+  | { type: 'ADD_MAINTENANCE'; payload: MaintenanceRequest }
+  | { type: 'UPDATE_MAINTENANCE'; payload: MaintenanceRequest }
+  | { type: 'DELETE_MAINTENANCE'; payload: string };
 
 const initialState: AppState = {
   properties: [],
@@ -48,6 +53,7 @@ const initialState: AppState = {
   rentPayments: [],
   expenses: [],
   incomes: [],
+  maintenance: [],
   isLoading: false,
   error: null,
 };
@@ -134,6 +140,15 @@ function reducer(state: AppState, action: Action): AppState {
           p.id === action.payload.id ? action.payload : p
         ),
       };
+    case 'ADD_MAINTENANCE':
+      return { ...state, maintenance: [action.payload, ...state.maintenance] };
+    case 'UPDATE_MAINTENANCE':
+      return {
+        ...state,
+        maintenance: state.maintenance.map(m => m.id === action.payload.id ? action.payload : m),
+      };
+    case 'DELETE_MAINTENANCE':
+      return { ...state, maintenance: state.maintenance.filter(m => m.id !== action.payload) };
     default:
       return state;
   }
@@ -159,6 +174,9 @@ interface AppContextType extends AppState {
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
   addRentPayment: (payment: Omit<RentPayment, 'id'>) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
+  addMaintenance: (request: Omit<MaintenanceRequest, 'id'>) => Promise<void>;
+  updateMaintenance: (request: MaintenanceRequest) => Promise<void>;
+  deleteMaintenance: (id: string) => Promise<void>;
   resetData: () => void;
 }
 
@@ -172,17 +190,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const [properties, units, tenants, rentPayments, expenses, incomes] = await Promise.all([
+      const [properties, units, tenants, rentPayments, expenses, incomes, maintenance] = await Promise.all([
         propertiesApi.getAll(),
         unitsApi.getAll(),
         tenantsApi.getAll(),
         paymentsApi.getAll(),
         expensesApi.getAll(),
         incomesApi.getAll(),
+        maintenanceApi.getAll(),
       ]);
       dispatch({
         type: 'SET_STATE',
-        payload: { properties, units, tenants, rentPayments, expenses, incomes, isLoading: false },
+        payload: { properties, units, tenants, rentPayments, expenses, incomes, maintenance, isLoading: false },
       });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
@@ -199,7 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({
         type: 'SET_STATE',
         payload: {
-          properties: [], units: [], tenants: [], rentPayments: [], expenses: [], incomes: [],
+          properties: [], units: [], tenants: [], rentPayments: [], expenses: [], incomes: [], maintenance: [],
           isLoading: false, error: null,
         },
       });
@@ -302,6 +321,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
   };
 
+  const addMaintenance = async (request: Omit<MaintenanceRequest, 'id'>) => {
+    const created = await maintenanceApi.create(request);
+    dispatch({ type: 'ADD_MAINTENANCE', payload: created });
+  };
+
+  const updateMaintenance = async (request: MaintenanceRequest) => {
+    const updated = await maintenanceApi.update(request.id, request);
+    dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+  };
+
+  const deleteMaintenance = async (id: string) => {
+    await maintenanceApi.delete(id);
+    dispatch({ type: 'DELETE_MAINTENANCE', payload: id });
+  };
+
   const resetData = () => {
     dispatch({ type: 'SET_STATE', payload: initialState });
   };
@@ -329,6 +363,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addIncome,
         addRentPayment,
         updatePaymentStatus,
+        addMaintenance,
+        updateMaintenance,
+        deleteMaintenance,
         resetData,
       }}
     >

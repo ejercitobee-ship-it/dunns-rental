@@ -1,8 +1,9 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import { roleCan } from './permissions';
 
 export interface Env {
   DB: D1Database;
+  DOCS?: R2Bucket;
 }
 
 export interface SessionUser {

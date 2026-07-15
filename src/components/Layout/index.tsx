@@ -15,6 +15,8 @@ import {
   FileText,
   Upload,
   Settings,
+  Wrench,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -40,7 +42,9 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Properties', path: '/properties', icon: Building2, show: hasModuleAccess('properties') },
     { name: 'Tenants', path: '/tenants', icon: Users, show: hasModuleAccess('tenants') },
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents') },
+    { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties') },
     { name: 'Finances', path: '/finances', icon: Receipt, show: hasModuleAccess('finances') },
+    { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances') },
     { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances') },
     { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings') },
     { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings') },

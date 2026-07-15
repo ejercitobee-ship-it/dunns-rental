@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, TrendingUp, 
-  TrendingDown, AlertCircle, Wallet, Building2, Percent, ArrowRight, DoorOpen, Home
+  Users, TrendingUp,
+  TrendingDown, AlertCircle, Wallet, Building2, Percent, ArrowRight, DoorOpen, Home, CalendarClock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -203,6 +203,19 @@ export function Dashboard() {
   const vacantUnits = useMemo(() => {
     return units.filter(u => u.status === 'vacant').slice(0, 5);
   }, [units]);
+
+  const upcomingRenewals = useMemo(() => {
+    const now = new Date();
+    return tenants
+      .filter(t => t.status === 'active' && t.leaseEnd)
+      .map(t => {
+        const end = new Date(t.leaseEnd);
+        const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return { tenant: t, days, end };
+      })
+      .filter(r => r.days >= 0 && r.days <= 90)
+      .sort((a, b) => a.days - b.days);
+  }, [tenants]);
 
   if (isLoading) {
     return (
@@ -456,6 +469,46 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming Lease Renewals */}
+      {upcomingRenewals.length > 0 && (
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <CalendarClock className="h-5 w-5 text-primary" />
+              </div>
+              Upcoming Lease Renewals ({upcomingRenewals.length})
+              <ArrowRight
+                className="h-4 w-4 text-faint ml-auto cursor-pointer"
+                onClick={() => navigate('/tenants')}
+              />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {upcomingRenewals.slice(0, 6).map(({ tenant, days, end }) => {
+                const tone = days <= 30 ? 'destructive' : days <= 60 ? 'warning' : 'secondary';
+                return (
+                  <div
+                    key={tenant.id}
+                    className="flex items-center justify-between py-2.5 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+                    onClick={() => navigate('/tenants')}
+                  >
+                    <div>
+                      <p className="font-medium text-ink">{tenant.firstName} {tenant.lastName}</p>
+                      <p className="text-sm text-muted">Lease ends {formatDate(end.toISOString())}</p>
+                    </div>
+                    <Badge variant={tone}>
+                      {days === 0 ? 'Ends today' : days === 1 ? '1 day left' : `${days} days left`}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Vacant Units Quick View */}
       {vacantUnits.length > 0 && (

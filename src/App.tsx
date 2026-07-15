@@ -9,6 +9,8 @@ import { Dashboard } from './pages/Dashboard';
 import { Properties } from './pages/Properties';
 import { Tenants } from './pages/Tenants';
 import { Rents } from './pages/Rents';
+import { Maintenance } from './pages/Maintenance';
+import { Reports } from './pages/Reports';
 import { Expenses } from './pages/Expenses';
 import { TaxReport } from './pages/TaxReport';
 import { DataMigration } from './pages/DataMigration';
@@ -93,6 +95,12 @@ function AppRoutes() {
           <Layout><Rents /></Layout>
         </ProtectedRoute>
       } />
+
+      <Route path="/maintenance" element={
+        <ProtectedRoute requiredPermission="properties_view">
+          <Layout><Maintenance /></Layout>
+        </ProtectedRoute>
+      } />
       
       <Route path="/finances" element={
         <ProtectedRoute requiredPermission="finances_view">
@@ -100,6 +108,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/reports" element={
+        <ProtectedRoute requiredPermission="finances_view">
+          <Layout><Reports /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/tax-report" element={
         <ProtectedRoute requiredPermission="finances_view">
           <Layout><TaxReport /></Layout>

@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, RentPayment, Expense, Income } from '../types';
+import type { Property, Unit, Tenant, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
 
 const API_BASE = '/api';
 
@@ -203,4 +203,48 @@ export const incomesApi = {
     apiRequest(`/incomes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/incomes/${id}`, { method: 'DELETE' }),
+};
+
+// Documents API (files stored in R2)
+export interface AppDocument {
+  id: string;
+  name: string;
+  contentType?: string;
+  size: number;
+  propertyId?: string;
+  tenantId?: string;
+  createdAt: number;
+}
+
+export const documentsApi = {
+  list: (tenantId?: string): Promise<AppDocument[]> =>
+    apiRequest(`/documents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
+  upload: async (file: File, opts: { tenantId?: string; propertyId?: string } = {}): Promise<AppDocument> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (opts.tenantId) fd.append('tenantId', opts.tenantId);
+    if (opts.propertyId) fd.append('propertyId', opts.propertyId);
+    // Note: no Content-Type header — the browser sets the multipart boundary.
+    const res = await fetch(`${API_BASE}/documents`, { method: 'POST', credentials: 'include', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.data !== undefined ? data.data : data;
+  },
+  delete: (id: string) => apiRequest(`/documents/${id}`, { method: 'DELETE' }),
+  downloadUrl: (id: string) => `${API_BASE}/documents/${id}`,
+};
+
+// Maintenance API
+export const maintenanceApi = {
+  getAll: (): Promise<MaintenanceRequest[]> => apiRequest('/maintenance'),
+  getById: (id: string): Promise<MaintenanceRequest> => apiRequest(`/maintenance/${id}`),
+  create: (data: Omit<MaintenanceRequest, 'id'>): Promise<MaintenanceRequest> =>
+    apiRequest('/maintenance', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: MaintenanceRequest): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/maintenance/${id}`, { method: 'DELETE' }),
 };

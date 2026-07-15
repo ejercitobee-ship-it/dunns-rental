@@ -9,5 +9,11 @@
       "database_name": "dunns-rental-db",
       "database_id": "fc7ff39d-0398-4b20-813e-a871a4d8e884"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DOCS",
+      "bucket_name": "dunns-rental-docs"
+    }
   ]
 }
