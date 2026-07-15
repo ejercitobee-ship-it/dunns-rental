@@ -36,24 +36,16 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     await env.DB.prepare(
       `UPDATE tenants SET
-        unit_id = ?, property_id = ?, first_name = ?, last_name = ?, email = ?, phone = ?,
-        lease_start = ?, lease_end = ?, monthly_rent = ?, security_deposit = ?, status = ?, notes = ?,
+        first_name = ?, last_name = ?, email = ?, phone = ?, notes = ?,
         emergency_contact_name = ?, emergency_contact_phone = ?, emergency_contact_relationship = ?,
         updated_at = unixepoch()
        WHERE id = ?`
     )
       .bind(
-        body.unitId ?? null,
-        body.propertyId ?? null,
         body.firstName,
         body.lastName,
-        body.email,
+        body.email ?? null,
         body.phone ?? null,
-        body.leaseStart ?? null,
-        body.leaseEnd ?? null,
-        body.monthlyRent ?? 0,
-        body.securityDeposit ?? 0,
-        body.status ?? 'active',
         body.notes ?? null,
         ec.name ?? null,
         ec.phone ?? null,
