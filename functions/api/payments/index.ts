@@ -24,20 +24,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    if (!body.leaseId) return jsonError('A lease is required', 400);
     if (body.amount === undefined || body.amount === null) {
       return jsonError('Amount is required', 400);
     }
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO rent_payments (id, tenant_id, unit_id, property_id, amount, due_date, paid_date, received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO rent_payments (id, lease_id, paid_by_tenant_id, amount, due_date, paid_date,
+        received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
-        body.tenantId ?? null,
-        body.unitId ?? null,
-        body.propertyId ?? null,
+        body.leaseId,
+        body.paidByTenantId ?? null,
         body.amount,
         body.dueDate ?? null,
         body.paidDate ?? null,
