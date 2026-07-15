@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import type { Property, Unit } from '../types';
+import type { Property, Unit, LeaseStatus } from '../types';
 
 const statusColors = {
   occupied: 'success',
@@ -16,15 +16,28 @@ const statusColors = {
   maintenance: 'destructive',
 } as const;
 
+const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
+  active: 'success',
+  paused: 'warning',
+  ended: 'secondary',
+};
+
+const leaseStatusLabel: Record<LeaseStatus, string> = {
+  active: 'Active',
+  paused: 'Paused',
+  ended: 'Ended',
+};
+
 export function Properties() {
-  const { 
-    properties, units, 
+  const {
+    properties, units,
     addProperty, updateProperty, deleteProperty,
     addUnit, updateUnit, deleteUnit,
-    getPropertyUnits, getUnitTenant 
+    getPropertyUnits, getUnitLease, getLeaseTenants,
+    refreshData,
   } = useApp();
   const { showToast } = useToast();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isEditPropertyOpen, setIsEditPropertyOpen] = useState(false);
@@ -35,6 +48,15 @@ export function Properties() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [propertyForUnit, setPropertyForUnit] = useState<Property | null>(null);
+
+  // Synchronous re-entry guards for the two submits that create a new record
+  // (a property, a unit). A useState-based "isSubmitting" flag only takes
+  // effect after a render, so a fast double click or double Enter can start
+  // a second overlapping submit before that render lands and create a
+  // duplicate record. These refs are set the instant the first submit
+  // starts, so a second invocation sees it immediately and bails out.
+  const isAddingPropertyRef = useRef(false);
+  const isAddingUnitRef = useRef(false);
 
   // Form states
   const [propertyForm, setPropertyForm] = useState({
@@ -91,6 +113,8 @@ export function Properties() {
 
   const handleAddProperty = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAddingPropertyRef.current) return;
+    isAddingPropertyRef.current = true;
     try {
       await addProperty(propertyForm);
       showToast('Property added successfully!', 'success');
@@ -98,6 +122,8 @@ export function Properties() {
       resetPropertyForm();
     } catch (error) {
       showToast((error as Error).message, 'error');
+    } finally {
+      isAddingPropertyRef.current = false;
     }
   };
 
@@ -144,7 +170,9 @@ export function Properties() {
 
   const handleAddUnit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAddingUnitRef.current) return;
     if (propertyForUnit) {
+      isAddingUnitRef.current = true;
       try {
         await addUnit({ ...unitForm, propertyId: propertyForUnit.id });
         showToast('Unit added successfully!', 'success');
@@ -153,6 +181,8 @@ export function Properties() {
         resetUnitForm();
       } catch (error) {
         showToast((error as Error).message, 'error');
+      } finally {
+        isAddingUnitRef.current = false;
       }
     }
   };
@@ -175,7 +205,16 @@ export function Properties() {
     e.preventDefault();
     if (selectedUnit) {
       try {
-        await updateUnit({ ...selectedUnit, ...unitForm });
+        // Occupied and vacant are derived from whether the unit has a
+        // tenancy, never stored by hand, so every save re-derives them here
+        // instead of trusting whatever the form last held. That keeps a
+        // stale stored value from ever disagreeing with what the page
+        // displays. Maintenance is the one state a lease can't express, so
+        // it is the only piece of unitForm.status the owner actually chose.
+        const status: Unit['status'] = unitForm.status === 'maintenance'
+          ? 'maintenance'
+          : (getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant');
+        await updateUnit({ ...selectedUnit, ...unitForm, status });
         showToast('Unit updated successfully!', 'success');
         setIsEditUnitOpen(false);
         setSelectedUnit(null);
@@ -190,6 +229,13 @@ export function Properties() {
     if (unitToDelete) {
       try {
         await deleteUnit(unitToDelete.id);
+        // The server clears unitId on any lease that pointed at this unit
+        // (ON DELETE SET NULL) so lease and payment history survive, but the
+        // in-memory DELETE_UNIT reducer only removes the unit itself: it
+        // does not touch leases. Without this refresh, a lease that used to
+        // point here would keep showing a unitId for a unit that no longer
+        // exists until the next full reload.
+        await refreshData();
         showToast('Unit deleted successfully!', 'success');
         setUnitToDelete(null);
       } catch (error) {
@@ -198,17 +244,26 @@ export function Properties() {
     }
   };
 
-  const handleStatusChange = async (unit: Unit, newStatus: Unit['status']) => {
+  // Maintenance is the only unit state a lease cannot express, so it is the
+  // only status the owner ever sets by hand. Occupied and vacant are always
+  // derived from whether the unit currently has a lease.
+  const handleToggleMaintenance = async (unit: Unit) => {
+    const nextStatus: Unit['status'] = unit.status === 'maintenance'
+      ? (getUnitLease(unit.id) ? 'occupied' : 'vacant')
+      : 'maintenance';
     try {
-      await updateUnit({ ...unit, status: newStatus });
-      showToast(`Unit status updated to ${newStatus}`, 'success');
+      await updateUnit({ ...unit, status: nextStatus });
+      showToast(
+        nextStatus === 'maintenance' ? 'Unit marked as under maintenance.' : 'Maintenance cleared.',
+        'success'
+      );
     } catch (error) {
       showToast((error as Error).message, 'error');
     }
   };
 
   const totalUnits = units.length;
-  const occupiedUnits = units.filter(u => u.status === 'occupied').length;
+  const occupiedUnits = units.filter(u => !!getUnitLease(u.id)).length;
   const totalMonthlyRent = units.reduce((sum, u) => sum + u.monthlyRent, 0);
 
   return (
@@ -288,7 +343,7 @@ export function Properties() {
       <div className="space-y-6">
         {filteredProperties.map(property => {
           const propertyUnits = getPropertyUnits(property.id);
-          const occupiedCount = propertyUnits.filter(u => u.status === 'occupied').length;
+          const occupiedCount = propertyUnits.filter(u => !!getUnitLease(u.id)).length;
           
           return (
             <Card key={property.id} className="overflow-hidden">
@@ -346,10 +401,20 @@ export function Properties() {
                 
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {propertyUnits.map(unit => {
-                    const tenant = getUnitTenant(unit.id);
+                    const lease = getUnitLease(unit.id);
+                    const occupants = lease ? getLeaseTenants(lease.id) : [];
+                    // Occupied and vacant are derived from whether the unit
+                    // currently has a lease, never read from the stored
+                    // field, so the badge below can never disagree with
+                    // reality. Maintenance is a real, separate fact a lease
+                    // cannot express, so it is the one piece of unit.status
+                    // still read directly.
+                    const displayStatus: Unit['status'] = unit.status === 'maintenance'
+                      ? 'maintenance'
+                      : (lease ? 'occupied' : 'vacant');
                     return (
-                      <div 
-                        key={unit.id} 
+                      <div
+                        key={unit.id}
                         className="border border-line rounded-xl p-4 hover:shadow-lg transition-all bg-white group"
                       >
                         <div className="flex items-start justify-between mb-3">
@@ -358,8 +423,8 @@ export function Properties() {
                             <span className="font-semibold text-ink">Unit {unit.unitNumber}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Badge variant={statusColors[unit.status]} className="text-xs">
-                              {unit.status}
+                            <Badge variant={statusColors[displayStatus]} className="text-xs">
+                              {displayStatus}
                             </Badge>
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                               <button
@@ -377,7 +442,7 @@ export function Properties() {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="grid grid-cols-3 gap-2 text-center mb-3">
                           <div className="bg-canvas rounded-lg p-2">
                             <Bed className="h-3 w-3 mx-auto mb-1 text-faint" />
@@ -392,40 +457,65 @@ export function Properties() {
                             <p className="text-xs font-medium text-ink">{unit.squareFeet}</p>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center justify-between pt-2 border-t border-line">
                           <div>
                             <p className="text-xs text-muted">Rent</p>
                             <p className="font-semibold text-positive">{formatCurrency(unit.monthlyRent)}</p>
                           </div>
                           <div className="text-right">
-                            {tenant ? (
-                              <div className="flex items-center gap-1 text-xs text-muted">
-                                <Users className="h-3 w-3" />
-                                <span>{tenant.firstName} {tenant.lastName[0]}.</span>
+                            {lease ? (
+                              <div className="flex items-center gap-1 text-xs text-muted justify-end">
+                                <Users className="h-3 w-3 flex-shrink-0" />
+                                <span className="truncate max-w-[160px]">
+                                  {occupants.length > 0
+                                    ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
+                                    : 'Occupant unknown'}
+                                </span>
                               </div>
                             ) : (
                               <span className="text-xs text-faint">Vacant</span>
                             )}
                           </div>
                         </div>
-                        
-                        {/* Quick Status Change */}
-                        <div className="mt-3 pt-2 border-t border-line flex gap-1">
-                          {(['vacant', 'occupied', 'maintenance'] as const).map(status => (
-                            <button
-                              key={status}
-                              onClick={() => handleStatusChange(unit, status)}
-                              className={`flex-1 py-1 px-2 text-xs rounded-lg capitalize transition-colors ${
-                                unit.status === status
-                                  ? 'bg-primary-soft text-primary-hover font-medium'
-                                  : 'bg-canvas text-muted hover:bg-black/[0.05]'
-                              }`}
-                            >
-                              {unit.status === status && <Check className="h-3 w-3 inline mr-1" />}
-                              {status}
-                            </button>
-                          ))}
+
+                        {lease && (
+                          <div className="mt-3 pt-3 border-t border-line space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted">Current tenancy</span>
+                              <Badge variant={leaseStatusBadge[lease.status]} className="text-xs">
+                                {leaseStatusLabel[lease.status]}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Rent</span>
+                              <span className="font-medium text-ink tnum">{formatCurrency(lease.monthlyRent)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Term</span>
+                              <span className="text-ink">
+                                {lease.startDate ? formatDate(lease.startDate) : '—'} to {lease.endDate ? formatDate(lease.endDate) : '—'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Maintenance is the only state here the owner sets
+                            by hand; occupied and vacant above always come
+                            from whether the unit has a lease. */}
+                        <div className="mt-3 pt-2 border-t border-line">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMaintenance(unit)}
+                            className={`w-full py-1.5 px-2 text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                              unit.status === 'maintenance'
+                                ? 'bg-danger-soft text-danger font-medium'
+                                : 'bg-canvas text-muted hover:bg-black/[0.05]'
+                            }`}
+                          >
+                            {unit.status === 'maintenance' && <Check className="h-3 w-3" />}
+                            {unit.status === 'maintenance' ? 'Under maintenance' : 'Mark as under maintenance'}
+                          </button>
                         </div>
                       </div>
                     );
@@ -642,15 +732,24 @@ export function Properties() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
-            <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={unitForm.status} onChange={(e) => setUnitForm({...unitForm, status: e.target.value as Unit['status']})}>
-              <option value="vacant">Vacant</option>
-              <option value="occupied">Occupied</option>
-              <option value="maintenance">Maintenance</option>
-            </select>
+            <label className="flex items-center gap-2 text-sm font-medium mb-1">
+              <input
+                type="checkbox"
+                checked={unitForm.status === 'maintenance'}
+                onChange={(e) => setUnitForm({
+                  ...unitForm,
+                  status: e.target.checked
+                    ? 'maintenance'
+                    : (selectedUnit && getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant'),
+                })}
+              />
+              Under maintenance
+            </label>
+            <p className="text-xs text-muted mt-1">
+              Occupied and vacant are set automatically from the unit's current tenancy and cannot be edited here.
+            </p>
           </div>
-          
+
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setIsEditUnitOpen(false)}>Cancel</Button>
             <Button type="submit" className="flex-1">Update Unit</Button>
@@ -675,7 +774,11 @@ export function Properties() {
         onClose={() => setUnitToDelete(null)}
         onConfirm={handleDeleteUnit}
         title="Delete Unit"
-        message={`Are you sure you want to delete Unit ${unitToDelete?.unitNumber}? This action cannot be undone.`}
+        message={
+          unitToDelete && getUnitLease(unitToDelete.id)
+            ? `Unit ${unitToDelete.unitNumber} has a current tenancy. Deleting the unit will not end that tenancy: the lease and its payment history will remain, but they will no longer be linked to a unit. This cannot be undone. Continue?`
+            : `Are you sure you want to delete Unit ${unitToDelete?.unitNumber}? This action cannot be undone.`
+        }
         confirmText="Delete"
         variant="danger"
       />
