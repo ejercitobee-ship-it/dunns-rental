@@ -11,7 +11,7 @@ import { adminApi } from '../lib/api';
 import type { User } from '../types/auth';
 
 export function Users() {
-  const { users, roles, addUser, updateUser, deleteUser, hasPermission } = useAuth();
+  const { user: currentUser, users, roles, addUser, updateUser, deleteUser, hasPermission } = useAuth();
   const { showToast } = useToast();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -305,9 +305,16 @@ export function Users() {
                             >
                               <KeyRound className="h-4 w-4 text-muted" />
                             </button>
-                            {!user.role.isSystem && (
+                            {/* Show delete to anyone who can delete users, for
+                                anyone but themselves. This used to check
+                                !user.role.isSystem, but every built in role is
+                                a system role, so the button never appeared for
+                                a single member. The server enforces the same
+                                two rules. */}
+                            {hasPermission('users_delete') && currentUser?.id !== user.id && (
                               <button
                                 onClick={() => setUserToDelete(user)}
+                                title="Remove member"
                                 className="p-2 hover:bg-danger-soft rounded-lg transition-colors"
                               >
                                 <Trash2 className="h-4 w-4 text-danger" />
