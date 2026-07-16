@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { withTenantIds, findMissingTenantIds } from './index';
+import { withTenantIds, findMissingTenantIds, readLeaseStatus } from './index';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -28,6 +28,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const id = params.id as string;
     const body = (await request.json()) as Record<string, unknown>;
 
+    const status = readLeaseStatus(body.status);
+    if (status === null) {
+      return jsonError('Status must be one of: active, paused, ended', 400);
+    }
+
     const tenantIds = Array.isArray(body.tenantIds) ? (body.tenantIds as string[]) : null;
     if (tenantIds && tenantIds.length) {
       const missing = await findMissingTenantIds(env, tenantIds);
@@ -38,7 +43,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       env.DB.prepare(
         `UPDATE leases SET
           unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
-          security_deposit = ?, status = ?, notes = ?, updated_at = unixepoch()
+          security_deposit = ?, status = ?, paused_at = ?, notes = ?, updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
         body.unitId ?? null,
@@ -47,7 +52,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.endDate ?? null,
         body.monthlyRent ?? 0,
         body.securityDeposit ?? 0,
-        body.status ?? 'active',
+        status,
+        body.pausedAt ?? null,
         body.notes ?? null,
         id
       ),

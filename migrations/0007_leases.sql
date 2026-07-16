@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS leases (
   end_date TEXT,
   monthly_rent REAL NOT NULL DEFAULT 0,
   security_deposit REAL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'active', -- active | paused | ended
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'ended')),
+  -- The day collection was paused. Stamped when the status becomes 'paused',
+  -- cleared on resume. Months before it are still owed.
+  paused_at TEXT,
   notes TEXT,
   user_id TEXT REFERENCES user(id),
   created_at INTEGER DEFAULT (unixepoch()),

@@ -34,6 +34,23 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 };
 
 /**
+ * The only three states a lease can be in. The column has a matching CHECK
+ * constraint, so this whitelist is what turns a bad value into a clean 400
+ * instead of a raw D1 constraint error surfacing as a 500.
+ */
+export const LEASE_STATUSES = ['active', 'paused', 'ended'] as const;
+
+/**
+ * Resolve the status off a request body. Returns null when the caller sent
+ * something that is not one of the three states, which the endpoints turn
+ * into a 400. An absent status defaults to 'active', as it always has.
+ */
+export function readLeaseStatus(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return 'active';
+  return (LEASE_STATUSES as readonly string[]).includes(value as string) ? (value as string) : null;
+}
+
+/**
  * Confirm every id in tenantIds exists in tenants, in one query. Returns the
  * ids that could NOT be found (empty when all are valid).
  */
@@ -60,6 +77,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (body.monthlyRent === undefined || body.monthlyRent === null) {
       return jsonError('Monthly rent is required', 400);
     }
+    const status = readLeaseStatus(body.status);
+    if (status === null) {
+      return jsonError('Status must be one of: active, paused, ended', 400);
+    }
 
     const unit = await env.DB.prepare('SELECT id, property_id FROM units WHERE id = ?')
       .bind(body.unitId)
@@ -75,8 +96,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = crypto.randomUUID();
     const statements = [
       env.DB.prepare(
-        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, notes, user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, paused_at, notes, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id,
         body.unitId,
@@ -85,7 +106,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.endDate ?? null,
         body.monthlyRent,
         body.securityDeposit ?? 0,
-        body.status ?? 'active',
+        status,
+        body.pausedAt ?? null,
         body.notes ?? null,
         auth.id
       ),

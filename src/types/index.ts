@@ -36,6 +36,12 @@ export interface Lease {
   monthlyRent: number;
   securityDeposit?: number;
   status: LeaseStatus;
+  /**
+   * The day collection was paused, stamped automatically when the status is
+   * set to 'paused' and cleared when the lease resumes. Months before it are
+   * owed normally; the pause only stops rent from that month on.
+   */
+  pausedAt?: string;
   notes?: string;
   tenantIds: string[];
 }

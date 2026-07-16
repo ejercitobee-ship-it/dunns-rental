@@ -51,6 +51,40 @@ export function leaseCoversMonth(lease: Lease, month: number, year: number): boo
 }
 
 /**
+ * Every lease that OWED rent for one historical month. This is the question a
+ * month walk must ask, and `activeLeases` is not it: a lease ended at turnover
+ * in June still owed (and was paid) January through June, so filtering it out
+ * would erase half a year of income from the Rent Management, Dashboard and
+ * Tax Report figures. Use this for anything historical; use `activeLeases`
+ * only for forward-looking figures (what is billed from now on).
+ *
+ * The rules, in order:
+ *  - the term has to cover the month at all (`leaseCoversMonth`). Ending a
+ *    lease stamps `endDate` to that day, so months after the tenant left are
+ *    excluded by the term, not by the status.
+ *  - a paused lease owed rent for every month strictly BEFORE the month it was
+ *    paused in. The pause stops rent from that point on, it does not rewrite
+ *    the months the tenant already lived there.
+ *  - a paused lease with no `pausedAt` (legacy or bad data) is treated as
+ *    paused from the current month onward: past months still owe, the current
+ *    month and later do not. That is the reading that cannot invent rent the
+ *    owner never agreed to bill.
+ */
+export function leasesOwingMonth(leases: Lease[], month: number, year: number): Lease[] {
+  const target = year * 12 + month;
+  const now = new Date();
+  // Local time on purpose: the owner's "this month" is America/Chicago, not UTC.
+  const currentYearMonth = now.getFullYear() * 12 + (now.getMonth() + 1);
+
+  return leases.filter(lease => {
+    if (!leaseCoversMonth(lease, month, year)) return false;
+    if (lease.status !== 'paused') return true;
+    const pausedYearMonth = lease.pausedAt ? yearMonthOf(lease.pausedAt) : currentYearMonth;
+    return target < pausedYearMonth;
+  });
+}
+
+/**
  * Total rent per month across active leases. Counted once per lease, which is
  * what stops income doubling when more than one person lives in a unit.
  */
@@ -58,14 +92,24 @@ export function monthlyRevenue(leases: Lease[]): number {
   return round2(activeLeases(leases).reduce((sum, l) => sum + (l.monthlyRent || 0), 0));
 }
 
-/** Payments recorded against one lease for one month. */
+/**
+ * Money actually received against one lease for one month.
+ *
+ * Only `status === 'paid'` counts. This is the ONE rule for what "collected"
+ * means, and it is the same rule the Dashboard, Reports and Tax Report use.
+ * Before this, settlement summed every payment row whatever its status, so an
+ * imported row marked `pending` showed the month as Paid on Rent Management
+ * while every other page showed $0 collected for it.
+ */
 export function paymentsForMonth(
   leaseId: string,
   payments: RentPayment[],
   month: number,
   year: number
 ): RentPayment[] {
-  return payments.filter(p => p.leaseId === leaseId && p.month === month && p.year === year);
+  return payments.filter(
+    p => p.leaseId === leaseId && p.month === month && p.year === year && p.status === 'paid'
+  );
 }
 
 /**
