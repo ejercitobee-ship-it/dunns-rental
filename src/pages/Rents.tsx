@@ -386,7 +386,16 @@ export function Rents() {
       return;
     }
 
-    const validStatuses: RentPayment['status'][] = ['paid', 'pending', 'overdue', 'partial'];
+    // Only 'paid' counts as money received (see paymentsForMonth), so an
+    // imported status has to say one thing: did the money arrive? A 'partial'
+    // row means it did, and the amount is what makes the month partial, so it
+    // maps to 'paid' and settlement works the rest out. 'overdue' means it did
+    // not, same as 'pending'. Importing those two verbatim would file real
+    // money under a status nothing counts, and it would vanish from every page.
+    const importedStatus = (raw: string): RentPayment['status'] => {
+      if (raw === 'pending' || raw === 'overdue') return 'pending';
+      return 'paid';
+    };
     let imported = 0;
     let skippedInvalid = 0;
     let skippedNoLease = 0;
@@ -422,8 +431,8 @@ export function Rents() {
         if (month === 0) month = parseInt(monthStr, 10) || (new Date().getMonth() + 1);
         const year = (iYear >= 0 && parseInt(cells[iYear], 10)) || new Date().getFullYear();
 
-        const rawStatus = (iStatus >= 0 ? cells[iStatus] || '' : '').trim().toLowerCase() as RentPayment['status'];
-        const status = validStatuses.includes(rawStatus) ? rawStatus : 'paid';
+        const rawStatus = (iStatus >= 0 ? cells[iStatus] || '' : '').trim().toLowerCase();
+        const status = importedStatus(rawStatus);
         const paidDate = iPaid >= 0 ? (cells[iPaid] || '').trim() : '';
 
         await addRentPayment({
