@@ -1,15 +1,10 @@
 import { Link } from 'react-router-dom';
-import { Home as HomeIcon, PhoneCall, Wallet, Users, Mail, ArrowRight, MapPin } from 'lucide-react';
+import { Home as HomeIcon, PhoneCall, Wallet, Users, Mail, ArrowRight } from 'lucide-react';
 import logo from '../assets/mh-dunn-logo.png';
 import heroPhoto from '../assets/login-family.jpg';
 import dunnFamily from '../assets/dunn-family.jpg';
 
-// Business contact details. Phone and service area are placeholders until Belle
-// supplies the real values; swap them here.
 const EMAIL = 'info@mhdunnproperty.net';
-const PHONE_DISPLAY = '(555) 123-4567';
-const PHONE_HREF = 'tel:+15551234567';
-const SERVICE_AREA = 'your local area';
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -170,8 +165,14 @@ function Contact() {
           Ask us about current availability or anything else. We are happy to help.
         </p>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2">
-          <a href={`mailto:${EMAIL}`} className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5 text-left hover:border-line-strong transition-colors">
+        {/* Phone and service area go here once Belle supplies them. Publishing a
+            placeholder number on a live site would misdirect real callers, so
+            the section shows email only until the real values arrive. */}
+        <div className="mt-10 flex justify-center">
+          <a
+            href={`mailto:${EMAIL}`}
+            className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5 text-left hover:border-line-strong transition-colors"
+          >
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-soft">
               <Mail className="h-5 w-5 text-primary" />
             </div>
@@ -180,21 +181,7 @@ function Contact() {
               <p className="text-ink font-medium">{EMAIL}</p>
             </div>
           </a>
-
-          <a href={PHONE_HREF} className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5 text-left hover:border-line-strong transition-colors">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-soft">
-              <PhoneCall className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="eyebrow text-faint">Phone</p>
-              <p className="text-ink font-medium">{PHONE_DISPLAY}</p>
-            </div>
-          </a>
         </div>
-
-        <p className="mt-8 inline-flex items-center gap-2 text-sm text-muted">
-          <MapPin className="h-4 w-4 text-faint" /> Serving {SERVICE_AREA}
-        </p>
       </div>
     </section>
   );
