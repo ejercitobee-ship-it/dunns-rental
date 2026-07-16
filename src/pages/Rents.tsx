@@ -12,7 +12,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -178,15 +178,16 @@ export function Rents() {
     ];
 
     const quarterlyData = quarters.map(q => {
+      // Expected is what the leases owed for those months. Collected is money
+      // received in them, the same definition the total above uses, so the
+      // four quarters add up to it rather than falling short of it.
       let qExpected = 0;
-      let qCollected = 0;
       for (const month of q.months) {
         for (const lease of leasesOwingMonth(leases, month, year)) {
-          const s = settleMonth(lease, rentPayments, month, year);
-          qExpected += s.due;
-          qCollected += s.paid;
+          qExpected += settleMonth(lease, rentPayments, month, year).due;
         }
       }
+      const qCollected = rentIncomeForMonths(rentPayments, q.months, year);
       return {
         name: q.name,
         collected: qCollected,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths } from './rent';
 import type { Lease, RentPayment } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -213,6 +213,23 @@ describe('leasesOwingMonth', () => {
     expect(leasesOwingMonth([paused], 7, 2026)).toEqual([]);
   });
 
+  // Ending a paused lease used to resurrect the rent that was never billed.
+  // Pause in June, tenant formally moves out in October, click End tenancy:
+  // that stamps endDate and leaves pausedAt alone, so keying the ceiling off
+  // status === 'paused' made July through October reappear as $8,000 owed.
+  // Only resuming clears pausedAt, so the date is the honest source of truth.
+  it('keeps the pause ceiling after a paused lease is ended', () => {
+    const endedWhilePaused = lease({
+      status: 'ended',
+      pausedAt: '2026-06-20',
+      startDate: '2026-01-01',
+      endDate: '2026-10-15',
+    });
+    expect(leasesOwingMonth([endedWhilePaused], 6, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([endedWhilePaused], 7, 2026)).toEqual([]);
+    expect(leasesOwingMonth([endedWhilePaused], 10, 2026)).toEqual([]);
+  });
+
   // Fix 2: an imported paused lease with no pausedAt (the LEASES CSV had no
   // such column) must not invent a stop date in either direction. Guessing
   // "still owed in the past" would bill nothing wrong here, but guessing
@@ -247,6 +264,26 @@ describe('rentIncomeForYear', () => {
       payment({ id: 'D', status: 'overdue', amount: 900, year: 2026 }),
     ];
     expect(rentIncomeForYear(payments, 2026)).toBe(1000);
+  });
+
+  // The Tax tab shows four quarters above a total. They have to reconcile, so
+  // the quarters are scoped by month using the same paid-only definition the
+  // total uses. The payment in month 11 belongs to no lease's owed term here,
+  // which is exactly the case that used to make the quarters fall short.
+  it('splits into quarters that add back up to the year', () => {
+    const payments = [
+      payment({ id: 'A', status: 'paid', amount: 1000, month: 2, year: 2026 }),
+      payment({ id: 'B', status: 'paid', amount: 250.5, month: 5, year: 2026 }),
+      payment({ id: 'C', status: 'paid', amount: 700, month: 8, year: 2026 }),
+      payment({ id: 'D', status: 'paid', amount: 49.5, month: 11, year: 2026 }),
+      payment({ id: 'E', status: 'pending', amount: 999, month: 11, year: 2026 }),
+      payment({ id: 'F', status: 'paid', amount: 5000, month: 2, year: 2025 }),
+    ];
+    const quarters = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]];
+    const byQuarter = quarters.map(months => rentIncomeForMonths(payments, months, 2026));
+    expect(byQuarter).toEqual([1000, 250.5, 700, 49.5]);
+    const summed = byQuarter.reduce((sum, q) => sum + q, 0);
+    expect(summed).toBe(rentIncomeForYear(payments, 2026));
   });
 
   it('ignores payments from other years', () => {

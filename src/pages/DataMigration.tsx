@@ -241,6 +241,18 @@ export function DataMigration() {
             break;
 
           case 'leases': {
+            // A LEASES row now carries pausedAt, so an older 9 column file
+            // would silently import zero leases and still report success.
+            // Say so instead.
+            if (cols.length > 0 && cols.length < 10) {
+              errors.push({
+                row: rowNum,
+                sheet: currentSection,
+                message:
+                  'A lease row needs 10 columns. Add the pausedAt column, blank unless rent is paused.',
+                data: line,
+              });
+            }
             if (cols.length >= 10) {
               const unitId = cols[1] || undefined;
               const endDate = cols[4] || undefined;

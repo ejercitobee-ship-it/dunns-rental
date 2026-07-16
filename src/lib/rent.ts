@@ -81,9 +81,12 @@ export function leasesOwingMonth(leases: Lease[], month: number, year: number): 
   return leases.filter(lease => {
     if (!leaseCoversMonth(lease, month, year)) return false;
     if (lease.status === 'ended' && !lease.endDate) return false;
-    if (lease.status !== 'paused') return true;
-    if (!lease.pausedAt) return false;
-    return target <= yearMonthOf(lease.pausedAt);
+    // The pause ceiling follows the DATE, not the status. A paused lease that
+    // is later ended keeps its pausedAt (only resuming clears it), so keying
+    // this off status === 'paused' would let ending it resurrect every month
+    // between the pause and the move out as rent that was never billed.
+    if (lease.pausedAt) return target <= yearMonthOf(lease.pausedAt);
+    return lease.status !== 'paused';
   });
 }
 
@@ -126,9 +129,24 @@ export function paymentsForMonth(
  * themselves, so the two figures cannot drift apart.
  */
 export function rentIncomeForYear(payments: RentPayment[], year: number): number {
+  return rentIncomeForMonths(payments, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], year);
+}
+
+/**
+ * The same definition as `rentIncomeForYear`, narrowed to some months of the
+ * year. The Tax tab's quarters use this so they add up to its own total: they
+ * were settlement based while the total was payment based, so a payment
+ * recorded outside any owed month made the four quarters sum to less than the
+ * total sitting above them on the same screen.
+ */
+export function rentIncomeForMonths(
+  payments: RentPayment[],
+  months: number[],
+  year: number
+): number {
   return round2(
     payments
-      .filter(p => p.status === 'paid' && p.year === year)
+      .filter(p => p.status === 'paid' && p.year === year && months.includes(p.month))
       .reduce((sum, p) => sum + (p.amount || 0), 0)
   );
 }
