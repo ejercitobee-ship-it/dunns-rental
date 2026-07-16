@@ -16,10 +16,6 @@ CREATE TABLE IF NOT EXISTS leases (
   monthly_rent REAL NOT NULL DEFAULT 0,
   security_deposit REAL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'ended')),
-  -- The day collection was paused. Stamped when the status becomes 'paused',
-  -- cleared on resume. The whole pause month is still owed, no proration;
-  -- rent stops only from the month after.
-  paused_at TEXT,
   notes TEXT,
   user_id TEXT REFERENCES user(id),
   created_at INTEGER DEFAULT (unixepoch()),
@@ -52,6 +48,23 @@ CREATE TABLE IF NOT EXISTS lease_tenants (
   UNIQUE(lease_id, tenant_id)
 );
 
+-- Every time collection on a lease was paused, and (if it has ended) when it
+-- resumed. A lease can be paused and resumed more than once over its life, so
+-- this is a table of intervals rather than one field on leases: a single
+-- pausedAt/resumedAt pair would let a second pause overwrite the first
+-- interval and silently re-bill that gap. An open pause (resumed_at IS NULL)
+-- excludes every month after paused_at, with no upper bound, until a later
+-- row closes it. The whole paused month and the whole resumed month are still
+-- owed, no proration, symmetric with how a lease's own start and end months
+-- are always owed in full: only the months strictly between are excluded.
+CREATE TABLE IF NOT EXISTS lease_pauses (
+  id TEXT PRIMARY KEY,
+  lease_id TEXT NOT NULL REFERENCES leases(id) ON DELETE CASCADE,
+  paused_at TEXT NOT NULL,
+  resumed_at TEXT,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
 -- Rent is owed by the lease. paid_by_tenant_id records who the money came from.
 CREATE TABLE IF NOT EXISTS rent_payments (
   id TEXT PRIMARY KEY,
@@ -62,7 +75,10 @@ CREATE TABLE IF NOT EXISTS rent_payments (
   paid_date TEXT,
   received_date TEXT,
   status TEXT DEFAULT 'pending',
-  month INTEGER,
+  -- Settlement and taxable income both key on the month, so a month outside
+  -- 1..12 (a typo'd CSV cell, say) would file real money where nothing counts
+  -- it and it would vanish from every screen. Reject it at the door.
+  month INTEGER CHECK (month BETWEEN 1 AND 12),
   year INTEGER,
   payment_method TEXT,
   uploaded_by TEXT,
@@ -76,5 +92,6 @@ CREATE INDEX IF NOT EXISTS idx_leases_unit ON leases(unit_id);
 CREATE INDEX IF NOT EXISTS idx_leases_status ON leases(status);
 CREATE INDEX IF NOT EXISTS idx_lease_tenants_lease ON lease_tenants(lease_id);
 CREATE INDEX IF NOT EXISTS idx_lease_tenants_tenant ON lease_tenants(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_lease_pauses_lease ON lease_pauses(lease_id);
 CREATE INDEX IF NOT EXISTS idx_rent_payments_lease ON rent_payments(lease_id);
 CREATE INDEX IF NOT EXISTS idx_rent_payments_period ON rent_payments(year, month);

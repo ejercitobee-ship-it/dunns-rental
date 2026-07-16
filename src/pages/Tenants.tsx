@@ -217,6 +217,9 @@ export function Tenants() {
         status: 'active',
         notes: tenancyForm.notes.trim() || undefined,
         tenantIds,
+        // A brand new tenancy starts with no pause history; the server
+        // stamps this list itself from then on.
+        pauses: [],
       });
 
       showToast('Tenancy added.', 'success');
@@ -236,15 +239,14 @@ export function Tenants() {
       // Neither action prompts for a date, so today is the only date the
       // owner could mean. Ending stamps endDate (so leasesOwingMonth stops
       // billing this lease from next month on, instead of it being billed
-      // forever on a blank or future endDate). Pausing stamps pausedAt.
-      // Resuming clears it, so the API PUT (which overwrites every column,
-      // not just the ones sent) needs the full lease object either way.
+      // forever on a blank or future endDate). Pause and resume intervals
+      // are no longer stamped here at all: the server records them itself
+      // off statusChangedOn, so the client can't forget to or disagree with
+      // the database. The PUT still overwrites every column rather than
+      // merging, so the full lease object goes along regardless.
       const today = todayLocalDate();
-      const dateFields: Partial<Lease> =
-        status === 'ended' ? { endDate: today }
-        : status === 'paused' ? { pausedAt: today }
-        : { pausedAt: undefined };
-      await updateLease({ ...lease, ...dateFields, status });
+      const dateFields: Partial<Lease> = status === 'ended' ? { endDate: today } : {};
+      await updateLease({ ...lease, ...dateFields, status, statusChangedOn: today });
       showToast(successMessage, 'success');
     } catch (err) {
       showToast((err as Error).message, 'error');

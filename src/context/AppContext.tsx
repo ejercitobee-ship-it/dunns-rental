@@ -172,8 +172,8 @@ interface AppContextType extends AppState {
   addTenant: (tenant: Omit<Tenant, 'id'>) => Promise<Tenant>;
   updateTenant: (tenant: Tenant) => Promise<void>;
   deleteTenant: (id: string) => Promise<void>;
-  addLease: (lease: Omit<Lease, 'id'>) => Promise<Lease>;
-  updateLease: (lease: Lease) => Promise<void>;
+  addLease: (lease: Omit<Lease, 'id'> & { pausedAt?: string }) => Promise<Lease>;
+  updateLease: (lease: Lease & { statusChangedOn?: string }) => Promise<void>;
   deleteLease: (id: string) => Promise<void>;
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
@@ -301,13 +301,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_TENANT', payload: id });
   };
 
-  const addLease = async (lease: Omit<Lease, 'id'>) => {
+  const addLease = async (lease: Omit<Lease, 'id'> & { pausedAt?: string }) => {
     const created = await leasesApi.create(lease);
     dispatch({ type: 'ADD_LEASE', payload: created });
     return created;
   };
 
-  const updateLease = async (lease: Lease) => {
+  const updateLease = async (lease: Lease & { statusChangedOn?: string }) => {
     const updated = await leasesApi.update(lease.id, lease);
     dispatch({ type: 'UPDATE_LEASE', payload: updated });
   };

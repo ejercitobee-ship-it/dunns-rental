@@ -37,12 +37,19 @@ export interface Lease {
   securityDeposit?: number;
   status: LeaseStatus;
   /**
-   * The day collection was paused, stamped automatically when the status is
-   * set to 'paused' and cleared when the lease resumes. Symmetric with
-   * `endDate`: the whole month the pause happened in is still owed (no
-   * proration), and rent stops only from the month after.
+   * Every stretch collection was paused on this lease, oldest first. The
+   * server stamps these itself when the status changes to or from 'paused'
+   * (off the `statusChangedOn` the client sends), so the client never writes
+   * to this list directly and cannot forget to or disagree with the
+   * database. An entry with no `resumedAt` is an OPEN pause: rent stays
+   * stopped from the month after `pausedAt`, with no upper bound, until a
+   * later status change resumes or ends the lease. A lease can carry more
+   * than one entry, since it can be paused, resumed, and paused again.
+   * Symmetric with `endDate`: the whole month a pause starts or resumes in
+   * is still owed in full, no proration; only the months strictly between
+   * are excluded.
    */
-  pausedAt?: string;
+  pauses: { pausedAt: string; resumedAt?: string }[];
   notes?: string;
   tenantIds: string[];
 }

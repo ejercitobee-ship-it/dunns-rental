@@ -2,21 +2,43 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeLease } from '../../lib/serializers';
 
-/** Attach the tenant ids on each lease in one extra query. */
-export async function withTenantIds(env: Env, rows: Record<string, unknown>[]) {
+/**
+ * Attach the tenant ids and pause intervals on each lease, in two extra
+ * queries (one for lease_tenants, one for lease_pauses), then serialize.
+ * Both are one-to-many joins done in a single SELECT and grouped in memory
+ * rather than N+1 queries, the same way lease_tenants was already loaded.
+ * Pauses are ordered by paused_at so a lease that was paused more than once
+ * shows its intervals oldest first.
+ */
+export async function withLeaseDetails(env: Env, rows: Record<string, unknown>[]) {
   if (!rows.length) return [];
-  const { results } = await env.DB.prepare('SELECT lease_id, tenant_id FROM lease_tenants').all<{
-    lease_id: string;
-    tenant_id: string;
-  }>();
-  const byLease = new Map<string, string[]>();
-  for (const link of results || []) {
-    const list = byLease.get(link.lease_id) || [];
+
+  const { results: tenantLinks } = await env.DB.prepare(
+    'SELECT lease_id, tenant_id FROM lease_tenants'
+  ).all<{ lease_id: string; tenant_id: string }>();
+  const tenantsByLease = new Map<string, string[]>();
+  for (const link of tenantLinks || []) {
+    const list = tenantsByLease.get(link.lease_id) || [];
     list.push(link.tenant_id);
-    byLease.set(link.lease_id, list);
+    tenantsByLease.set(link.lease_id, list);
   }
+
+  const { results: pauseRows } = await env.DB.prepare(
+    'SELECT lease_id, paused_at, resumed_at FROM lease_pauses ORDER BY paused_at'
+  ).all<{ lease_id: string; paused_at: string; resumed_at: string | null }>();
+  const pausesByLease = new Map<string, { pausedAt: string; resumedAt?: string }[]>();
+  for (const p of pauseRows || []) {
+    const list = pausesByLease.get(p.lease_id) || [];
+    list.push({ pausedAt: p.paused_at, resumedAt: p.resumed_at ?? undefined });
+    pausesByLease.set(p.lease_id, list);
+  }
+
   return rows.map(r =>
-    serializeLease({ ...r, tenantIds: byLease.get(r.id as string) || [] })
+    serializeLease({
+      ...r,
+      tenantIds: tenantsByLease.get(r.id as string) || [],
+      pauses: pausesByLease.get(r.id as string) || [],
+    })
   );
 }
 
@@ -27,11 +49,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const { results } = await env.DB.prepare('SELECT * FROM leases ORDER BY created_at DESC').all();
-    return jsonOk({ success: true, data: await withTenantIds(env, results || []) });
+    return jsonOk({ success: true, data: await withLeaseDetails(env, results || []) });
   } catch {
     return serverError();
   }
 };
+
+/**
+ * Strict `YYYY-MM-DD`, no `Date` parsing involved. Used to validate any date
+ * the client sends for stamping a pause interval (`statusChangedOn` on the
+ * PUT, or an imported lease's `pausedAt` on the POST) so a malformed value
+ * 400s instead of writing a row the month math in `leasesOwingMonth` would
+ * silently misread.
+ */
+export function isValidDateString(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
 
 /**
  * The only three states a lease can be in. The column has a matching CHECK
@@ -93,11 +126,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       if (missing.length) return jsonError('One or more tenants could not be found', 400);
     }
 
+    // Only the CSV importer sends this: a paused lease being imported has no
+    // way to say the pause already closed, so this always opens a NEW
+    // interval (resumed_at NULL). A regular create from the UI never sends
+    // pausedAt at all.
+    if (body.pausedAt !== undefined && body.pausedAt !== null && !isValidDateString(body.pausedAt)) {
+      return jsonError('pausedAt must be YYYY-MM-DD', 400);
+    }
+
     const id = crypto.randomUUID();
     const statements = [
       env.DB.prepare(
-        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, paused_at, notes, user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, status, notes, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id,
         body.unitId,
@@ -107,7 +148,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.monthlyRent,
         body.securityDeposit ?? 0,
         status,
-        body.pausedAt ?? null,
         body.notes ?? null,
         auth.id
       ),
@@ -116,11 +156,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
         ).bind(crypto.randomUUID(), id, tid)
       ),
+      ...(isValidDateString(body.pausedAt)
+        ? [
+            env.DB.prepare(
+              'INSERT INTO lease_pauses (id, lease_id, paused_at, resumed_at) VALUES (?, ?, ?, NULL)'
+            ).bind(crypto.randomUUID(), id, body.pausedAt),
+          ]
+        : []),
     ];
     await env.DB.batch(statements);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
-    const [data] = await withTenantIds(env, [row as Record<string, unknown>]);
+    const [data] = await withLeaseDetails(env, [row as Record<string, unknown>]);
     return jsonOk({ success: true, data }, 201);
   } catch {
     return serverError();

@@ -1904,3 +1904,143 @@ wrangler d1 migrations apply dunns-rental-db --local`: no migrations to
 apply, `paused_at` was already present locally from Task 15's migration run.
 
 - [ ] **Step 9: Commit**
+
+---
+
+### Task 17: Pause intervals replace `pausedAt` (the owner's final decision)
+
+The owner rejected the single `pausedAt` field outright: once resumed, the
+app had no record a pause ever happened, so resuming after a multi month gap
+(pause June 20, resume October 5) resurrected July through September as back
+rent. A `pausedAt`/`resumedAt` pair would have been just as wrong, since a
+second pause on the same lease would overwrite the first interval and
+silently re-bill that gap. Migration 0007 has not run against production, so
+it was edited in place rather than adding a new migration file.
+
+**Files:**
+- Modify: `migrations/0007_leases.sql` (drop `leases.paused_at`, add `lease_pauses` and its index)
+- Modify: `functions/lib/serializers.ts` (`serializeLease` now returns `pauses`, not `pausedAt`)
+- Modify: `functions/api/leases/index.ts` (`withTenantIds` → `withLeaseDetails`, also joins `lease_pauses`; new `isValidDateString`; POST accepts an optional `pausedAt` that opens one interval, for the CSV importer only)
+- Modify: `functions/api/leases/[id].ts` (PUT reads the lease's current status first, then atomically opens or closes a pause interval in the same `env.DB.batch([...])` as the lease UPDATE, keyed off a `statusChangedOn` the client sends)
+- Modify: `src/types/index.ts` (`Lease.pausedAt` → `Lease.pauses: { pausedAt: string; resumedAt?: string }[]`)
+- Modify: `src/lib/rent.ts` (`leasesOwingMonth` reads intervals instead of one date)
+- Modify: `src/lib/api.ts`, `src/context/AppContext.tsx` (`leasesApi`/`addLease`/`updateLease` carry the POST-only `pausedAt` and PUT-only `statusChangedOn` extras)
+- Modify: `src/pages/Tenants.tsx` (`handleLeaseStatusChange` no longer stamps or clears any pause field itself; sends `statusChangedOn` instead)
+- Modify: `src/pages/DataMigration.tsx` (LEASES CSV `pausedAt` column unchanged in shape and validation, now opens an interval via the POST instead of setting a field)
+- Test: `src/lib/rent.test.ts`
+
+- [x] **Step 1: Schema**
+
+Replaced `leases.paused_at` with:
+```sql
+CREATE TABLE IF NOT EXISTS lease_pauses (
+  id TEXT PRIMARY KEY,
+  lease_id TEXT NOT NULL REFERENCES leases(id) ON DELETE CASCADE,
+  paused_at TEXT NOT NULL,
+  resumed_at TEXT,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+```
+plus `idx_lease_pauses_lease`, following the same shape as `lease_tenants`. An
+open pause is `resumed_at IS NULL`.
+
+- [x] **Step 2: The server stamps intervals, not the client**
+
+`functions/api/leases/[id].ts`'s PUT reads the lease's CURRENT status with a
+`SELECT status FROM leases WHERE id = ?` before building its statement batch.
+On a transition to `paused` (from anything else), it pushes an INSERT opening
+a new interval (`resumed_at` NULL). On a transition away from `paused` (to
+`active` or to `ended`), it pushes an UPDATE closing whatever interval is
+still open (`WHERE lease_id = ? AND resumed_at IS NULL`). Both ride in the
+SAME `env.DB.batch([...])` as the lease UPDATE and the occupant-list
+replacement, so they commit or fail together with it, no second round trip.
+The date stamped is `statusChangedOn`, a `YYYY-MM-DD` the client sends (built
+with `todayLocalDate()`, the OWNER's local day in America/Chicago), validated
+server side with a new `isValidDateString` helper and falling back to the
+server's own UTC date only when the field is absent (an older client or a
+direct API call; the app's own status-change flow always sends it).
+
+- [x] **Step 3: Serializer, loader, and type**
+
+`withTenantIds` became `withLeaseDetails`: it now runs a second grouped query
+against `lease_pauses` (ordered by `paused_at`, so a lease paused more than
+once lists its intervals oldest first) alongside the existing
+`lease_tenants` query, and attaches both before calling `serializeLease`.
+`serializeLease` returns `pauses: { pausedAt, resumedAt? }[]` instead of
+`pausedAt`. `Lease.pauses` in `src/types/index.ts` replaces `Lease.pausedAt`,
+documented the same way `tenantIds` is: always present, server owned, never
+written to directly by the client.
+
+- [x] **Step 4: `leasesOwingMonth` reads intervals**
+
+Added `monthIsPaused(pause, target)`: a month is excluded only if it falls
+STRICTLY AFTER the pause's own month and, for a closed interval, STRICTLY
+BEFORE the resume month. The pause month and the resume month are both owed
+in full, symmetric with how a lease's own start and end months are always
+owed in full. An open interval (no `resumedAt`) excludes every month after
+its own start, with no upper bound. `leasesOwingMonth` now excludes a month
+if it falls inside ANY of a lease's intervals, independent of the lease's
+CURRENT status, and keeps the conservative rule for bad data: a `paused`
+lease with an EMPTY `pauses` array owes nothing at all, since there is no
+data to support any other reading.
+
+- [x] **Step 5: Client stops stamping dates**
+
+`Tenants.tsx`'s `handleLeaseStatusChange` no longer sets or clears any pause
+field; it only still stamps `endDate` locally (unchanged) and now sends
+`statusChangedOn: todayLocalDate()` alongside `status` so the server can
+stamp the interval itself. The PUT still overwrites every column rather than
+merging, so the full lease object goes along regardless.
+
+- [x] **Step 6: CSV importer opens an interval instead of setting a field**
+
+The LEASES CSV keeps its `pausedAt` column and the existing validation
+(`status=paused` requires it, `status=ended` requires `endDate`) unchanged,
+since that is still how an imported paused lease says when rent stopped. The
+leases POST (`functions/api/leases/index.ts`) now accepts an optional
+`pausedAt` on the body and, when present and a valid `YYYY-MM-DD`, pushes an
+INSERT opening one OPEN interval in the same batch as the lease and occupant
+inserts. `ParsedLease.pausedAt` and the `addLease` call in
+`DataMigration.tsx` are otherwise unchanged; both now also pass `pauses: []`
+on the literal object to satisfy the (now required, server owned) `Lease`
+field shape.
+
+- [x] **Step 7: Tests**
+
+Replaced the five `pausedAt`-based tests in `src/lib/rent.test.ts` with five
+interval based ones (35 total, same count, since each new test covers more
+ground per `it()` than the boundary tests it replaced):
+- a CLOSED interval (pause 2026-06-20, resume 2026-10-05): June owed, July
+  through September not, October and November owed. This is the owner's
+  decision and the reason for the whole change: the old single field could
+  not keep a closed gap unbilled after resuming.
+- an OPEN interval (pause 2026-06-20, never resumed): June owed, everything
+  after excluded forever.
+- TWO intervals on one lease (paused Mar 10 to May 1, paused again Aug 15,
+  never resumed): both gaps stay unbilled, which a single field could never
+  express at all.
+- the regression test adapted to the interval shape: an ended lease whose
+  pause was NEVER resumed keeps excluding months past its own end month,
+  proving the term's "end month owed in full" rule does not override an
+  unresolved pause.
+- a `paused` lease with an EMPTY `pauses` array still owes nothing, past or
+  present (the legacy/bad-data conservative rule, preserved).
+
+The three old boundary tests (before/on/after the pause month) and the old
+no-`pausedAt` test were removed since the new CLOSED and empty-array tests
+subsume them with the added interval behavior. The unchanged `ended` lease
+with no `endDate` test was kept as is.
+
+- [x] **Step 8: Verify**
+
+`npx tsc -b`, `npx tsc -p functions/tsconfig.json` and `npm run build` all
+pass with zero errors. `npm test` passes 35/35. Killed three stale `workerd`
+processes holding the local D1 file lock (same issue noted in Task 16), then
+removed `.wrangler/state/v3/d1` and ran
+`npx wrangler d1 migrations apply dunns-rental-db --local` (the database name
+is `dunns-rental-db` per `wrangler.toml`, not `dunns-rental`): all seven
+migrations applied cleanly. Confirmed via `PRAGMA table_info` that
+`leases.paused_at` is gone and `lease_pauses` (`id`, `lease_id`, `paused_at`
+NOT NULL, `resumed_at`, `created_at`) exists with its index.
+
+- [ ] **Step 9: Commit**

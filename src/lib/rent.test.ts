@@ -12,6 +12,7 @@ const lease = (over: Partial<Lease> = {}): Lease => ({
   securityDeposit: 0,
   status: 'active',
   tenantIds: [],
+  pauses: [],
   ...over,
 });
 
@@ -180,48 +181,73 @@ describe('leasesOwingMonth', () => {
     expect(leasesOwingMonth([notYetStarted], 3, 2026)).toEqual([]);
   });
 
-  // The Critical fix from the re-review: pausing mid-June still bills all of
-  // June, full month either way, no proration, exactly like an ended lease
-  // owes its whole end month. The pause only stops rent from the NEXT month.
-  it('counts a paused lease for months before its pause month', () => {
+  // The owner's decision and the reason this changed from a single pausedAt
+  // field to a table of intervals: a pause that has ENDED must keep the gap
+  // it created unbilled forever, not just until the ceiling date. Pause June
+  // 20, resume October 5: June is still owed in full (pausing mid-month bills
+  // the whole month), July/August/September are the gap and stay unbilled,
+  // and October is owed in full too, symmetric with how a lease starting
+  // mid-month owes that whole month. November, safely past the interval, is
+  // unaffected.
+  it('excludes only the months strictly between a closed pause interval', () => {
     const paused = lease({
-      status: 'paused',
-      pausedAt: '2026-06-20',
-      startDate: '2026-01-01',
-      endDate: '2027-01-01',
-    });
-    expect(leasesOwingMonth([paused], 5, 2026).map(l => l.id)).toEqual(['L1']);
-  });
-
-  it('counts a paused lease for its own pause month', () => {
-    const paused = lease({
-      status: 'paused',
-      pausedAt: '2026-06-20',
+      status: 'active',
+      pauses: [{ pausedAt: '2026-06-20', resumedAt: '2026-10-05' }],
       startDate: '2026-01-01',
       endDate: '2027-01-01',
     });
     expect(leasesOwingMonth([paused], 6, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([paused], 7, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 8, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 9, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 10, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([paused], 11, 2026).map(l => l.id)).toEqual(['L1']);
   });
 
-  it('excludes a paused lease for every month after its pause month', () => {
+  it('excludes every month after an OPEN pause, with no resume to bound it', () => {
     const paused = lease({
       status: 'paused',
-      pausedAt: '2026-06-20',
+      pauses: [{ pausedAt: '2026-06-20' }],
       startDate: '2026-01-01',
-      endDate: '2027-01-01',
+      endDate: undefined,
     });
+    expect(leasesOwingMonth([paused], 6, 2026).map(l => l.id)).toEqual(['L1']);
     expect(leasesOwingMonth([paused], 7, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 12, 2026)).toEqual([]);
   });
 
-  // Ending a paused lease used to resurrect the rent that was never billed.
-  // Pause in June, tenant formally moves out in October, click End tenancy:
-  // that stamps endDate and leaves pausedAt alone, so keying the ceiling off
-  // status === 'paused' made July through October reappear as $8,000 owed.
-  // Only resuming clears pausedAt, so the date is the honest source of truth.
-  it('keeps the pause ceiling after a paused lease is ended', () => {
+  // What a single pausedAt field could never express: a lease paused,
+  // resumed, and paused again keeps BOTH gaps unbilled, not just the most
+  // recent one.
+  it('keeps both gaps unbilled across two separate pause intervals', () => {
+    const twicePaused = lease({
+      status: 'paused',
+      pauses: [
+        { pausedAt: '2026-03-10', resumedAt: '2026-05-01' },
+        { pausedAt: '2026-08-15' },
+      ],
+      startDate: '2026-01-01',
+      endDate: undefined,
+    });
+    expect(leasesOwingMonth([twicePaused], 3, 2026).map(l => l.id)).toEqual(['L1']); // first pause month: owed
+    expect(leasesOwingMonth([twicePaused], 4, 2026)).toEqual([]); // inside first gap
+    expect(leasesOwingMonth([twicePaused], 5, 2026).map(l => l.id)).toEqual(['L1']); // first resume month: owed
+    expect(leasesOwingMonth([twicePaused], 6, 2026).map(l => l.id)).toEqual(['L1']); // between the two intervals
+    expect(leasesOwingMonth([twicePaused], 7, 2026).map(l => l.id)).toEqual(['L1']); // between the two intervals
+    expect(leasesOwingMonth([twicePaused], 8, 2026).map(l => l.id)).toEqual(['L1']); // second pause month: owed
+    expect(leasesOwingMonth([twicePaused], 9, 2026)).toEqual([]); // inside second (open) gap, forever
+  });
+
+  // Ending a paused lease used to resurrect the rent that was never billed,
+  // because ending only stamped endDate and left the single pausedAt field
+  // alone. This pins the same regression for the interval shape: an interval
+  // that never got a resumedAt keeps excluding months even past the lease's
+  // own end month, since the term's "end month owed in full" rule does not
+  // override an unresolved pause.
+  it('keeps the pause ceiling after a paused lease is ended, when the pause was never resumed', () => {
     const endedWhilePaused = lease({
       status: 'ended',
-      pausedAt: '2026-06-20',
+      pauses: [{ pausedAt: '2026-06-20' }],
       startDate: '2026-01-01',
       endDate: '2026-10-15',
     });
@@ -230,15 +256,16 @@ describe('leasesOwingMonth', () => {
     expect(leasesOwingMonth([endedWhilePaused], 10, 2026)).toEqual([]);
   });
 
-  // Fix 2: an imported paused lease with no pausedAt (the LEASES CSV had no
-  // such column) must not invent a stop date in either direction. Guessing
-  // "still owed in the past" would bill nothing wrong here, but guessing
-  // "paused as of today" invented $9,000 of rent on a lease paused 17 months
-  // ago. The only reading that cannot invent rent is to owe nothing at all.
-  it('treats a paused lease with no pausedAt as owing nothing, past or present', () => {
+  // An imported paused lease with no recorded interval (or any other legacy
+  // shape that lost track of when the pause happened) must not invent a stop
+  // date in either direction. Guessing "still owed in the past" would bill
+  // nothing wrong here, but guessing "paused as of today" would invent rent
+  // on a lease paused long ago. The only reading that cannot invent rent is
+  // to owe nothing at all.
+  it('treats a paused lease with an empty pauses array as owing nothing, past or present', () => {
     const paused = lease({
       status: 'paused',
-      pausedAt: undefined,
+      pauses: [],
       startDate: '2020-01-01',
       endDate: undefined,
     });

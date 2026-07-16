@@ -51,6 +51,24 @@ export function leaseCoversMonth(lease: Lease, month: number, year: number): boo
 }
 
 /**
+ * Whether one pause interval excludes a given target month. The month the
+ * pause STARTS in is still owed in full, symmetric with how a lease's own
+ * start month is owed in full: pausing mid-June still bills all of June, so
+ * only months STRICTLY AFTER `pausedAt`'s month are candidates for exclusion.
+ * If the interval has closed (`resumedAt` set), the month it RESUMES in is
+ * likewise owed in full, exactly like a lease starting mid-month owes that
+ * whole month, so only months STRICTLY BEFORE `resumedAt`'s month are
+ * excluded. An OPEN interval (no `resumedAt`) has no upper bound: it excludes
+ * every month after its own start, forever.
+ */
+function monthIsPaused(pause: { pausedAt: string; resumedAt?: string }, target: number): boolean {
+  const pausedMonth = yearMonthOf(pause.pausedAt);
+  if (target <= pausedMonth) return false;
+  if (!pause.resumedAt) return true;
+  return target < yearMonthOf(pause.resumedAt);
+}
+
+/**
  * Every lease that OWED rent for one historical month. This is the question a
  * month walk must ask, and `activeLeases` is not it: a lease ended at turnover
  * in June still owed (and was paid) January through June, so filtering it out
@@ -65,15 +83,21 @@ export function leaseCoversMonth(lease: Lease, month: number, year: number): boo
  *    `endDate` at all (bad data: the UI always stamps one) has no known
  *    upper bound to trust, so it is treated as owing nothing rather than
  *    billing forever.
- *  - a paused lease owed rent through the month it was paused in, same as an
- *    ended lease owes its whole end month: pausing mid-June still bills all
- *    of June. The pause only stops rent starting the month AFTER the pause,
- *    it does not rewrite the month the tenant was paused in or any month
- *    before it.
- *  - a paused lease with no `pausedAt` (legacy or bad data) has no known date
- *    rent stopped, so it owes nothing at all from the moment it is read as
- *    paused: guessing a stop date, in either direction, would either invent
- *    rent the owner never billed or erase rent she actually collected.
+ *  - a lease whose status is `paused` but which has NO recorded pause
+ *    interval at all (legacy or bad data, e.g. an old single-field record
+ *    that never migrated) has no known date rent stopped, so it owes
+ *    nothing at all, past or present, the moment it is read as paused:
+ *    guessing a stop date, in either direction, would either invent rent the
+ *    owner never billed or erase rent she actually collected.
+ *  - a month is not owed if it falls inside ANY of the lease's pause
+ *    intervals (`monthIsPaused`), regardless of the lease's CURRENT status.
+ *    A lease can be paused, resumed, and paused again, and each gap has to
+ *    stay unbilled on its own: a single field could only ever remember the
+ *    most recent pause, so a second one would silently overwrite the first
+ *    and re-bill that gap. This also covers a lease that was ended while
+ *    still paused (only resuming or ending closes an interval, so an
+ *    unresolved one keeps excluding months even past the lease's own end
+ *    month).
  */
 export function leasesOwingMonth(leases: Lease[], month: number, year: number): Lease[] {
   const target = year * 12 + month;
@@ -81,12 +105,9 @@ export function leasesOwingMonth(leases: Lease[], month: number, year: number): 
   return leases.filter(lease => {
     if (!leaseCoversMonth(lease, month, year)) return false;
     if (lease.status === 'ended' && !lease.endDate) return false;
-    // The pause ceiling follows the DATE, not the status. A paused lease that
-    // is later ended keeps its pausedAt (only resuming clears it), so keying
-    // this off status === 'paused' would let ending it resurrect every month
-    // between the pause and the move out as rent that was never billed.
-    if (lease.pausedAt) return target <= yearMonthOf(lease.pausedAt);
-    return lease.status !== 'paused';
+    if (lease.status === 'paused' && lease.pauses.length === 0) return false;
+    if (lease.pauses.some(p => monthIsPaused(p, target))) return false;
+    return true;
   });
 }
 
@@ -119,14 +140,19 @@ export function paymentsForMonth(
 }
 
 /**
- * Total rent actually received in a calendar year, no lease or month filter
- * at all. For tax purposes the money received IS the income, whatever month
- * it was recorded against: a payment posted against a month outside any
- * lease's owed term (say, one entered after a lease's `endDate`) still
- * counts, because the cash came in that year regardless. This is the ONE
- * definition of taxable rent income; the Tax Report page and Rent
- * Management's Tax tab both call this instead of summing payments
- * themselves, so the two figures cannot drift apart.
+ * Total rent actually received in a calendar year, with no LEASE filter at
+ * all. For tax purposes the money received IS the income, whatever month it
+ * was recorded against: a payment posted against a month outside any lease's
+ * owed term (say, one entered after a lease's `endDate`) still counts,
+ * because the cash came in that year regardless. This is the ONE definition
+ * of taxable rent income; the Tax Report page and Rent Management's Tax tab
+ * both call this instead of summing payments themselves, so the two figures
+ * cannot drift apart.
+ *
+ * It does assume a payment's month is 1..12, which is what lets the Tax tab's
+ * four quarters add up to it. `rent_payments.month` carries a matching CHECK
+ * constraint and the payments API rejects a missing month, so a month outside
+ * that range cannot be stored.
  */
 export function rentIncomeForYear(payments: RentPayment[], year: number): number {
   return rentIncomeForMonths(payments, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], year);

@@ -27,7 +27,10 @@ interface ParsedLease {
   status: LeaseStatus;
   /** The day collection was paused. Required when status is 'paused': with
    * no pausedAt, leasesOwingMonth treats the lease as owing nothing at all
-   * rather than guessing a stop date and inventing rent. */
+   * rather than guessing a stop date and inventing rent. Not a field on the
+   * created lease itself: the leases POST reads it separately and opens an
+   * OPEN lease_pauses interval (no resumedAt), since a CSV row has no way to
+   * say a pause has already ended. */
   pausedAt?: string;
   notes?: string;
   tenantIds: string[];
@@ -540,9 +543,14 @@ export function DataMigration() {
           monthlyRent: lease.monthlyRent,
           securityDeposit: lease.securityDeposit,
           status: lease.status,
+          // Not part of the Lease shape itself: the leases POST reads this
+          // separately and, when present, opens an OPEN lease_pauses interval
+          // (no resumedAt), since a CSV row has no way to say a pause has
+          // already ended.
           pausedAt: lease.pausedAt,
           notes: lease.notes,
           tenantIds,
+          pauses: [],
         });
         leaseIdMapRef.current.set(lease.id, created.id);
         imported++;
