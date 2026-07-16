@@ -8,6 +8,7 @@ import { Register } from './pages/Register';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
+import { Home } from './pages/Home';
 import { Properties } from './pages/Properties';
 import { Tenants } from './pages/Tenants';
 import { TenantDetail } from './pages/TenantDetail';
@@ -45,6 +46,23 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+// The site root. A logged-out visitor sees the public homepage; a logged-in
+// user sees their dashboard, exactly as before. Keeping the dashboard at "/"
+// means no existing link, nav item, or redirect has to change.
+function RootRoute() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Home />;
+  }
+
+  return (
+    <Layout>
+      <Dashboard />
+    </Layout>
+  );
 }
 
 function AppRoutes() {
@@ -85,11 +103,7 @@ function AppRoutes() {
           session cookie is present. */}
       <Route path="/reset-password" element={<ResetPassword />} />
       
-      <Route path="/" element={
-        <ProtectedRoute>
-          <Layout><Dashboard /></Layout>
-        </ProtectedRoute>
-      } />
+      <Route path="/" element={<RootRoute />} />
       
       <Route path="/properties" element={
         <ProtectedRoute requiredPermission="properties_view">
