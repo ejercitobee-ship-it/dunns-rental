@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, yearOf, monthOf } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import type { ExpenseCategory } from '../types';
 import {
@@ -26,16 +26,10 @@ import {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-/**
- * Whether an ISO date string (YYYY-MM-DD) falls in a given month and year.
- * Parsed as plain numbers on purpose: `new Date('2026-03-01')` is UTC midnight
- * and reads as February for anyone behind UTC, which would file an expense
- * under the wrong month.
- */
+/** Whether a stored ISO date falls in a given month and year. */
 function isInMonth(dateStr: string, month: number, year: number): boolean {
   if (!dateStr) return false;
-  const [y, m] = dateStr.split('-').map(Number);
-  return m === month && y === year;
+  return monthOf(dateStr) === month && yearOf(dateStr) === year;
 }
 
 const categoryIcons: Record<ExpenseCategory, typeof Wrench> = {

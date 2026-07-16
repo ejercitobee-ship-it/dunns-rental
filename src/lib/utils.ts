@@ -40,3 +40,19 @@ export function todayLocalDate(): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${month}-${day}`;
 }
+
+// The year and month of a stored ISO date (YYYY-MM-DD), read as plain numbers.
+//
+// Never use new Date(dateStr).getFullYear() or .getMonth() for this. An ISO
+// date only string parses as UTC midnight, so for anyone behind UTC it reads
+// back as the previous day: 2026-01-01 becomes December 31, 2025. That filed
+// first of the month expenses in the wrong month, and New Year's Day expenses
+// in the wrong tax year.
+export function yearOf(dateStr: string): number {
+  return Number(dateStr?.slice(0, 4));
+}
+
+/** Month as 1 to 12, matching how rent payments store theirs. */
+export function monthOf(dateStr: string): number {
+  return Number(dateStr?.slice(5, 7));
+}

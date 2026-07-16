@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, formatMonthYear, getMonthName } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth } from '../lib/rent';
 import type { DashboardStats, Property, Tenant } from '../types';
@@ -107,10 +107,7 @@ export function Dashboard() {
       .reduce((sum, r) => sum + r.amount, 0);
 
     const monthlyExpenses = expenses
-      .filter(e => {
-        const date = new Date(e.date);
-        return date.getMonth() + 1 === currentMonth && date.getFullYear() === currentYear;
-      })
+      .filter(e => monthOf(e.date) === currentMonth && yearOf(e.date) === currentYear)
       .reduce((sum, e) => sum + e.amount, 0);
 
     // What's still owed across every elapsed month of the current year, one
@@ -153,10 +150,7 @@ export function Dashboard() {
         .reduce((sum, r) => sum + r.amount, 0);
       
       const monthExpenses = expenses
-        .filter(e => {
-          const date = new Date(e.date);
-          return date.getMonth() + 1 === month && date.getFullYear() === currentYear;
-        })
+        .filter(e => monthOf(e.date) === month && yearOf(e.date) === currentYear)
         .reduce((sum, e) => sum + e.amount, 0);
       
       return {

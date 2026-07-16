@@ -6,7 +6,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, yearOf, monthOf } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { rentIncomeForYear } from '../lib/rent';
 import {
@@ -48,8 +48,8 @@ export function TaxReport() {
 
   const taxYearData = useMemo(() => {
     const year = parseInt(yearFilter);
-    const yearExpenses = expenses.filter(e => new Date(e.date).getFullYear() === year);
-    const yearIncome = incomes.filter(i => new Date(i.date).getFullYear() === year);
+    const yearExpenses = expenses.filter(e => yearOf(e.date) === year);
+    const yearIncome = incomes.filter(i => yearOf(i.date) === year);
     // Rent actually collected lives in rent payments, not the incomes table.
     const yearPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === year);
 
@@ -119,11 +119,11 @@ export function TaxReport() {
         .filter(p => qMonths.includes(p.month))
         .reduce((sum, p) => sum + p.amount, 0);
       const qOther = yearIncome
-        .filter(i => i.source !== 'rent' && q.months.includes(new Date(i.date).getMonth()))
+        .filter(i => i.source !== 'rent' && qMonths.includes(monthOf(i.date)))
         .reduce((sum, i) => sum + i.amount, 0);
       const qIncome = qRent + qOther;
       const qExpenses = yearExpenses
-        .filter(e => q.months.includes(new Date(e.date).getMonth()))
+        .filter(e => qMonths.includes(monthOf(e.date)))
         .reduce((sum, e) => sum + (e.taxDeductible !== false ? e.amount : 0), 0);
 
       return {
