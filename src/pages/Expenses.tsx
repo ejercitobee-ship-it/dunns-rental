@@ -26,6 +26,18 @@ import {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+/**
+ * Whether an ISO date string (YYYY-MM-DD) falls in a given month and year.
+ * Parsed as plain numbers on purpose: `new Date('2026-03-01')` is UTC midnight
+ * and reads as February for anyone behind UTC, which would file an expense
+ * under the wrong month.
+ */
+function isInMonth(dateStr: string, month: number, year: number): boolean {
+  if (!dateStr) return false;
+  const [y, m] = dateStr.split('-').map(Number);
+  return m === month && y === year;
+}
+
 const categoryIcons: Record<ExpenseCategory, typeof Wrench> = {
   maintenance: Wrench,
   utilities: Zap,
@@ -60,18 +72,21 @@ export function Expenses() {
   const [view, setView] = useState<'expenses' | 'income'>('expenses');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
   const stats = useMemo(() => {
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
     const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
     const netIncome = totalIncome - totalExpenses;
-    
-    const currentMonth = new Date().getMonth() + 1;
+
     const monthlyExpenses = expenses
-      .filter(e => new Date(e.date).getMonth() + 1 === currentMonth)
+      .filter(e => isInMonth(e.date, currentMonth, currentYear))
       .reduce((sum, e) => sum + e.amount, 0);
-    
+
     return { totalExpenses, totalIncome, netIncome, monthlyExpenses };
-  }, []);
+  }, [expenses, incomes, currentMonth, currentYear]);
 
   const expenseByCategory = useMemo(() => {
     const categories: Record<string, number> = {};
@@ -81,25 +96,28 @@ export function Expenses() {
     return Object.entries(categories)
       .map(([name, value]) => ({ name: categoryLabels[name as ExpenseCategory], value }))
       .sort((a, b) => b.value - a.value);
-  }, []);
+  }, [expenses]);
 
+  // Every month of the current year. This used to stop at May because the list
+  // was hard coded to five months, and it counted any year's March in March
+  // because nothing compared the year.
   const monthlyData = useMemo(() => {
-    const months = [1, 2, 3, 4, 5];
+    const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     return months.map(month => {
       const monthExpenses = expenses
-        .filter(e => new Date(e.date).getMonth() + 1 === month)
+        .filter(e => isInMonth(e.date, month, currentYear))
         .reduce((sum, e) => sum + e.amount, 0);
       const monthIncome = incomes
-        .filter(i => new Date(i.date).getMonth() + 1 === month)
+        .filter(i => isInMonth(i.date, month, currentYear))
         .reduce((sum, i) => sum + i.amount, 0);
-      
+
       return {
-        name: new Date(2024, month - 1).toLocaleDateString('en-US', { month: 'short' }),
+        name: new Date(currentYear, month - 1).toLocaleDateString('en-US', { month: 'short' }),
         expenses: monthExpenses,
         income: monthIncome,
       };
     });
-  }, []);
+  }, [expenses, incomes, currentYear]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(expense => {
@@ -117,8 +135,8 @@ export function Expenses() {
       const matchesProperty = propertyFilter === 'all' || expense.propertyId === propertyFilter;
       
       return matchesSearch && matchesCategory && matchesProperty;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [searchTerm, categoryFilter, propertyFilter]);
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }, [expenses, properties, units, searchTerm, categoryFilter, propertyFilter]);
 
   const filteredIncome = useMemo(() => {
     return incomes.filter(income => {
@@ -134,8 +152,8 @@ export function Expenses() {
       const matchesProperty = propertyFilter === 'all' || income.propertyId === propertyFilter;
       
       return matchesSearch && matchesProperty;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [searchTerm, propertyFilter]);
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }, [incomes, properties, units, searchTerm, propertyFilter]);
 
   const getProperty = (propertyId: string) => properties.find(p => p.id === propertyId);
   const getUnit = (unitId?: string) => unitId ? units.find(u => u.id === unitId) : null;
