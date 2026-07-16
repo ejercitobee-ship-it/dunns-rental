@@ -77,29 +77,33 @@ function Hero() {
 function About() {
   return (
     <section id="about" className="bg-canvas">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20">
-        <div className="grid gap-10 md:grid-cols-2 md:items-center">
-          <div className="order-2 md:order-1">
-            <p className="eyebrow text-primary">About MH Dunn</p>
-            <h2 className="font-display text-3xl font-medium text-ink mt-3">Meet Marlene and Terry</h2>
-            <p className="mt-6 text-lg text-muted leading-relaxed">
-              MH Dunn Property is Marlene and Terry Dunn. The name is hers, MH for Marlene's initials and Dunn for the family. For more than twenty years the two of them have owned these homes and looked after them together.
-            </p>
-            <p className="mt-4 text-lg text-muted leading-relaxed">
-              Terry spent even longer than that with the Chicago Police Department. He carries the same steadiness into the buildings, and when a tenant needs something handled, he is the one who shows up. Marlene keeps it personal. She knows the homes and she knows the families, so no one who rents here is just a name on a lease.
-            </p>
-            <p className="mt-4 text-lg text-muted leading-relaxed">
-              That is really the whole of it. A small family business, where the people who own your home are the people you can call, and where your home gets the same care they give their own.
-            </p>
-          </div>
-          <div className="order-1 md:order-2">
-            <img
-              src={dunnFamily}
-              alt="Marlene and Terry Dunn"
-              className="w-full rounded-2xl border border-line object-cover shadow-[0_2px_16px_rgba(27,26,23,0.08)]"
-            />
-            <p className="mt-3 text-center text-sm text-faint">Marlene and Terry Dunn</p>
-          </div>
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-20">
+        <p className="eyebrow text-primary">About MH Dunn</p>
+        <h2 className="font-display text-3xl font-medium text-ink mt-3">Meet Marlene and Terry</h2>
+        <figure className="mt-8">
+          <img
+            src={dunnFamily}
+            alt="Marlene and Terry Dunn"
+            className="w-full rounded-2xl border border-line object-cover shadow-[0_2px_16px_rgba(27,26,23,0.08)]"
+          />
+          <figcaption className="mt-3 text-center text-sm text-faint">Marlene and Terry Dunn</figcaption>
+        </figure>
+        <div className="mt-8 space-y-4 text-lg text-muted leading-relaxed">
+          <p>
+            MH Dunn Property is a family-owned business built by Marlene and Terry Dunn. The name comes from Marlene's first and middle initials, combined with the Dunn family name.
+          </p>
+          <p>
+            For more than 20 years, they've owned and cared for these homes together. They believe that being a landlord is about more than maintaining properties. It's about creating places where people feel comfortable calling home.
+          </p>
+          <p>
+            Before dedicating his time to the business, Terry served with the Chicago Police Department for many years. He brings that same dependable, hands-on approach to every property. When something needs to be fixed or taken care of, he's often the one who shows up.
+          </p>
+          <p>
+            Marlene focuses on building relationships with tenants. She knows the properties, the people who live in them, and believes everyone deserves to be treated with respect and care, not as just another name on a lease.
+          </p>
+          <p>
+            At the end of the day, MH Dunn Property is simply a small family business that takes pride in providing well-maintained homes and being there when tenants need them. When you rent from MH Dunn Property, you're working directly with the people who own and care for your home.
+          </p>
         </div>
       </div>
     </section>
