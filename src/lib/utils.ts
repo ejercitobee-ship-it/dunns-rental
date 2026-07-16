@@ -30,3 +30,13 @@ export function formatMonthYear(month: number, year: number): string {
 export function getMonthName(month: number): string {
   return new Date(2024, month - 1).toLocaleDateString('en-US', { month: 'short' });
 }
+
+// YYYY-MM-DD from local date parts, not toISOString(): toISOString() is UTC
+// and rolls back to yesterday's date for the owner in America/Chicago late
+// in the day.
+export function todayLocalDate(): string {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+}

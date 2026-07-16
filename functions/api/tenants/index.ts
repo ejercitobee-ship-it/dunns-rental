@@ -14,9 +14,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM tenants ORDER BY created_at DESC'
-    ).all();
+    const { results } = await env.DB.prepare('SELECT * FROM tenants ORDER BY created_at DESC').all();
     return jsonOk({ success: true, data: (results || []).map(serializeTenant) });
   } catch {
     return serverError();
@@ -32,42 +30,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const body = (await request.json()) as Record<string, unknown>;
     const ec = (body.emergencyContact as EmergencyContact) || {};
 
-    if (!body.firstName || !body.lastName || !body.email) {
-      return jsonError('First name, last name and email are required', 400);
-    }
-
-    if (body.unitId) {
-      const unit = await env.DB.prepare('SELECT id FROM units WHERE id = ?').bind(body.unitId).first();
-      if (!unit) return jsonError('Unit not found', 404);
-    }
-    if (body.propertyId) {
-      const property = await env.DB.prepare('SELECT id FROM properties WHERE id = ?')
-        .bind(body.propertyId)
-        .first();
-      if (!property) return jsonError('Property not found', 404);
+    if (!body.firstName || !body.lastName) {
+      return jsonError('First and last name are required', 400);
     }
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO tenants (id, unit_id, property_id, first_name, last_name, email, phone, lease_start, lease_end,
-        monthly_rent, security_deposit, status, notes,
-        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
-        user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())`
+      `INSERT INTO tenants (id, first_name, last_name, email, phone, notes,
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
-        body.unitId ?? null,
-        body.propertyId ?? null,
         body.firstName,
         body.lastName,
-        body.email,
+        body.email ?? null,
         body.phone ?? null,
-        body.leaseStart ?? null,
-        body.leaseEnd ?? null,
-        body.monthlyRent ?? 0,
-        body.securityDeposit ?? 0,
-        body.status ?? 'active',
         body.notes ?? null,
         ec.name ?? null,
         ec.phone ?? null,

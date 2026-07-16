@@ -34,20 +34,14 @@ export function serializeUnit(r: Row) {
 }
 
 export function serializeTenant(r: Row) {
-  const hasEmergency = r.emergency_contact_name || r.emergency_contact_phone || r.emergency_contact_relationship;
+  const hasEmergency =
+    r.emergency_contact_name || r.emergency_contact_phone || r.emergency_contact_relationship;
   return {
     id: r.id,
-    unitId: r.unit_id,
-    propertyId: r.property_id,
     firstName: r.first_name,
     lastName: r.last_name,
-    email: r.email,
-    phone: r.phone,
-    leaseStart: r.lease_start,
-    leaseEnd: r.lease_end,
-    monthlyRent: r.monthly_rent,
-    securityDeposit: r.security_deposit,
-    status: r.status,
+    email: r.email ?? undefined,
+    phone: r.phone ?? undefined,
     notes: r.notes ?? undefined,
     emergencyContact: hasEmergency
       ? {
@@ -59,12 +53,29 @@ export function serializeTenant(r: Row) {
   };
 }
 
+export function serializeLease(r: Row) {
+  return {
+    id: r.id,
+    unitId: r.unit_id ?? undefined,
+    propertyId: r.property_id ?? undefined,
+    startDate: r.start_date ?? undefined,
+    endDate: r.end_date ?? undefined,
+    monthlyRent: r.monthly_rent ?? 0,
+    securityDeposit: r.security_deposit ?? 0,
+    status: r.status ?? 'active',
+    notes: r.notes ?? undefined,
+    // Filled in by the leases endpoints, which join lease_tenants.
+    tenantIds: (r.tenantIds as string[]) ?? [],
+    // Filled in by the leases endpoints, which join lease_pauses.
+    pauses: (r.pauses as { pausedAt: string; resumedAt?: string }[]) ?? [],
+  };
+}
+
 export function serializePayment(r: Row) {
   return {
     id: r.id,
-    tenantId: r.tenant_id,
-    unitId: r.unit_id,
-    propertyId: r.property_id,
+    leaseId: r.lease_id ?? undefined,
+    paidByTenantId: r.paid_by_tenant_id ?? undefined,
     amount: r.amount,
     dueDate: r.due_date,
     paidDate: r.paid_date ?? undefined,

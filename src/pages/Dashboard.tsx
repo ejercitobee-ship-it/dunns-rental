@@ -6,9 +6,10 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, getMonthName } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, getMonthName } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import type { DashboardStats } from '../types';
+import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth } from '../lib/rent';
+import type { DashboardStats, Property, Tenant } from '../types';
 import {
   BarChart,
   Bar,
@@ -84,38 +85,50 @@ function ClickableCard({ children, onClick, className = '' }: ClickableCardProps
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { properties, units, tenants, rentPayments, expenses, isLoading, error } = useApp();
+  const { properties, units, leases, rentPayments, expenses, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
     const totalUnits = units.length;
-    const occupiedUnits = units.filter(u => u.status === 'occupied').length;
-    const totalTenants = tenants.filter(t => t.status === 'active').length;
-    
+    // Occupied means the unit currently has a lease, active or paused: the
+    // people still live there even while collection is on hold. This is the
+    // same rule Properties.tsx uses, via getUnitLease.
+    const occupiedUnits = units.filter(u => !!getUnitLease(u.id)).length;
+    // A person can be double counted here only if they are on two active
+    // leases at once, so dedupe by tenant id.
+    const totalTenants = new Set(activeLeases(leases).flatMap(l => l.tenantIds)).size;
+
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
-    
+
     // Calculate monthly income from paid rent payments (not the separate incomes array)
     const monthlyIncome = rentPayments
       .filter(r => r.status === 'paid' && r.month === currentMonth && r.year === currentYear)
       .reduce((sum, r) => sum + r.amount, 0);
-    
+
     const monthlyExpenses = expenses
       .filter(e => {
         const date = new Date(e.date);
         return date.getMonth() + 1 === currentMonth && date.getFullYear() === currentYear;
       })
       .reduce((sum, e) => sum + e.amount, 0);
-    
-    const totalOwed = rentPayments
-      .filter(r => r.status === 'overdue' || r.status === 'pending')
-      .reduce((sum, r) => sum + r.amount, 0);
 
-    // Calculate projected yearly income from active tenants' monthly rent
-    const projectedYearlyIncome = tenants
-      .filter(t => t.status === 'active')
-      .reduce((sum, t) => sum + (t.monthlyRent * 12), 0);
-    
+    // What's still owed across every elapsed month of the current year, one
+    // lease at a time. Walks leasesOwingMonth rather than activeLeases so a
+    // lease that ended at turnover mid-year still counts for the months it
+    // was lived in, and this figure can never disagree with Rent Management
+    // or the Tax Report.
+    const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
+    let totalOwed = 0;
+    for (const month of elapsedMonths) {
+      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+        totalOwed += settleMonth(lease, rentPayments, month, currentYear).balance;
+      }
+    }
+
+    // Projected yearly income counts each lease once, not each occupant.
+    const projectedYearlyIncome = monthlyRevenue(leases) * 12;
+
     return {
       totalProperties,
       totalUnits,
@@ -128,7 +141,7 @@ export function Dashboard() {
       occupancyRate: totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0,
       projectedYearlyIncome,
     };
-  }, [properties, units, tenants, expenses, rentPayments]);
+  }, [properties, units, leases, expenses, rentPayments, getUnitLease]);
 
   const monthlyData = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -167,55 +180,91 @@ export function Dashboard() {
     const activities = [
       ...rentPayments
         .filter(r => r.paidDate)
-        .map(r => ({
-          type: 'payment' as const,
-          date: r.paidDate!,
-          description: `Rent payment received`,
-          amount: r.amount,
-          property: properties.find(p => p.id === r.propertyId)?.name || '',
-          tenant: tenants.find(t => t.id === r.tenantId),
-        })),
+        .map(r => {
+          const lease = leases.find(l => l.id === r.leaseId);
+          const property = lease?.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
+          return {
+            type: 'payment' as const,
+            date: r.paidDate!,
+            description: `Rent payment received`,
+            amount: r.amount,
+            property: property?.name || '',
+          };
+        }),
       ...expenses.map(e => ({
         type: 'expense' as const,
         date: e.date,
         description: e.description,
         amount: -e.amount,
         property: properties.find(p => p.id === e.propertyId)?.name || '',
-        tenant: null,
       })),
     ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10);
-    
+
     return activities;
-  }, [rentPayments, expenses, properties, tenants]);
+  }, [rentPayments, expenses, properties, leases]);
 
+  // Derived from settlement, not payment.status: nothing in the app ever
+  // writes the 'overdue' payment status, so filtering on it always found
+  // zero rows here while Rent Management (which settles each lease month
+  // instead) showed real overdue counts for the same data. A month is
+  // overdue when the lease owed it, the month has already elapsed, and
+  // settleMonth says it isn't paid, matching how Rents.tsx counts overdue.
   const overduePayments = useMemo(() => {
-    return rentPayments
-      .filter(r => r.status === 'overdue')
-      .map(r => ({
-        ...r,
-        tenant: tenants.find(t => t.id === r.tenantId),
-        property: properties.find(p => p.id === r.propertyId),
-      }));
-  }, [rentPayments, tenants, properties]);
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
 
+    const rows: {
+      key: string;
+      property?: Property;
+      occupants: Tenant[];
+      month: number;
+      year: number;
+      amount: number;
+    }[] = [];
+
+    for (const month of elapsedMonths) {
+      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+        const settlement = settleMonth(lease, rentPayments, month, currentYear);
+        if (settlement.status === 'paid') continue;
+        const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
+        rows.push({
+          key: `${lease.id}-${currentYear}-${month}`,
+          property,
+          occupants: getLeaseTenants(lease.id),
+          month,
+          year: currentYear,
+          amount: settlement.balance,
+        });
+      }
+    }
+    return rows;
+  }, [leases, rentPayments, properties, getLeaseTenants]);
+
+  // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
+  // rather than the unit's own stored status field, so the two counts can
+  // never disagree (maintenance is the one status still set by hand).
   const vacantUnits = useMemo(() => {
-    return units.filter(u => u.status === 'vacant').slice(0, 5);
-  }, [units]);
+    return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id)).slice(0, 5);
+  }, [units, getUnitLease]);
 
   const upcomingRenewals = useMemo(() => {
     const now = new Date();
-    return tenants
-      .filter(t => t.status === 'active' && t.leaseEnd)
-      .map(t => {
-        const end = new Date(t.leaseEnd);
+    return activeLeases(leases)
+      .filter(l => l.endDate)
+      .map(l => {
+        const end = new Date(l.endDate!);
         const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return { tenant: t, days, end };
+        const unit = l.unitId ? units.find(u => u.id === l.unitId) : undefined;
+        const occupants = getLeaseTenants(l.id);
+        return { lease: l, unit, occupants, days, end };
       })
       .filter(r => r.days >= 0 && r.days <= 90)
       .sort((a, b) => a.days - b.days);
-  }, [tenants]);
+  }, [leases, units, getLeaseTenants]);
 
   if (isLoading) {
     return (
@@ -298,7 +347,7 @@ export function Dashboard() {
           <div className="flex-1">
             <h3 className="font-semibold text-red-900">Outstanding Payments</h3>
             <p className="text-danger mt-1">
-              You have {formatCurrency(stats.totalOwed)} in overdue or pending rent payments.
+              You have {formatCurrency(stats.totalOwed)} in unpaid rent so far this year.
             </p>
           </div>
           <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2">
@@ -487,16 +536,20 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {upcomingRenewals.slice(0, 6).map(({ tenant, days, end }) => {
+              {upcomingRenewals.slice(0, 6).map(({ lease, unit, occupants, days, end }) => {
                 const tone = days <= 30 ? 'destructive' : days <= 60 ? 'warning' : 'secondary';
+                const occupantNames = occupants.length > 0
+                  ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
+                  : 'Occupant unknown';
                 return (
                   <div
-                    key={tenant.id}
+                    key={lease.id}
                     className="flex items-center justify-between py-2.5 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
                     onClick={() => navigate('/tenants')}
                   >
                     <div>
-                      <p className="font-medium text-ink">{tenant.firstName} {tenant.lastName}</p>
+                      <p className="font-medium text-ink">{unit ? `Unit ${unit.unitNumber}` : 'Unit unknown'}</p>
+                      <p className="text-sm text-muted">{occupantNames}</p>
                       <p className="text-sm text-muted">Lease ends {formatDate(end.toISOString())}</p>
                     </div>
                     <Badge variant={tone}>
@@ -574,31 +627,33 @@ export function Dashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-line">
-                    <th className="text-left py-3 px-4 font-semibold text-ink">Tenant</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink">Occupants</th>
                     <th className="text-left py-3 px-4 font-semibold text-ink">Property</th>
-                    <th className="text-left py-3 px-4 font-semibold text-ink">Due Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink">Period</th>
                     <th className="text-right py-3 px-4 font-semibold text-ink">Amount</th>
                     <th className="text-center py-3 px-4 font-semibold text-ink">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {overduePayments.slice(0, 5).map(payment => (
-                    <tr 
-                      key={payment.id} 
+                  {overduePayments.slice(0, 5).map(row => (
+                    <tr
+                      key={row.key}
                       className="border-b border-line last:border-0 hover:bg-danger-soft/50 cursor-pointer transition-colors"
                       onClick={() => navigate('/rents')}
                     >
                       <td className="py-3 px-4 font-medium text-ink">
-                        {payment.tenant?.firstName} {payment.tenant?.lastName}
+                        {row.occupants.length > 0
+                          ? row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
+                          : '—'}
                       </td>
                       <td className="py-3 px-4 text-muted">
-                        {payment.property?.name}
+                        {row.property?.name}
                       </td>
                       <td className="py-3 px-4 text-muted">
-                        {formatDate(payment.dueDate)}
+                        {formatMonthYear(row.month, row.year)}
                       </td>
                       <td className="py-3 px-4 text-right font-bold text-ink">
-                        {formatCurrency(payment.amount)}
+                        {formatCurrency(row.amount)}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <Badge variant="destructive">Overdue</Badge>

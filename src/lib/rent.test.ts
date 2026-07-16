@@ -1,0 +1,336 @@
+import { describe, it, expect } from 'vitest';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths } from './rent';
+import type { Lease, RentPayment } from './rent';
+
+const lease = (over: Partial<Lease> = {}): Lease => ({
+  id: 'L1',
+  unitId: 'U1',
+  propertyId: 'P1',
+  startDate: '2026-01-01',
+  endDate: '2027-01-01',
+  monthlyRent: 1325,
+  securityDeposit: 0,
+  status: 'active',
+  tenantIds: [],
+  pauses: [],
+  ...over,
+});
+
+const payment = (over: Partial<RentPayment> = {}): RentPayment => ({
+  id: 'PMT1',
+  leaseId: 'L1',
+  amount: 1325,
+  month: 7,
+  year: 2026,
+  status: 'paid',
+  ...over,
+});
+
+describe('monthlyRevenue', () => {
+  it('counts a lease once no matter how many people live there', () => {
+    // The double-counting bug: two occupants must not mean two rents.
+    expect(monthlyRevenue([lease()])).toBe(1325);
+  });
+
+  it('adds up multiple active leases', () => {
+    expect(monthlyRevenue([lease(), lease({ id: 'L2', monthlyRent: 1300 })])).toBe(2625);
+  });
+
+  it('ignores ended and paused leases', () => {
+    const leases = [
+      lease(),
+      lease({ id: 'L2', status: 'ended', monthlyRent: 999 }),
+      lease({ id: 'L3', status: 'paused', monthlyRent: 888 }),
+    ];
+    expect(monthlyRevenue(leases)).toBe(1325);
+  });
+
+  it('returns 0 with no leases', () => {
+    expect(monthlyRevenue([])).toBe(0);
+  });
+});
+
+describe('activeLeases', () => {
+  it('returns only active leases', () => {
+    const result = activeLeases([lease(), lease({ id: 'L2', status: 'ended' })]);
+    expect(result.map(l => l.id)).toEqual(['L1']);
+  });
+});
+
+describe('settleMonth', () => {
+  it('settles when one person pays in full', () => {
+    const s = settleMonth(lease(), [payment()], 7, 2026);
+    expect(s).toEqual({ due: 1325, paid: 1325, balance: 0, status: 'paid' });
+  });
+
+  it('settles when roommates split the month and it adds up', () => {
+    const payments = [
+      payment({ id: 'A', amount: 700, paidByTenantId: 'T1' }),
+      payment({ id: 'B', amount: 625, paidByTenantId: 'T2' }),
+    ];
+    const s = settleMonth(lease(), payments, 7, 2026);
+    expect(s.paid).toBe(1325);
+    expect(s.status).toBe('paid');
+    expect(s.balance).toBe(0);
+  });
+
+  it('reports partial with the remaining balance when short', () => {
+    const s = settleMonth(lease(), [payment({ amount: 700 })], 7, 2026);
+    expect(s).toEqual({ due: 1325, paid: 700, balance: 625, status: 'partial' });
+  });
+
+  it('reports unpaid when nothing was paid', () => {
+    const s = settleMonth(lease(), [], 7, 2026);
+    expect(s).toEqual({ due: 1325, paid: 0, balance: 1325, status: 'unpaid' });
+  });
+
+  it('ignores payments from other months, years and leases', () => {
+    const payments = [
+      payment({ id: 'A', month: 6 }),
+      payment({ id: 'B', year: 2025 }),
+      payment({ id: 'C', leaseId: 'OTHER' }),
+    ];
+    expect(settleMonth(lease(), payments, 7, 2026).paid).toBe(0);
+  });
+
+  it('does not fail on floating point drift', () => {
+    const payments = [
+      payment({ id: 'A', amount: 441.66 }),
+      payment({ id: 'B', amount: 441.67 }),
+      payment({ id: 'C', amount: 441.67 }),
+    ];
+    const s = settleMonth(lease({ monthlyRent: 1325 }), payments, 7, 2026);
+    expect(s.status).toBe('paid');
+    expect(s.balance).toBe(0);
+  });
+
+  it('treats overpayment as paid with no negative balance', () => {
+    const s = settleMonth(lease(), [payment({ amount: 1400 })], 7, 2026);
+    expect(s.status).toBe('paid');
+    expect(s.balance).toBe(0);
+  });
+});
+
+describe('leaseCoversMonth', () => {
+  // A lease starting April 10 and ending August 20: full months either way,
+  // no proration.
+  const midYearLease = lease({ startDate: '2026-04-10', endDate: '2026-08-20' });
+
+  it('is false for a month before the start', () => {
+    expect(leaseCoversMonth(midYearLease, 3, 2026)).toBe(false);
+  });
+
+  it('is true for the start month itself', () => {
+    expect(leaseCoversMonth(midYearLease, 4, 2026)).toBe(true);
+  });
+
+  it('is true for a month in the middle of the term', () => {
+    expect(leaseCoversMonth(midYearLease, 6, 2026)).toBe(true);
+  });
+
+  it('is true for the end month itself', () => {
+    expect(leaseCoversMonth(midYearLease, 8, 2026)).toBe(true);
+  });
+
+  it('is false for a month after the end', () => {
+    expect(leaseCoversMonth(midYearLease, 9, 2026)).toBe(false);
+  });
+
+  it('is true far in the future when there is no endDate', () => {
+    const ongoing = lease({ startDate: '2026-04-10', endDate: undefined });
+    expect(leaseCoversMonth(ongoing, 12, 2030)).toBe(true);
+  });
+
+  it('is true with no lower bound when there is no startDate', () => {
+    const noStart = lease({ startDate: undefined, endDate: '2027-01-01' });
+    expect(leaseCoversMonth(noStart, 1, 2020)).toBe(true);
+  });
+
+  it('is true for the one month a lease both starts and ends in', () => {
+    const oneMonth = lease({ startDate: '2026-04-10', endDate: '2026-04-20' });
+    expect(leaseCoversMonth(oneMonth, 4, 2026)).toBe(true);
+  });
+});
+
+describe('paymentsForMonth', () => {
+  it('does not count a payment that is not marked paid', () => {
+    const payments = [payment({ status: 'pending' })];
+    expect(paymentsForMonth('L1', payments, 7, 2026)).toEqual([]);
+  });
+
+  it('does not count a partial-status payment', () => {
+    // Pinned per the owner's decision: a `partial` row is not money in hand
+    // for settlement purposes, `settleMonth` derives "partial" itself from
+    // the amounts actually paid.
+    const payments = [payment({ status: 'partial', amount: 700 })];
+    expect(paymentsForMonth('L1', payments, 7, 2026)).toEqual([]);
+  });
+});
+
+describe('leasesOwingMonth', () => {
+  // The Critical fix: a lease ended at turnover still owed, and was paid,
+  // every month its term covered before that. Filtering on activeLeases
+  // instead would erase that income from the year's totals.
+  it('still counts an ended lease for a month its term covered', () => {
+    const ended = lease({ status: 'ended', startDate: '2026-01-01', endDate: '2026-06-30' });
+    expect(leasesOwingMonth([ended], 3, 2026).map(l => l.id)).toEqual(['L1']);
+  });
+
+  it('excludes a lease whose term does not cover the month', () => {
+    const notYetStarted = lease({ startDate: '2026-04-01', endDate: '2026-06-30' });
+    expect(leasesOwingMonth([notYetStarted], 3, 2026)).toEqual([]);
+  });
+
+  // The owner's decision and the reason this changed from a single pausedAt
+  // field to a table of intervals: a pause that has ENDED must keep the gap
+  // it created unbilled forever, not just until the ceiling date. Pause June
+  // 20, resume October 5: June is still owed in full (pausing mid-month bills
+  // the whole month), July/August/September are the gap and stay unbilled,
+  // and October is owed in full too, symmetric with how a lease starting
+  // mid-month owes that whole month. November, safely past the interval, is
+  // unaffected.
+  it('excludes only the months strictly between a closed pause interval', () => {
+    const paused = lease({
+      status: 'active',
+      pauses: [{ pausedAt: '2026-06-20', resumedAt: '2026-10-05' }],
+      startDate: '2026-01-01',
+      endDate: '2027-01-01',
+    });
+    expect(leasesOwingMonth([paused], 6, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([paused], 7, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 8, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 9, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 10, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([paused], 11, 2026).map(l => l.id)).toEqual(['L1']);
+  });
+
+  it('excludes every month after an OPEN pause, with no resume to bound it', () => {
+    const paused = lease({
+      status: 'paused',
+      pauses: [{ pausedAt: '2026-06-20' }],
+      startDate: '2026-01-01',
+      endDate: undefined,
+    });
+    expect(leasesOwingMonth([paused], 6, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([paused], 7, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 12, 2026)).toEqual([]);
+  });
+
+  // What a single pausedAt field could never express: a lease paused,
+  // resumed, and paused again keeps BOTH gaps unbilled, not just the most
+  // recent one.
+  it('keeps both gaps unbilled across two separate pause intervals', () => {
+    const twicePaused = lease({
+      status: 'paused',
+      pauses: [
+        { pausedAt: '2026-03-10', resumedAt: '2026-05-01' },
+        { pausedAt: '2026-08-15' },
+      ],
+      startDate: '2026-01-01',
+      endDate: undefined,
+    });
+    expect(leasesOwingMonth([twicePaused], 3, 2026).map(l => l.id)).toEqual(['L1']); // first pause month: owed
+    expect(leasesOwingMonth([twicePaused], 4, 2026)).toEqual([]); // inside first gap
+    expect(leasesOwingMonth([twicePaused], 5, 2026).map(l => l.id)).toEqual(['L1']); // first resume month: owed
+    expect(leasesOwingMonth([twicePaused], 6, 2026).map(l => l.id)).toEqual(['L1']); // between the two intervals
+    expect(leasesOwingMonth([twicePaused], 7, 2026).map(l => l.id)).toEqual(['L1']); // between the two intervals
+    expect(leasesOwingMonth([twicePaused], 8, 2026).map(l => l.id)).toEqual(['L1']); // second pause month: owed
+    expect(leasesOwingMonth([twicePaused], 9, 2026)).toEqual([]); // inside second (open) gap, forever
+  });
+
+  // Ending a paused lease used to resurrect the rent that was never billed,
+  // because ending only stamped endDate and left the single pausedAt field
+  // alone. This pins the same regression for the interval shape: an interval
+  // that never got a resumedAt keeps excluding months even past the lease's
+  // own end month, since the term's "end month owed in full" rule does not
+  // override an unresolved pause.
+  it('keeps the pause ceiling after a paused lease is ended, when the pause was never resumed', () => {
+    const endedWhilePaused = lease({
+      status: 'ended',
+      pauses: [{ pausedAt: '2026-06-20' }],
+      startDate: '2026-01-01',
+      endDate: '2026-10-15',
+    });
+    expect(leasesOwingMonth([endedWhilePaused], 6, 2026).map(l => l.id)).toEqual(['L1']);
+    expect(leasesOwingMonth([endedWhilePaused], 7, 2026)).toEqual([]);
+    expect(leasesOwingMonth([endedWhilePaused], 10, 2026)).toEqual([]);
+  });
+
+  // An imported paused lease with no recorded interval (or any other legacy
+  // shape that lost track of when the pause happened) must not invent a stop
+  // date in either direction. Guessing "still owed in the past" would bill
+  // nothing wrong here, but guessing "paused as of today" would invent rent
+  // on a lease paused long ago. The only reading that cannot invent rent is
+  // to owe nothing at all.
+  it('treats a paused lease with an empty pauses array as owing nothing, past or present', () => {
+    const paused = lease({
+      status: 'paused',
+      pauses: [],
+      startDate: '2020-01-01',
+      endDate: undefined,
+    });
+    expect(leasesOwingMonth([paused], 3, 2025)).toEqual([]);
+    const now = new Date();
+    expect(leasesOwingMonth([paused], now.getMonth() + 1, now.getFullYear())).toEqual([]);
+  });
+
+  // Fix 5: bad data (any import source, not just the UI) cannot bill an
+  // ended tenant forever just because endDate was left blank.
+  it('treats an ended lease with no endDate as owing nothing', () => {
+    const ended = lease({ status: 'ended', startDate: '2024-01-01', endDate: undefined });
+    expect(leasesOwingMonth([ended], 6, 2026)).toEqual([]);
+  });
+});
+
+describe('rentIncomeForYear', () => {
+  it('sums paid payments for the year and ignores non-paid ones', () => {
+    const payments = [
+      payment({ id: 'A', status: 'paid', amount: 1000, year: 2026 }),
+      payment({ id: 'B', status: 'pending', amount: 500, year: 2026 }),
+      payment({ id: 'C', status: 'partial', amount: 300, year: 2026 }),
+      payment({ id: 'D', status: 'overdue', amount: 900, year: 2026 }),
+    ];
+    expect(rentIncomeForYear(payments, 2026)).toBe(1000);
+  });
+
+  // The Tax tab shows four quarters above a total. They have to reconcile, so
+  // the quarters are scoped by month using the same paid-only definition the
+  // total uses. The payment in month 11 belongs to no lease's owed term here,
+  // which is exactly the case that used to make the quarters fall short.
+  it('splits into quarters that add back up to the year', () => {
+    const payments = [
+      payment({ id: 'A', status: 'paid', amount: 1000, month: 2, year: 2026 }),
+      payment({ id: 'B', status: 'paid', amount: 250.5, month: 5, year: 2026 }),
+      payment({ id: 'C', status: 'paid', amount: 700, month: 8, year: 2026 }),
+      payment({ id: 'D', status: 'paid', amount: 49.5, month: 11, year: 2026 }),
+      payment({ id: 'E', status: 'pending', amount: 999, month: 11, year: 2026 }),
+      payment({ id: 'F', status: 'paid', amount: 5000, month: 2, year: 2025 }),
+    ];
+    const quarters = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]];
+    const byQuarter = quarters.map(months => rentIncomeForMonths(payments, months, 2026));
+    expect(byQuarter).toEqual([1000, 250.5, 700, 49.5]);
+    const summed = byQuarter.reduce((sum, q) => sum + q, 0);
+    expect(summed).toBe(rentIncomeForYear(payments, 2026));
+  });
+
+  it('ignores payments from other years', () => {
+    const payments = [
+      payment({ id: 'A', status: 'paid', amount: 1000, year: 2025 }),
+      payment({ id: 'B', status: 'paid', amount: 2000, year: 2026 }),
+    ];
+    expect(rentIncomeForYear(payments, 2026)).toBe(2000);
+  });
+
+  it('counts a paid payment even when its month falls outside any lease boundary', () => {
+    // A payment can be recorded against a month after a lease's endDate (bad
+    // data, or a late payment for a stay that already ended). For tax
+    // purposes the cash received IS the income regardless, so this still
+    // counts even though leasesOwingMonth would exclude that lease-month.
+    const payments = [payment({ id: 'A', status: 'paid', amount: 1325, month: 12, year: 2026 })];
+    expect(rentIncomeForYear(payments, 2026)).toBe(1325);
+  });
+
+  it('returns 0 with no paid payments', () => {
+    expect(rentIncomeForYear([payment({ status: 'pending' })], 2026)).toBe(0);
+  });
+});

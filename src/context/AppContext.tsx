@@ -1,20 +1,23 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
-import type { Property, Unit, Tenant, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
+import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
 import {
   propertiesApi,
   unitsApi,
   tenantsApi,
+  leasesApi,
   paymentsApi,
   expensesApi,
   incomesApi,
   maintenanceApi,
 } from '../lib/api';
 import { useAuth } from './AuthContext';
+import { todayLocalDate } from '../lib/utils';
 
 interface AppState {
   properties: Property[];
   units: Unit[];
   tenants: Tenant[];
+  leases: Lease[];
   rentPayments: RentPayment[];
   expenses: Expense[];
   incomes: Income[];
@@ -36,6 +39,9 @@ type Action =
   | { type: 'ADD_TENANT'; payload: Tenant }
   | { type: 'UPDATE_TENANT'; payload: Tenant }
   | { type: 'DELETE_TENANT'; payload: string }
+  | { type: 'ADD_LEASE'; payload: Lease }
+  | { type: 'UPDATE_LEASE'; payload: Lease }
+  | { type: 'DELETE_LEASE'; payload: string }
   | { type: 'ADD_EXPENSE'; payload: Expense }
   | { type: 'UPDATE_EXPENSE'; payload: Expense }
   | { type: 'DELETE_EXPENSE'; payload: string }
@@ -50,6 +56,7 @@ const initialState: AppState = {
   properties: [],
   units: [],
   tenants: [],
+  leases: [],
   rentPayments: [],
   expenses: [],
   incomes: [],
@@ -90,33 +97,28 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         units: state.units.filter(u => u.id !== action.payload),
-        tenants: state.tenants.filter(t => t.unitId !== action.payload),
       };
     case 'ADD_TENANT':
-      return {
-        ...state,
-        tenants: [...state.tenants, action.payload],
-        units: state.units.map(u =>
-          u.id === action.payload.unitId ? { ...u, status: 'occupied' as const } : u
-        ),
-      };
+      return { ...state, tenants: [...state.tenants, action.payload] };
     case 'UPDATE_TENANT':
       return {
         ...state,
         tenants: state.tenants.map(t => t.id === action.payload.id ? action.payload : t),
       };
-    case 'DELETE_TENANT': {
-      const tenant = state.tenants.find(t => t.id === action.payload);
+    case 'DELETE_TENANT':
       return {
         ...state,
         tenants: state.tenants.filter(t => t.id !== action.payload),
-        units: tenant
-          ? state.units.map(u =>
-              u.id === tenant.unitId ? { ...u, status: 'vacant' as const } : u
-            )
-          : state.units,
       };
-    }
+    case 'ADD_LEASE':
+      return { ...state, leases: [action.payload, ...state.leases] };
+    case 'UPDATE_LEASE':
+      return {
+        ...state,
+        leases: state.leases.map(l => (l.id === action.payload.id ? action.payload : l)),
+      };
+    case 'DELETE_LEASE':
+      return { ...state, leases: state.leases.filter(l => l.id !== action.payload) };
     case 'ADD_EXPENSE':
       return { ...state, expenses: [...state.expenses, action.payload] };
     case 'UPDATE_EXPENSE':
@@ -158,18 +160,21 @@ interface AppContextType extends AppState {
   dispatch: React.Dispatch<Action>;
   refreshData: () => Promise<void>;
   getPropertyUnits: (propertyId: string) => Unit[];
-  getUnitTenant: (unitId: string) => Tenant | undefined;
-  getPropertyTenants: (propertyId: string) => Tenant[];
-  getAvailableUnits: (propertyId?: string) => Unit[];
-  addProperty: (property: Omit<Property, 'id'>) => Promise<void>;
+  getUnitLease: (unitId: string) => Lease | undefined;
+  getLeaseTenants: (leaseId: string) => Tenant[];
+  getTenantLeases: (tenantId: string) => Lease[];
+  addProperty: (property: Omit<Property, 'id'>) => Promise<Property>;
   updateProperty: (property: Property) => Promise<void>;
   deleteProperty: (id: string) => Promise<void>;
-  addUnit: (unit: Omit<Unit, 'id'>) => Promise<void>;
+  addUnit: (unit: Omit<Unit, 'id'>) => Promise<Unit>;
   updateUnit: (unit: Unit) => Promise<void>;
   deleteUnit: (id: string) => Promise<void>;
-  addTenant: (tenant: Omit<Tenant, 'id'>) => Promise<void>;
-  updateTenant: (id: string, updates: Partial<Tenant>) => Promise<void>;
+  addTenant: (tenant: Omit<Tenant, 'id'>) => Promise<Tenant>;
+  updateTenant: (tenant: Tenant) => Promise<void>;
   deleteTenant: (id: string) => Promise<void>;
+  addLease: (lease: Omit<Lease, 'id'> & { pausedAt?: string }) => Promise<Lease>;
+  updateLease: (lease: Lease & { statusChangedOn?: string }) => Promise<void>;
+  deleteLease: (id: string) => Promise<void>;
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
   addRentPayment: (payment: Omit<RentPayment, 'id'>) => Promise<void>;
@@ -190,10 +195,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const [properties, units, tenants, rentPayments, expenses, incomes, maintenance] = await Promise.all([
+      const [properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance] = await Promise.all([
         propertiesApi.getAll(),
         unitsApi.getAll(),
         tenantsApi.getAll(),
+        leasesApi.getAll(),
         paymentsApi.getAll(),
         expensesApi.getAll(),
         incomesApi.getAll(),
@@ -201,7 +207,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       dispatch({
         type: 'SET_STATE',
-        payload: { properties, units, tenants, rentPayments, expenses, incomes, maintenance, isLoading: false },
+        payload: { properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, isLoading: false },
       });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
@@ -218,7 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({
         type: 'SET_STATE',
         payload: {
-          properties: [], units: [], tenants: [], rentPayments: [], expenses: [], incomes: [], maintenance: [],
+          properties: [], units: [], tenants: [], leases: [], rentPayments: [], expenses: [], incomes: [], maintenance: [],
           isLoading: false, error: null,
         },
       });
@@ -228,20 +234,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getPropertyUnits = useCallback((propertyId: string) =>
     state.units.filter(u => u.propertyId === propertyId), [state.units]);
 
-  const getUnitTenant = useCallback((unitId: string) =>
-    state.tenants.find(t => t.unitId === unitId && t.status === 'active'), [state.tenants]);
+  const getUnitLease = useCallback(
+    (unitId: string) => state.leases.find(l => l.unitId === unitId && l.status !== 'ended'),
+    [state.leases]
+  );
 
-  const getPropertyTenants = useCallback((propertyId: string) =>
-    state.tenants.filter(t => t.propertyId === propertyId && t.status === 'active'), [state.tenants]);
+  const getLeaseTenants = useCallback(
+    (leaseId: string) => {
+      const lease = state.leases.find(l => l.id === leaseId);
+      if (!lease) return [];
+      return state.tenants.filter(t => lease.tenantIds.includes(t.id));
+    },
+    [state.leases, state.tenants]
+  );
 
-  const getAvailableUnits = useCallback((propertyId?: string) =>
-    state.units.filter(u =>
-      u.status === 'vacant' && (!propertyId || u.propertyId === propertyId)
-    ), [state.units]);
+  const getTenantLeases = useCallback(
+    (tenantId: string) => state.leases.filter(l => l.tenantIds.includes(tenantId)),
+    [state.leases]
+  );
 
   const addProperty = async (property: Omit<Property, 'id'>) => {
     const newProperty = await propertiesApi.create(property);
     dispatch({ type: 'ADD_PROPERTY', payload: newProperty });
+    return newProperty;
   };
 
   const updateProperty = async (property: Property) => {
@@ -257,6 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addUnit = async (unit: Omit<Unit, 'id'>) => {
     const newUnit = await unitsApi.create(unit);
     dispatch({ type: 'ADD_UNIT', payload: newUnit });
+    return newUnit;
   };
 
   const updateUnit = async (unit: Unit) => {
@@ -270,21 +286,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addTenant = async (tenant: Omit<Tenant, 'id'>) => {
-    const newTenant = await tenantsApi.create(tenant);
-    dispatch({ type: 'ADD_TENANT', payload: newTenant });
+    const created = await tenantsApi.create(tenant);
+    dispatch({ type: 'ADD_TENANT', payload: created });
+    return created;
   };
 
-  const updateTenant = async (id: string, updates: Partial<Tenant>) => {
-    const tenant = state.tenants.find(t => t.id === id);
-    if (tenant) {
-      const updated = await tenantsApi.update(id, { ...tenant, ...updates });
-      dispatch({ type: 'UPDATE_TENANT', payload: updated });
-    }
+  const updateTenant = async (tenant: Tenant) => {
+    const updated = await tenantsApi.update(tenant.id, tenant);
+    dispatch({ type: 'UPDATE_TENANT', payload: updated });
   };
 
   const deleteTenant = async (id: string) => {
     await tenantsApi.delete(id);
     dispatch({ type: 'DELETE_TENANT', payload: id });
+  };
+
+  const addLease = async (lease: Omit<Lease, 'id'> & { pausedAt?: string }) => {
+    const created = await leasesApi.create(lease);
+    dispatch({ type: 'ADD_LEASE', payload: created });
+    return created;
+  };
+
+  const updateLease = async (lease: Lease & { statusChangedOn?: string }) => {
+    const updated = await leasesApi.update(lease.id, lease);
+    dispatch({ type: 'UPDATE_LEASE', payload: updated });
+  };
+
+  const deleteLease = async (id: string) => {
+    await leasesApi.delete(id);
+    dispatch({ type: 'DELETE_LEASE', payload: id });
   };
 
   const addExpense = async (expense: Omit<Expense, 'id'>) => {
@@ -312,7 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = await paymentsApi.update(id, {
       ...payment,
       status,
-      paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : undefined,
+      paidDate: status === 'paid' ? todayLocalDate() : undefined,
       receivedDate: paymentDetails?.receivedDate,
       paymentMethod: paymentDetails?.paymentMethod,
       uploadedBy: paymentDetails?.uploadedBy,
@@ -347,9 +377,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch,
         refreshData,
         getPropertyUnits,
-        getUnitTenant,
-        getPropertyTenants,
-        getAvailableUnits,
+        getUnitLease,
+        getLeaseTenants,
+        getTenantLeases,
         addProperty,
         updateProperty,
         deleteProperty,
@@ -359,6 +389,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addTenant,
         updateTenant,
         deleteTenant,
+        addLease,
+        updateLease,
+        deleteLease,
         addExpense,
         addIncome,
         addRentPayment,

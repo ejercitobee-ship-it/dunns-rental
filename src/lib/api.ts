@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
+import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
 
 const API_BASE = '/api';
 
@@ -175,6 +175,23 @@ export const tenantsApi = {
     apiRequest(`/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/tenants/${id}`, { method: 'DELETE' }),
+};
+
+// Leases API
+export const leasesApi = {
+  getAll: (): Promise<Lease[]> => apiRequest('/leases'),
+  getById: (id: string): Promise<Lease> => apiRequest(`/leases/${id}`),
+  // `pausedAt` is not part of the Lease shape (the server owns `pauses` and
+  // stamps it from status transitions); it exists only so the CSV importer
+  // can ask the POST to open an interval for an imported paused lease.
+  create: (data: Omit<Lease, 'id'> & { pausedAt?: string }): Promise<Lease> =>
+    apiRequest('/leases', { method: 'POST', body: JSON.stringify(data) }),
+  // `statusChangedOn` (YYYY-MM-DD, the OWNER's local day) tells the server
+  // which day to stamp a pause/resume interval on, since the server has no
+  // timezone of its own to derive "today" from.
+  update: (id: string, data: Lease & { statusChangedOn?: string }): Promise<Lease> =>
+    apiRequest(`/leases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiRequest(`/leases/${id}`, { method: 'DELETE' }),
 };
 
 // Payments API

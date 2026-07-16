@@ -5,9 +5,23 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
+import type { Lease, Tenant } from '../types';
+
+/** One row of the rent roll: a single active lease and this month's settlement. */
+interface RentRollRow {
+  lease: Lease;
+  property: string;
+  unit: string;
+  occupants: Tenant[];
+  rent: number;
+  leaseEnd?: string;
+  /** null when the lease's term doesn't cover this month at all, so it owes nothing yet or anymore. */
+  settlement: MonthSettlement | null;
+}
 
 export function Reports() {
-  const { tenants, properties, units, rentPayments } = useApp();
+  const { properties, units, leases, rentPayments, getLeaseTenants } = useApp();
 
   const propertyName = (id?: string) => properties.find(p => p.id === id)?.name || '—';
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber || '—';
@@ -16,74 +30,63 @@ export function Reports() {
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  // Rent roll: one row per active tenant, with this month's payment status.
-  const rentRoll = useMemo(() => {
-    return tenants
-      .filter(t => t.status === 'active')
-      .map(t => {
-        const thisMonth = rentPayments.find(
-          p => p.tenantId === t.id && p.month === currentMonth && p.year === currentYear
-        );
-        const status = thisMonth?.status || 'not_recorded';
+  // Rent roll: one row per active lease, counted once regardless of how many
+  // people occupy it, with this month's payment status.
+  const rentRoll = useMemo<RentRollRow[]>(() => {
+    return activeLeases(leases)
+      .map(lease => {
+        const covers = leaseCoversMonth(lease, currentMonth, currentYear);
         return {
-          tenant: t,
-          property: propertyName(t.propertyId),
-          unit: unitNumber(t.unitId),
-          rent: t.monthlyRent || 0,
-          leaseEnd: t.leaseEnd,
-          status,
+          lease,
+          property: propertyName(lease.propertyId),
+          unit: unitNumber(lease.unitId),
+          occupants: getLeaseTenants(lease.id),
+          rent: lease.monthlyRent || 0,
+          leaseEnd: lease.endDate,
+          settlement: covers ? settleMonth(lease, rentPayments, currentMonth, currentYear) : null,
         };
       })
       .sort((a, b) => a.property.localeCompare(b.property));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenants, rentPayments, properties, units, currentMonth, currentYear]);
+  }, [leases, rentPayments, properties, units, getLeaseTenants, currentMonth, currentYear]);
 
   const totals = useMemo(() => {
-    const scheduled = rentRoll.reduce((s, r) => s + r.rent, 0);
+    const scheduled = monthlyRevenue(leases);
     const collected = rentPayments
       .filter(p => p.status === 'paid' && p.month === currentMonth && p.year === currentYear)
       .reduce((s, p) => s + p.amount, 0);
-    const outstanding = rentPayments
-      .filter(p => p.status === 'overdue' || p.status === 'pending')
-      .reduce((s, p) => s + p.amount, 0);
+    // Only leases whose term actually covers this month can owe anything for
+    // it: a lease starting next month is never counted as outstanding today.
+    const outstanding = rentRoll.reduce((s, r) => s + (r.settlement?.balance || 0), 0);
     return { scheduled, collected, outstanding };
-  }, [rentRoll, rentPayments, currentMonth, currentYear]);
+  }, [leases, rentPayments, rentRoll, currentMonth, currentYear]);
 
-  // Delinquency: every unpaid (overdue/pending) payment.
+  // Outstanding balances: every active lease whose current month settled as
+  // partial or unpaid.
   const delinquencies = useMemo(() => {
-    return rentPayments
-      .filter(p => p.status === 'overdue' || p.status === 'pending')
-      .map(p => {
-        const t = tenants.find(x => x.id === p.tenantId);
-        return {
-          payment: p,
-          name: t ? `${t.firstName} ${t.lastName}` : 'Unknown tenant',
-          property: propertyName(p.propertyId),
-        };
-      })
-      .sort((a, b) => b.payment.amount - a.payment.amount);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rentPayments, tenants, properties]);
+    return rentRoll
+      .filter(r => r.settlement && r.settlement.status !== 'paid')
+      .sort((a, b) => (b.settlement?.balance || 0) - (a.settlement?.balance || 0));
+  }, [rentRoll]);
 
-  const statusView = (status: string) => {
+  const statusView = (status: MonthSettlement['status'] | null) => {
     switch (status) {
       case 'paid': return <Badge variant="success">Paid</Badge>;
-      case 'overdue': return <Badge variant="destructive">Overdue</Badge>;
-      case 'pending': return <Badge variant="warning">Pending</Badge>;
       case 'partial': return <Badge variant="secondary">Partial</Badge>;
-      default: return <Badge variant="secondary">Not recorded</Badge>;
+      case 'unpaid': return <Badge variant="destructive">Unpaid</Badge>;
+      default: return <Badge variant="secondary">Not due yet</Badge>;
     }
   };
 
   const exportRentRoll = () => {
-    const headers = ['Property', 'Unit', 'Tenant', 'Monthly Rent', 'Lease End', 'This Month'];
+    const headers = ['Property', 'Unit', 'Occupants', 'Monthly Rent', 'Lease End', 'This Month'];
     const rows = rentRoll.map(r => [
       r.property,
       r.unit,
-      `${r.tenant.firstName} ${r.tenant.lastName}`,
+      r.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', '),
       r.rent,
       r.leaseEnd || '',
-      r.status,
+      r.settlement?.status || 'not_due',
     ]);
     const csv = [headers, ...rows].map(row => row.map(c => `"${String(c ?? '')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -113,7 +116,7 @@ export function Reports() {
         {[
           { label: 'Scheduled Rent', value: formatCurrency(totals.scheduled), sub: 'Active leases, monthly' },
           { label: 'Collected This Month', value: formatCurrency(totals.collected), sub: 'Marked paid' },
-          { label: 'Outstanding', value: formatCurrency(totals.outstanding), sub: 'Overdue + pending' },
+          { label: 'Outstanding', value: formatCurrency(totals.outstanding), sub: 'Balance due this month' },
         ].map(s => (
           <Card key={s.label}>
             <div className="p-5">
@@ -141,7 +144,7 @@ export function Reports() {
               <thead>
                 <tr className="border-b border-line bg-canvas">
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property & Unit</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Tenant</th>
+                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Occupants</th>
                   <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Monthly Rent</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Lease Ends</th>
                   <th className="text-center py-3 px-4 font-semibold text-ink text-sm">This Month</th>
@@ -149,15 +152,17 @@ export function Reports() {
               </thead>
               <tbody>
                 {rentRoll.map(r => (
-                  <tr key={r.tenant.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
+                  <tr key={r.lease.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
                     <td className="py-3 px-4 text-sm">
                       <span className="text-ink">{r.property}</span>
                       <span className="text-faint"> · {r.unit}</span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-ink">{r.tenant.firstName} {r.tenant.lastName}</td>
+                    <td className="py-3 px-4 text-sm text-ink">
+                      {r.occupants.length > 0 ? r.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') : '—'}
+                    </td>
                     <td className="py-3 px-4 text-right text-sm text-ink tnum">{formatCurrency(r.rent)}</td>
                     <td className="py-3 px-4 text-sm text-muted">{r.leaseEnd ? formatDate(r.leaseEnd) : '—'}</td>
-                    <td className="py-3 px-4 text-center">{statusView(r.status)}</td>
+                    <td className="py-3 px-4 text-center">{statusView(r.settlement?.status ?? null)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -181,27 +186,30 @@ export function Reports() {
         </CardHeader>
         <CardContent className="p-0">
           {delinquencies.length === 0 ? (
-            <div className="text-center py-14 text-sm text-muted">Nothing outstanding. Every recorded payment is settled.</div>
+            <div className="text-center py-14 text-sm text-muted">Nothing outstanding. Every active lease is settled for this month.</div>
           ) : (
             <div className="overflow-x-auto sm:overflow-visible">
               <table className="w-full min-w-[640px] sm:min-w-0">
                 <thead>
                   <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Tenant</th>
-                    <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property</th>
-                    <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Due</th>
-                    <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Amount</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property & Unit</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Occupants</th>
+                    <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Balance</th>
                     <th className="text-center py-3 px-4 font-semibold text-ink text-sm">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {delinquencies.map(d => (
-                    <tr key={d.payment.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
-                      <td className="py-3 px-4 text-sm text-ink">{d.name}</td>
-                      <td className="py-3 px-4 text-sm text-muted">{d.property}</td>
-                      <td className="py-3 px-4 text-sm text-muted">{d.payment.dueDate ? formatDate(d.payment.dueDate) : '—'}</td>
-                      <td className="py-3 px-4 text-right text-sm text-danger font-medium tnum">{formatCurrency(d.payment.amount)}</td>
-                      <td className="py-3 px-4 text-center">{statusView(d.payment.status)}</td>
+                  {delinquencies.map(r => (
+                    <tr key={r.lease.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
+                      <td className="py-3 px-4 text-sm">
+                        <span className="text-ink">{r.property}</span>
+                        <span className="text-faint"> · {r.unit}</span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-ink">
+                        {r.occupants.length > 0 ? r.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') : '—'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-danger font-medium tnum">{formatCurrency(r.settlement?.balance || 0)}</td>
+                      <td className="py-3 px-4 text-center">{statusView(r.settlement?.status ?? null)}</td>
                     </tr>
                   ))}
                 </tbody>
