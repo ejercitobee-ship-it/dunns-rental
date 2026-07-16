@@ -25,6 +25,10 @@ interface ParsedLease {
   monthlyRent: number;
   securityDeposit?: number;
   status: LeaseStatus;
+  /** The day collection was paused. Required when status is 'paused': with
+   * no pausedAt, leasesOwingMonth treats the lease as owing nothing at all
+   * rather than guessing a stop date and inventing rent. */
+  pausedAt?: string;
   notes?: string;
   tenantIds: string[];
 }
@@ -81,8 +85,8 @@ id,firstName,lastName,email,phone
 2,Jane,Doe,jane@email.com,(555) 987-6543
 
 === LEASES ===
-id,unitId,propertyId,startDate,endDate,monthlyRent,securityDeposit,status,tenantIds
-L1,u1,1,2024-01-01,2024-12-31,2500,5000,active,1|2
+id,unitId,propertyId,startDate,endDate,monthlyRent,securityDeposit,status,pausedAt,tenantIds
+L1,u1,1,2024-01-01,2024-12-31,2500,5000,active,,1|2
 
 === RENT_PAYMENTS ===
 id,leaseId,paidByTenantId,amount,dueDate,paidDate,status,month,year
@@ -99,7 +103,10 @@ function sheetLabel(sheet: string): string {
 }
 
 const LEASE_STATUS_VALUES: LeaseStatus[] = ['active', 'paused', 'ended'];
-const PAYMENT_STATUS_VALUES: RentPayment['status'][] = ['paid', 'pending', 'overdue', 'partial'];
+// 'overdue' and 'partial' are derived by settleMonth from the amounts
+// actually paid, never accepted as an input: a payment row IS or ISN'T
+// money received, there is nothing else to import.
+const PAYMENT_STATUS_VALUES: RentPayment['status'][] = ['paid', 'pending'];
 
 export function DataMigration() {
   const { addProperty, addUnit, addTenant, addLease, addRentPayment, addExpense, refreshData } = useApp();
@@ -234,9 +241,11 @@ export function DataMigration() {
             break;
 
           case 'leases': {
-            if (cols.length >= 9) {
+            if (cols.length >= 10) {
               const unitId = cols[1] || undefined;
-              const tenantIds = (cols[8] || '').split('|').map(t => t.trim()).filter(Boolean);
+              const endDate = cols[4] || undefined;
+              const pausedAt = cols[8] || undefined;
+              const tenantIds = (cols[9] || '').split('|').map(t => t.trim()).filter(Boolean);
 
               // A lease can outlive its unit (the column is cleared if the unit
               // is deleted), but it cannot be created without one: the API
@@ -288,15 +297,41 @@ export function DataMigration() {
                 status = rawLeaseStatus as LeaseStatus;
               }
 
+              // A paused lease with no pausedAt has no known stop date:
+              // leasesOwingMonth reads that as owing nothing at all rather
+              // than guess one, which silently erases every month of rent
+              // from the current date backward. Catch the bad row instead.
+              if (status === 'paused' && !pausedAt) {
+                errors.push({
+                  row: rowNum,
+                  sheet: currentSection,
+                  message: 'A paused lease needs a pausedAt date. Without one, no rent can be billed for it at all.',
+                  data: line,
+                });
+              }
+
+              // An ended lease with no endDate has no known upper bound:
+              // leaseCoversMonth would then see the lease as covering every
+              // month forever, billing a tenant who moved out years ago.
+              if (status === 'ended' && !endDate) {
+                errors.push({
+                  row: rowNum,
+                  sheet: currentSection,
+                  message: 'An ended lease needs an endDate. Without one, the lease would be billed forever.',
+                  data: line,
+                });
+              }
+
               data.leases.push({
                 id: cols[0],
                 unitId,
                 propertyId: cols[2] || undefined,
                 startDate: cols[3] || undefined,
-                endDate: cols[4] || undefined,
+                endDate,
                 monthlyRent: parseFloat(cols[5]) || 0,
                 securityDeposit: cols[6] ? (parseFloat(cols[6]) || 0) : undefined,
                 status,
+                pausedAt,
                 tenantIds,
               });
             }
@@ -329,14 +364,17 @@ export function DataMigration() {
               // Only status === 'paid' counts as money received anywhere in
               // the app now, so an unvalidated cell here (a typo, a stray
               // space) would silently import a payment that never counts as
-              // collected instead of failing loudly.
+              // collected instead of failing loudly. 'overdue' and 'partial'
+              // are derived by settleMonth from the amounts paid, not valid
+              // inputs: they are rejected here rather than silently accepted
+              // and then ignored by every money calculation in the app.
               const rawPaymentStatus = (cols[6] || '').trim().toLowerCase();
               let status: RentPayment['status'] = 'pending';
               if (rawPaymentStatus && !PAYMENT_STATUS_VALUES.includes(rawPaymentStatus as RentPayment['status'])) {
                 errors.push({
                   row: rowNum,
                   sheet: currentSection,
-                  message: `Status "${cols[6]}" is not valid. Use paid, pending, overdue or partial.`,
+                  message: `Status "${cols[6]}" is not valid. Use paid or pending.`,
                   data: line,
                 });
               } else if (rawPaymentStatus) {
@@ -490,6 +528,7 @@ export function DataMigration() {
           monthlyRent: lease.monthlyRent,
           securityDeposit: lease.securityDeposit,
           status: lease.status,
+          pausedAt: lease.pausedAt,
           notes: lease.notes,
           tenantIds,
         });
@@ -650,7 +689,7 @@ export function DataMigration() {
                 id,firstName,lastName,email,phone<br/>
                 <br/>
                 === LEASES ===<br/>
-                id,unitId,propertyId,startDate,endDate,monthlyRent,securityDeposit,status,tenantIds<br/>
+                id,unitId,propertyId,startDate,endDate,monthlyRent,securityDeposit,status,pausedAt,tenantIds<br/>
                 <br/>
                 === RENT_PAYMENTS ===<br/>
                 id,leaseId,paidByTenantId,amount,dueDate,paidDate,status,month,year<br/>
@@ -661,6 +700,10 @@ export function DataMigration() {
               <p className="text-sm text-muted flex items-start gap-2 pt-1">
                 <KeyRound className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 A lease's tenantIds column holds one or more TENANTS ids, joined with a pipe, for example 1|2. That is how one lease covers two adults sharing a single rent.
+              </p>
+              <p className="text-sm text-muted flex items-start gap-2 pt-1">
+                <Users className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                A paused lease requires a pausedAt date, and an ended lease requires an endDate. Without one, that lease cannot be billed correctly and the row is rejected.
               </p>
             </div>
 
@@ -681,13 +724,13 @@ export function DataMigration() {
                 <h4 className="font-semibold text-ink flex items-center gap-2">
                   <Users className="h-4 w-4" /> Lease Status
                 </h4>
-                <p className="text-sm text-muted">active, paused, ended</p>
+                <p className="text-sm text-muted">active, paused (requires pausedAt), ended (requires endDate)</p>
               </div>
               <div className="space-y-2">
                 <h4 className="font-semibold text-ink flex items-center gap-2">
                   <DollarSign className="h-4 w-4" /> Payment Status
                 </h4>
-                <p className="text-sm text-muted">paid, pending, overdue, partial</p>
+                <p className="text-sm text-muted">paid, pending</p>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <h4 className="font-semibold text-ink flex items-center gap-2">

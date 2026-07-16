@@ -38,8 +38,9 @@ export interface Lease {
   status: LeaseStatus;
   /**
    * The day collection was paused, stamped automatically when the status is
-   * set to 'paused' and cleared when the lease resumes. Months before it are
-   * owed normally; the pause only stops rent from that month on.
+   * set to 'paused' and cleared when the lease resumes. Symmetric with
+   * `endDate`: the whole month the pause happened in is still owed (no
+   * proration), and rent stops only from the month after.
    */
   pausedAt?: string;
   notes?: string;

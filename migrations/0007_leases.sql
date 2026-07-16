@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS leases (
   security_deposit REAL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'ended')),
   -- The day collection was paused. Stamped when the status becomes 'paused',
-  -- cleared on resume. Months before it are still owed.
+  -- cleared on resume. The whole pause month is still owed, no proration;
+  -- rent stops only from the month after.
   paused_at TEXT,
   notes TEXT,
   user_id TEXT REFERENCES user(id),

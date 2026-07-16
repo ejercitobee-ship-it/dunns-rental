@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { rentIncomeForYear } from '../lib/rent';
 import {
   BarChart,
   Bar,
@@ -52,8 +53,10 @@ export function TaxReport() {
     // Rent actually collected lives in rent payments, not the incomes table.
     const yearPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === year);
 
-    // Income summary
-    const rentIncome = yearPaidRent.reduce((sum, p) => sum + p.amount, 0);
+    // Income summary. rentIncomeForYear is the ONE definition of taxable rent
+    // income (money received that year, whatever month it settles against),
+    // shared with Rent Management's Tax tab so the two pages cannot disagree.
+    const rentIncome = rentIncomeForYear(rentPayments, year);
     const lateFeeIncome = yearIncome
       .filter(i => i.source === 'late_fee')
       .reduce((sum, i) => sum + i.amount, 0);

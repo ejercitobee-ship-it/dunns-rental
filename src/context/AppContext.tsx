@@ -11,6 +11,7 @@ import {
   maintenanceApi,
 } from '../lib/api';
 import { useAuth } from './AuthContext';
+import { todayLocalDate } from '../lib/utils';
 
 interface AppState {
   properties: Property[];
@@ -341,7 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = await paymentsApi.update(id, {
       ...payment,
       status,
-      paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : undefined,
+      paidDate: status === 'paid' ? todayLocalDate() : undefined,
       receivedDate: paymentDetails?.receivedDate,
       paymentMethod: paymentDetails?.paymentMethod,
       uploadedBy: paymentDetails?.uploadedBy,

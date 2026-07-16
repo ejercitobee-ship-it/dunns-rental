@@ -1789,9 +1789,118 @@ all seven migrations cleanly; confirmed via `sqlite_master` that `leases.paused_
 and the `CHECK (status IN ('active','paused','ended'))` constraint are present,
 and that the constraint actually rejects an invalid status.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/pages/Rents.tsx src/pages/Dashboard.tsx src/pages/TenantDetail.tsx src/pages/Tenants.tsx src/pages/DataMigration.tsx functions/api/payments src/context/AppContext.tsx src/lib/rent.test.ts docs/superpowers/plans/2026-07-15-lease-household-model.md
 git commit -m "fix: five month walks read the right population, plus smaller correctness gaps"
 ```
+
+### Task 16: Fix wave 2 (re-review of Task 15)
+
+A re-review of Task 15 found the pause rule itself was still wrong (an
+un-owned regression introduced by that task, not the reviewer's error), plus
+import-side gaps that would corrupt real money figures the first time the
+owner re-imports after migration 0007 drops and recreates `leases`.
+
+**Files:**
+- Modify: `src/lib/rent.ts` (`leasesOwingMonth` pause/ended rules, new `rentIncomeForYear`)
+- Modify: `src/types/index.ts` (`Lease.pausedAt` docstring)
+- Modify: `src/pages/DataMigration.tsx` (LEASES `pausedAt` column, ended/paused validation, RENT_PAYMENTS status restricted to paid/pending)
+- Modify: `src/pages/TaxReport.tsx`, `src/pages/Rents.tsx` (both call `rentIncomeForYear` for taxable income)
+- Modify: `src/lib/utils.ts` (hoisted `todayLocalDate`), `src/pages/Tenants.tsx`, `src/context/AppContext.tsx`, `src/pages/Rents.tsx` (use it instead of `toISOString()`)
+- Modify: `migrations/0007_leases.sql` (comment only, matches the corrected rule)
+- Test: `src/lib/rent.test.ts`
+
+- [x] **Step 1: Pause month is inclusive, matching `endDate`**
+
+`leasesOwingMonth` excluded a paused lease's own pause month
+(`target < pausedYearMonth`), contradicting the owner's "full month either
+way, no proration" rule that every other boundary in the app honors: a lease
+ending May 20 owes all of May, so a lease paused June 20 must owe all of
+June. Changed to `target <= pausedYearMonth` (rent stops the month AFTER the
+pause), and rewrote the function's docstring to state the `endDate` symmetry
+explicitly.
+
+- [x] **Step 2: No-`pausedAt` fallback owes nothing, not "as of today"**
+
+The old fallback (`pausedAt ?? currentYearMonth`) invented a stop date of "as
+of right now" for any paused lease missing the date, which is exactly the
+data shape a LEASES CSV import produces (`pausedAt` wasn't a column at all).
+A lease paused 17 months ago with a blank `endDate` would resurrect as owing
+every elapsed month of the current year. Changed the rule to: no
+`pausedAt` means the lease owes nothing at all, past or present, since there
+is no data to support any other reading. Added the `pausedAt` column to the
+LEASES CSV section end to end: header, `SAMPLE_CSV`, `ParsedLease`, the
+parser (now reads column 9, shifting `tenantIds` to column 10), the format
+guide, the field help text, and the `addLease` call so it actually reaches
+the API (which already accepted `pausedAt`, added in the backend half of
+Task 15). Added an import-time validation: `status=paused` with no
+`pausedAt` is now a rejected row, reported per row like every other CSV
+validation error.
+
+- [x] **Step 3: Payment import accepts only `paid` and `pending`**
+
+`paymentsForMonth` (and everything downstream of it) only ever counted
+`status === 'paid'`, but the CSV importer still accepted and advertised
+`overdue` and `partial` as valid input statuses. A `partial` row with money
+actually attached (say $700 of a $2,000 rent) imported clean and then
+vanished from every screen: Rent Management showed the month fully unpaid,
+Dashboard's `totalOwed` carried the full $2,000, and the $700 sat in the
+database invisible everywhere. `overdue` and `partial` are derived by
+`settleMonth` from amounts, never a valid input, so the importer now rejects
+them with a `ValidationError` instead of silently accepting money that never
+counts as collected.
+
+- [x] **Step 4: One function for taxable rent income, used in both places**
+
+Added `rentIncomeForYear(payments, year)` to `rent.ts`: sums `status ===
+'paid'` payments for the year, no lease or month filter. `TaxReport.tsx`'s
+`rentIncome` and `Rents.tsx`'s `taxData.totalRentIncome` both call it now,
+so a payment recorded against a month outside any lease's owed term (for
+example, one entered after a lease's `endDate`) is counted the same way on
+both surfaces, since for tax purposes the cash received IS the income
+regardless of which month it settles against. `Rents.tsx`'s
+`yearStats.totalCollected` (the Payments tab's own headline figure) was left
+on the settlement-based definition on purpose: it answers what was collected
+against the rows the tab actually shows, a different question from taxable
+income.
+
+- [x] **Step 5: An `ended` lease with no `endDate` owes nothing**
+
+`DataMigration.tsx` let `status=ended` through with a blank `endDate`, and
+`leaseCoversMonth` then saw no upper bound and billed forever. Fixed both
+ends: the importer now rejects an `ended` row with no `endDate` as a
+`ValidationError`, and `leasesOwingMonth` independently excludes an `ended`
+lease with no `endDate` regardless of where the bad data came from, so a
+future import path or a hand-edited database row can't reproduce the bug.
+
+- [x] **Step 6: Hoist `todayLocalDate`**
+
+Moved from `Tenants.tsx` to `src/lib/utils.ts` and reused it in
+`AppContext.tsx` (`paidDate`) and `Rents.tsx` (`receivedDate`, three call
+sites), replacing `toISOString()`, which is UTC and stamps yesterday's date
+for the owner in America/Chicago late in the day. Neither field feeds month
+math today, so this is tidying rather than a behavior fix for either page,
+but it removes the last `toISOString()`-for-a-local-date pattern in the app.
+
+- [x] **Step 7: Tests**
+
+Added to `src/lib/rent.test.ts`: a paused lease owing its own pause month but
+not the month after (replacing the two tests that pinned the old,
+strictly-before behavior); a paused lease with no `pausedAt` owing nothing
+for either a past month or the current month (replacing the test that
+asserted it still owed a past month); an `ended` lease with no `endDate`
+owing nothing; a `partial`-status payment not counting toward
+`paymentsForMonth`; and a new `rentIncomeForYear` suite (counts paid,
+ignores pending/partial/overdue, filters by year, counts a payment whose
+month falls outside any lease's boundary, and returns 0 with nothing paid).
+33 tests pass (27 prior, 2 removed for the corrected pause behavior, 8 new).
+
+- [x] **Step 8: Verify**
+
+`npx tsc -b`, `npm run build` and `npm test` all pass (33/33). Ran `npx
+wrangler d1 migrations apply dunns-rental-db --local`: no migrations to
+apply, `paused_at` was already present locally from Task 15's migration run.
+
+- [ ] **Step 9: Commit**

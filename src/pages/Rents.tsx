@@ -9,10 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatMonthYear } from '../lib/utils';
+import { formatCurrency, formatMonthYear, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leasesOwingMonth, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -121,7 +121,7 @@ export function Rents() {
   const [recordForm, setRecordForm] = useState({
     amount: '',
     paidByTenantId: '',
-    receivedDate: new Date().toISOString().split('T')[0],
+    receivedDate: todayLocalDate(),
     paymentMethod: 'check' as PaymentMethod,
   });
   const [isRecording, setIsRecording] = useState(false);
@@ -161,9 +161,12 @@ export function Rents() {
     });
   }, [leases, rentPayments, yearFilter]);
 
-  // Tax summary data. Same leasesOwingMonth gating as annualData above, so
-  // this and the Tax Report page can never disagree on taxable income for a
-  // lease that ended mid-year.
+  // Tax summary data. "Expected" and "Outstanding" still walk leasesOwingMonth
+  // like annualData above, because those answer what was owed against the
+  // lease calendar. "Total Rent Income" does not: it calls rentIncomeForYear,
+  // the same function the Tax Report page uses, so the two pages report the
+  // same taxable income even for a payment recorded outside any lease's owed
+  // months (for example, one entered after a lease's endDate).
   const taxData = useMemo(() => {
     const year = parseInt(yearFilter, 10);
 
@@ -192,7 +195,7 @@ export function Rents() {
       };
     });
 
-    const totalRentIncome = quarterlyData.reduce((sum, q) => sum + q.collected, 0);
+    const totalRentIncome = rentIncomeForYear(rentPayments, year);
     const totalExpected = quarterlyData.reduce((sum, q) => sum + q.expected, 0);
     const totalOutstanding = quarterlyData.reduce((sum, q) => sum + q.outstanding, 0);
 
@@ -296,7 +299,7 @@ export function Rents() {
     setRecordForm({
       amount: row.settlement.balance > 0 ? String(row.settlement.balance) : '',
       paidByTenantId: '',
-      receivedDate: new Date().toISOString().split('T')[0],
+      receivedDate: todayLocalDate(),
       paymentMethod: 'check',
     });
   };
@@ -306,7 +309,7 @@ export function Rents() {
     setRecordForm({
       amount: '',
       paidByTenantId: '',
-      receivedDate: new Date().toISOString().split('T')[0],
+      receivedDate: todayLocalDate(),
       paymentMethod: 'check',
     });
   };

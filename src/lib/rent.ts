@@ -61,26 +61,29 @@ export function leaseCoversMonth(lease: Lease, month: number, year: number): boo
  * The rules, in order:
  *  - the term has to cover the month at all (`leaseCoversMonth`). Ending a
  *    lease stamps `endDate` to that day, so months after the tenant left are
- *    excluded by the term, not by the status.
- *  - a paused lease owed rent for every month strictly BEFORE the month it was
- *    paused in. The pause stops rent from that point on, it does not rewrite
- *    the months the tenant already lived there.
- *  - a paused lease with no `pausedAt` (legacy or bad data) is treated as
- *    paused from the current month onward: past months still owe, the current
- *    month and later do not. That is the reading that cannot invent rent the
- *    owner never agreed to bill.
+ *    excluded by the term, not by the status. An `ended` lease with no
+ *    `endDate` at all (bad data: the UI always stamps one) has no known
+ *    upper bound to trust, so it is treated as owing nothing rather than
+ *    billing forever.
+ *  - a paused lease owed rent through the month it was paused in, same as an
+ *    ended lease owes its whole end month: pausing mid-June still bills all
+ *    of June. The pause only stops rent starting the month AFTER the pause,
+ *    it does not rewrite the month the tenant was paused in or any month
+ *    before it.
+ *  - a paused lease with no `pausedAt` (legacy or bad data) has no known date
+ *    rent stopped, so it owes nothing at all from the moment it is read as
+ *    paused: guessing a stop date, in either direction, would either invent
+ *    rent the owner never billed or erase rent she actually collected.
  */
 export function leasesOwingMonth(leases: Lease[], month: number, year: number): Lease[] {
   const target = year * 12 + month;
-  const now = new Date();
-  // Local time on purpose: the owner's "this month" is America/Chicago, not UTC.
-  const currentYearMonth = now.getFullYear() * 12 + (now.getMonth() + 1);
 
   return leases.filter(lease => {
     if (!leaseCoversMonth(lease, month, year)) return false;
+    if (lease.status === 'ended' && !lease.endDate) return false;
     if (lease.status !== 'paused') return true;
-    const pausedYearMonth = lease.pausedAt ? yearMonthOf(lease.pausedAt) : currentYearMonth;
-    return target < pausedYearMonth;
+    if (!lease.pausedAt) return false;
+    return target <= yearMonthOf(lease.pausedAt);
   });
 }
 
@@ -109,6 +112,24 @@ export function paymentsForMonth(
 ): RentPayment[] {
   return payments.filter(
     p => p.leaseId === leaseId && p.month === month && p.year === year && p.status === 'paid'
+  );
+}
+
+/**
+ * Total rent actually received in a calendar year, no lease or month filter
+ * at all. For tax purposes the money received IS the income, whatever month
+ * it was recorded against: a payment posted against a month outside any
+ * lease's owed term (say, one entered after a lease's `endDate`) still
+ * counts, because the cash came in that year regardless. This is the ONE
+ * definition of taxable rent income; the Tax Report page and Rent
+ * Management's Tax tab both call this instead of summing payments
+ * themselves, so the two figures cannot drift apart.
+ */
+export function rentIncomeForYear(payments: RentPayment[], year: number): number {
+  return round2(
+    payments
+      .filter(p => p.status === 'paid' && p.year === year)
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
   );
 }
 

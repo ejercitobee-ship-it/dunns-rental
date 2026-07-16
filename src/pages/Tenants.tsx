@@ -8,7 +8,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { monthlyRevenue } from '../lib/rent';
@@ -53,16 +53,6 @@ const leaseStatusLabel: Record<LeaseStatus, string> = {
 };
 
 const DAY_MS = 1000 * 60 * 60 * 24;
-
-// YYYY-MM-DD from local date parts, not toISOString(): toISOString() is UTC
-// and rolls back to yesterday's date for the owner in America/Chicago late
-// in the day.
-function todayLocalDate(): string {
-  const d = new Date();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
-}
 
 export function Tenants() {
   const {
