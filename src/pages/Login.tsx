@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import logo from '../assets/mh-dunn-logo.png';
+import familyPhoto from '../assets/login-family.jpg';
 
 export function Login() {
   const navigate = useNavigate();
@@ -47,15 +49,29 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-canvas p-4">
+    <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[1.05fr_1fr]">
+      {/* Image panel, shown on larger screens */}
+      <div className="relative hidden lg:block overflow-hidden">
+        <img
+          src={familyPhoto}
+          alt="A family relaxing with their dog in the yard of a home"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#14231c]/80 via-[#14231c]/15 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 p-12">
+          <p className="font-display text-white text-[30px] leading-snug max-w-md">
+            Quality multi family homes, managed with care.
+          </p>
+          <p className="text-white/75 mt-3 text-sm tracking-wide">MH Dunn Property</p>
+        </div>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex items-center justify-center p-6 sm:p-10">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-primary rounded-2xl ring-1 ring-black/5 mb-4">
-            <Building2 className="h-7 w-7 text-[#c9ddd2]" />
-          </div>
-          <h1 className="text-[26px] font-medium text-ink">Dunn's Rental</h1>
-          <p className="text-muted mt-1 text-sm">Property Management</p>
+          <img src={logo} alt="MH Dunn Property" className="mx-auto w-60 h-auto" />
         </div>
 
         {/* Login Card */}
@@ -159,8 +175,9 @@ export function Login() {
 
         {/* Footer */}
         <p className="text-center text-sm text-faint mt-8">
-          © 2024 DUNN's Rental. All rights reserved.
+          © 2026 MH Dunn Property. All rights reserved.
         </p>
+      </div>
       </div>
     </div>
   );
