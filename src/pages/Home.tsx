@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Home as HomeIcon, PhoneCall, Wallet, Users, Mail, ArrowRight, MapPin } from 'lucide-react';
 import logo from '../assets/mh-dunn-logo.png';
 import heroPhoto from '../assets/login-family.jpg';
+import dunnFamily from '../assets/dunn-family.jpg';
 
 // Business contact details. Phone and service area are placeholders until Belle
 // supplies the real values; swap them here.
@@ -32,7 +33,7 @@ function PublicHeader() {
           to="/login"
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover transition-colors"
         >
-          Tenant Login
+          Login
         </Link>
       </div>
     </header>
@@ -76,12 +77,27 @@ function Hero() {
 function About() {
   return (
     <section id="about" className="bg-canvas">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-20 text-center">
-        <p className="eyebrow text-primary">About MH Dunn</p>
-        <h2 className="font-display text-3xl font-medium text-ink mt-3">A landlord that actually cares</h2>
-        <p className="mt-6 text-lg text-muted leading-relaxed">
-          MH Dunn Property owns and manages multi family homes with a simple belief: a good home is looked after. We keep our properties in great shape, we answer when you need us, and we treat our tenants like neighbors. Renting from us should feel easy and personal, from the first hello to the day you move in.
-        </p>
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20">
+        <div className="grid gap-10 md:grid-cols-2 md:items-center">
+          <div className="order-2 md:order-1">
+            <p className="eyebrow text-primary">About MH Dunn</p>
+            <h2 className="font-display text-3xl font-medium text-ink mt-3">A family business, named for Marlene</h2>
+            <p className="mt-6 text-lg text-muted leading-relaxed">
+              For more than twenty years, Marlene and Terry Dunn have owned and run MH Dunn Property together. The name is Marlene's, with Dunn being the family name, and it stands for the way they have always done things: homes kept to the standard they would want for their own family, and tenants treated like neighbors.
+            </p>
+            <p className="mt-4 text-lg text-muted leading-relaxed">
+              What began as a family business is still run like one. When you rent from MH Dunn, you are renting from people who answer the phone, know every home, and take real pride in looking after the families who live in them.
+            </p>
+          </div>
+          <div className="order-1 md:order-2">
+            <img
+              src={dunnFamily}
+              alt="Marlene and Terry Dunn"
+              className="w-full rounded-2xl border border-line object-cover shadow-[0_2px_16px_rgba(27,26,23,0.08)]"
+            />
+            <p className="mt-3 text-center text-sm text-faint">Marlene and Terry Dunn</p>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -189,7 +205,7 @@ function PublicFooter() {
         </div>
         <div className="flex items-center gap-6 text-sm">
           <a href={`mailto:${EMAIL}`} className="hover:text-white transition-colors">{EMAIL}</a>
-          <Link to="/login" className="hover:text-white transition-colors">Tenant Login</Link>
+          <Link to="/login" className="hover:text-white transition-colors">Login</Link>
         </div>
       </div>
       <div className="border-t border-sidebar-line">
