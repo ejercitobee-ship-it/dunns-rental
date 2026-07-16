@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import logo from '../../assets/mh-dunn-logo.png';
 import {
   LayoutDashboard,
   Building2,
@@ -8,7 +9,6 @@ import {
   Receipt,
   Menu,
   X,
-  Home,
   ChevronRight,
   LogOut,
   Shield,
@@ -69,14 +69,10 @@ export function Layout({ children }: LayoutProps) {
         )}
       >
         {/* Logo Section */}
-        <div className="flex items-center justify-between h-16 px-5 border-b border-sidebar-line">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center ring-1 ring-white/10">
-              <Home className="h-[18px] w-[18px] text-[#c9ddd2]" />
-            </div>
-            <div className="leading-tight">
-              <span className="font-display text-[17px] font-medium tracking-tight text-white">Dunn's Rental</span>
-              <p className="text-[11px] text-sidebar-muted tracking-wide">Property Management</p>
+        <div className="flex items-start justify-between gap-2 px-4 py-4 border-b border-sidebar-line">
+          <Link to="/" className="block flex-1 min-w-0">
+            <div className="bg-white rounded-xl px-4 py-3 ring-1 ring-white/10">
+              <img src={logo} alt="MH Dunn Property" className="mx-auto h-auto w-full max-w-[176px]" />
             </div>
           </Link>
           <button
@@ -148,11 +144,8 @@ export function Layout({ children }: LayoutProps) {
       <main className="lg:ml-72 min-h-screen">
         {/* Mobile header */}
         <header className="lg:hidden h-16 bg-surface/90 backdrop-blur-md border-b border-line flex items-center justify-between px-4 sticky top-0 z-30">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Home className="h-4 w-4 text-[#c9ddd2]" />
-            </div>
-            <span className="font-display text-base font-medium text-ink">Dunn's Rental</span>
+          <Link to="/" className="flex items-center">
+            <img src={logo} alt="MH Dunn Property" className="h-10 w-auto" />
           </Link>
           <button
             className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors"

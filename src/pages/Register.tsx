@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Building2, Lock, Mail, Eye, EyeOff, AlertCircle, User } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, User } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import logo from '../assets/mh-dunn-logo.png';
 
 export function Register() {
   const navigate = useNavigate();
@@ -58,11 +59,7 @@ export function Register() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl ring-1 ring-black/5 mb-4">
-            <Building2 className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-ink">DUNN's Rental</h1>
-          <p className="text-muted mt-1">Property Management System</p>
+          <img src={logo} alt="MH Dunn Property" className="mx-auto w-60 h-auto" />
         </div>
 
         {/* Register Card */}
@@ -180,7 +177,7 @@ export function Register() {
 
         {/* Footer */}
         <p className="text-center text-sm text-muted mt-8">
-          © 2024 DUNN's Rental. All rights reserved.
+          © 2026 MH Dunn Property. All rights reserved.
         </p>
       </div>
     </div>
