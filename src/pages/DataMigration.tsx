@@ -98,6 +98,9 @@ function sheetLabel(sheet: string): string {
   return sheet.replace(/_/g, ' ');
 }
 
+const LEASE_STATUS_VALUES: LeaseStatus[] = ['active', 'paused', 'ended'];
+const PAYMENT_STATUS_VALUES: RentPayment['status'][] = ['paid', 'pending', 'overdue', 'partial'];
+
 export function DataMigration() {
   const { addProperty, addUnit, addTenant, addLease, addRentPayment, addExpense, refreshData } = useApp();
   const { showToast } = useToast();
@@ -265,6 +268,26 @@ export function DataMigration() {
                 });
               }
 
+              // A raw cast here (`cols[7] as LeaseStatus`) would let a
+              // misspelled or wrongly cased cell like "Active" through as a
+              // typed LeaseStatus that isn't actually one of the three
+              // values: activeLeases would then miss the lease (0 revenue,
+              // no rent rows) while getUnitLease still matched it, leaving
+              // the unit both unbillable and blocked from a new tenancy,
+              // with no error surfaced anywhere. Validate it here instead.
+              const rawLeaseStatus = (cols[7] || '').trim().toLowerCase();
+              let status: LeaseStatus = 'active';
+              if (rawLeaseStatus && !LEASE_STATUS_VALUES.includes(rawLeaseStatus as LeaseStatus)) {
+                errors.push({
+                  row: rowNum,
+                  sheet: currentSection,
+                  message: `Status "${cols[7]}" is not valid. Use active, paused or ended.`,
+                  data: line,
+                });
+              } else if (rawLeaseStatus) {
+                status = rawLeaseStatus as LeaseStatus;
+              }
+
               data.leases.push({
                 id: cols[0],
                 unitId,
@@ -273,7 +296,7 @@ export function DataMigration() {
                 endDate: cols[4] || undefined,
                 monthlyRent: parseFloat(cols[5]) || 0,
                 securityDeposit: cols[6] ? (parseFloat(cols[6]) || 0) : undefined,
-                status: (cols[7] as LeaseStatus) || 'active',
+                status,
                 tenantIds,
               });
             }
@@ -303,6 +326,23 @@ export function DataMigration() {
                 });
               }
 
+              // Only status === 'paid' counts as money received anywhere in
+              // the app now, so an unvalidated cell here (a typo, a stray
+              // space) would silently import a payment that never counts as
+              // collected instead of failing loudly.
+              const rawPaymentStatus = (cols[6] || '').trim().toLowerCase();
+              let status: RentPayment['status'] = 'pending';
+              if (rawPaymentStatus && !PAYMENT_STATUS_VALUES.includes(rawPaymentStatus as RentPayment['status'])) {
+                errors.push({
+                  row: rowNum,
+                  sheet: currentSection,
+                  message: `Status "${cols[6]}" is not valid. Use paid, pending, overdue or partial.`,
+                  data: line,
+                });
+              } else if (rawPaymentStatus) {
+                status = rawPaymentStatus as RentPayment['status'];
+              }
+
               data.rentPayments.push({
                 id: cols[0],
                 leaseId,
@@ -310,7 +350,7 @@ export function DataMigration() {
                 amount: parseFloat(cols[3]) || 0,
                 dueDate: cols[4] || undefined,
                 paidDate: cols[5] || undefined,
-                status: (cols[6] as RentPayment['status']) || 'pending',
+                status,
                 month: parseInt(cols[7]) || 1,
                 year: parseInt(cols[8]) || new Date().getFullYear(),
               });

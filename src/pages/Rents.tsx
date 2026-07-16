@@ -12,7 +12,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leasesOwingMonth, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -129,13 +129,13 @@ export function Rents() {
   // a double-click on "Record Payment" must not create two payments.
   const isRecordingRef = useRef(false);
 
-  // Annual rent collection data. Walks every month of the year, but only
-  // counts a month against a lease when leaseCoversMonth says the lease's
-  // term actually overlaps it, so a lease that starts in April is never
-  // billed for January through March. This is what fixes the old reading of
-  // near 100% collection: the previous version summed raw payment rows,
-  // which only ever exist for months someone actually paid, so "expected"
-  // and "collected" were nearly the same number by construction.
+  // Annual rent collection data. Walks every month of the year against
+  // leasesOwingMonth, which is every lease whose term covered that month
+  // whether or not it has since ended, so a lease ended at turnover mid-year
+  // still counts for the months it was lived in. This is what fixes the old
+  // reading of near 100% collection: the previous version summed raw payment
+  // rows, which only ever exist for months someone actually paid, so
+  // "expected" and "collected" were nearly the same number by construction.
   const annualData = useMemo(() => {
     const year = parseInt(yearFilter, 10);
     return MONTHS.map((monthName, index) => {
@@ -143,8 +143,7 @@ export function Rents() {
       let expected = 0;
       let collected = 0;
       let outstanding = 0;
-      for (const lease of activeLeases(leases)) {
-        if (!leaseCoversMonth(lease, month, year)) continue;
+      for (const lease of leasesOwingMonth(leases, month, year)) {
         const s = settleMonth(lease, rentPayments, month, year);
         expected += s.due;
         collected += s.paid;
@@ -162,8 +161,9 @@ export function Rents() {
     });
   }, [leases, rentPayments, yearFilter]);
 
-  // Tax summary data. Same lease-term gating as annualData above: expected
-  // rent only accrues for the months a lease's term actually covers.
+  // Tax summary data. Same leasesOwingMonth gating as annualData above, so
+  // this and the Tax Report page can never disagree on taxable income for a
+  // lease that ended mid-year.
   const taxData = useMemo(() => {
     const year = parseInt(yearFilter, 10);
 
@@ -177,9 +177,8 @@ export function Rents() {
     const quarterlyData = quarters.map(q => {
       let qExpected = 0;
       let qCollected = 0;
-      for (const lease of activeLeases(leases)) {
-        for (const month of q.months) {
-          if (!leaseCoversMonth(lease, month, year)) continue;
+      for (const month of q.months) {
+        for (const lease of leasesOwingMonth(leases, month, year)) {
           const s = settleMonth(lease, rentPayments, month, year);
           qExpected += s.due;
           qCollected += s.paid;
@@ -205,19 +204,20 @@ export function Rents() {
     };
   }, [leases, rentPayments, yearFilter]);
 
-  // One row per active lease per month of the selected year. This, not the
-  // raw payment list, is what the Payments table renders: rent is owed once
-  // per lease per month regardless of how many payments (or people) it took
-  // to settle it.
+  // One row per lease per month of the selected year that the lease OWED
+  // rent for (leasesOwingMonth), whether or not it has since ended. This,
+  // not the raw payment list, is what the Payments table renders: rent is
+  // owed once per lease per month regardless of how many payments (or
+  // people) it took to settle it, and a lease that ended at turnover still
+  // owed, and shows, every month it covered before that.
   const leaseMonthRows = useMemo(() => {
     const year = parseInt(yearFilter, 10);
     const rows: LeaseMonthRow[] = [];
-    for (const lease of activeLeases(leases)) {
-      const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : undefined;
-      const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
-      const occupants = getLeaseTenants(lease.id);
-      for (let month = 1; month <= 12; month++) {
-        if (!leaseCoversMonth(lease, month, year)) continue;
+    for (let month = 1; month <= 12; month++) {
+      for (const lease of leasesOwingMonth(leases, month, year)) {
+        const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : undefined;
+        const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
+        const occupants = getLeaseTenants(lease.id);
         rows.push({
           lease,
           unit,
@@ -265,9 +265,8 @@ export function Rents() {
     let outstanding = 0;
     let overdueCount = 0;
 
-    for (const lease of activeLeases(leases)) {
-      for (const month of elapsedMonths) {
-        if (!leaseCoversMonth(lease, month, year)) continue;
+    for (const month of elapsedMonths) {
+      for (const lease of leasesOwingMonth(leases, month, year)) {
         const s = settleMonth(lease, rentPayments, month, year);
         totalDue += s.due;
         totalPaidElapsed += s.paid;

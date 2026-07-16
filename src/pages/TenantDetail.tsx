@@ -12,7 +12,7 @@ import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { documentsApi, type AppDocument } from '../lib/api';
-import { settleMonth } from '../lib/rent';
+import { leasesOwingMonth, settleMonth } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
@@ -87,7 +87,15 @@ export function TenantDetail() {
   const thisMonth = useMemo(() => {
     if (!lease) return undefined;
     const now = new Date();
-    return settleMonth(lease, rentPayments, now.getMonth() + 1, now.getFullYear());
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    // Gated the same way every other page gates a month against a lease:
+    // leasesOwingMonth already knows a lease starting in the future owes
+    // nothing yet, and that a paused lease stops owing from its pause month
+    // on. Showing a settlement without this would invent a balance the
+    // owner never billed.
+    if (!leasesOwingMonth([lease], month, year).length) return undefined;
+    return settleMonth(lease, rentPayments, month, year);
   }, [lease, rentPayments]);
 
   const payments = useMemo(() => {

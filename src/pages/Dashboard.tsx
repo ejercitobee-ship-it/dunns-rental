@@ -6,10 +6,10 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, getMonthName } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, getMonthName } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth } from '../lib/rent';
-import type { DashboardStats } from '../types';
+import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth } from '../lib/rent';
+import type { DashboardStats, Property, Tenant } from '../types';
 import {
   BarChart,
   Bar,
@@ -114,13 +114,14 @@ export function Dashboard() {
       .reduce((sum, e) => sum + e.amount, 0);
 
     // What's still owed across every elapsed month of the current year, one
-    // lease at a time. Gated on leaseCoversMonth so a lease that started in
-    // April is never billed for January through March.
+    // lease at a time. Walks leasesOwingMonth rather than activeLeases so a
+    // lease that ended at turnover mid-year still counts for the months it
+    // was lived in, and this figure can never disagree with Rent Management
+    // or the Tax Report.
     const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
     let totalOwed = 0;
-    for (const lease of activeLeases(leases)) {
-      for (const month of elapsedMonths) {
-        if (!leaseCoversMonth(lease, month, currentYear)) continue;
+    for (const month of elapsedMonths) {
+      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
         totalOwed += settleMonth(lease, rentPayments, month, currentYear).balance;
       }
     }
@@ -204,16 +205,44 @@ export function Dashboard() {
     return activities;
   }, [rentPayments, expenses, properties, leases]);
 
+  // Derived from settlement, not payment.status: nothing in the app ever
+  // writes the 'overdue' payment status, so filtering on it always found
+  // zero rows here while Rent Management (which settles each lease month
+  // instead) showed real overdue counts for the same data. A month is
+  // overdue when the lease owed it, the month has already elapsed, and
+  // settleMonth says it isn't paid, matching how Rents.tsx counts overdue.
   const overduePayments = useMemo(() => {
-    return rentPayments
-      .filter(r => r.status === 'overdue')
-      .map(r => {
-        const lease = leases.find(l => l.id === r.leaseId);
-        const property = lease?.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
-        const occupants = lease ? getLeaseTenants(lease.id) : [];
-        return { ...r, property, occupants };
-      });
-  }, [rentPayments, leases, properties, getLeaseTenants]);
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
+
+    const rows: {
+      key: string;
+      property?: Property;
+      occupants: Tenant[];
+      month: number;
+      year: number;
+      amount: number;
+    }[] = [];
+
+    for (const month of elapsedMonths) {
+      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+        const settlement = settleMonth(lease, rentPayments, month, currentYear);
+        if (settlement.status === 'paid') continue;
+        const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
+        rows.push({
+          key: `${lease.id}-${currentYear}-${month}`,
+          property,
+          occupants: getLeaseTenants(lease.id),
+          month,
+          year: currentYear,
+          amount: settlement.balance,
+        });
+      }
+    }
+    return rows;
+  }, [leases, rentPayments, properties, getLeaseTenants]);
 
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
@@ -600,31 +629,31 @@ export function Dashboard() {
                   <tr className="border-b border-line">
                     <th className="text-left py-3 px-4 font-semibold text-ink">Occupants</th>
                     <th className="text-left py-3 px-4 font-semibold text-ink">Property</th>
-                    <th className="text-left py-3 px-4 font-semibold text-ink">Due Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-ink">Period</th>
                     <th className="text-right py-3 px-4 font-semibold text-ink">Amount</th>
                     <th className="text-center py-3 px-4 font-semibold text-ink">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {overduePayments.slice(0, 5).map(payment => (
+                  {overduePayments.slice(0, 5).map(row => (
                     <tr
-                      key={payment.id}
+                      key={row.key}
                       className="border-b border-line last:border-0 hover:bg-danger-soft/50 cursor-pointer transition-colors"
                       onClick={() => navigate('/rents')}
                     >
                       <td className="py-3 px-4 font-medium text-ink">
-                        {payment.occupants.length > 0
-                          ? payment.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
+                        {row.occupants.length > 0
+                          ? row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
                           : '—'}
                       </td>
                       <td className="py-3 px-4 text-muted">
-                        {payment.property?.name}
+                        {row.property?.name}
                       </td>
                       <td className="py-3 px-4 text-muted">
-                        {payment.dueDate ? formatDate(payment.dueDate) : '—'}
+                        {formatMonthYear(row.month, row.year)}
                       </td>
                       <td className="py-3 px-4 text-right font-bold text-ink">
-                        {formatCurrency(payment.amount)}
+                        {formatCurrency(row.amount)}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <Badge variant="destructive">Overdue</Badge>

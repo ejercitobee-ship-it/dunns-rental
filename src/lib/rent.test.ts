@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth } from './rent';
 import type { Lease, RentPayment } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -148,5 +148,73 @@ describe('leaseCoversMonth', () => {
   it('is true for the one month a lease both starts and ends in', () => {
     const oneMonth = lease({ startDate: '2026-04-10', endDate: '2026-04-20' });
     expect(leaseCoversMonth(oneMonth, 4, 2026)).toBe(true);
+  });
+});
+
+describe('paymentsForMonth', () => {
+  it('does not count a payment that is not marked paid', () => {
+    const payments = [payment({ status: 'pending' })];
+    expect(paymentsForMonth('L1', payments, 7, 2026)).toEqual([]);
+  });
+});
+
+describe('leasesOwingMonth', () => {
+  // The Critical fix: a lease ended at turnover still owed, and was paid,
+  // every month its term covered before that. Filtering on activeLeases
+  // instead would erase that income from the year's totals.
+  it('still counts an ended lease for a month its term covered', () => {
+    const ended = lease({ status: 'ended', startDate: '2026-01-01', endDate: '2026-06-30' });
+    expect(leasesOwingMonth([ended], 3, 2026).map(l => l.id)).toEqual(['L1']);
+  });
+
+  it('excludes a lease whose term does not cover the month', () => {
+    const notYetStarted = lease({ startDate: '2026-04-01', endDate: '2026-06-30' });
+    expect(leasesOwingMonth([notYetStarted], 3, 2026)).toEqual([]);
+  });
+
+  it('counts a paused lease for months strictly before its pause month', () => {
+    const paused = lease({
+      status: 'paused',
+      pausedAt: '2026-06-01',
+      startDate: '2026-01-01',
+      endDate: '2027-01-01',
+    });
+    expect(leasesOwingMonth([paused], 5, 2026).map(l => l.id)).toEqual(['L1']);
+  });
+
+  it('excludes a paused lease for its pause month and every month after', () => {
+    const paused = lease({
+      status: 'paused',
+      pausedAt: '2026-06-01',
+      startDate: '2026-01-01',
+      endDate: '2027-01-01',
+    });
+    expect(leasesOwingMonth([paused], 6, 2026)).toEqual([]);
+    expect(leasesOwingMonth([paused], 7, 2026)).toEqual([]);
+  });
+
+  it('treats a paused lease with no pausedAt as still owing a month in the past', () => {
+    const now = new Date();
+    const past = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    const paused = lease({
+      status: 'paused',
+      pausedAt: undefined,
+      startDate: '2020-01-01',
+      endDate: undefined,
+    });
+    expect(
+      leasesOwingMonth([paused], past.getMonth() + 1, past.getFullYear()).map(l => l.id)
+    ).toEqual(['L1']);
+  });
+
+  it('treats a paused lease with no pausedAt as not owing the current month', () => {
+    const now = new Date();
+    const paused = lease({
+      status: 'paused',
+      pausedAt: undefined,
+      startDate: '2020-01-01',
+      endDate: undefined,
+    });
+    expect(leasesOwingMonth([paused], now.getMonth() + 1, now.getFullYear())).toEqual([]);
   });
 });

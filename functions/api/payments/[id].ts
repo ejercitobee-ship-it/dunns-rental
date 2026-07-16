@@ -32,6 +32,16 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     if (body.amount === undefined || body.amount === null) {
       return jsonError('Amount is required', 400);
     }
+    // month and year are nullable columns, so without this check a payment
+    // could be updated to have neither. serializePayment then returns
+    // month: null typed as number, paymentsForMonth never matches it on any
+    // month, and the payment sits in the database invisible on every screen.
+    if (body.month === undefined || body.month === null) {
+      return jsonError('Month is required', 400);
+    }
+    if (body.year === undefined || body.year === null) {
+      return jsonError('Year is required', 400);
+    }
 
     await env.DB.prepare(
       `UPDATE rent_payments SET
@@ -48,8 +58,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.paidDate ?? null,
         body.receivedDate ?? null,
         body.status ?? 'pending',
-        body.month ?? null,
-        body.year ?? null,
+        body.month,
+        body.year,
         body.paymentMethod ?? null,
         body.uploadedBy ?? null,
         body.uploadedAt ?? null,

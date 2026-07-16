@@ -1685,3 +1685,113 @@ Expected: `200` then `401` (the API is alive and still refuses anonymous callers
 ```bash
 npx wrangler pages deployment list --project-name dunns-rental | grep Production | head -1
 ```
+
+---
+
+### Task 15: Final review fixes
+
+Added mid-execution, after a final review of Tasks 1 to 14 found five places that
+still walked a year of months against `activeLeases` instead of the population a
+historical month walk actually needs, plus a handful of smaller correctness gaps.
+Landed in two waves: the backend and money-math half (`src/lib/rent.ts`,
+`Lease.pausedAt`, the leases API status whitelist, `paymentsForMonth`/`settleMonth`
+counting only `status === 'paid'`) shipped first; this task is the frontend and
+importer half that reads from it.
+
+**Files:**
+- Modify: `src/lib/rent.ts` (added `leasesOwingMonth`, done in the prior wave)
+- Modify: `src/pages/Rents.tsx`, `src/pages/Dashboard.tsx`, `src/pages/TenantDetail.tsx`, `src/pages/Tenants.tsx`, `src/pages/DataMigration.tsx`
+- Modify: `functions/api/payments/index.ts`, `functions/api/payments/[id].ts`
+- Modify: `src/context/AppContext.tsx`
+- Test: `src/lib/rent.test.ts`
+
+- [x] **Step 1: Add `leasesOwingMonth` and switch the five month-walk callsites**
+
+`leasesOwingMonth(leases, month, year)` returns every lease that owed rent for one
+historical month: the term covers it (`leaseCoversMonth`), regardless of whether the
+lease is now `ended`, and a `paused` lease only owes months strictly before its
+pause month. Switched to it: `Rents.tsx` `annualData`, `taxData`, `leaseMonthRows`,
+`yearStats`; `Dashboard.tsx` `totalOwed`. Each callsite's redundant inner
+`leaseCoversMonth` gate was removed since `leasesOwingMonth` does that gating
+itself. Left on `activeLeases` (forward-looking, correct as is): `monthlyRevenue`,
+the Reports rent roll, `Rents.tsx`'s CSV-import active-lease lookup (recording a
+new payment needs a currently active lease, not a historical one), `Dashboard.tsx`'s
+`totalTenants` and `upcomingRenewals`.
+
+- [x] **Step 2: Dashboard overdue table matches Rent Management**
+
+`Dashboard.tsx`'s Overdue Payments table filtered on `payment.status === 'overdue'`,
+a status nothing in the app ever writes, so it always showed zero while Rent
+Management (which settles per lease-month) showed the real count for the same
+data. Rewrote `overduePayments` to walk `leasesOwingMonth` over the elapsed months
+of the current year and keep the ones whose `settleMonth` status isn't `'paid'`,
+matching how `Rents.tsx` counts overdue. The table now shows a Period column
+(month/year) instead of a due date, since a lease-month has no single due date.
+
+- [x] **Step 3: Gate TenantDetail's "This Month"**
+
+`TenantDetail.tsx` called `settleMonth` unconditionally, so a lease starting next
+month showed a fabricated balance today. Gated on `leasesOwingMonth([lease], ...)`
+so a future-start or already-paused lease shows nothing due, consistent with every
+other page.
+
+- [x] **Step 4: Stamp dates on lease status changes**
+
+`Tenants.tsx`'s `handleLeaseStatusChange` now stamps `endDate` to today when ending
+a lease, stamps `pausedAt` to today when pausing, and clears `pausedAt` when
+resuming, using local date parts (`getFullYear`/`getMonth`/`getDate`) rather than
+`toISOString()` (UTC, rolls back a day late in the evening for the owner in
+America/Chicago). Neither action prompts for a date. The full lease object is sent
+either way, since the PUT endpoint overwrites every column rather than merging.
+
+- [x] **Step 5: Validate CSV status columns instead of casting them**
+
+`DataMigration.tsx` cast the LEASES `status` column (`cols[7] as LeaseStatus`)
+and passed the RENT_PAYMENTS `status` column through unchecked. A bad or wrongly
+cased value (`Active`) produced a lease `activeLeases` missed but `getUnitLease`
+still matched: unbillable and unbookable with no error shown. Both columns are now
+validated (case-insensitively) against the same `ValidationError` mechanism the
+importer already uses for unit and tenant id checks, defaulting an empty cell to
+`active` / `pending` and reporting a clean message for anything else.
+
+- [x] **Step 6: Require month and year on rent payments**
+
+`functions/api/payments/index.ts` and `functions/api/payments/[id].ts` bound
+`body.month ?? null` / `body.year ?? null`, so a payment could be created or
+updated with neither. Since `paymentsForMonth` matches on `month`/`year`, that
+payment would sit in the database invisible on every screen. Both endpoints now
+400 on a missing month or year, in both POST and PUT, the same way `leaseId` and
+`amount` already do.
+
+- [x] **Step 7: Delete `getAvailableUnits`**
+
+Removed from `AppContext.tsx` (state, type, and provider value). It had no
+callers and encoded the rule Task 9 deliberately rejected (`u.status === 'vacant'`
+instead of `!getUnitLease(unit.id)`, which also excludes a unit whose lease is
+merely paused).
+
+- [x] **Step 8: Tests**
+
+Added to `src/lib/rent.test.ts`: `leasesOwingMonth` still counting an ended lease
+for a month its term covered, excluding a lease whose term doesn't cover the
+month, counting a paused lease before its pause month but not on or after it, and
+a paused lease with no `pausedAt` still owing past months but not the current one;
+`paymentsForMonth` excluding a non-`paid` payment. 27 tests pass (20 prior plus 7
+new).
+
+- [x] **Step 9: Verify**
+
+`npx tsc -b`, `npx tsc -p functions/tsconfig.json` and `npm run build` all pass
+with zero errors. `npm test` passes 27/27. Local D1 was reset
+(`.wrangler/state/v3/d1` removed after stopping a stale `workerd` process holding
+its lock) and `npx wrangler d1 migrations apply dunns-rental-db --local` reapplied
+all seven migrations cleanly; confirmed via `sqlite_master` that `leases.paused_at`
+and the `CHECK (status IN ('active','paused','ended'))` constraint are present,
+and that the constraint actually rejects an invalid status.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/pages/Rents.tsx src/pages/Dashboard.tsx src/pages/TenantDetail.tsx src/pages/Tenants.tsx src/pages/DataMigration.tsx functions/api/payments src/context/AppContext.tsx src/lib/rent.test.ts docs/superpowers/plans/2026-07-15-lease-household-model.md
+git commit -m "fix: five month walks read the right population, plus smaller correctness gaps"
+```

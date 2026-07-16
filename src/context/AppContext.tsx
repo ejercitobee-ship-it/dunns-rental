@@ -162,7 +162,6 @@ interface AppContextType extends AppState {
   getUnitLease: (unitId: string) => Lease | undefined;
   getLeaseTenants: (leaseId: string) => Tenant[];
   getTenantLeases: (tenantId: string) => Lease[];
-  getAvailableUnits: (propertyId?: string) => Unit[];
   addProperty: (property: Omit<Property, 'id'>) => Promise<Property>;
   updateProperty: (property: Property) => Promise<void>;
   deleteProperty: (id: string) => Promise<void>;
@@ -252,11 +251,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (tenantId: string) => state.leases.filter(l => l.tenantIds.includes(tenantId)),
     [state.leases]
   );
-
-  const getAvailableUnits = useCallback((propertyId?: string) =>
-    state.units.filter(u =>
-      u.status === 'vacant' && (!propertyId || u.propertyId === propertyId)
-    ), [state.units]);
 
   const addProperty = async (property: Omit<Property, 'id'>) => {
     const newProperty = await propertiesApi.create(property);
@@ -385,7 +379,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         getUnitLease,
         getLeaseTenants,
         getTenantLeases,
-        getAvailableUnits,
         addProperty,
         updateProperty,
         deleteProperty,

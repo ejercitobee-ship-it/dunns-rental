@@ -54,6 +54,16 @@ const leaseStatusLabel: Record<LeaseStatus, string> = {
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
+// YYYY-MM-DD from local date parts, not toISOString(): toISOString() is UTC
+// and rolls back to yesterday's date for the owner in America/Chicago late
+// in the day.
+function todayLocalDate(): string {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 export function Tenants() {
   const {
     tenants, properties, units, leases,
@@ -233,7 +243,18 @@ export function Tenants() {
     setOpenMenuId(null);
     if (!confirm(confirmMessage)) return;
     try {
-      await updateLease({ ...lease, status });
+      // Neither action prompts for a date, so today is the only date the
+      // owner could mean. Ending stamps endDate (so leasesOwingMonth stops
+      // billing this lease from next month on, instead of it being billed
+      // forever on a blank or future endDate). Pausing stamps pausedAt.
+      // Resuming clears it, so the API PUT (which overwrites every column,
+      // not just the ones sent) needs the full lease object either way.
+      const today = todayLocalDate();
+      const dateFields: Partial<Lease> =
+        status === 'ended' ? { endDate: today }
+        : status === 'paused' ? { pausedAt: today }
+        : { pausedAt: undefined };
+      await updateLease({ ...lease, ...dateFields, status });
       showToast(successMessage, 'success');
     } catch (err) {
       showToast((err as Error).message, 'error');
