@@ -81,12 +81,15 @@ function About() {
         <div className="grid gap-10 md:grid-cols-2 md:items-center">
           <div className="order-2 md:order-1">
             <p className="eyebrow text-primary">About MH Dunn</p>
-            <h2 className="font-display text-3xl font-medium text-ink mt-3">A family business, named for Marlene</h2>
+            <h2 className="font-display text-3xl font-medium text-ink mt-3">Meet Marlene and Terry</h2>
             <p className="mt-6 text-lg text-muted leading-relaxed">
-              For more than twenty years, Marlene and Terry Dunn have owned and run MH Dunn Property together. The name is Marlene's, with Dunn being the family name, and it stands for the way they have always done things: homes kept to the standard they would want for their own family, and tenants treated like neighbors.
+              MH Dunn Property is Marlene and Terry Dunn. The name is hers, MH for Marlene's initials and Dunn for the family. For more than twenty years the two of them have owned these homes and looked after them together.
             </p>
             <p className="mt-4 text-lg text-muted leading-relaxed">
-              What began as a family business is still run like one. When you rent from MH Dunn, you are renting from people who answer the phone, know every home, and take real pride in looking after the families who live in them.
+              Terry spent even longer than that with the Chicago Police Department. He carries the same steadiness into the buildings, and when a tenant needs something handled, he is the one who shows up. Marlene keeps it personal. She knows the homes and she knows the families, so no one who rents here is just a name on a lease.
+            </p>
+            <p className="mt-4 text-lg text-muted leading-relaxed">
+              That is really the whole of it. A small family business, where the people who own your home are the people you can call, and where your home gets the same care they give their own.
             </p>
           </div>
           <div className="order-1 md:order-2">
