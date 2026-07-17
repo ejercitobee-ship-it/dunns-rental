@@ -262,6 +262,19 @@ export const documentsApi = {
   downloadUrl: (id: string) => `${API_BASE}/documents/${id}`,
 };
 
+// Google Drive API (document storage connection)
+export interface GoogleStatus {
+  connected: boolean;
+}
+
+export const googleApi = {
+  // Note: apiRequest already prefixes with API_BASE ('/api'), so these paths
+  // must not repeat it (unlike the raw fetch to /api/google/connect below,
+  // which is a full page redirect and never goes through apiRequest).
+  status: (): Promise<GoogleStatus> => apiRequest('/google/status'),
+  disconnect: () => apiRequest('/google/disconnect', { method: 'POST' }),
+};
+
 // Maintenance API
 export const maintenanceApi = {
   getAll: (): Promise<MaintenanceRequest[]> => apiRequest('/maintenance'),

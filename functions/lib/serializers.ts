@@ -124,6 +124,19 @@ export function serializeMaintenance(r: Row) {
   };
 }
 
+export function serializeDocument(r: Row) {
+  return {
+    id: r.id,
+    name: r.name,
+    contentType: r.content_type ?? undefined,
+    size: r.size ?? 0,
+    propertyId: r.property_id ?? undefined,
+    tenantId: r.tenant_id ?? undefined,
+    driveFileId: r.drive_file_id,
+    createdAt: r.created_at,
+  };
+}
+
 export function serializeIncome(r: Row) {
   return {
     id: r.id,
