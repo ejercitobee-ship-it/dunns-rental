@@ -49,6 +49,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const body = (await request.json()) as { realtorUserId?: string };
     if (!body.realtorUserId) return jsonError('A realtor is required', 400);
 
+    const tenant = await env.DB.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantId).first();
+    if (!tenant) return jsonError('Tenant not found', 404);
+
     const realtor = await env.DB.prepare(
       `SELECT u.id FROM user u
          JOIN user_roles ur ON ur.user_id = u.id

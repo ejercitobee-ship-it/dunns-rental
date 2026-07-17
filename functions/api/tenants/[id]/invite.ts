@@ -30,8 +30,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!tenant.email) return jsonError('This tenant has no email address to invite', 400);
     if (tenant.user_id) return jsonError('This tenant already has a login', 400);
 
+    // Store the login email normalised, because sign-in lowercases what the
+    // tenant types before looking the user up. Without this, a tenant whose
+    // record has any capital letter (Bob.Smith@Gmail.com) could set a password
+    // via the link and then never log in, and nothing would surface the break.
+    const email = tenant.email.trim().toLowerCase();
+
     const existing = await env.DB.prepare('SELECT id FROM user WHERE email = ?')
-      .bind(tenant.email)
+      .bind(email)
       .first();
     if (existing) return jsonError('Someone already uses that email address', 400);
 
@@ -45,10 +51,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       env.DB.prepare(
         `INSERT INTO user (id, name, email, email_verified, image, is_active, created_at, updated_at)
          VALUES (?, ?, ?, 0, NULL, 1, ?, ?)`
-      ).bind(userId, name, tenant.email, now, now),
+      ).bind(userId, name, email, now, now),
       env.DB.prepare(
         'INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).bind(crypto.randomUUID(), tenant.email, 'credential', userId, passwordHash, now, now),
+      ).bind(crypto.randomUUID(), email, 'credential', userId, passwordHash, now, now),
       env.DB.prepare(
         'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
       ).bind(crypto.randomUUID(), userId, 'tenant', now, now),
