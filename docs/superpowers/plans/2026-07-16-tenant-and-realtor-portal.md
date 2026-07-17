@@ -6,7 +6,7 @@
 
 **Architecture:** A separate `/portal` area with its own layout and its own endpoints under `functions/api/portal/`. Two new roles, `tenant` and `realtor`, carry no management permissions, so the existing `requirePermission` already refuses them everywhere in the management app. Every portal endpoint resolves the caller's own tenant from the session and never trusts a tenant id from the client.
 
-**Tech Stack:** Cloudflare Pages Functions, D1 (SQLite), R2 (documents), React 19, React Router 7, Tailwind v4, Vitest.
+**Tech Stack:** Cloudflare Pages Functions, D1 (SQLite), Google Drive (documents), React 19, React Router 7, Tailwind v4, Vitest.
 
 ## Global Constraints
 
@@ -23,26 +23,41 @@
 - Use `env.DB.batch([...])` for statements that must succeed together.
 - Design system only: components in `src/components/ui/`, tokens in `src/index.css`. No new colors or fonts.
 
-## Prerequisites, outside the code
+## Prerequisites: both are DONE
 
-Neither blocks building or local testing. Both block rollout. Belle does these.
+This plan was written before Google Drive storage landed. Both prerequisites it
+once listed are now satisfied, and the notes are kept only so nobody re-opens them:
 
-1. **R2 is not enabled.** `wrangler.jsonc` has the `DOCS` binding commented out because the bucket does not exist, and every document endpoint returns a friendly 503. Uploads do not work today for anyone. Before rollout: enable R2 on the account, `wrangler r2 bucket create dunns-rental-docs`, and restore the binding `"r2_buckets": [{ "binding": "DOCS", "bucket_name": "dunns-rental-docs" }]`. A binding to a bucket that does not exist fails the deploy at the Function publish step, so create the bucket first.
-2. **Resend's sending domain is unverified.** It delivers only to `info@mhdunnproperty.net`, so invites cannot reach a tenant. Verify `mhdunnproperty.net` in Resend (DNS records), then set `MAIL_FROM` to `MH Dunn Property <info@mhdunnproperty.net>`.
+1. **Document storage is Google Drive, and it is connected on production.** R2 was
+   never enabled and has been abandoned; do not revisit it. The `DOCS` binding stays
+   commented out in `wrangler.jsonc` forever. Documents live in Belle's Drive, one
+   folder per tenant, via `functions/lib/google.ts`.
+2. **Resend is verified.** `mhdunnproperty.net` is verified, `MAIL_FROM` is
+   `MH Dunn Property <info@mhdunnproperty.net>`, and a real email was confirmed
+   delivered. Invites can reach a tenant.
 
 ## Existing interfaces this builds on
 
-- `functions/lib/session.ts`: `Env` (`DB`, `DOCS?`, `RESEND_API_KEY?`, `MAIL_FROM?`), `SessionUser` (`id`, `email`, `name`, `role`, `permissions`), `requireUser`, `requirePermission`, `jsonOk`, `jsonError`, `unauthorized`, `forbidden`, `serverError`, `hashPassword`, `generateTempPassword`.
+- `functions/lib/session.ts`: `Env` (`DB`, `DOCS?`, `RESEND_API_KEY?`, `MAIL_FROM?`, `GOOGLE_CLIENT_ID?`, `GOOGLE_CLIENT_SECRET?`), `SessionUser` (`id`, `email`, `name`, `role`, `permissions`), `requireUser`, `requirePermission`, `jsonOk`, `jsonError`, `unauthorized`, `forbidden`, `serverError`, `hashPassword`, `generateTempPassword`, `parseCookies`.
+- **`functions/lib/google.ts` is the ONLY file that talks to Google.** It exports `ensureTenantFolder(env, tenantId): Promise<string>` (the tenant's Drive folder id, created on first use), `uploadToDrive(env, folderId, name, contentType, body: Blob): Promise<{ id: string }>`, `getDriveFileStream(env, fileId): Promise<Response>`, `deleteDriveFile(env, fileId)`, `isDriveConnected(env)`, and `class DriveNotConnected extends Error`. Portal endpoints call these; they never call Google directly and never touch R2.
 - `functions/lib/email.ts`: `sendEmail(env, {to, subject, html, text})` returns false when `RESEND_API_KEY` is unset.
 - `password_reset_tokens` (migration 0002): `id`, `user_id`, `token` UNIQUE, `expires_at`, `created_at`, `used_at`. The invite reuses this and the existing `/reset-password` page.
-- `documents` (migration 0006): `id`, `name`, `r2_key`, `content_type`, `size`, `property_id`, `tenant_id`, `uploaded_by`, `created_at`. **`uploaded_by` already stores the user id.** No column needs adding.
-- `tenants.user_id` exists (migration 0007) and is currently unused. It becomes the person to login link.
+- `documents` (**reshaped by migration 0009**): `id`, `name`, **`drive_file_id`** (NOT NULL; `r2_key` no longer exists), `content_type`, `size`, `property_id`, `tenant_id`, `uploaded_by`, `created_at`. **`uploaded_by` already stores the user id.** No column needs adding.
+- `functions/lib/serializers.ts`: the document serializer is **`serializeDocument`** (renamed from `serializeDoc` during the Drive build) and returns `driveFileId`.
+- `tenants.user_id` exists (migration 0007) and is currently unused. It becomes the person to login link. `tenants.drive_folder_id` (0009) holds the tenant's Drive folder.
 - `roles` table (migration 0004): `id`, `name`, `description`, `permissions` (JSON array), `is_system`.
 - `src/lib/rent.ts`: `settleMonth(lease, payments, month, year)`, `leaseCoversMonth`, `leasesOwingMonth`.
 
+## Migration numbering, corrected
+
+The portal migration is **`0010_portal.sql`**, not 0008. There is no 0008: it was
+only ever described in this plan and never written, and `0009_drive_storage.sql` has
+since been created AND applied to production. Everywhere below that says 0008 means
+0010.
+
 ## File structure
 
-- Create `migrations/0008_portal.sql` — the `tenant_realtors` link table and the two new roles.
+- Create `migrations/0010_portal.sql` — the `tenant_realtors` link table and the two new roles.
 - Create `functions/lib/portal.ts` — the access core. Pure rules plus the session to scope resolvers. This is the security boundary; everything else calls it.
 - Create `functions/lib/portal.test.ts` — tests for the pure rules.
 - Create `functions/api/portal/me.ts` — the tenant's own record and lease (GET, PUT).
@@ -65,7 +80,7 @@ Neither blocks building or local testing. Both block rollout. Belle does these.
 ### Task 1: Migration and the two new roles
 
 **Files:**
-- Create: `migrations/0008_portal.sql`
+- Create: `migrations/0010_portal.sql`
 
 **Interfaces:**
 - Produces: the `tenant_realtors` table (`id`, `tenant_id`, `realtor_user_id`, `created_at`) and role rows `tenant` and `realtor`.
@@ -111,7 +126,7 @@ Expected: both rows returned, each with `permissions` of `[]`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add migrations/0008_portal.sql
+git add migrations/0010_portal.sql
 git commit -m "feat: tenant_realtors link table and the tenant and realtor roles"
 ```
 
@@ -589,8 +604,16 @@ git commit -m "feat: portal payment history, lease totals with no payer attribut
 - Create: `functions/api/portal/documents/[id].ts`
 
 **Interfaces:**
-- Consumes: `reachableTenantIds`, `serverToday`.
+- Consumes: `reachableTenantIds`, `serverToday`, and from `functions/lib/google.ts`: `ensureTenantFolder`, `uploadToDrive`, `getDriveFileStream`, `DriveNotConnected`.
 - Produces: `GET /api/portal/documents?tenantId=`, `POST /api/portal/documents`, `GET /api/portal/documents/:id`.
+
+**Storage is Google Drive, not R2.** Ignore any `env.DOCS` in the snippets below if
+you see it; R2 was abandoned and the binding does not exist. Follow how
+`functions/api/documents/index.ts` already does it: `ensureTenantFolder` then
+`uploadToDrive`, storing the returned **file** id (not the folder id) in
+`documents.drive_file_id`. Catch `DriveNotConnected` and return the friendly 503
+`Google Drive is not connected. Connect it in Settings.` Never let a raw
+`Error.message` from the google module reach a response body.
 
 - [ ] **Step 1: Implement list and upload**
 
@@ -598,7 +621,8 @@ git commit -m "feat: portal payment history, lease totals with no payer attribut
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { reachableTenantIds, serverToday } from '../../../lib/portal';
-import { serializeDoc } from '../../../lib/serializers';
+import { ensureTenantFolder, uploadToDrive, DriveNotConnected } from '../../../lib/google';
+import { serializeDocument } from '../../../lib/serializers';
 
 /**
  * GET /api/portal/documents?tenantId=...
@@ -625,7 +649,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       `SELECT * FROM documents WHERE tenant_id IN (${placeholders}) ORDER BY created_at DESC`
     ).bind(...ids).all();
 
-    return jsonOk({ success: true, data: (results || []).map(serializeDoc) });
+    return jsonOk({ success: true, data: (results || []).map(serializeDocument) });
   } catch {
     return serverError();
   }
@@ -637,15 +661,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
  * A tenant may only upload to themselves; a realtor to a tenant inside their
  * window. Both cases fall out of the reachable set, so there is no separate
  * branch to get wrong.
+ *
+ * The bytes go to Belle's Google Drive, into the tenant's own folder, exactly
+ * as the staff endpoint does.
  */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requireUser(env, request);
   if (auth instanceof Response) return auth;
-
-  if (!env.DOCS) {
-    return jsonError('Document storage is not configured. Create the R2 bucket and bind it as DOCS.', 503);
-  }
 
   try {
     const form = await request.formData();
@@ -659,20 +682,27 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('You do not have access to that tenant', 403);
     }
 
-    const id = crypto.randomUUID();
-    const key = `tenants/${askedTenantId}/${id}-${file.name}`;
-    await env.DOCS.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type || 'application/octet-stream' },
-    });
+    const folderId = await ensureTenantFolder(env, askedTenantId);
+    const uploaded = await uploadToDrive(
+      env,
+      folderId,
+      file.name,
+      file.type || 'application/octet-stream',
+      file
+    );
 
+    const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO documents (id, name, r2_key, content_type, size, property_id, tenant_id, uploaded_by)
+      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, tenant_id, uploaded_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, file.name, key, file.type || null, file.size, null, askedTenantId, auth.id).run();
+    ).bind(id, file.name, uploaded.id, file.type || null, file.size, null, askedTenantId, auth.id).run();
 
     const row = await env.DB.prepare('SELECT * FROM documents WHERE id = ?').bind(id).first();
-    return jsonOk({ success: true, data: serializeDoc(row as Record<string, unknown>) }, 201);
-  } catch {
+    return jsonOk({ success: true, data: serializeDocument(row as Record<string, unknown>) }, 201);
+  } catch (err) {
+    if (err instanceof DriveNotConnected) {
+      return jsonError('Google Drive is not connected. Connect it in Settings.', 503);
+    }
     return serverError();
   }
 };
@@ -684,6 +714,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonError, serverError } from '../../../lib/session';
 import { reachableTenantIds, serverToday } from '../../../lib/portal';
+import { getDriveFileStream, DriveNotConnected } from '../../../lib/google';
 
 /**
  * GET /api/portal/documents/:id — stream a document the caller may reach.
@@ -697,12 +728,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
   const auth = await requireUser(env, request);
   if (auth instanceof Response) return auth;
-  if (!env.DOCS) return jsonError('Document storage is not configured', 503);
 
   try {
     const meta = await env.DB.prepare('SELECT * FROM documents WHERE id = ?')
       .bind(params.id as string)
-      .first<{ r2_key: string; name: string; content_type: string | null; tenant_id: string | null }>();
+      .first<{ drive_file_id: string; name: string; content_type: string | null; tenant_id: string | null }>();
     if (!meta) return jsonError('Document not found', 404);
 
     const reachable = await reachableTenantIds(env, auth, serverToday());
@@ -710,16 +740,23 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       return jsonError('Document not found', 404);
     }
 
-    const object = await env.DOCS.get(meta.r2_key);
-    if (!object) return jsonError('Document not found', 404);
+    const upstream = await getDriveFileStream(env, meta.drive_file_id);
+    if (!upstream.ok) return jsonError('Document not found', 404);
 
-    return new Response(object.body as unknown as BodyInit, {
+    // attachment + an encoded filename, matching the staff endpoint. The name is
+    // user supplied, so an unencoded one is header injection. no-store because
+    // these are tenants' personal documents and must not sit in a cache.
+    return new Response(upstream.body, {
       headers: {
         'Content-Type': meta.content_type || 'application/octet-stream',
-        'Content-Disposition': `inline; filename="${meta.name}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.name)}"`,
+        'Cache-Control': 'private, no-store',
       },
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof DriveNotConnected) {
+      return jsonError('Google Drive is not connected. Connect it in Settings.', 503);
+    }
     return serverError();
   }
 };
@@ -1277,7 +1314,7 @@ Expected: clean, green, and all tests passing.
 
 - [ ] **Step 6: Ship**
 
-Prerequisites first, both Belle's to do: create the R2 bucket and restore the `DOCS` binding, and verify `mhdunnproperty.net` in Resend. Then:
+There are no outstanding prerequisites: Drive is connected on production and Resend is verified. Then:
 
 ```bash
 npx wrangler d1 migrations apply dunns-rental-db --remote
