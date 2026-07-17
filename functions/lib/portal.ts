@@ -40,3 +40,77 @@ export function realtorWindowOpen(
 ): boolean {
   return today <= realtorAccessEndsOn(leaseStartDate, linkedOnDate);
 }
+
+// ---------------------------------------------------------------------------
+// Scope resolvers — the one place that decides which tenants a portal caller
+// may reach. Every portal endpoint must derive its reachable set from here,
+// from the session, never from a client supplied id. A client supplied id is
+// only ever used to filter WITHIN this resolved set.
+// ---------------------------------------------------------------------------
+
+import type { Env, SessionUser } from './session';
+
+/** Today as YYYY-MM-DD. The server has no timezone, so callers may pass one. */
+export function serverToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** The tenant record belonging to a login, or null. One user, one tenant. */
+export async function tenantIdForUser(env: Env, userId: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT id FROM tenants WHERE user_id = ?')
+    .bind(userId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
+/**
+ * The tenants a realtor may currently see: linked to them, and still inside
+ * the window. The window is anchored on the tenant's most recent lease start,
+ * which is what "move in" means for that person.
+ */
+export async function realtorTenantIds(
+  env: Env,
+  userId: string,
+  today: string
+): Promise<string[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT tr.tenant_id AS tenant_id,
+            date(tr.created_at, 'unixepoch') AS linked_on,
+            (SELECT l.start_date
+               FROM leases l
+               JOIN lease_tenants lt ON lt.lease_id = l.id
+              WHERE lt.tenant_id = tr.tenant_id
+              ORDER BY l.start_date DESC
+              LIMIT 1) AS lease_start
+       FROM tenant_realtors tr
+      WHERE tr.realtor_user_id = ?`
+  )
+    .bind(userId)
+    .all<{ tenant_id: string; linked_on: string; lease_start: string | null }>();
+
+  return (results || [])
+    .filter(r => realtorWindowOpen(r.lease_start ?? undefined, r.linked_on, today))
+    .map(r => r.tenant_id);
+}
+
+/**
+ * Every tenant id this caller may reach, whoever they are. A tenant reaches
+ * exactly themselves. A realtor reaches their linked tenants inside the window.
+ * Anyone else reaches nothing through the portal.
+ *
+ * Endpoints filter within this set. They never fetch by a client supplied id.
+ */
+export async function reachableTenantIds(
+  env: Env,
+  auth: SessionUser,
+  today: string
+): Promise<string[]> {
+  if (auth.role === 'tenant') {
+    const id = await tenantIdForUser(env, auth.id);
+    return id ? [id] : [];
+  }
+  if (auth.role === 'realtor') {
+    return realtorTenantIds(env, auth.id, today);
+  }
+  return [];
+}
