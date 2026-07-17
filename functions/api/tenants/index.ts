@@ -34,11 +34,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('First and last name are required', 400);
     }
 
+    // user_id is deliberately NOT set here. It means "this person's own portal
+    // login" and is filled in only when the tenant is invited to the portal.
+    // It used to be bound to auth.id, the staff member who created the record,
+    // which put one admin's id on every tenant row. The portal resolves a
+    // tenant with `WHERE user_id = ?` and takes the first match, so that would
+    // have handed whoever it matched an arbitrary tenant's documents.
     const id = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO tenants (id, first_name, last_name, email, phone, notes,
-        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -49,8 +55,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.notes ?? null,
         ec.name ?? null,
         ec.phone ?? null,
-        ec.relationship ?? null,
-        auth.id
+        ec.relationship ?? null
       )
       .run();
 

@@ -20,3 +20,20 @@ CREATE INDEX IF NOT EXISTS idx_tenant_realtors_realtor ON tenant_realtors(realto
 INSERT OR IGNORE INTO roles (id, name, description, permissions, is_system) VALUES
   ('tenant', 'Tenant', 'Portal only. Sees and edits their own information.', '[]', 1),
   ('realtor', 'Realtor', 'Portal only. Sees tenants they placed, within the access window.', '[]', 1);
+
+-- tenants.user_id means "this person's own portal login" and nothing else.
+--
+-- POST /api/tenants used to bind auth.id here, the STAFF MEMBER who created the
+-- record, so in production every tenant row carried the same admin's id. The
+-- portal resolves a tenant with `WHERE user_id = ?` and takes the first match,
+-- so once tenant logins existed that would have handed someone an arbitrary
+-- tenant's documents. The endpoint no longer writes it; clear what it wrote.
+--
+-- Only clear ids that belong to a real login, which is all of them today. A
+-- genuine tenant link cannot exist yet: nothing has ever created one.
+UPDATE tenants SET user_id = NULL WHERE user_id IS NOT NULL;
+
+-- Make the "one login, one tenant" rule real rather than a comment. A UNIQUE
+-- INDEX is used because SQLite cannot add a UNIQUE constraint via ALTER, and it
+-- permits many NULLs, so every un-invited tenant is unaffected.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_user_id ON tenants(user_id);
