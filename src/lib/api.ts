@@ -165,6 +165,23 @@ export const unitsApi = {
     apiRequest(`/units/${id}`, { method: 'DELETE' }),
 };
 
+// A realtor linked to a tenant, as GET /api/tenants/:id/realtors returns it.
+export interface TenantRealtorLink {
+  id: string;
+  realtorUserId: string;
+  name: string;
+  email: string;
+  linkedOn: string;
+  accessEndsOn: string;
+}
+
+// Response of POST /api/tenants/:id/invite. When mail isn't configured,
+// `inviteUrl` carries the set-password link so Belle can pass it on by hand.
+export interface InviteResult {
+  emailSent: boolean;
+  inviteUrl?: string;
+}
+
 // Tenants API
 export const tenantsApi = {
   getAll: (): Promise<Tenant[]> => apiRequest('/tenants'),
@@ -175,7 +192,28 @@ export const tenantsApi = {
     apiRequest(`/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/tenants/${id}`, { method: 'DELETE' }),
+  // Gives the tenant a portal login. 400s with "This tenant already has a
+  // login" (or "no email address") when it can't — there is no field on the
+  // tenant that says this up front, so the caller shows that message as-is.
+  invite: (id: string): Promise<InviteResult> =>
+    apiRequest(`/tenants/${id}/invite`, { method: 'POST' }),
+  getRealtors: (id: string): Promise<TenantRealtorLink[]> =>
+    apiRequest(`/tenants/${id}/realtors`),
+  linkRealtor: (id: string, realtorUserId: string) =>
+    apiRequest(`/tenants/${id}/realtors`, { method: 'POST', body: JSON.stringify({ realtorUserId }) }),
+  unlinkRealtor: (id: string, realtorUserId: string) =>
+    apiRequest(`/tenants/${id}/realtors?realtorUserId=${encodeURIComponent(realtorUserId)}`, { method: 'DELETE' }),
+  // The realtor-role users, for the link picker. Gated on tenants_edit server
+  // side, so it works for any staff member who can link a realtor, not only
+  // those who also hold users_view.
+  listRealtorUsers: (): Promise<RealtorUserOption[]> => apiRequest('/realtors'),
 };
+
+export interface RealtorUserOption {
+  id: string;
+  name: string;
+  email: string;
+}
 
 // Leases API
 export const leasesApi = {
@@ -311,6 +349,26 @@ export interface PortalPaymentsResponse {
   payments: PortalPayment[];
 }
 
+/**
+ * A tenant as the portal's allowlist serializer returns it
+ * (serializePortalTenant): same shape as `Tenant` minus `notes`, which is the
+ * owner's private note and never travels to a tenant or realtor session.
+ */
+export interface PortalPerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  emergencyContact?: { name: string; phone: string; relationship: string };
+}
+
+/** A tenant as a realtor's list sees them: the allowlisted person plus the
+ * unit they were placed in (joined server side from their most recent lease). */
+export interface RealtorTenantSummary extends PortalPerson {
+  unitNumber?: string;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   updateMe: (data: unknown): Promise<Tenant> =>
@@ -339,8 +397,8 @@ export const portalApi = {
   // route (requirePermission('tenants_view')), which a tenant or realtor
   // session has no permission to hit. This is the portal's own route.
   downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
-  realtorTenants: () => apiRequest('/portal/realtor/tenants'),
-  realtorTenant: (id: string) => apiRequest(`/portal/realtor/tenants/${id}`),
+  realtorTenants: (): Promise<RealtorTenantSummary[]> => apiRequest('/portal/realtor/tenants'),
+  realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
 };
 
 // Maintenance API
