@@ -120,12 +120,21 @@ export async function exchangeCodeForRefreshToken(
   await putSetting(env, KEY_ACCESS_EXPIRES, String(now + data.expires_in));
 }
 
-/** Forget the connection. Files already in Drive are left alone. */
+/**
+ * Forget the connection. Files already in Drive are left alone: they are the
+ * owner's, and disconnecting an integration should not touch her documents.
+ *
+ * The root folder id is deliberately KEPT. Reconnecting the same account then
+ * re-adopts the existing folder instead of making a second "MH Dunn Property
+ * Documents" beside the first and splitting the tenant folders across the two.
+ * If a DIFFERENT account connects, the stale id simply is not reachable under
+ * the drive.file scope, folderAlive returns false, and a fresh root is made.
+ * So keeping it is right in both cases.
+ */
 export async function disconnectDrive(env: Env): Promise<void> {
   await delSetting(env, KEY_REFRESH);
   await delSetting(env, KEY_ACCESS);
   await delSetting(env, KEY_ACCESS_EXPIRES);
-  await delSetting(env, KEY_ROOT_FOLDER);
 }
 
 async function createFolder(env: Env, name: string, parentId?: string): Promise<string> {
