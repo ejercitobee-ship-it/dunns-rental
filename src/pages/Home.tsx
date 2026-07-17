@@ -19,7 +19,7 @@ function PublicHeader() {
         </button>
 
         <nav className="hidden md:flex items-center gap-8 text-sm text-muted">
-          <button onClick={() => scrollToId('top')} className="hover:text-ink transition-colors">Homes</button>
+          <button onClick={() => scrollToId('top')} className="hover:text-ink transition-colors">Home</button>
           <button onClick={() => scrollToId('about')} className="hover:text-ink transition-colors">About</button>
           <button onClick={() => scrollToId('contact')} className="hover:text-ink transition-colors">Contact</button>
         </nav>
@@ -72,11 +72,15 @@ function Hero() {
 function About() {
   return (
     <section id="about" className="bg-canvas">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20">
-        <div className="grid gap-10 lg:gap-14 md:grid-cols-2 md:items-start">
-          {/* Photo on the left. It sticks on desktop so it stays beside the
-              story rather than leaving a tall gap under itself. */}
-          <figure className="md:sticky md:top-24">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 py-20">
+        <p className="eyebrow text-primary">About MH Dunn</p>
+        <h2 className="font-display text-3xl font-medium text-ink mt-3">Meet Marlene and Terry</h2>
+
+        {/* The photo floats inside the story so the copy wraps around it,
+            instead of sitting in its own column with a gap underneath. On
+            small screens it drops the float and stacks full width. */}
+        <div className="mt-6 text-lg text-muted leading-relaxed [&>p]:mb-4 [&>p:last-child]:mb-0">
+          <figure className="mb-5 sm:float-left sm:mr-7 sm:mb-3 sm:w-[44%] sm:max-w-xs">
             <img
               src={dunnFamily}
               alt="Marlene and Terry Dunn"
@@ -84,29 +88,22 @@ function About() {
             />
             <figcaption className="mt-3 text-center text-sm text-faint">Marlene and Terry Dunn</figcaption>
           </figure>
-
-          {/* Story on the right. */}
-          <div>
-            <p className="eyebrow text-primary">About MH Dunn</p>
-            <h2 className="font-display text-3xl font-medium text-ink mt-3">Meet Marlene and Terry</h2>
-            <div className="mt-6 space-y-4 text-lg text-muted leading-relaxed">
-              <p>
-                MH Dunn Property is a family-owned business built by Marlene and Terry Dunn. The name comes from Marlene's first and middle initials, combined with the Dunn family name.
-              </p>
-              <p>
-                For more than 20 years, they've owned and cared for these homes together. They believe that being a landlord is about more than maintaining properties. It's about creating places where people feel comfortable calling home.
-              </p>
-              <p>
-                Before dedicating his time to the business, Terry served with the Chicago Police Department for many years. He brings that same dependable, hands-on approach to every property. When something needs to be fixed or taken care of, he's often the one who shows up.
-              </p>
-              <p>
-                Marlene focuses on building relationships with tenants. She knows the properties, the people who live in them, and believes everyone deserves to be treated with respect and care, not as just another name on a lease.
-              </p>
-              <p>
-                At the end of the day, MH Dunn Property is simply a small family business that takes pride in providing well-maintained homes and being there when tenants need them. When you rent from MH Dunn Property, you're working directly with the people who own and care for your home.
-              </p>
-            </div>
-          </div>
+          <p>
+            MH Dunn Property is a family-owned business built by Marlene and Terry Dunn. The name comes from Marlene's first and middle initials, combined with the Dunn family name.
+          </p>
+          <p>
+            For more than 20 years, they've owned and cared for these homes together. They believe that being a landlord is about more than maintaining properties. It's about creating places where people feel comfortable calling home.
+          </p>
+          <p>
+            Before dedicating his time to the business, Terry served with the Chicago Police Department for many years. He brings that same dependable, hands-on approach to every property. When something needs to be fixed or taken care of, he's often the one who shows up.
+          </p>
+          <p>
+            Marlene focuses on building relationships with tenants. She knows the properties, the people who live in them, and believes everyone deserves to be treated with respect and care, not as just another name on a lease.
+          </p>
+          <p>
+            At the end of the day, MH Dunn Property is simply a small family business that takes pride in providing well-maintained homes and being there when tenants need them. When you rent from MH Dunn Property, you're working directly with the people who own and care for your home.
+          </p>
+          <div className="clear-both" />
         </div>
       </div>
     </section>
