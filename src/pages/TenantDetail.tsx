@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
-  FileText, Upload, Download, Trash2, Users, ShieldAlert,
+  FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -10,8 +10,9 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { documentsApi, type AppDocument } from '../lib/api';
+import { documentsApi, tenantsApi, type AppDocument, type TenantRealtorLink } from '../lib/api';
 import { leasesOwingMonth, settleMonth } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
@@ -47,9 +48,11 @@ export function TenantDetail() {
     tenants, properties, units, rentPayments,
     updateTenant, getLeaseTenants, getTenantLeases,
   } = useApp();
+  const { hasPermission, users } = useAuth();
   const { showToast } = useToast();
 
   const tenant = tenants.find(t => t.id === id);
+  const canManagePortal = hasPermission('tenants_edit');
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [form, setForm] = useState({
@@ -66,10 +69,41 @@ export function TenantDetail() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Portal access: who is invited, and which realtors are linked. Only
+  // fetched when this viewer can act on it, since the endpoints require
+  // tenants_edit and would otherwise just 403.
+  const [realtors, setRealtors] = useState<TenantRealtorLink[]>([]);
+  const [realtorsLoading, setRealtorsLoading] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [selectedRealtorId, setSelectedRealtorId] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [removingRealtorId, setRemovingRealtorId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
     documentsApi.list(id).then(setDocs).catch(() => setDocs([]));
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !canManagePortal) return;
+    let cancelled = false;
+    setRealtorsLoading(true);
+    tenantsApi
+      .getRealtors(id)
+      .then((list) => {
+        if (!cancelled) setRealtors(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRealtors([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRealtorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, canManagePortal]);
 
   const lease = useMemo(() => {
     if (!id) return undefined;
@@ -173,6 +207,57 @@ export function TenantDetail() {
       showToast((err as Error).message || 'Could not delete', 'error');
     }
   };
+
+  // There is no field that says a tenant already has a login: the invite
+  // endpoint is the source of truth, and answers with a 400 ("This tenant
+  // already has a login") when one exists. So the button is always shown,
+  // and whatever the server says is passed straight through as the toast.
+  const handleInvite = async () => {
+    if (!id || inviting) return;
+    setInviting(true);
+    try {
+      const result = await tenantsApi.invite(id);
+      if (result.inviteUrl) setInviteUrl(result.inviteUrl);
+      showToast('Invite sent', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not send the invite', 'error');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleLinkRealtor = async () => {
+    if (!id || !selectedRealtorId || linking) return;
+    setLinking(true);
+    try {
+      await tenantsApi.linkRealtor(id, selectedRealtorId);
+      setRealtors(await tenantsApi.getRealtors(id));
+      setSelectedRealtorId('');
+      showToast('Realtor linked', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not link that realtor', 'error');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleRemoveRealtor = async (realtorUserId: string) => {
+    if (!id || removingRealtorId) return;
+    setRemovingRealtorId(realtorUserId);
+    try {
+      await tenantsApi.unlinkRealtor(id, realtorUserId);
+      setRealtors(prev => prev.filter(r => r.realtorUserId !== realtorUserId));
+      showToast('Realtor removed', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove that realtor', 'error');
+    } finally {
+      setRemovingRealtorId(null);
+    }
+  };
+
+  const availableRealtors = users.filter(
+    u => u.role.id === 'realtor' && !realtors.some(r => r.realtorUserId === u.id)
+  );
 
   if (!tenant) {
     return (
@@ -379,6 +464,106 @@ export function TenantDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Portal access */}
+      {canManagePortal && (
+        <Card>
+          <CardContent className="p-5 space-y-5">
+            <h3 className="font-semibold text-ink flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-faint" /> Portal Access
+            </h3>
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm text-ink font-medium">Tenant login</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Give this person their own sign in to the tenant portal.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" disabled={inviting} onClick={handleInvite}>
+                {inviting ? 'Sending...' : 'Invite to Portal'}
+              </Button>
+            </div>
+
+            {inviteUrl && (
+              <div className="px-3 py-2.5 bg-canvas border border-line rounded-lg space-y-1.5">
+                <p className="text-xs text-muted">
+                  Email is not set up, so send this link to the tenant yourself.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs text-ink break-all flex-1">{inviteUrl}</code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(inviteUrl);
+                      showToast('Link copied', 'success');
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-line space-y-3">
+              <p className="text-sm text-ink font-medium flex items-center gap-2">
+                <Briefcase className="h-3.5 w-3.5 text-faint" /> Realtors
+              </p>
+
+              {realtorsLoading ? (
+                <p className="text-sm text-muted">Loading.</p>
+              ) : realtors.length === 0 ? (
+                <p className="text-sm text-faint">No realtor linked to this person.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {realtors.map(r => (
+                    <div key={r.id} className="flex items-center justify-between px-3 py-2 border border-line rounded-lg">
+                      <div>
+                        <p className="text-sm text-ink">{r.name}</p>
+                        <p className="text-xs text-muted">Access ends {formatDate(r.accessEndsOn)}</p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveRealtor(r.realtorUserId)}
+                        disabled={removingRealtorId === r.realtorUserId}
+                        className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {availableRealtors.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="flex-1 px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    value={selectedRealtorId}
+                    onChange={(e) => setSelectedRealtorId(e.target.value)}
+                  >
+                    <option value="">Choose a realtor...</option>
+                    {availableRealtors.map(u => (
+                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!selectedRealtorId || linking}
+                    onClick={handleLinkRealtor}
+                  >
+                    {linking ? 'Linking...' : 'Link'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payment history */}
       <Card>
