@@ -1,6 +1,6 @@
 import type { Env } from './session';
 
-const DEFAULT_FROM = "Dunn's Rental <info@mhdunnproperty.net>";
+const DEFAULT_FROM = 'MH Dunn Property <info@mhdunnproperty.net>';
 
 /**
  * Send a transactional email via Resend. Returns false when no API key is
