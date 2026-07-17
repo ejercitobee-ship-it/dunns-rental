@@ -184,3 +184,19 @@ export interface DashboardStats {
 }
 
 export type ViewType = 'dashboard' | 'properties' | 'tenants' | 'rents' | 'expenses' | 'income';
+
+/** Roles that belong in the portal and must never reach the management app. */
+export const PORTAL_ROLES = ['tenant', 'realtor'] as const;
+
+export function isPortalRole(roleId?: string): boolean {
+  return roleId === 'tenant' || roleId === 'realtor';
+}
+
+export interface PortalPayment {
+  amount: number;
+  dueDate?: string;
+  paidDate?: string;
+  status: 'paid' | 'pending' | 'overdue' | 'partial';
+  month: number;
+  year: number;
+}

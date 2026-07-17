@@ -20,14 +20,30 @@ import { TaxReport } from './pages/TaxReport';
 import { DataMigration } from './pages/DataMigration';
 import { Settings } from './pages/Settings';
 import { Users } from './pages/Users';
+import { PortalLayout } from './components/PortalLayout';
+import { TenantHome } from './pages/portal/TenantHome';
+import { TenantPayments } from './pages/portal/TenantPayments';
+import { TenantInfo } from './pages/portal/TenantInfo';
+import { TenantDocuments } from './pages/portal/TenantDocuments';
+import { RealtorTenants } from './pages/portal/RealtorTenants';
+import { RealtorTenantDetail } from './pages/portal/RealtorTenantDetail';
+import { isPortalRole } from './types';
 
 // Protected Route component
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: string }) {
-  const { isAuthenticated, hasPermission } = useAuth();
+  const { isAuthenticated, hasPermission, user } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // A portal role (tenant, realtor) has no management permissions on the
+  // server, so a deep link into a management route (e.g. /rents) would show
+  // them nothing but errors. Bounce them to their own portal instead of the
+  // dashboard.
+  if (isPortalRole(user?.role.id)) {
+    return <Navigate to="/portal" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
@@ -48,14 +64,42 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * The portal wall on the client. The real wall is server side: tenant and
+ * realtor roles hold no permissions, so requirePermission refuses them on
+ * every management endpoint. This only stops them loading a page that would
+ * show them nothing but errors.
+ */
+function PortalRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isPortalRole(user?.role.id)) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+// The portal landing: a tenant sees their home, a realtor sees their tenant
+// list. Both pages are placeholders until Tasks 10 and 11 build them out.
+function PortalIndex() {
+  const { user } = useAuth();
+  if (user?.role.id === 'realtor') {
+    return <RealtorTenants />;
+  }
+  return <TenantHome />;
+}
+
 // The site root. A logged-out visitor sees the public homepage; a logged-in
 // user sees their dashboard, exactly as before. Keeping the dashboard at "/"
 // means no existing link, nav item, or redirect has to change.
 function RootRoute() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   if (!isAuthenticated) {
     return <Home />;
+  }
+
+  // A portal user never sees the management dashboard.
+  if (isPortalRole(user?.role.id)) {
+    return <Navigate to="/portal" replace />;
   }
 
   return (
@@ -104,7 +148,37 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
       
       <Route path="/" element={<RootRoute />} />
-      
+
+      <Route path="/portal" element={
+        <PortalRoute>
+          <PortalLayout><PortalIndex /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/payments" element={
+        <PortalRoute>
+          <PortalLayout><TenantPayments /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/information" element={
+        <PortalRoute>
+          <PortalLayout><TenantInfo /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/documents" element={
+        <PortalRoute>
+          <PortalLayout><TenantDocuments /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/tenants/:id" element={
+        <PortalRoute>
+          <PortalLayout><RealtorTenantDetail /></PortalLayout>
+        </PortalRoute>
+      } />
+
       <Route path="/properties" element={
         <ProtectedRoute requiredPermission="properties_view">
           <Layout><Properties /></Layout>
