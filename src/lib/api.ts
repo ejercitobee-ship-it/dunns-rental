@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment } from '../types';
 
 const API_BASE = '/api';
 
@@ -278,12 +278,65 @@ export const googleApi = {
 // Portal API (tenant and realtor self-service)
 // Note: apiRequest already prefixes with API_BASE ('/api'), so these paths
 // must not repeat it: pass '/portal/...', not '/api/portal/...'.
+
+/**
+ * A lease as the portal serializer returns it (serializePortalLease): an
+ * allowlist that omits `pauses` and `tenantIds`, unlike the full `Lease`
+ * shape the management app uses. Callers that need `settleMonth` or
+ * `leaseCoversMonth` (which expect a full `Lease`) fill those two in with
+ * empty defaults; neither function reads them.
+ */
+export interface PortalLease {
+  id: string;
+  unitId?: string;
+  propertyId?: string;
+  startDate?: string;
+  endDate?: string;
+  monthlyRent: number;
+  securityDeposit?: number;
+  status: LeaseStatus;
+}
+
+export interface PortalMeResponse {
+  tenant: Tenant;
+  lease: PortalLease | null;
+  unit: Unit | null;
+  property: Property | null;
+}
+
+export interface PortalPaymentsResponse {
+  lease: PortalLease | null;
+  payments: PortalPayment[];
+}
+
 export const portalApi = {
-  me: () => apiRequest('/portal/me'),
-  updateMe: (data: unknown) => apiRequest('/portal/me', { method: 'PUT', body: JSON.stringify(data) }),
-  payments: (): Promise<PortalPayment[]> => apiRequest('/portal/payments'),
-  documents: (tenantId?: string) =>
+  me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
+  updateMe: (data: unknown): Promise<Tenant> =>
+    apiRequest('/portal/me', { method: 'PUT', body: JSON.stringify(data) }),
+  // { lease, payments }, not a bare array: see PortalPaymentsResponse. No
+  // payer field travels on any payment row (Belle's decision: on a shared
+  // lease a tenant never sees who paid what).
+  payments: (): Promise<PortalPaymentsResponse> => apiRequest('/portal/payments'),
+  documents: (tenantId?: string): Promise<AppDocument[]> =>
     apiRequest(`/portal/documents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
+  // Multipart, like documentsApi.upload: no Content-Type header, so the
+  // browser sets the multipart boundary itself.
+  uploadDocument: async (file: File, tenantId: string): Promise<AppDocument> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('tenantId', tenantId);
+    const res = await fetch(`${API_BASE}/portal/documents`, { method: 'POST', credentials: 'include', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.data !== undefined ? data.data : data;
+  },
+  // NOT documentsApi.downloadUrl: that builds /api/documents/:id, the staff
+  // route (requirePermission('tenants_view')), which a tenant or realtor
+  // session has no permission to hit. This is the portal's own route.
+  downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
   realtorTenants: () => apiRequest('/portal/realtor/tenants'),
   realtorTenant: (id: string) => apiRequest(`/portal/realtor/tenants/${id}`),
 };
