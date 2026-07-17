@@ -111,6 +111,9 @@ export function serializePortalLease(r: Row) {
     monthlyRent: full.monthlyRent,
     securityDeposit: full.securityDeposit,
     status: full.status,
+    // The tenant's own pause history, not private: without it the portal would
+    // show a month the owner paused as unpaid. The endpoint fills r.pauses in.
+    pauses: full.pauses,
   };
 }
 

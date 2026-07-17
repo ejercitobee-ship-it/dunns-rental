@@ -50,9 +50,30 @@ export function realtorWindowOpen(
 
 import type { Env, SessionUser } from './session';
 
-/** Today as YYYY-MM-DD. The server has no timezone, so callers may pass one. */
+/** Today as YYYY-MM-DD. */
 export function serverToday(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * A lease's pause intervals, oldest first, in the shape serializeLease expects.
+ * The portal fetches one lease at a time, so this attaches its pauses before
+ * serialising. Without them the tenant's pages would show a paused month as
+ * unpaid, disagreeing with the owner's own Rent Management for the same lease.
+ */
+export async function leasePauses(
+  env: Env,
+  leaseId: string
+): Promise<{ pausedAt: string; resumedAt?: string }[]> {
+  const { results } = await env.DB.prepare(
+    'SELECT paused_at, resumed_at FROM lease_pauses WHERE lease_id = ? ORDER BY paused_at'
+  )
+    .bind(leaseId)
+    .all<{ paused_at: string; resumed_at: string | null }>();
+  return (results || []).map(p => ({
+    pausedAt: p.paused_at,
+    resumedAt: p.resumed_at ?? undefined,
+  }));
 }
 
 /** The tenant record belonging to a login, or null. One user, one tenant. */

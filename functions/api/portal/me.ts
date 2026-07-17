@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib/session';
-import { tenantIdForUser } from '../../lib/portal';
+import { tenantIdForUser, leasePauses } from '../../lib/portal';
 import { serializePortalTenant, serializePortalLease, serializeUnit, serializeProperty } from '../../lib/serializers';
 
 /** GET /api/portal/me — the caller's own person record, lease, unit, property. */
@@ -24,6 +24,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         WHERE lt.tenant_id = ? AND l.status != 'ended'
         ORDER BY l.start_date DESC LIMIT 1`
     ).bind(tenantId).first();
+
+    // Attach the lease's pause intervals so the tenant's pages agree with the
+    // owner's Rent Management about which months were actually owed.
+    if (lease) {
+      (lease as Record<string, unknown>).pauses = await leasePauses(env, lease.id as string);
+    }
 
     const unit = lease?.unit_id
       ? await env.DB.prepare('SELECT * FROM units WHERE id = ?').bind(lease.unit_id).first()
