@@ -53,6 +53,28 @@ export function serializeTenant(r: Row) {
   };
 }
 
+/**
+ * A tenant as the portal may see them. Identical to serializeTenant minus
+ * `notes`, which is Belle's private note about the person and is never shown
+ * to the tenant or to a realtor.
+ */
+export function serializePortalTenant(r: Row) {
+  // An ALLOWLIST, deliberately, not `serializeTenant` minus notes. Stripping one
+  // field fails open: the day someone adds a field to serializeTenant, it would
+  // appear in the portal for tenants and realtors without anyone deciding that.
+  // Naming what may be shown means a new field stays private until someone
+  // chooses otherwise. `notes` is the owner's private note and is absent here.
+  const full = serializeTenant(r) as Record<string, unknown>;
+  return {
+    id: full.id,
+    firstName: full.firstName,
+    lastName: full.lastName,
+    email: full.email,
+    phone: full.phone,
+    emergencyContact: full.emergencyContact,
+  };
+}
+
 export function serializeLease(r: Row) {
   return {
     id: r.id,
@@ -68,6 +90,27 @@ export function serializeLease(r: Row) {
     tenantIds: (r.tenantIds as string[]) ?? [],
     // Filled in by the leases endpoints, which join lease_pauses.
     pauses: (r.pauses as { pausedAt: string; resumedAt?: string }[]) ?? [],
+  };
+}
+
+/**
+ * A lease as the portal may see it. An ALLOWLIST, like serializePortalTenant:
+ * `notes` is the owner's private note about the tenancy (late history, eviction
+ * commentary) and is never shown to the tenant or a realtor. Naming the shown
+ * fields means a new column on serializeLease stays private until someone
+ * chooses to expose it.
+ */
+export function serializePortalLease(r: Row) {
+  const full = serializeLease(r) as Record<string, unknown>;
+  return {
+    id: full.id,
+    unitId: full.unitId,
+    propertyId: full.propertyId,
+    startDate: full.startDate,
+    endDate: full.endDate,
+    monthlyRent: full.monthlyRent,
+    securityDeposit: full.securityDeposit,
+    status: full.status,
   };
 }
 
