@@ -59,9 +59,20 @@ export function serializeTenant(r: Row) {
  * to the tenant or to a realtor.
  */
 export function serializePortalTenant(r: Row) {
-  const { notes, ...safe } = serializeTenant(r) as Record<string, unknown>;
-  void notes;
-  return safe;
+  // An ALLOWLIST, deliberately, not `serializeTenant` minus notes. Stripping one
+  // field fails open: the day someone adds a field to serializeTenant, it would
+  // appear in the portal for tenants and realtors without anyone deciding that.
+  // Naming what may be shown means a new field stays private until someone
+  // chooses otherwise. `notes` is the owner's private note and is absent here.
+  const full = serializeTenant(r) as Record<string, unknown>;
+  return {
+    id: full.id,
+    firstName: full.firstName,
+    lastName: full.lastName,
+    email: full.email,
+    phone: full.phone,
+    emergencyContact: full.emergencyContact,
+  };
 }
 
 export function serializeLease(r: Row) {
