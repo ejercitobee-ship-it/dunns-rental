@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requirePermission, parseCookies } from '../../lib/session';
+import { type Env, parseCookies } from '../../lib/session';
 import { exchangeCodeForRefreshToken } from '../../lib/google';
 
 /** Send the user back to Settings with a short result note in the query. */
@@ -16,16 +16,27 @@ function backToSettings(origin: string, result: string): Response {
 /**
  * GET /api/google/callback — Google returns here with a one time code.
  *
- * This is a browser redirect, so it must be a GET and cannot return JSON. It
- * still demands settings_edit: the callback is what actually stores the
- * connection, so it cannot be left open to anyone who guesses the URL.
+ * This is a browser redirect, so it must be a GET and cannot return JSON.
+ *
+ * It deliberately does NOT call requirePermission, and that is not an
+ * oversight. The browser arrives here via a 302 from accounts.google.com, which
+ * is a cross site navigation, and the session cookie is SameSite=Strict, so the
+ * browser withholds it. Any permission check here therefore fails for everyone,
+ * every time, and Drive could never be connected.
+ *
+ * The state cookie is the authorisation instead, which is the ordinary OAuth
+ * pattern. It is only ever issued by connect.ts, which DOES require
+ * settings_edit; it is HttpOnly and Secure, so no script can read or forge it;
+ * it is unguessable; it lives 10 minutes; and it is cleared on every exit path
+ * below, so it cannot be replayed. A matching state therefore proves this
+ * browser started a connect that an authorised user asked for.
+ *
+ * Do not "restore" the permission check here without also moving the session
+ * cookie to SameSite=Lax, or connecting Drive will break.
  */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const origin = new URL(request.url).origin;
-
-  const auth = await requirePermission(env, request, 'settings_edit');
-  if (auth instanceof Response) return backToSettings(origin, 'denied');
 
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
