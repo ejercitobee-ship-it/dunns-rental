@@ -53,6 +53,17 @@ export function serializeTenant(r: Row) {
   };
 }
 
+/**
+ * A tenant as the portal may see them. Identical to serializeTenant minus
+ * `notes`, which is Belle's private note about the person and is never shown
+ * to the tenant or to a realtor.
+ */
+export function serializePortalTenant(r: Row) {
+  const { notes, ...safe } = serializeTenant(r) as Record<string, unknown>;
+  void notes;
+  return safe;
+}
+
 export function serializeLease(r: Row) {
   return {
     id: r.id,
