@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
+import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment } from '../types';
 
 const API_BASE = '/api';
 
@@ -273,6 +273,19 @@ export const googleApi = {
   // which is a full page redirect and never goes through apiRequest).
   status: (): Promise<GoogleStatus> => apiRequest('/google/status'),
   disconnect: () => apiRequest('/google/disconnect', { method: 'POST' }),
+};
+
+// Portal API (tenant and realtor self-service)
+// Note: apiRequest already prefixes with API_BASE ('/api'), so these paths
+// must not repeat it: pass '/portal/...', not '/api/portal/...'.
+export const portalApi = {
+  me: () => apiRequest('/portal/me'),
+  updateMe: (data: unknown) => apiRequest('/portal/me', { method: 'PUT', body: JSON.stringify(data) }),
+  payments: (): Promise<PortalPayment[]> => apiRequest('/portal/payments'),
+  documents: (tenantId?: string) =>
+    apiRequest(`/portal/documents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
+  realtorTenants: () => apiRequest('/portal/realtor/tenants'),
+  realtorTenant: (id: string) => apiRequest(`/portal/realtor/tenants/${id}`),
 };
 
 // Maintenance API
