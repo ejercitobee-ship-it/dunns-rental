@@ -70,3 +70,25 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
 
   return { subject: "Reset your Dunn's Rental password", html, text };
 }
+
+/** Portal invite email, sent when Belle invites a tenant to their own login. */
+export function portalInviteEmail(inviteUrl: string, name?: string) {
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+  return {
+    subject: 'Your MH Dunn Property account',
+    text: `${greeting}
+
+MH Dunn Property has set up an account for you. You can see your lease, your rent history, and your documents, and you can correct your own details.
+
+Set your password here: ${inviteUrl}
+
+This link expires in 7 days.
+
+MH Dunn Property`,
+    html: `<p>${greeting}</p>
+<p>MH Dunn Property has set up an account for you. You can see your lease, your rent history, and your documents, and you can correct your own details.</p>
+<p><a href="${inviteUrl}">Set your password</a></p>
+<p>This link expires in 7 days.</p>
+<p>MH Dunn Property</p>`,
+  };
+}
