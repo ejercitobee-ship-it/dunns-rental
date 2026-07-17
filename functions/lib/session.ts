@@ -8,6 +8,10 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** From address for outgoing mail, e.g. "Dunn's Rental <info@mhdunnproperty.net>" */
   MAIL_FROM?: string;
+  /** Google OAuth client id for Drive storage. */
+  GOOGLE_CLIENT_ID?: string;
+  /** Google OAuth client secret. Never logged, never returned. */
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 export interface SessionUser {
