@@ -93,6 +93,27 @@ export function serializeLease(r: Row) {
   };
 }
 
+/**
+ * A lease as the portal may see it. An ALLOWLIST, like serializePortalTenant:
+ * `notes` is the owner's private note about the tenancy (late history, eviction
+ * commentary) and is never shown to the tenant or a realtor. Naming the shown
+ * fields means a new column on serializeLease stays private until someone
+ * chooses to expose it.
+ */
+export function serializePortalLease(r: Row) {
+  const full = serializeLease(r) as Record<string, unknown>;
+  return {
+    id: full.id,
+    unitId: full.unitId,
+    propertyId: full.propertyId,
+    startDate: full.startDate,
+    endDate: full.endDate,
+    monthlyRent: full.monthlyRent,
+    securityDeposit: full.securityDeposit,
+    status: full.status,
+  };
+}
+
 export function serializePayment(r: Row) {
   return {
     id: r.id,

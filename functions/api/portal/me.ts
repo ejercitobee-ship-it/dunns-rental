@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib/session';
 import { tenantIdForUser } from '../../lib/portal';
-import { serializePortalTenant, serializeLease, serializeUnit, serializeProperty } from '../../lib/serializers';
+import { serializePortalTenant, serializePortalLease, serializeUnit, serializeProperty } from '../../lib/serializers';
 
 /** GET /api/portal/me — the caller's own person record, lease, unit, property. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -36,7 +36,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       success: true,
       data: {
         tenant: serializePortalTenant(tenant as Record<string, unknown>),
-        lease: lease ? serializeLease(lease as Record<string, unknown>) : null,
+        lease: lease ? serializePortalLease(lease as Record<string, unknown>) : null,
         unit: unit ? serializeUnit(unit as Record<string, unknown>) : null,
         property: property ? serializeProperty(property as Record<string, unknown>) : null,
       },

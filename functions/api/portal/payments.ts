@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib/session';
 import { tenantIdForUser } from '../../lib/portal';
-import { serializeLease } from '../../lib/serializers';
+import { serializePortalLease } from '../../lib/serializers';
 
 /**
  * GET /api/portal/payments — the payment history of the caller's own lease.
@@ -40,7 +40,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return jsonOk({
       success: true,
       data: {
-        lease: serializeLease(lease as Record<string, unknown>),
+        lease: serializePortalLease(lease as Record<string, unknown>),
         payments: (results || []).map(r => ({
           amount: r.amount,
           dueDate: r.due_date ?? undefined,
