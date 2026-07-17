@@ -12,7 +12,7 @@ import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { documentsApi, tenantsApi, type AppDocument, type TenantRealtorLink } from '../lib/api';
+import { documentsApi, tenantsApi, type AppDocument, type TenantRealtorLink, type RealtorUserOption } from '../lib/api';
 import { leasesOwingMonth, settleMonth } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
@@ -48,7 +48,7 @@ export function TenantDetail() {
     tenants, properties, units, rentPayments,
     updateTenant, getLeaseTenants, getTenantLeases,
   } = useApp();
-  const { hasPermission, users } = useAuth();
+  const { hasPermission } = useAuth();
   const { showToast } = useToast();
 
   const tenant = tenants.find(t => t.id === id);
@@ -73,8 +73,10 @@ export function TenantDetail() {
   // fetched when this viewer can act on it, since the endpoints require
   // tenants_edit and would otherwise just 403.
   const [realtors, setRealtors] = useState<TenantRealtorLink[]>([]);
+  const [realtorOptions, setRealtorOptions] = useState<RealtorUserOption[]>([]);
   const [realtorsLoading, setRealtorsLoading] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [invited, setInvited] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [selectedRealtorId, setSelectedRealtorId] = useState('');
   const [linking, setLinking] = useState(false);
@@ -89,13 +91,19 @@ export function TenantDetail() {
     if (!id || !canManagePortal) return;
     let cancelled = false;
     setRealtorsLoading(true);
-    tenantsApi
-      .getRealtors(id)
-      .then((list) => {
-        if (!cancelled) setRealtors(list);
+    // The realtor-role users come from /api/realtors (gated on tenants_edit),
+    // not the full users list, so the picker is populated for any staff member
+    // who can link a realtor, not only those who also hold users_view.
+    Promise.all([tenantsApi.getRealtors(id), tenantsApi.listRealtorUsers()])
+      .then(([links, options]) => {
+        if (cancelled) return;
+        setRealtors(links);
+        setRealtorOptions(options);
       })
       .catch(() => {
-        if (!cancelled) setRealtors([]);
+        if (cancelled) return;
+        setRealtors([]);
+        setRealtorOptions([]);
       })
       .finally(() => {
         if (!cancelled) setRealtorsLoading(false);
@@ -218,6 +226,7 @@ export function TenantDetail() {
     try {
       const result = await tenantsApi.invite(id);
       if (result.inviteUrl) setInviteUrl(result.inviteUrl);
+      setInvited(true);
       showToast('Invite sent', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not send the invite', 'error');
@@ -255,8 +264,8 @@ export function TenantDetail() {
     }
   };
 
-  const availableRealtors = users.filter(
-    u => u.role.id === 'realtor' && !realtors.some(r => r.realtorUserId === u.id)
+  const availableRealtors = realtorOptions.filter(
+    u => !realtors.some(r => r.realtorUserId === u.id)
   );
 
   if (!tenant) {
@@ -480,8 +489,8 @@ export function TenantDetail() {
                   Give this person their own sign in to the tenant portal.
                 </p>
               </div>
-              <Button variant="outline" size="sm" disabled={inviting} onClick={handleInvite}>
-                {inviting ? 'Sending...' : 'Invite to Portal'}
+              <Button variant="outline" size="sm" disabled={inviting || invited} onClick={handleInvite}>
+                {invited ? 'Invited' : inviting ? 'Sending...' : 'Invite to Portal'}
               </Button>
             </div>
 
@@ -546,7 +555,7 @@ export function TenantDetail() {
                   >
                     <option value="">Choose a realtor...</option>
                     {availableRealtors.map(u => (
-                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                      <option key={u.id} value={u.id}>{u.name || u.email}</option>
                     ))}
                   </select>
                   <Button

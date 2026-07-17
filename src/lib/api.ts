@@ -203,7 +203,17 @@ export const tenantsApi = {
     apiRequest(`/tenants/${id}/realtors`, { method: 'POST', body: JSON.stringify({ realtorUserId }) }),
   unlinkRealtor: (id: string, realtorUserId: string) =>
     apiRequest(`/tenants/${id}/realtors?realtorUserId=${encodeURIComponent(realtorUserId)}`, { method: 'DELETE' }),
+  // The realtor-role users, for the link picker. Gated on tenants_edit server
+  // side, so it works for any staff member who can link a realtor, not only
+  // those who also hold users_view.
+  listRealtorUsers: (): Promise<RealtorUserOption[]> => apiRequest('/realtors'),
 };
+
+export interface RealtorUserOption {
+  id: string;
+  name: string;
+  email: string;
+}
 
 // Leases API
 export const leasesApi = {
