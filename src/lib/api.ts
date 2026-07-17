@@ -281,10 +281,11 @@ export const googleApi = {
 
 /**
  * A lease as the portal serializer returns it (serializePortalLease): an
- * allowlist that omits `pauses` and `tenantIds`, unlike the full `Lease`
- * shape the management app uses. Callers that need `settleMonth` or
- * `leaseCoversMonth` (which expect a full `Lease`) fill those two in with
- * empty defaults; neither function reads them.
+ * allowlist that omits `notes` and `tenantIds`, unlike the full `Lease` shape
+ * the management app uses. It DOES carry `pauses`, so the tenant's pages can
+ * gate months with `leasesOwingMonth` and agree with the owner's Rent
+ * Management about which months were owed. `tenantIds` is filled with an empty
+ * default by callers that build a full `Lease`.
  */
 export interface PortalLease {
   id: string;
@@ -295,6 +296,7 @@ export interface PortalLease {
   monthlyRent: number;
   securityDeposit?: number;
   status: LeaseStatus;
+  pauses: { pausedAt: string; resumedAt?: string }[];
 }
 
 export interface PortalMeResponse {

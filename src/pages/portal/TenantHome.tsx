@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalMeResponse, type PortalLease } from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/utils';
-import { settleMonth, leaseCoversMonth } from '../../lib/rent';
+import { settleMonth, leasesOwingMonth } from '../../lib/rent';
 import type { Lease, RentPayment } from '../../types';
 
 const settlementBadge = {
@@ -19,11 +19,11 @@ const settlementLabel = {
   unpaid: 'Not yet paid',
 } as const;
 
-// settleMonth and leaseCoversMonth both expect a full Lease, but the portal
-// serializer omits `pauses` and `tenantIds` (see PortalLease in lib/api.ts).
-// Neither function reads those two fields, so empty defaults are safe.
+// The rent-math functions expect a full Lease. The portal serializer carries
+// pauses (so paused months read correctly) but not tenantIds, which the math
+// does not use, so an empty default is safe.
 function toLease(pl: PortalLease): Lease {
-  return { ...pl, pauses: [], tenantIds: [] };
+  return { ...pl, tenantIds: [] };
 }
 
 export function TenantHome() {
@@ -60,16 +60,18 @@ export function TenantHome() {
     };
   }, []);
 
-  // This month's settlement, gated by leaseCoversMonth: a lease signed to
-  // start next month owes nothing yet, and showing "Not yet paid" for a
-  // month that isn't due would invent a balance the owner never billed.
+  // This month's settlement, gated by leasesOwingMonth so it matches the
+  // owner's Rent Management exactly: a lease starting next month owes nothing
+  // yet, and a month the owner paused is not owed either. Showing "Not yet
+  // paid" for a month that was never billed would alarm the tenant over rent
+  // they do not owe.
   const thisMonth = useMemo(() => {
     if (!me?.lease) return null;
     const lease = toLease(me.lease);
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
-    if (!leaseCoversMonth(lease, month, year)) return null;
+    if (leasesOwingMonth([lease], month, year).length === 0) return null;
     return settleMonth(lease, payments, month, year);
   }, [me, payments]);
 

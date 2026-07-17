@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease } from '../../lib/api';
 import { formatCurrency, getMonthName, yearOf, monthOf } from '../../lib/utils';
-import { settleMonth, leaseCoversMonth } from '../../lib/rent';
+import { settleMonth, leasesOwingMonth } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
 
 // This app has had a React #310 white screen from a useMemo called after an
@@ -17,11 +17,11 @@ const statusConfig = {
   unpaid: { label: 'Unpaid', variant: 'destructive', icon: AlertCircle },
 } as const;
 
-// settleMonth and leaseCoversMonth both expect a full Lease, but the portal
-// serializer omits `pauses` and `tenantIds` (see PortalLease in lib/api.ts).
-// Neither function reads those two fields, so empty defaults are safe.
+// The rent-math functions expect a full Lease. The portal serializer carries
+// pauses (so paused months read correctly) but not tenantIds, which the math
+// does not use, so an empty default is safe.
 function toLease(pl: PortalLease): Lease {
-  return { ...pl, pauses: [], tenantIds: [] };
+  return { ...pl, tenantIds: [] };
 }
 
 // The payments endpoint returns raw rows with no id and no leaseId (a tenant
@@ -68,9 +68,10 @@ export function TenantPayments() {
     };
   }, []);
 
-  // One row per month the lease has covered, from its start through the
-  // current month, newest first. Figures come from settleMonth alone; no
-  // rent arithmetic is re-derived here.
+  // One row per month the lease actually OWED rent, from its start through the
+  // current month, newest first. Gated by leasesOwingMonth so a month the owner
+  // paused shows no row at all, matching the owner's Rent Management. Figures
+  // come from settleMonth alone; no rent arithmetic is re-derived here.
   const rows = useMemo(() => {
     if (!lease) return [];
     const fullLease = toLease(lease);
@@ -84,7 +85,7 @@ export function TenantPayments() {
     let y = startYear;
     let m = startMonth;
     while (y < nowYear || (y === nowYear && m <= nowMonth)) {
-      if (leaseCoversMonth(fullLease, m, y)) months.push({ month: m, year: y });
+      if (leasesOwingMonth([fullLease], m, y).length > 0) months.push({ month: m, year: y });
       m += 1;
       if (m > 12) {
         m = 1;

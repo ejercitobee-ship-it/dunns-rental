@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib/session';
-import { tenantIdForUser } from '../../lib/portal';
+import { tenantIdForUser, leasePauses } from '../../lib/portal';
 import { serializePortalLease } from '../../lib/serializers';
 
 /**
@@ -28,6 +28,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     ).bind(tenantId).first();
 
     if (!lease) return jsonOk({ success: true, data: { lease: null, payments: [] } });
+
+    // The lease's pauses, so the tenant's rows agree with the owner's Rent
+    // Management about which months were owed (a paused month is not owed).
+    (lease as Record<string, unknown>).pauses = await leasePauses(env, lease.id as string);
 
     // Only the columns a tenant may see. No payer, no uploaded_by, no notes.
     const { results } = await env.DB.prepare(
