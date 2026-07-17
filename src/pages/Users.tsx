@@ -151,8 +151,8 @@ export function Users() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-ink">Team Members</h1>
-          <p className="text-muted mt-1">Manage your team and their permissions</p>
+          <h1 className="text-3xl font-bold text-ink">Users</h1>
+          <p className="text-muted mt-1">Manage the people who can sign in and what they can do.</p>
         </div>
         {canManageUsers && (
           <Button onClick={() => { resetForm(); setIsAddUserOpen(true); }}>

@@ -48,7 +48,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances') },
     { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings') },
     { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings') },
-    { name: 'Team', path: '/users', icon: Shield, show: hasModuleAccess('users') },
+    { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users') },
   ].filter(item => item.show);
 
   return (
