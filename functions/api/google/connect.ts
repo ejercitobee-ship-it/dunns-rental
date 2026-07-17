@@ -28,7 +28,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', DRIVE_SCOPE);
   url.searchParams.set('access_type', 'offline');
-  url.searchParams.set('prompt', 'consent');
+  // select_account makes Google always ask which account to use. Without it,
+  // Google silently picks whichever account the browser happens to be signed
+  // in as, and because this app is Internal to mhdunnproperty.net, a personal
+  // account gets a blunt "Access blocked: org_internal" with no hint that the
+  // fix is simply to choose a different account.
+  // consent is what makes Google return a refresh token: without it, a second
+  // authorisation returns none and the connection can never be renewed.
+  url.searchParams.set('prompt', 'select_account consent');
   url.searchParams.set('state', state);
 
   return new Response(null, {
