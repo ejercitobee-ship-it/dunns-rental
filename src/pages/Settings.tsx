@@ -15,6 +15,7 @@ import {
   Edit2,
   ChevronDown,
   ChevronRight,
+  Cloud,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -22,17 +23,19 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { settingsApi } from '../lib/api';
+import { settingsApi, googleApi } from '../lib/api';
 import { SYSTEM_PERMISSIONS } from '../types/auth';
 import type { Role } from '../types/auth';
 
 export function Settings() {
   const { showToast } = useToast();
-  const { roles, updateRole, addRole, deleteRole } = useAuth();
+  const { roles, updateRole, addRole, deleteRole, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState('company');
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
+  const [isDriveWorking, setIsDriveWorking] = useState(false);
 
   const [companySettings, setCompanySettings] = useState({
     companyName: "DUNN's Rental",
@@ -88,6 +91,66 @@ export function Settings() {
       active = false;
     };
   }, []);
+
+  // Load whether Google Drive is connected.
+  useEffect(() => {
+    let active = true;
+    googleApi
+      .status()
+      .then((data) => {
+        if (!active || !data) return;
+        setDriveConnected(Boolean(data.connected));
+      })
+      .catch(() => {
+        // Leave the state unknown if the check fails.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The Google OAuth callback redirects back here with ?drive=connected,
+  // ?drive=cancelled, or ?drive=failed. Toast it once, then clear the query
+  // param so a refresh does not toast again.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('drive');
+    if (!result) return;
+
+    if (result === 'connected') {
+      showToast('Connected to Google Drive.', 'success');
+      setDriveConnected(true);
+    } else if (result === 'cancelled') {
+      showToast('Google Drive connection was cancelled.', 'info');
+    } else if (result === 'failed') {
+      showToast('Could not connect to Google Drive. Please try again.', 'error');
+    }
+
+    params.delete('drive');
+    const query = params.toString();
+    const newUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
+    window.history.replaceState({}, '', newUrl);
+  }, []);
+
+  const handleConnectDrive = () => {
+    // Full page navigation on purpose: this is an OAuth flow and has to
+    // leave the app to reach Google. A fetch would follow the redirect
+    // itself and fail silently.
+    window.location.href = '/api/google/connect';
+  };
+
+  const handleDisconnectDrive = async () => {
+    setIsDriveWorking(true);
+    try {
+      await googleApi.disconnect();
+      setDriveConnected(false);
+      showToast('Disconnected from Google Drive.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to disconnect Google Drive', 'error');
+    } finally {
+      setIsDriveWorking(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -231,6 +294,7 @@ export function Settings() {
 
       {/* Company Settings */}
       {activeTab === 'company' && (
+        <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -327,6 +391,54 @@ export function Settings() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5" />
+              Document Storage
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted">
+              Tenant documents are stored in your Google Drive, in a folder for each tenant. Only files this app creates are visible to it. It cannot see the rest of your Drive.
+            </p>
+
+            {driveConnected === null ? (
+              <p className="text-sm text-muted">Checking connection.</p>
+            ) : driveConnected ? (
+              <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-positive-soft flex items-center justify-center flex-shrink-0">
+                    <Check className="h-4 w-4 text-positive" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-ink">Connected to Google Drive</p>
+                    <p className="text-sm text-muted">Tenant documents are saved to Drive automatically.</p>
+                  </div>
+                </div>
+                {hasPermission('settings_edit') && (
+                  <Button variant="outline" onClick={handleDisconnectDrive} disabled={isDriveWorking}>
+                    {isDriveWorking ? 'Disconnecting.' : 'Disconnect'}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
+                <div>
+                  <p className="font-medium text-ink">Not connected</p>
+                  <p className="text-sm text-muted">Connect Google Drive so tenant documents have somewhere to go.</p>
+                </div>
+                {hasPermission('settings_edit') && (
+                  <Button onClick={handleConnectDrive}>
+                    Connect Google Drive
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        </div>
       )}
 
       {/* Rent Settings */}

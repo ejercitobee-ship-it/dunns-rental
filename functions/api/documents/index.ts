@@ -1,19 +1,9 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
+import { serializeDocument } from '../../lib/serializers';
+import { ensureTenantFolder, uploadToDrive, DriveNotConnected } from '../../lib/google';
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
-
-function serializeDoc(r: Record<string, unknown>) {
-  return {
-    id: r.id,
-    name: r.name,
-    contentType: r.content_type ?? undefined,
-    size: r.size ?? 0,
-    propertyId: r.property_id ?? undefined,
-    tenantId: r.tenant_id ?? undefined,
-    createdAt: r.created_at,
-  };
-}
 
 // GET /api/documents?tenantId=...&propertyId=...  — list document metadata.
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -38,21 +28,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     query += ' ORDER BY created_at DESC';
 
     const { results } = await env.DB.prepare(query).bind(...binds).all();
-    return jsonOk({ success: true, data: (results || []).map(serializeDoc) });
+    return jsonOk({ success: true, data: (results || []).map(serializeDocument) });
   } catch {
     return serverError();
   }
 };
 
 // POST /api/documents — multipart upload (file + optional tenantId/propertyId).
+// Files land in the tenant's Google Drive folder, created on first use.
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requirePermission(env, request, 'tenants_edit');
   if (auth instanceof Response) return auth;
-
-  if (!env.DOCS) {
-    return jsonError('Document storage is not configured. Create the R2 bucket and bind it as DOCS.', 503);
-  }
 
   try {
     const form = await request.formData();
@@ -67,24 +54,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const tenantId = (form.get('tenantId') as string) || null;
     const propertyId = (form.get('propertyId') as string) || null;
 
+    // A document must belong to a tenant, because Drive folders are per tenant.
+    // (Behaviour change from the R2 version, which allowed property-only docs.)
+    if (!tenantId) return jsonError('A tenant is required', 400);
+
+    const folderId = await ensureTenantFolder(env, tenantId);
+    const uploaded = await uploadToDrive(
+      env,
+      folderId,
+      file.name,
+      file.type || 'application/octet-stream',
+      file
+    );
+
     const id = crypto.randomUUID();
-    const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-    const key = `docs/${tenantId || propertyId || 'general'}/${id}-${safeName}`;
-
-    await env.DOCS.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type || 'application/octet-stream' },
-    });
-
     await env.DB.prepare(
-      `INSERT INTO documents (id, name, r2_key, content_type, size, property_id, tenant_id, uploaded_by)
+      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, tenant_id, uploaded_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(id, file.name, key, file.type || null, file.size, propertyId, tenantId, auth.id)
+      .bind(id, file.name, uploaded.id, file.type || null, file.size, propertyId, tenantId, auth.id)
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM documents WHERE id = ?').bind(id).first();
-    return jsonOk({ success: true, data: serializeDoc(row as Record<string, unknown>) }, 201);
-  } catch {
+    return jsonOk({ success: true, data: serializeDocument(row as Record<string, unknown>) }, 201);
+  } catch (err) {
+    // Never forward err.message: it can carry Drive internals (folder ids,
+    // tenant names). DriveNotConnected gets its own friendly wording; anything
+    // else is an opaque 500.
+    if (err instanceof DriveNotConnected) {
+      return jsonError('Google Drive is not connected. Connect it in Settings.', 503);
+    }
     return serverError();
   }
 };
