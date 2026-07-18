@@ -13,6 +13,9 @@ const KEY_ACCESS = 'google_access_token';
 const KEY_ACCESS_EXPIRES = 'google_access_expires_at';
 const KEY_ROOT_FOLDER = 'google_root_folder_id';
 
+/** The single top-level folder that holds every tenant's folder. */
+const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
+
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
   constructor() {
@@ -153,15 +156,60 @@ async function createFolder(env: Env, name: string, parentId?: string): Promise<
   return data.id;
 }
 
-/** Confirm a Drive id still exists and is not in the trash. */
-async function folderAlive(env: Env, id: string): Promise<boolean> {
+export type FolderStatus = 'alive' | 'gone' | 'unknown';
+
+/**
+ * Map a Drive files.get outcome to whether the folder should be treated as
+ * present. Pulled out as a pure function so the rule that a transient failure
+ * must NEVER be read as "gone" (which is what forked a second root folder) is
+ * unit-testable without a live Drive.
+ *   - 200, not trashed        -> alive
+ *   - 200 but trashed, or 404 -> gone    (safe to adopt or create another)
+ *   - anything else           -> unknown (401/403/429/5xx/network: do NOT fork)
+ */
+export function folderStatusFrom(
+  ok: boolean,
+  status: number,
+  trashed: boolean | undefined
+): FolderStatus {
+  if (ok) return trashed === true ? 'gone' : 'alive';
+  if (status === 404) return 'gone';
+  return 'unknown';
+}
+
+/** Whether a Drive folder still exists, is trashed/gone, or could not be checked. */
+async function folderStatus(env: Env, id: string): Promise<FolderStatus> {
   const token = await getAccessToken(env);
   const res = await fetch(`${DRIVE_API}/files/${id}?fields=id,trashed`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) return false;
-  const data = (await res.json()) as { trashed?: boolean };
-  return data.trashed !== true;
+  let trashed: boolean | undefined;
+  if (res.ok) {
+    const data = (await res.json()) as { trashed?: boolean };
+    trashed = data.trashed === true;
+  }
+  return folderStatusFrom(res.ok, res.status, trashed);
+}
+
+/**
+ * The id of an existing, non-trashed folder with this name that the app can
+ * see, oldest first so duplicates always collapse back onto the original.
+ * `parentId` scopes the search; omit it for the root folder, which the owner
+ * may have moved anywhere in her Drive. Used only where the name is unique
+ * (the root) — never for tenant folders, where two people can share a name.
+ */
+async function findFolder(env: Env, name: string, parentId?: string): Promise<string | null> {
+  const token = await getAccessToken(env);
+  const esc = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const clauses = [`name='${esc}'`, `mimeType='${FOLDER_MIME}'`, 'trashed=false'];
+  if (parentId) clauses.push(`'${parentId}' in parents`);
+  const q = encodeURIComponent(clauses.join(' and '));
+  const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)&orderBy=createdTime&pageSize=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { files?: { id: string }[] };
+  return data.files?.[0]?.id ?? null;
 }
 
 /**
@@ -171,8 +219,18 @@ async function folderAlive(env: Env, id: string): Promise<boolean> {
  */
 async function ensureRootFolder(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_ROOT_FOLDER);
-  if (existing && (await folderAlive(env, existing))) return existing;
-  const id = await createFolder(env, 'MH Dunn Property Documents');
+  if (existing) {
+    // Reuse unless the folder is DEFINITELY gone. On 'unknown' (a transient
+    // check failure) we keep the stored id rather than forking a second root —
+    // that fork is exactly the bug that created a duplicate "MH Dunn Property
+    // Documents". If it turns out truly gone, the upload fails and retries.
+    const status = await folderStatus(env, existing);
+    if (status !== 'gone') return existing;
+  }
+  // No usable stored id: adopt an existing root already in the Drive before
+  // making one, so a lost setting or an earlier duplicate heals to a single
+  // canonical folder instead of spawning yet another.
+  const id = (await findFolder(env, ROOT_FOLDER_NAME)) ?? (await createFolder(env, ROOT_FOLDER_NAME));
   await putSetting(env, KEY_ROOT_FOLDER, id);
   return id;
 }
@@ -189,8 +247,13 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
     .first<{ id: string; first_name: string; last_name: string; drive_folder_id: string | null }>();
   if (!tenant) throw new Error('Tenant not found');
 
-  if (tenant.drive_folder_id && (await folderAlive(env, tenant.drive_folder_id))) {
-    return tenant.drive_folder_id;
+  // Same rule as the root: reuse unless the folder is definitely gone, so a
+  // transient check failure never makes a second folder for the same person.
+  // No adopt-by-name here — two tenants can share a name, and adopting would
+  // merge their documents.
+  if (tenant.drive_folder_id) {
+    const status = await folderStatus(env, tenant.drive_folder_id);
+    if (status !== 'gone') return tenant.drive_folder_id;
   }
 
   const root = await ensureRootFolder(env);
