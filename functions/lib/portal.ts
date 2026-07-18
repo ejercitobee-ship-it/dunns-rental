@@ -84,6 +84,27 @@ export async function tenantIdForUser(env: Env, userId: string): Promise<string 
   return row?.id ?? null;
 }
 
+/** Every lease id a tenant is on. Used to authorise edits to lease-scoped data. */
+export async function tenantLeaseIds(env: Env, tenantId: string): Promise<string[]> {
+  const { results } = await env.DB.prepare('SELECT lease_id FROM lease_tenants WHERE tenant_id = ?')
+    .bind(tenantId)
+    .all<{ lease_id: string }>();
+  return (results || []).map(r => r.lease_id);
+}
+
+/** The tenant's current lease: most recent one they are on that has not ended. */
+export async function currentLeaseId(env: Env, tenantId: string): Promise<string | null> {
+  const row = await env.DB.prepare(
+    `SELECT l.id FROM leases l
+       JOIN lease_tenants lt ON lt.lease_id = l.id
+      WHERE lt.tenant_id = ? AND l.status != 'ended'
+      ORDER BY l.start_date DESC LIMIT 1`
+  )
+    .bind(tenantId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 /**
  * The tenants a realtor may currently see: linked to them, and still inside
  * the window. The window is anchored on the tenant's most recent lease start,
