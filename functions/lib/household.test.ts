@@ -16,4 +16,15 @@ describe('validateHouseholdInput', () => {
     const long = 'x'.repeat(MAX_HOUSEHOLD_FIELD + 1);
     expect(validateHouseholdInput({ name: long })).toEqual({ ok: false, error: 'Name is too long' });
   });
+
+  it('rejects an over-long phone or relationship', () => {
+    const long = 'x'.repeat(MAX_HOUSEHOLD_FIELD + 1);
+    expect(validateHouseholdInput({ name: 'Jane', phone: long })).toEqual({ ok: false, error: 'Phone is too long' });
+    expect(validateHouseholdInput({ name: 'Jane', relationship: long })).toEqual({ ok: false, error: 'Relationship is too long' });
+  });
+
+  it('retains a valid non-blank phone and relationship', () => {
+    const r = validateHouseholdInput({ name: 'Jane', phone: '555-1234', relationship: 'child' });
+    expect(r).toEqual({ ok: true, value: { name: 'Jane', phone: '555-1234', relationship: 'child' } });
+  });
 });

@@ -200,6 +200,7 @@ function HouseholdCard({ hasLease }: { hasLease: boolean }) {
     try {
       await portalApi.household.remove(toRemove.id);
       setMembers(members.filter(m => m.id !== toRemove.id));
+      if (editingId === toRemove.id) resetForm();
       showToast('Removed.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not remove.', 'error');

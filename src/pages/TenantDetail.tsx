@@ -319,6 +319,7 @@ export function TenantDetail() {
     try {
       await householdApi.remove(householdToRemove.id);
       setHouseholdMembers(prev => prev.filter(m => m.id !== householdToRemove.id));
+      if (editingHouseholdId === householdToRemove.id) resetHouseholdForm();
       showToast('Removed.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not remove.', 'error');
