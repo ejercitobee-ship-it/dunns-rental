@@ -426,6 +426,8 @@ export const portalApi = {
   downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
   realtorTenants: (): Promise<RealtorTenantSummary[]> => apiRequest('/portal/realtor/tenants'),
   realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
+  addRealtorTenant: (data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<PortalPerson> =>
+    apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
   household: {
     list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
     add: (data: HouseholdInput): Promise<HouseholdMember> =>
