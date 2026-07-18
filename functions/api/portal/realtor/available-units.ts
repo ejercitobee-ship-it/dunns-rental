@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { availableUnits } from '../../../lib/units';
 
-// GET /api/portal/realtor/available-units — vacant units a realtor may market.
+// GET /api/portal/realtor/available-units. Vacant units a realtor may market.
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requireUser(env, request);

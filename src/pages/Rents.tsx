@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
   Search, Download, Upload, Home, DoorOpen, Users,
@@ -116,6 +117,12 @@ export function Rents() {
   // after a render, so a fast double-click could start a second overlapping
   // import loop before that render lands and create duplicate payments.
   const isImportingRef = useRef(false);
+
+  // Draft leases a realtor placed but Belle has not finalized yet. These owe
+  // no rent (needsReview leases are excluded from leasesOwingMonth), so they
+  // never show up in the table below. This section is the only place on the
+  // page they are discoverable.
+  const draftLeases = leases.filter(l => l.needsReview);
 
   const [recordRow, setRecordRow] = useState<LeaseMonthRow | null>(null);
   const [recordForm, setRecordForm] = useState({
@@ -516,6 +523,54 @@ export function Rents() {
         </div>
       </div>
 
+      {/* Needs review: draft leases a realtor placed, not yet finalized. These
+          owe no rent, so they never appear in the table below. */}
+      {draftLeases.length > 0 && (
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div>
+              <h2 className="font-semibold text-ink">Needs review</h2>
+              <p className="text-sm text-muted mt-1">
+                These tenancies were placed by a realtor. Set the dates and rent to finalize them.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {draftLeases.map(lease => {
+                const tenants = getLeaseTenants(lease.id);
+                const tenantNames = tenants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
+                const unit = units.find(u => u.id === lease.unitId);
+                const property = properties.find(p => p.id === lease.propertyId);
+                const location = [unit ? `Unit ${unit.unitNumber}` : null, property?.address].filter(Boolean).join(', ');
+                const firstTenantId = tenants[0]?.id;
+
+                return (
+                  <div
+                    key={lease.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-line p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Badge variant="warning">Needs review</Badge>
+                      <div>
+                        <div className="text-sm font-medium text-ink">{tenantNames}</div>
+                        {location && <div className="text-sm text-muted">{location}</div>}
+                      </div>
+                    </div>
+                    {firstTenantId && (
+                      <Link
+                        to={`/tenants/${firstTenantId}`}
+                        className="inline-flex items-center justify-center rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/[0.02] w-fit"
+                      >
+                        Open
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* View Toggle */}
       <div className="flex gap-2 border-b border-line overflow-x-auto">
         <button
@@ -674,7 +729,6 @@ export function Rents() {
                                 <StatusIcon className="h-3 w-3" />
                                 {status.label}
                               </Badge>
-                              {row.lease.needsReview && <Badge variant="warning">Needs review</Badge>}
                             </div>
                           </td>
 
