@@ -14,7 +14,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    const { results } = await env.DB.prepare('SELECT * FROM tenants ORDER BY created_at DESC').all();
+    // ?withoutRealtor=1 returns only tenants not linked to any realtor, for the
+    // admin "link an existing tenant to a realtor" picker. Kept as a query param
+    // on this collection route (rather than a /tenants/unlinked file) so it can
+    // never be shadowed by the dynamic /tenants/[id] route.
+    const withoutRealtor = new URL(request.url).searchParams.get('withoutRealtor') === '1';
+    const sql = withoutRealtor
+      ? `SELECT * FROM tenants WHERE id NOT IN (SELECT tenant_id FROM tenant_realtors) ORDER BY last_name, first_name`
+      : 'SELECT * FROM tenants ORDER BY created_at DESC';
+    const { results } = await env.DB.prepare(sql).all();
     return jsonOk({ success: true, data: (results || []).map(serializeTenant) });
   } catch {
     return serverError();
