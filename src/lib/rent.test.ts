@@ -298,6 +298,12 @@ describe('draft (needs review) leases owe nothing', () => {
   it('once finalized (needsReview false) it covers again', () => {
     expect(leaseCoversMonth({ ...draft, needsReview: false, startDate: '2026-01-01' }, 7, 2026)).toBe(true);
   });
+
+  it('settleMonth bills a needs-review lease nothing even if called directly', () => {
+    const s = settleMonth(draft, [], 7, 2026);
+    expect(s.due).toBe(0);
+    expect(s.balance).toBe(0);
+  });
 });
 
 describe('rentIncomeForYear', () => {

@@ -192,6 +192,10 @@ export function settleMonth(
   month: number,
   year: number
 ): MonthSettlement {
+  // A draft lease a realtor created (awaiting review) owes nothing until Belle
+  // finalizes it, enforced here too so no caller can bill it by skipping the
+  // leasesOwingMonth gate.
+  if (lease.needsReview) return { due: 0, paid: 0, balance: 0, status: 'paid' };
   const due = round2(lease.monthlyRent || 0);
   const paid = round2(
     paymentsForMonth(lease.id, payments, month, year).reduce((sum, p) => sum + (p.amount || 0), 0)
