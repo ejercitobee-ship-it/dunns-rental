@@ -176,8 +176,16 @@ export function RealtorTenants() {
                       </p>
                       <p className="text-xs text-muted flex items-center gap-1 mt-0.5">
                         <DoorOpen className="h-3 w-3 text-faint" />
-                        {t.unitNumber ? `Unit ${t.unitNumber}` : 'Unit not on file'}
+                        {t.unit?.unitNumber ? `Unit ${t.unit.unitNumber}` : 'Unit not on file'}
                       </p>
+                      {(() => {
+                        const addr = [
+                          t.unit?.address,
+                          t.unit?.city,
+                          [t.unit?.state, t.unit?.zipCode].filter(Boolean).join(' '),
+                        ].filter(Boolean).join(', ');
+                        return addr ? <p className="text-xs text-muted truncate mt-0.5">{addr}</p> : null;
+                      })()}
                     </div>
                   </div>
                   <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />

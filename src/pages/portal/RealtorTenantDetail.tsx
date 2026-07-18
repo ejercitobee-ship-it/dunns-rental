@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, User, Mail, Phone, ShieldAlert, FileText, Upload, Download } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, ShieldAlert, FileText, Upload, Download, MapPin } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { portalApi, type AppDocument, type PortalPerson } from '../../lib/api';
@@ -75,7 +75,7 @@ export function RealtorTenantDetail() {
     return (
       <div className="space-y-6">
         <Link
-          to="/portal"
+          to="/portal/tenants"
           className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover"
         >
           <ArrowLeft className="h-4 w-4" /> Back to my tenants
@@ -92,7 +92,7 @@ export function RealtorTenantDetail() {
   return (
     <div className="space-y-6">
       <Link
-        to="/portal"
+        to="/portal/tenants"
         className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover"
       >
         <ArrowLeft className="h-4 w-4" /> Back to my tenants
@@ -143,6 +143,27 @@ export function RealtorTenantDetail() {
           )}
         </CardContent>
       </Card>
+
+      {tenant.unit && (tenant.unit.address || tenant.unit.unitNumber) && (
+        <Card>
+          <CardContent className="p-5 space-y-2">
+            <h3 className="font-semibold text-ink flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-faint" /> Address
+            </h3>
+            <div className="text-sm space-y-0.5">
+              {tenant.unit.address && <p className="text-ink">{tenant.unit.address}</p>}
+              {(tenant.unit.city || tenant.unit.state || tenant.unit.zipCode) && (
+                <p className="text-muted">
+                  {[tenant.unit.city, [tenant.unit.state, tenant.unit.zipCode].filter(Boolean).join(' ')]
+                    .filter(Boolean)
+                    .join(', ')}
+                </p>
+              )}
+              {tenant.unit.unitNumber && <p className="text-muted">Unit {tenant.unit.unitNumber}</p>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-5 space-y-3">
