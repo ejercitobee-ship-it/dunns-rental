@@ -44,6 +44,11 @@ function yearMonthOf(dateStr: string): number {
  * both inclusive.
  */
 export function leaseCoversMonth(lease: Lease, month: number, year: number): boolean {
+  // A draft lease a realtor created (awaiting Belle's review) owes no rent
+  // anywhere until she finalizes it. Excluding it here, the coverage
+  // primitive, keeps it out of leasesOwingMonth AND settleMonth at once, so a
+  // draft (which has a null start date) never bills every month by mistake.
+  if (lease.needsReview) return false;
   const target = year * 12 + month;
   if (lease.startDate && target < yearMonthOf(lease.startDate)) return false;
   if (lease.endDate && target > yearMonthOf(lease.endDate)) return false;
