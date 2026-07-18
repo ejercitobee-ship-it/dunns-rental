@@ -9,12 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { adminApi } from '../lib/api';
 import type { User } from '../types/auth';
+import { userCategory, type UserCategory } from '../lib/userCategory';
 
 export function Users() {
   const { user: currentUser, users, roles, addUser, updateUser, deleteUser, hasPermission } = useAuth();
   const { showToast } = useToast();
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [tab, setTab] = useState<UserCategory>('internal');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -33,7 +35,8 @@ export function Users() {
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
 
-  const filteredUsers = users.filter(user => {
+  const inTab = users.filter(u => userCategory(u.roleId) === tab);
+  const filteredUsers = inTab.filter(user => {
     const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
     const search = searchTerm.toLowerCase();
     return (
@@ -43,6 +46,17 @@ export function Users() {
       user.department?.toLowerCase().includes(search)
     );
   });
+
+  const counts = {
+    internal: users.filter(u => userCategory(u.roleId) === 'internal').length,
+    realtor: users.filter(u => userCategory(u.roleId) === 'realtor').length,
+    tenant: users.filter(u => userCategory(u.roleId) === 'tenant').length,
+  };
+  const TABS: { key: UserCategory; label: string }[] = [
+    { key: 'internal', label: 'Internal' },
+    { key: 'realtor', label: 'Realtors' },
+    { key: 'tenant', label: 'Tenants' },
+  ];
 
   const resetForm = () => {
     setUserForm({
@@ -154,7 +168,7 @@ export function Users() {
           <h1 className="text-3xl font-bold text-ink">Users</h1>
           <p className="text-muted mt-1">Manage the people who can sign in and what they can do.</p>
         </div>
-        {canManageUsers && (
+        {tab === 'internal' && canManageUsers && (
           <Button onClick={() => { resetForm(); setIsAddUserOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" />
             Add Member
@@ -214,6 +228,28 @@ export function Users() {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-line mb-4">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.key ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            {t.label} <span className="text-faint">({counts[t.key]})</span>
+          </button>
+        ))}
+      </div>
+
+      {tab === 'tenant' && (
+        <p className="text-muted text-sm mb-3">Tenants get portal access by inviting them from their own page.</p>
+      )}
+      {tab === 'realtor' && (
+        <p className="text-muted text-sm mb-3">Realtors are added by linking them from a tenant's page.</p>
+      )}
 
       {/* Users Table */}
       <Card>
