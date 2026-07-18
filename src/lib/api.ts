@@ -215,6 +215,13 @@ export interface RealtorUserOption {
   email: string;
 }
 
+// Realtors API (staff side: acting on a realtor's behalf).
+export const realtorsApi = {
+  // Staff create a brand new tenant and link it to this realtor in one step.
+  addTenant: (realtorUserId: string, data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<Tenant> =>
+    apiRequest(`/realtors/${realtorUserId}/tenants`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // Household API (admin side: household members for a given tenant's lease).
 // Mirrors portalApi.household, but scoped by tenantId and gated on
 // tenants_edit server side, since only staff with edit rights should be able
