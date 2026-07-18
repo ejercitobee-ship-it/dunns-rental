@@ -17,7 +17,7 @@ These ship together because both are user/household housekeeping, but they are i
 
 - An added person is a **household member (name/contact only)**: no login, no Drive folder, no rent, cannot be invited. Deliberately NOT a `tenants` record.
 - **Both** the tenant (from their dashboard) and Belle (from admin) can **add, edit, and remove** household members.
-- **Realtors get no new powers.** They do not see or manage the household list. Their only change is getting their own tab on the Users page.
+- **Realtors get no new powers.** A realtor sees ONLY their linked (main) tenant's contact info (name, email, phone), that tenant's emergency contact, and documents (view/upload within the 30-day window) — exactly as shipped today. They never see the household list, and never any co-tenant's data. Their only change in this work is getting their own tab on the Users page.
 - Users page splits into **three tabs**: Internal / Realtors / Tenants.
 
 ## Non-goals
