@@ -527,7 +527,11 @@ export function Users() {
         onClose={() => setUserToDelete(null)}
         onConfirm={handleDeleteUser}
         title="Delete Team Member"
-        message={`Are you sure you want to remove ${userToDelete?.firstName} ${userToDelete?.lastName}? This action cannot be undone.`}
+        message={
+          currentUser?.roleId === 'super_admin'
+            ? 'This permanently deletes this account, purges their income and expense records, and reassigns any properties they own to you. This cannot be undone.'
+            : `Are you sure you want to remove ${userToDelete?.firstName} ${userToDelete?.lastName}? This action cannot be undone.`
+        }
         confirmText="Delete"
         variant="danger"
       />

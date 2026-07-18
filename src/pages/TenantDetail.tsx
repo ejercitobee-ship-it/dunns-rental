@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase,
@@ -48,11 +48,12 @@ function formatMethod(method?: PaymentMethod): string {
 
 export function TenantDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const {
     tenants, properties, units, rentPayments,
-    updateTenant, getLeaseTenants, getTenantLeases,
+    updateTenant, deleteTenant, getLeaseTenants, getTenantLeases,
   } = useApp();
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
 
   const tenant = tenants.find(t => t.id === id);
@@ -94,6 +95,7 @@ export function TenantDetail() {
   const [editingHouseholdId, setEditingHouseholdId] = useState<string | null>(null);
   const [householdToRemove, setHouseholdToRemove] = useState<HouseholdMember | null>(null);
   const [householdBusy, setHouseholdBusy] = useState(false);
+  const [tenantToDelete, setTenantToDelete] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -314,6 +316,19 @@ export function TenantDetail() {
     }
   };
 
+  const handleDeleteTenant = async () => {
+    if (!id) return;
+    try {
+      await deleteTenant(id);
+      showToast('Tenant deleted', 'success');
+      navigate('/tenants');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete this tenant', 'error');
+    } finally {
+      setTenantToDelete(false);
+    }
+  };
+
   const confirmRemoveHousehold = async () => {
     if (!householdToRemove) return;
     try {
@@ -367,10 +382,22 @@ export function TenantDetail() {
             )}
           </div>
         </div>
-        <Button onClick={openEdit} className="w-full sm:w-auto">
-          <Edit2 className="h-4 w-4 mr-2" />
-          Edit Person
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button onClick={openEdit} className="flex-1 sm:flex-none">
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit Person
+          </Button>
+          {hasPermission('tenants_delete') && (
+            <Button
+              variant="destructive"
+              className="flex-1 sm:flex-none"
+              onClick={() => setTenantToDelete(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete tenant
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -871,6 +898,19 @@ export function TenantDetail() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={tenantToDelete}
+        onClose={() => setTenantToDelete(false)}
+        onConfirm={handleDeleteTenant}
+        title="Delete tenant"
+        message={
+          user?.roleId === 'super_admin'
+            ? 'This permanently deletes this tenant and their payment history. This cannot be undone.'
+            : 'This removes this tenant. Their lease payment records are kept. This cannot be undone.'
+        }
+        confirmText="Delete"
+      />
     </div>
   );
 }
