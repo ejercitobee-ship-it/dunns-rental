@@ -215,6 +215,21 @@ export interface RealtorUserOption {
   email: string;
 }
 
+// Household API (admin side: household members for a given tenant's lease).
+// Mirrors portalApi.household, but scoped by tenantId and gated on
+// tenants_edit server side, since only staff with edit rights should be able
+// to add, change, or remove someone's household.
+export const householdApi = {
+  list: (tenantId: string): Promise<HouseholdMember[]> =>
+    apiRequest(`/household?tenantId=${encodeURIComponent(tenantId)}`),
+  add: (tenantId: string, data: HouseholdInput): Promise<HouseholdMember> =>
+    apiRequest('/household', { method: 'POST', body: JSON.stringify({ tenantId, ...data }) }),
+  update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
+    apiRequest(`/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string): Promise<{ success: boolean }> =>
+    apiRequest(`/household/${id}`, { method: 'DELETE' }),
+};
+
 // Leases API
 export const leasesApi = {
   getAll: (): Promise<Lease[]> => apiRequest('/leases'),
@@ -369,6 +384,20 @@ export interface RealtorTenantSummary extends PortalPerson {
   unitNumber?: string;
 }
 
+export interface HouseholdMember {
+  id: string;
+  leaseId: string;
+  name: string;
+  phone: string | null;
+  relationship: string | null;
+  createdAt: number;
+}
+export interface HouseholdInput {
+  name: string;
+  phone?: string;
+  relationship?: string;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   updateMe: (data: unknown): Promise<Tenant> =>
@@ -399,6 +428,15 @@ export const portalApi = {
   downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
   realtorTenants: (): Promise<RealtorTenantSummary[]> => apiRequest('/portal/realtor/tenants'),
   realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
+  household: {
+    list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
+    add: (data: HouseholdInput): Promise<HouseholdMember> =>
+      apiRequest('/portal/household', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
+      apiRequest(`/portal/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id: string): Promise<{ success: boolean }> =>
+      apiRequest(`/portal/household/${id}`, { method: 'DELETE' }),
+  },
 };
 
 // Maintenance API

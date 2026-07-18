@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Home, DoorOpen, Calendar, DollarSign } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { portalApi, type PortalMeResponse, type PortalLease } from '../../lib/api';
+import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { useToast } from '../../context/ToastContext';
+import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember } from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth } from '../../lib/rent';
 import type { Lease, RentPayment } from '../../types';
@@ -158,6 +161,97 @@ export function TenantHome() {
           </Card>
         </div>
       )}
+
+      <HouseholdCard hasLease={!!me?.lease} />
     </div>
+  );
+}
+
+function HouseholdCard({ hasLease }: { hasLease: boolean }) {
+  const { showToast } = useToast();
+  const [members, setMembers] = useState<HouseholdMember[]>([]);
+  const [form, setForm] = useState({ name: '', phone: '', relationship: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [toRemove, setToRemove] = useState<HouseholdMember | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (hasLease) portalApi.household.list().then(setMembers).catch(() => {});
+  }, [hasLease]);
+
+  const resetForm = () => { setForm({ name: '', phone: '', relationship: '' }); setEditingId(null); };
+
+  const submit = async () => {
+    if (!form.name.trim() || busy) return;
+    setBusy(true);
+    try {
+      if (editingId) await portalApi.household.update(editingId, form);
+      else await portalApi.household.add(form);
+      setMembers(await portalApi.household.list());
+      resetForm();
+      showToast('Saved.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not save.', 'error');
+    } finally { setBusy(false); }
+  };
+
+  const confirmRemove = async () => {
+    if (!toRemove) return;
+    try {
+      await portalApi.household.remove(toRemove.id);
+      setMembers(members.filter(m => m.id !== toRemove.id));
+      if (editingId === toRemove.id) resetForm();
+      showToast('Removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove.', 'error');
+    } finally { setToRemove(null); }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <h2 className="font-display text-lg font-medium text-ink">Who lives here</h2>
+        {!hasLease ? (
+          <p className="text-muted text-sm">Once your lease is active you can add the people living with you.</p>
+        ) : (
+          <>
+            <ul className="space-y-2">
+              {members.map(m => (
+                <li key={m.id} className="flex items-center justify-between gap-3 border-b border-line pb-2">
+                  <div>
+                    <p className="text-ink font-medium">{m.name}</p>
+                    <p className="text-muted text-sm">
+                      {[m.relationship, m.phone].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setEditingId(m.id); setForm({ name: m.name, phone: m.phone ?? '', relationship: m.relationship ?? '' }); }}>Edit</Button>
+                    <Button variant="outline" size="sm" onClick={() => setToRemove(m)}>Remove</Button>
+                  </div>
+                </li>
+              ))}
+              {members.length === 0 && <li className="text-muted text-sm">No one added yet.</li>}
+            </ul>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Relationship" value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })} />
+              <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={!form.name.trim() || busy} onClick={submit}>{editingId ? 'Save changes' : 'Add person'}</Button>
+              {editingId && <Button variant="outline" size="sm" onClick={resetForm}>Cancel</Button>}
+            </div>
+          </>
+        )}
+      </CardContent>
+      <ConfirmDialog
+        isOpen={!!toRemove}
+        onClose={() => setToRemove(null)}
+        onConfirm={confirmRemove}
+        title="Remove household member"
+        message={`Remove ${toRemove?.name} from the people who live here?`}
+        confirmText="Remove"
+      />
+    </Card>
   );
 }
