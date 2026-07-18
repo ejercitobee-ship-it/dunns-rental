@@ -28,6 +28,7 @@ import { TenantDocuments } from './pages/portal/TenantDocuments';
 import { RealtorTenants } from './pages/portal/RealtorTenants';
 import { RealtorTenantDetail } from './pages/portal/RealtorTenantDetail';
 import { RealtorDashboard } from './pages/portal/RealtorDashboard';
+import { RealtorAvailableUnits } from './pages/portal/RealtorAvailableUnits';
 import { isPortalRole } from './types';
 
 // Protected Route component
@@ -183,6 +184,12 @@ function AppRoutes() {
       <Route path="/portal/tenants/:id" element={
         <PortalRoute>
           <PortalLayout><RealtorTenantDetail /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/available" element={
+        <PortalRoute>
+          <PortalLayout><RealtorAvailableUnits /></PortalLayout>
         </PortalRoute>
       } />
 
