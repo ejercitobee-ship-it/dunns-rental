@@ -215,6 +215,21 @@ export interface RealtorUserOption {
   email: string;
 }
 
+// Household API (admin side: household members for a given tenant's lease).
+// Mirrors portalApi.household, but scoped by tenantId and gated on
+// tenants_edit server side, since only staff with edit rights should be able
+// to add, change, or remove someone's household.
+export const householdApi = {
+  list: (tenantId: string): Promise<HouseholdMember[]> =>
+    apiRequest(`/household?tenantId=${encodeURIComponent(tenantId)}`),
+  add: (tenantId: string, data: HouseholdInput): Promise<HouseholdMember> =>
+    apiRequest('/household', { method: 'POST', body: JSON.stringify({ tenantId, ...data }) }),
+  update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
+    apiRequest(`/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string): Promise<{ success: boolean }> =>
+    apiRequest(`/household/${id}`, { method: 'DELETE' }),
+};
+
 // Leases API
 export const leasesApi = {
   getAll: (): Promise<Lease[]> => apiRequest('/leases'),

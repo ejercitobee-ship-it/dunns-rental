@@ -8,11 +8,15 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { documentsApi, tenantsApi, type AppDocument, type TenantRealtorLink, type RealtorUserOption } from '../lib/api';
+import {
+  documentsApi, tenantsApi, householdApi,
+  type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember,
+} from '../lib/api';
 import { leasesOwingMonth, settleMonth } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
@@ -82,9 +86,23 @@ export function TenantDetail() {
   const [linking, setLinking] = useState(false);
   const [removingRealtorId, setRemovingRealtorId] = useState<string | null>(null);
 
+  // Household: the people living with this tenant. Loaded regardless of
+  // permission so a view-only admin still sees the roster; the add/edit/
+  // remove controls are gated on canManagePortal below.
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
+  const [householdForm, setHouseholdForm] = useState({ name: '', phone: '', relationship: '' });
+  const [editingHouseholdId, setEditingHouseholdId] = useState<string | null>(null);
+  const [householdToRemove, setHouseholdToRemove] = useState<HouseholdMember | null>(null);
+  const [householdBusy, setHouseholdBusy] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     documentsApi.list(id).then(setDocs).catch(() => setDocs([]));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    householdApi.list(id).then(setHouseholdMembers).catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -275,6 +293,40 @@ export function TenantDetail() {
     u => !realtors.some(r => r.realtorUserId === u.id)
   );
 
+  const resetHouseholdForm = () => {
+    setHouseholdForm({ name: '', phone: '', relationship: '' });
+    setEditingHouseholdId(null);
+  };
+
+  const submitHousehold = async () => {
+    if (!id || !householdForm.name.trim() || householdBusy) return;
+    setHouseholdBusy(true);
+    try {
+      if (editingHouseholdId) await householdApi.update(editingHouseholdId, householdForm);
+      else await householdApi.add(id, householdForm);
+      setHouseholdMembers(await householdApi.list(id));
+      resetHouseholdForm();
+      showToast('Saved.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not save.', 'error');
+    } finally {
+      setHouseholdBusy(false);
+    }
+  };
+
+  const confirmRemoveHousehold = async () => {
+    if (!householdToRemove) return;
+    try {
+      await householdApi.remove(householdToRemove.id);
+      setHouseholdMembers(prev => prev.filter(m => m.id !== householdToRemove.id));
+      showToast('Removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove.', 'error');
+    } finally {
+      setHouseholdToRemove(null);
+    }
+  };
+
   if (!tenant) {
     return (
       <div className="space-y-6">
@@ -429,6 +481,96 @@ export function TenantDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Household */}
+      <Card>
+        <CardContent className="p-5 space-y-4">
+          <h3 className="font-semibold text-ink flex items-center gap-2">
+            <Users className="h-4 w-4 text-faint" /> Household
+          </h3>
+          {!lease ? (
+            <p className="text-sm text-faint">This tenant has no active lease, so there is no household to manage.</p>
+          ) : (
+            <>
+              <ul className="space-y-2">
+                {householdMembers.map(m => (
+                  <li
+                    key={m.id}
+                    className="flex items-center justify-between gap-3 border-b border-line pb-2 last:border-0 last:pb-0"
+                  >
+                    <div>
+                      <p className="text-ink font-medium text-sm">{m.name}</p>
+                      <p className="text-muted text-xs">
+                        {[m.relationship, m.phone].filter(Boolean).join(' · ') || 'No details on file'}
+                      </p>
+                    </div>
+                    {canManagePortal && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingHouseholdId(m.id);
+                            setHouseholdForm({ name: m.name, phone: m.phone ?? '', relationship: m.relationship ?? '' });
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setHouseholdToRemove(m)}>Remove</Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+                {householdMembers.length === 0 && <li className="text-sm text-faint">No one added yet.</li>}
+              </ul>
+              {canManagePortal && (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <input
+                      className="rounded-lg border border-line px-3 py-2 text-sm"
+                      placeholder="Name"
+                      value={householdForm.name}
+                      onChange={(e) => setHouseholdForm({ ...householdForm, name: e.target.value })}
+                    />
+                    <input
+                      className="rounded-lg border border-line px-3 py-2 text-sm"
+                      placeholder="Relationship"
+                      value={householdForm.relationship}
+                      onChange={(e) => setHouseholdForm({ ...householdForm, relationship: e.target.value })}
+                    />
+                    <input
+                      className="rounded-lg border border-line px-3 py-2 text-sm"
+                      placeholder="Phone"
+                      value={householdForm.phone}
+                      onChange={(e) => setHouseholdForm({ ...householdForm, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!householdForm.name.trim() || householdBusy}
+                      onClick={submitHousehold}
+                    >
+                      {editingHouseholdId ? 'Save changes' : 'Add person'}
+                    </Button>
+                    {editingHouseholdId && (
+                      <Button variant="outline" size="sm" onClick={resetHouseholdForm}>Cancel</Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </CardContent>
+        <ConfirmDialog
+          isOpen={!!householdToRemove}
+          onClose={() => setHouseholdToRemove(null)}
+          onConfirm={confirmRemoveHousehold}
+          title="Remove household member"
+          message={`Remove ${householdToRemove?.name} from this household?`}
+          confirmText="Remove"
+        />
+      </Card>
 
       {/* Documents */}
       <Card>
