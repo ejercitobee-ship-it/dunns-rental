@@ -7,7 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { adminApi, realtorsApi } from '../lib/api';
+import { adminApi, realtorsApi, tenantsApi } from '../lib/api';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 
@@ -40,6 +40,11 @@ export function Users() {
     email: '',
     phone: '',
   });
+  // Add-tenant-for-realtor modal: link an existing unlinked tenant, or create new.
+  const [addTenantMode, setAddTenantMode] = useState<'link' | 'create'>('link');
+  const [unlinkedTenants, setUnlinkedTenants] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [addTenantBusy, setAddTenantBusy] = useState(false);
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
 
@@ -155,18 +160,32 @@ export function Users() {
 
   const openAddTenant = (user: User) => {
     setTenantForm({ firstName: '', lastName: '', email: '', phone: '' });
+    setAddTenantMode('link');
+    setSelectedTenantId('');
+    setUnlinkedTenants([]);
     setAddTenantTarget(user);
+    // Load the tenants with no realtor yet, for the "link existing" picker.
+    tenantsApi.listUnlinked().then(setUnlinkedTenants).catch(() => setUnlinkedTenants([]));
   };
 
   const handleAddTenant = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addTenantTarget) return;
+    if (!addTenantTarget || addTenantBusy) return;
+    setAddTenantBusy(true);
     try {
-      await realtorsApi.addTenant(addTenantTarget.id, tenantForm);
-      showToast('Tenant added for this realtor.', 'success');
+      if (addTenantMode === 'link') {
+        if (!selectedTenantId) return;
+        await tenantsApi.linkRealtor(selectedTenantId, addTenantTarget.id);
+        showToast('Tenant linked to this realtor.', 'success');
+      } else {
+        await realtorsApi.addTenant(addTenantTarget.id, tenantForm);
+        showToast('Tenant added for this realtor.', 'success');
+      }
       setAddTenantTarget(null);
     } catch (err) {
       showToast((err as Error).message || 'Failed to add tenant', 'error');
+    } finally {
+      setAddTenantBusy(false);
     }
   };
 
@@ -543,34 +562,68 @@ export function Users() {
         title={`Add tenant for ${addTenantTarget ? `${addTenantTarget.firstName} ${addTenantTarget.lastName}` : 'this realtor'}`}
       >
         <form onSubmit={handleAddTenant} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">First Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={tenantForm.firstName} onChange={(e) => setTenantForm({...tenantForm, firstName: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Last Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={tenantForm.lastName} onChange={(e) => setTenantForm({...tenantForm, lastName: e.target.value})} />
-            </div>
+          {/* Mode toggle: link an existing unlinked tenant, or create a new one. */}
+          <div className="flex gap-1 p-1 bg-canvas border border-line rounded-lg">
+            <button type="button" onClick={() => setAddTenantMode('link')}
+              className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${addTenantMode === 'link' ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}>
+              Link existing tenant
+            </button>
+            <button type="button" onClick={() => setAddTenantMode('create')}
+              className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${addTenantMode === 'create' ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}>
+              Create new tenant
+            </button>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input type="email" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={tenantForm.email} onChange={(e) => setTenantForm({...tenantForm, email: e.target.value})} />
-          </div>
+          {addTenantMode === 'link' ? (
+            unlinkedTenants.length === 0 ? (
+              <p className="text-sm text-muted">Every tenant already has a realtor. Create a new one instead.</p>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium mb-1">Tenant with no realtor yet</label>
+                <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)}>
+                  <option value="">Choose a tenant</option>
+                  {unlinkedTenants.map(t => (
+                    <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
+                  ))}
+                </select>
+              </div>
+            )
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">First Name *</label>
+                  <input type="text" required={addTenantMode === 'create'} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                    value={tenantForm.firstName} onChange={(e) => setTenantForm({...tenantForm, firstName: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Last Name *</label>
+                  <input type="text" required={addTenantMode === 'create'} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                    value={tenantForm.lastName} onChange={(e) => setTenantForm({...tenantForm, lastName: e.target.value})} />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Phone</label>
-            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={tenantForm.phone} onChange={(e) => setTenantForm({...tenantForm, phone: e.target.value})} />
-          </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <input type="email" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={tenantForm.email} onChange={(e) => setTenantForm({...tenantForm, email: e.target.value})} />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Phone</label>
+                <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={tenantForm.phone} onChange={(e) => setTenantForm({...tenantForm, phone: e.target.value})} />
+              </div>
+            </>
+          )}
 
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setAddTenantTarget(null)}>Cancel</Button>
-            <Button type="submit" className="flex-1">Add Tenant</Button>
+            <Button type="submit" className="flex-1"
+              disabled={addTenantBusy || (addTenantMode === 'link' && !selectedTenantId)}>
+              {addTenantMode === 'link' ? 'Link Tenant' : 'Add Tenant'}
+            </Button>
           </div>
         </form>
       </Modal>
