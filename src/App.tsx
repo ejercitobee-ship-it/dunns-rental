@@ -27,6 +27,7 @@ import { TenantInfo } from './pages/portal/TenantInfo';
 import { TenantDocuments } from './pages/portal/TenantDocuments';
 import { RealtorTenants } from './pages/portal/RealtorTenants';
 import { RealtorTenantDetail } from './pages/portal/RealtorTenantDetail';
+import { RealtorDashboard } from './pages/portal/RealtorDashboard';
 import { isPortalRole } from './types';
 
 // Protected Route component
@@ -82,7 +83,7 @@ function PortalRoute({ children }: { children: React.ReactNode }) {
 function PortalIndex() {
   const { user } = useAuth();
   if (user?.role.id === 'realtor') {
-    return <RealtorTenants />;
+    return <RealtorDashboard />;
   }
   return <TenantHome />;
 }
@@ -170,6 +171,12 @@ function AppRoutes() {
       <Route path="/portal/documents" element={
         <PortalRoute>
           <PortalLayout><TenantDocuments /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/tenants" element={
+        <PortalRoute>
+          <PortalLayout><RealtorTenants /></PortalLayout>
         </PortalRoute>
       } />
 
