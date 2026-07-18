@@ -33,9 +33,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // Management about which months were owed (a paused month is not owed).
     (lease as Record<string, unknown>).pauses = await leasePauses(env, lease.id as string);
 
-    // Only the columns a tenant may see. No payer, no uploaded_by, no notes.
+    // Only the columns a tenant may see. payment_method is the method only
+    // (cash, check, zelle): still no payer, no uploaded_by, no notes.
     const { results } = await env.DB.prepare(
-      `SELECT amount, due_date, paid_date, status, month, year
+      `SELECT amount, due_date, paid_date, status, month, year, payment_method
          FROM rent_payments
         WHERE lease_id = ?
         ORDER BY year DESC, month DESC`
@@ -52,6 +53,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           status: r.status,
           month: r.month,
           year: r.year,
+          paymentMethod: r.payment_method ?? undefined,
         })),
       },
     });

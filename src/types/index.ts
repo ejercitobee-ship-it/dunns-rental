@@ -199,4 +199,7 @@ export interface PortalPayment {
   status: 'paid' | 'pending' | 'overdue' | 'partial';
   month: number;
   year: number;
+  // How the payment was recorded (cash, check, zelle, ...). The method only:
+  // still never who paid, so the shared-lease privacy rule holds.
+  paymentMethod?: PaymentMethod;
 }
