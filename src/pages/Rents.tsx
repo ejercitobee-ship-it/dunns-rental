@@ -669,10 +669,13 @@ export function Rents() {
                           </td>
 
                           <td className="py-4 px-4 text-center">
-                            <Badge variant={status.color} className="flex items-center gap-1 w-fit mx-auto">
-                              <StatusIcon className="h-3 w-3" />
-                              {status.label}
-                            </Badge>
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge variant={status.color} className="flex items-center gap-1 w-fit mx-auto">
+                                <StatusIcon className="h-3 w-3" />
+                                {status.label}
+                              </Badge>
+                              {row.lease.needsReview && <Badge variant="warning">Needs review</Badge>}
+                            </div>
                           </td>
 
                           <td className="py-4 px-4 text-center">

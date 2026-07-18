@@ -376,7 +376,10 @@ export function TenantDetail() {
               {tenant.firstName} {tenant.lastName}
             </h1>
             {lease ? (
-              <Badge variant={leaseStatusBadge[lease.status]} className="mt-1">{leaseStatusLabel[lease.status]}</Badge>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                {lease.needsReview && <Badge variant="warning">Needs review</Badge>}
+              </div>
             ) : (
               <Badge variant="outline" className="mt-1">No tenancy</Badge>
             )}
