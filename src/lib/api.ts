@@ -369,6 +369,20 @@ export interface RealtorTenantSummary extends PortalPerson {
   unitNumber?: string;
 }
 
+export interface HouseholdMember {
+  id: string;
+  leaseId: string;
+  name: string;
+  phone: string | null;
+  relationship: string | null;
+  createdAt: number;
+}
+export interface HouseholdInput {
+  name: string;
+  phone?: string;
+  relationship?: string;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   updateMe: (data: unknown): Promise<Tenant> =>
@@ -399,6 +413,15 @@ export const portalApi = {
   downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
   realtorTenants: (): Promise<RealtorTenantSummary[]> => apiRequest('/portal/realtor/tenants'),
   realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
+  household: {
+    list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
+    add: (data: HouseholdInput): Promise<HouseholdMember> =>
+      apiRequest('/portal/household', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
+      apiRequest(`/portal/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id: string): Promise<{ success: boolean }> =>
+      apiRequest(`/portal/household/${id}`, { method: 'DELETE' }),
+  },
 };
 
 // Maintenance API
