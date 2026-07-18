@@ -1,4 +1,4 @@
-import type { PagesFunction } from '@cloudflare/workers-types';
+import type { PagesFunction, D1PreparedStatement } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTenant } from '../../lib/serializers';
 import { deleteUserStatements } from '../../lib/users';
@@ -79,7 +79,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     // rent_payments.paid_by_tenant_id. A Super Admin additionally purges the
     // payment history recorded as paid by this person (done first, so the rows
     // are deleted rather than nulled by the cascade).
-    const statements = [];
+    const statements: D1PreparedStatement[] = [];
     if (auth.role === 'super_admin') {
       statements.push(env.DB.prepare('DELETE FROM rent_payments WHERE paid_by_tenant_id = ?').bind(id));
     }

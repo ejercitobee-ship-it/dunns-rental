@@ -90,7 +90,7 @@ export function TenantInfo() {
         <p className="eyebrow">Your details</p>
         <h1 className="font-display text-2xl text-ink mt-1">My information</h1>
         <p className="text-sm text-muted mt-1">
-          Keep your contact details current so your property manager can reach you.
+          This is the information we have on file for you.
         </p>
       </div>
 

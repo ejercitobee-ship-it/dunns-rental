@@ -1,4 +1,4 @@
-import type { PagesFunction } from '@cloudflare/workers-types';
+import type { PagesFunction, D1PreparedStatement } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { deleteUserStatements } from '../../../lib/users';
 import { serializeUser } from './index';
@@ -114,7 +114,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       }
     }
 
-    const statements = [];
+    const statements: D1PreparedStatement[] = [];
     if (isSuper) {
       // Reassign the portfolio to the acting Super Admin BEFORE deleting the
       // user, so the NOT NULL FK on properties.user_id stays satisfied.
