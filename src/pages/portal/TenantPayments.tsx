@@ -38,7 +38,16 @@ function toRentPayments(leaseId: string, payments: PortalPayment[]): RentPayment
     status: p.status,
     month: p.month,
     year: p.year,
+    paymentMethod: p.paymentMethod,
   }));
+}
+
+// Turn a stored method value (cash, bank_transfer) into a readable label.
+function prettyMethod(method: string): string {
+  return method
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 export function TenantPayments() {
@@ -97,6 +106,14 @@ export function TenantPayments() {
       month,
       year,
       settlement: settleMonth(fullLease, payments, month, year),
+      // The distinct methods recorded for this month's payment(s). Usually one.
+      methods: Array.from(
+        new Set(
+          payments
+            .filter(p => p.month === month && p.year === year && p.paymentMethod)
+            .map(p => p.paymentMethod as string)
+        )
+      ),
     }));
   }, [lease, payments]);
 
@@ -133,7 +150,7 @@ export function TenantPayments() {
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px]">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-line bg-canvas">
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Month</th>
@@ -141,6 +158,7 @@ export function TenantPayments() {
                     <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Paid</th>
                     <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Balance</th>
                     <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
+                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -168,6 +186,9 @@ export function TenantPayments() {
                             <StatusIcon className="h-3 w-3" />
                             {status.label}
                           </Badge>
+                        </td>
+                        <td className="py-3 px-5 text-sm text-muted">
+                          {row.methods.map(prettyMethod).join(', ')}
                         </td>
                       </tr>
                     );
