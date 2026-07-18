@@ -76,10 +76,14 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     if (!tenant) return jsonError('Tenant not found', 404);
 
     // Deleting the tenant cascades lease_tenants and tenant_realtors and nulls
-    // rent_payments.paid_by_tenant_id. If the tenant had a portal login, that
-    // login exists only to serve this person, so remove it too — otherwise it
-    // lingers as an orphan account that can sign in but reaches no tenant.
-    const statements = [env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id)];
+    // rent_payments.paid_by_tenant_id. A Super Admin additionally purges the
+    // payment history recorded as paid by this person (done first, so the rows
+    // are deleted rather than nulled by the cascade).
+    const statements = [];
+    if (auth.role === 'super_admin') {
+      statements.push(env.DB.prepare('DELETE FROM rent_payments WHERE paid_by_tenant_id = ?').bind(id));
+    }
+    statements.push(env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id));
     if (tenant.user_id) statements.push(...deleteUserStatements(env, tenant.user_id));
     await env.DB.batch(statements);
 

@@ -91,29 +91,39 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     const existing = await env.DB.prepare('SELECT id FROM user WHERE id = ?').bind(id).first();
     if (!existing) return jsonError('User not found', 404);
 
-    // properties/expenses/incomes reference user(id) NOT NULL, so their owner
-    // cannot be nulled out and the row cannot be deleted while they exist. That
-    // only happens for staff accounts; tell the caller to deactivate instead of
-    // failing with an opaque 500.
-    const owned = await env.DB.prepare(
-      `SELECT
-         (SELECT COUNT(*) FROM properties WHERE user_id = ?1) AS properties,
-         (SELECT COUNT(*) FROM expenses   WHERE user_id = ?1) AS expenses,
-         (SELECT COUNT(*) FROM incomes    WHERE user_id = ?1) AS incomes`
-    )
-      .bind(id)
-      .first<{ properties: number; expenses: number; incomes: number }>();
-    if (owned && (owned.properties || owned.expenses || owned.incomes)) {
-      return jsonError(
-        'This user owns properties, expenses, or income records, so their history cannot be deleted. Deactivate the account instead.',
-        409
-      );
+    const isSuper = auth.role === 'super_admin';
+
+    // properties/expenses/incomes reference user(id) NOT NULL. A normal admin is
+    // blocked when the user owns any (deactivate instead). A Super Admin instead
+    // reassigns the properties to themselves (the portfolio survives) and purges
+    // the financial history (expenses, incomes), then deletes the login.
+    if (!isSuper) {
+      const owned = await env.DB.prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM properties WHERE user_id = ?1) AS properties,
+           (SELECT COUNT(*) FROM expenses   WHERE user_id = ?1) AS expenses,
+           (SELECT COUNT(*) FROM incomes    WHERE user_id = ?1) AS incomes`
+      )
+        .bind(id)
+        .first<{ properties: number; expenses: number; incomes: number }>();
+      if (owned && (owned.properties || owned.expenses || owned.incomes)) {
+        return jsonError(
+          'This user owns properties, expenses, or income records, so their history cannot be deleted. Deactivate the account instead.',
+          409
+        );
+      }
     }
 
-    // Clear every foreign-key reference to this login (tenants/leases/etc.) and
-    // remove its rows in one FK-safe transaction, so a tenant login deletes
-    // cleanly instead of tripping "FOREIGN KEY constraint failed".
-    await env.DB.batch(deleteUserStatements(env, id));
+    const statements = [];
+    if (isSuper) {
+      // Reassign the portfolio to the acting Super Admin BEFORE deleting the
+      // user, so the NOT NULL FK on properties.user_id stays satisfied.
+      statements.push(env.DB.prepare('UPDATE properties SET user_id = ? WHERE user_id = ?').bind(auth.id, id));
+      statements.push(env.DB.prepare('DELETE FROM expenses WHERE user_id = ?').bind(id));
+      statements.push(env.DB.prepare('DELETE FROM incomes WHERE user_id = ?').bind(id));
+    }
+    statements.push(...deleteUserStatements(env, id));
+    await env.DB.batch(statements);
 
     return jsonOk({ success: true });
   } catch {
