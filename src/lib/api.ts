@@ -400,8 +400,6 @@ export interface HouseholdInput {
 
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
-  updateMe: (data: unknown): Promise<Tenant> =>
-    apiRequest('/portal/me', { method: 'PUT', body: JSON.stringify(data) }),
   // { lease, payments }, not a bare array: see PortalPaymentsResponse. No
   // payer field travels on any payment row (Belle's decision: on a shared
   // lease a tenant never sees who paid what).
@@ -432,10 +430,6 @@ export const portalApi = {
     list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
     add: (data: HouseholdInput): Promise<HouseholdMember> =>
       apiRequest('/portal/household', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
-      apiRequest(`/portal/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    remove: (id: string): Promise<{ success: boolean }> =>
-      apiRequest(`/portal/household/${id}`, { method: 'DELETE' }),
   },
 };
 
