@@ -16,24 +16,42 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if (ids.length === 0) return jsonOk({ success: true, data: [] });
 
     const placeholders = ids.map(() => '?').join(',');
+    // Join each tenant to their most recent lease's unit and property, so the
+    // list carries the unit number and the exact address.
     const { results } = await env.DB.prepare(
       `SELECT t.*,
-              (SELECT u.unit_number FROM units u
-                 JOIN leases l ON l.unit_id = u.id
-                 JOIN lease_tenants lt ON lt.lease_id = l.id
-                WHERE lt.tenant_id = t.id
-                ORDER BY l.start_date DESC LIMIT 1) AS unit_number
+              u.unit_number AS unit_number,
+              p.address AS prop_address,
+              p.city AS prop_city,
+              p.state AS prop_state,
+              p.zip_code AS prop_zip
          FROM tenants t
+         LEFT JOIN leases l ON l.id = (
+           SELECT l2.id FROM leases l2
+             JOIN lease_tenants lt ON lt.lease_id = l2.id
+            WHERE lt.tenant_id = t.id
+            ORDER BY l2.start_date DESC LIMIT 1)
+         LEFT JOIN units u ON u.id = l.unit_id
+         LEFT JOIN properties p ON p.id = l.property_id
         WHERE t.id IN (${placeholders})
         ORDER BY t.last_name, t.first_name`
     ).bind(...ids).all();
 
     return jsonOk({
       success: true,
-      data: (results || []).map(r => ({
-        ...serializePortalTenant(r as Record<string, unknown>),
-        unitNumber: (r as Record<string, unknown>).unit_number ?? undefined,
-      })),
+      data: (results || []).map(r => {
+        const row = r as Record<string, unknown>;
+        return {
+          ...serializePortalTenant(row),
+          unit: {
+            unitNumber: (row.unit_number as string) ?? undefined,
+            address: (row.prop_address as string) ?? undefined,
+            city: (row.prop_city as string) ?? undefined,
+            state: (row.prop_state as string) ?? undefined,
+            zipCode: (row.prop_zip as string) ?? undefined,
+          },
+        };
+      }),
     });
   } catch {
     return serverError();

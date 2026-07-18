@@ -381,6 +381,16 @@ export interface PortalPaymentsResponse {
  * (serializePortalTenant): same shape as `Tenant` minus `notes`, which is the
  * owner's private note and never travels to a tenant or realtor session.
  */
+/** Where a tenant lives: their unit number and the property's exact address,
+ * resolved server side from their most recent lease. */
+export interface TenantUnit {
+  unitNumber?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+}
+
 export interface PortalPerson {
   id: string;
   firstName: string;
@@ -388,13 +398,12 @@ export interface PortalPerson {
   email?: string;
   phone?: string;
   emergencyContact?: { name: string; phone: string; relationship: string };
+  unit?: TenantUnit;
 }
 
-/** A tenant as a realtor's list sees them: the allowlisted person plus the
- * unit they were placed in (joined server side from their most recent lease). */
-export interface RealtorTenantSummary extends PortalPerson {
-  unitNumber?: string;
-}
+/** A tenant as a realtor's list sees them: the allowlisted person plus their
+ * unit and address (via PortalPerson.unit). */
+export type RealtorTenantSummary = PortalPerson;
 
 export interface HouseholdMember {
   id: string;
