@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../context/ToastContext';
-import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember } from '../../lib/api';
+import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth } from '../../lib/rent';
 import type { Lease, RentPayment } from '../../types';
@@ -31,8 +31,15 @@ function toLease(pl: PortalLease): Lease {
 export function TenantHome() {
   const [me, setMe] = useState<PortalMeResponse | null>(null);
   const [payments, setPayments] = useState<RentPayment[]>([]);
+  const [realtors, setRealtors] = useState<RealtorContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // The tenant's realtor(s), loaded independently so a failure here never
+  // blocks the rest of the dashboard.
+  useEffect(() => {
+    portalApi.myRealtors().then(setRealtors).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +169,29 @@ export function TenantHome() {
       )}
 
       <HouseholdCard hasLease={!!me?.lease} />
+
+      <RealtorCard realtors={realtors} />
     </div>
+  );
+}
+
+function RealtorCard({ realtors }: { realtors: RealtorContact[] }) {
+  if (realtors.length === 0) return null;
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <h2 className="font-display text-lg font-medium text-ink">Your realtor</h2>
+        <ul className="space-y-3">
+          {realtors.map((r, i) => (
+            <li key={i} className="space-y-0.5">
+              <p className="text-ink font-medium">{r.name || 'Realtor'}</p>
+              <p className="text-muted text-sm">{r.email}</p>
+              {r.phone && <p className="text-muted text-sm">{r.phone}</p>}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 

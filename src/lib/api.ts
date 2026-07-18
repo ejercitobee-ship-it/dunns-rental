@@ -410,8 +410,23 @@ export interface HouseholdInput {
   relationship?: string;
 }
 
+export interface RealtorContact {
+  name: string | null;
+  email: string;
+  phone: string | null;
+}
+export interface RealtorMe {
+  profile: RealtorContact;
+  tenantsPlaced: number;
+  tenantsInWindow: number;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
+  // The tenant's linked realtor(s), contact info only, always visible.
+  myRealtors: (): Promise<RealtorContact[]> => apiRequest('/portal/my-realtors'),
+  // The realtor's own profile plus summary counts, for their dashboard.
+  realtorMe: (): Promise<RealtorMe> => apiRequest('/portal/realtor/me'),
   // { lease, payments }, not a bare array: see PortalPaymentsResponse. No
   // payer field travels on any payment row (Belle's decision: on a shared
   // lease a tenant never sees who paid what).

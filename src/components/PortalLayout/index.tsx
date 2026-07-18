@@ -20,7 +20,8 @@ const TENANT_TABS = [
 ];
 
 const REALTOR_TABS = [
-  { name: 'My tenants', path: '/portal' },
+  { name: 'Dashboard', path: '/portal' },
+  { name: 'My tenants', path: '/portal/tenants' },
 ];
 
 export function PortalLayout({ children }: PortalLayoutProps) {
