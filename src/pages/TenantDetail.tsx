@@ -227,7 +227,14 @@ export function TenantDetail() {
       const result = await tenantsApi.invite(id);
       if (result.inviteUrl) setInviteUrl(result.inviteUrl);
       setInvited(true);
-      showToast('Invite sent', 'success');
+      // The account is always created; the email may not have gone out (an
+      // unverified sending domain, say). Say which happened so Belle knows
+      // whether she still needs to pass the link below on by hand.
+      if (result.emailSent) {
+        showToast('Invite email sent', 'success');
+      } else {
+        showToast('Account created, but the email could not be sent. Copy the link below and send it to the tenant.', 'info');
+      }
     } catch (err) {
       showToast((err as Error).message || 'Could not send the invite', 'error');
     } finally {

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTenant } from '../../lib/serializers';
+import { deleteUserStatements } from '../../lib/users';
 
 interface EmergencyContact {
   name?: string;
@@ -68,7 +69,20 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    await env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(params.id as string).run();
+    const id = params.id as string;
+    const tenant = await env.DB.prepare('SELECT user_id FROM tenants WHERE id = ?')
+      .bind(id)
+      .first<{ user_id: string | null }>();
+    if (!tenant) return jsonError('Tenant not found', 404);
+
+    // Deleting the tenant cascades lease_tenants and tenant_realtors and nulls
+    // rent_payments.paid_by_tenant_id. If the tenant had a portal login, that
+    // login exists only to serve this person, so remove it too — otherwise it
+    // lingers as an orphan account that can sign in but reaches no tenant.
+    const statements = [env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id)];
+    if (tenant.user_id) statements.push(...deleteUserStatements(env, tenant.user_id));
+    await env.DB.batch(statements);
+
     return jsonOk({ success: true });
   } catch {
     return serverError();

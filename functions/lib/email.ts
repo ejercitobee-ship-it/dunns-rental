@@ -10,24 +10,43 @@ export async function sendEmail(
   env: Env,
   opts: { to: string; subject: string; html: string; text: string }
 ): Promise<boolean> {
-  if (!env.RESEND_API_KEY) return false;
+  if (!env.RESEND_API_KEY) {
+    console.error('sendEmail: RESEND_API_KEY is not set; no email was sent.');
+    return false;
+  }
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.MAIL_FROM || DEFAULT_FROM,
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    }),
-  });
+  const from = env.MAIL_FROM || DEFAULT_FROM;
+  let res: Response;
+  try {
+    res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      }),
+    });
+  } catch (err) {
+    console.error(`sendEmail: request to Resend failed: ${(err as Error).message}`);
+    return false;
+  }
 
-  return res.ok;
+  if (!res.ok) {
+    // Resend explains rejections in the body (e.g. an unverified sending
+    // domain, which caps delivery to the account's own address). Without this
+    // the caller only sees a bare false and the real reason is lost.
+    const detail = await res.text().catch(() => '');
+    console.error(`sendEmail: Resend rejected the message from "${from}" to "${opts.to}" — ${res.status} ${detail}`);
+    return false;
+  }
+
+  return true;
 }
 
 /** Password reset email, styled to match the app. */

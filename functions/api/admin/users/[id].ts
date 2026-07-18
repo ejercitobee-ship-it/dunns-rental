@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
+import { deleteUserStatements } from '../../../lib/users';
 import { serializeUser } from './index';
 
 interface UserRow {
@@ -90,12 +91,29 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     const existing = await env.DB.prepare('SELECT id FROM user WHERE id = ?').bind(id).first();
     if (!existing) return jsonError('User not found', 404);
 
-    // Remove dependent rows first (session and account have no cascade).
-    await env.DB.prepare('DELETE FROM session WHERE user_id = ?').bind(id).run();
-    await env.DB.prepare('DELETE FROM account WHERE user_id = ?').bind(id).run();
-    await env.DB.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(id).run();
-    await env.DB.prepare('DELETE FROM user_metadata WHERE user_id = ?').bind(id).run();
-    await env.DB.prepare('DELETE FROM user WHERE id = ?').bind(id).run();
+    // properties/expenses/incomes reference user(id) NOT NULL, so their owner
+    // cannot be nulled out and the row cannot be deleted while they exist. That
+    // only happens for staff accounts; tell the caller to deactivate instead of
+    // failing with an opaque 500.
+    const owned = await env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM properties WHERE user_id = ?1) AS properties,
+         (SELECT COUNT(*) FROM expenses   WHERE user_id = ?1) AS expenses,
+         (SELECT COUNT(*) FROM incomes    WHERE user_id = ?1) AS incomes`
+    )
+      .bind(id)
+      .first<{ properties: number; expenses: number; incomes: number }>();
+    if (owned && (owned.properties || owned.expenses || owned.incomes)) {
+      return jsonError(
+        'This user owns properties, expenses, or income records, so their history cannot be deleted. Deactivate the account instead.',
+        409
+      );
+    }
+
+    // Clear every foreign-key reference to this login (tenants/leases/etc.) and
+    // remove its rows in one FK-safe transaction, so a tenant login deletes
+    // cleanly instead of tripping "FOREIGN KEY constraint failed".
+    await env.DB.batch(deleteUserStatements(env, id));
 
     return jsonOk({ success: true });
   } catch {
