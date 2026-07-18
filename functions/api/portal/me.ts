@@ -21,7 +21,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const lease = await env.DB.prepare(
       `SELECT l.* FROM leases l
          JOIN lease_tenants lt ON lt.lease_id = l.id
-        WHERE lt.tenant_id = ? AND l.status != 'ended'
+        WHERE lt.tenant_id = ? AND l.status != 'ended' AND (l.needs_review IS NULL OR l.needs_review = 0)
         ORDER BY l.start_date DESC LIMIT 1`
     ).bind(tenantId).first();
 

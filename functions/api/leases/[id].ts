@@ -66,7 +66,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       env.DB.prepare(
         `UPDATE leases SET
           unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
-          security_deposit = ?, status = ?, notes = ?, updated_at = unixepoch()
+          security_deposit = ?, status = ?, needs_review = 0, notes = ?, updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
         body.unitId ?? null,

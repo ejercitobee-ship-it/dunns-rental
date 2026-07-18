@@ -4,7 +4,8 @@ import { Users, DoorOpen, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../context/ToastContext';
-import { portalApi, type RealtorTenantSummary } from '../../lib/api';
+import { portalApi, type RealtorTenantSummary, type AvailableUnit } from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 // This app has had a React #310 white screen from a hook called after an
 // early return, so every hook below runs unconditionally before the
@@ -14,7 +15,11 @@ import { portalApi, type RealtorTenantSummary } from '../../lib/api';
 // page lists and links out to the detail page. The one write path is adding
 // a brand new tenant below, which always creates a fresh record.
 
-const emptyForm = { firstName: '', lastName: '', email: '', phone: '' };
+const emptyForm = {
+  firstName: '', lastName: '', email: '', phone: '',
+  emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
+  unitId: '',
+};
 
 export function RealtorTenants() {
   const { showToast } = useToast();
@@ -24,8 +29,10 @@ export function RealtorTenants() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [units, setUnits] = useState<AvailableUnit[]>([]);
 
   const loadTenants = () => portalApi.realtorTenants().then(setTenants);
+  const loadUnits = () => portalApi.availableUnits().then(setUnits);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +54,14 @@ export function RealtorTenants() {
     };
   }, []);
 
+  const openForm = () => {
+    setShowForm((v) => {
+      const next = !v;
+      if (next) loadUnits();
+      return next;
+    });
+  };
+
   const submitNewTenant = async () => {
     if (!form.firstName.trim() || !form.lastName.trim() || submitting) return;
     setSubmitting(true);
@@ -56,8 +71,12 @@ export function RealtorTenants() {
         lastName: form.lastName.trim(),
         email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined,
+        emergencyName: form.emergencyName.trim() || undefined,
+        emergencyPhone: form.emergencyPhone.trim() || undefined,
+        emergencyRelationship: form.emergencyRelationship.trim() || undefined,
+        unitId: form.unitId || undefined,
       });
-      await loadTenants();
+      await Promise.all([loadTenants(), loadUnits()]);
       setForm(emptyForm);
       setShowForm(false);
       showToast('Tenant added.', 'success');
@@ -92,7 +111,7 @@ export function RealtorTenants() {
             People you placed, for the first 30 days after they move in.
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+        <Button size="sm" variant="outline" onClick={openForm}>
           {showForm ? 'Cancel' : 'New Tenant'}
         </Button>
       </div>
@@ -128,6 +147,40 @@ export function RealtorTenants() {
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input
+                className="rounded-lg border border-line px-3 py-2 text-sm"
+                placeholder="Emergency contact name"
+                value={form.emergencyName}
+                onChange={(e) => setForm({ ...form, emergencyName: e.target.value })}
+              />
+              <input
+                className="rounded-lg border border-line px-3 py-2 text-sm"
+                placeholder="Emergency contact phone"
+                value={form.emergencyPhone}
+                onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })}
+              />
+              <input
+                className="rounded-lg border border-line px-3 py-2 text-sm"
+                placeholder="Emergency contact relationship"
+                value={form.emergencyRelationship}
+                onChange={(e) => setForm({ ...form, emergencyRelationship: e.target.value })}
+              />
+            </div>
+            <div>
+              <select
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+                value={form.unitId}
+                onChange={(e) => setForm({ ...form, unitId: e.target.value })}
+              >
+                <option value="">No unit yet</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.address ? `${u.address}, ` : ''}Unit {u.unitNumber} ({formatCurrency(u.monthlyRent)})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
@@ -139,6 +192,9 @@ export function RealtorTenants() {
             </div>
             <p className="text-xs text-muted">
               This creates a new person in your list and in the system. If they are already in the system, ask the office to link them instead.
+            </p>
+            <p className="text-xs text-muted">
+              Choosing a unit places this tenant there as a draft. The office sets the rent and dates.
             </p>
           </CardContent>
         </Card>

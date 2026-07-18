@@ -36,6 +36,7 @@ export interface Lease {
   monthlyRent: number;
   securityDeposit?: number;
   status: LeaseStatus;
+  needsReview?: boolean;
   /**
    * Every stretch collection was paused on this lease, oldest first. The
    * server stamps these itself when the status changes to or from 'paused'

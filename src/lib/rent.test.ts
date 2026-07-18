@@ -282,6 +282,30 @@ describe('leasesOwingMonth', () => {
   });
 });
 
+describe('draft (needs review) leases owe nothing', () => {
+  // A realtor-created draft has no start date yet and is awaiting Belle's
+  // review; it must not bill any month until she finalizes it.
+  const draft = lease({ id: 'd1', startDate: undefined, endDate: undefined, needsReview: true });
+
+  it('a needs-review lease covers no month', () => {
+    expect(leaseCoversMonth(draft, 7, 2026)).toBe(false);
+  });
+
+  it('a needs-review lease is never owed', () => {
+    expect(leasesOwingMonth([draft], 7, 2026)).toEqual([]);
+  });
+
+  it('once finalized (needsReview false) it covers again', () => {
+    expect(leaseCoversMonth({ ...draft, needsReview: false, startDate: '2026-01-01' }, 7, 2026)).toBe(true);
+  });
+
+  it('settleMonth bills a needs-review lease nothing even if called directly', () => {
+    const s = settleMonth(draft, [], 7, 2026);
+    expect(s.due).toBe(0);
+    expect(s.balance).toBe(0);
+  });
+});
+
 describe('rentIncomeForYear', () => {
   it('sums paid payments for the year and ignores non-paid ones', () => {
     const payments = [
