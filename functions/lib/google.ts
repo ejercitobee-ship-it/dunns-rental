@@ -12,9 +12,11 @@ const KEY_REFRESH = 'google_refresh_token';
 const KEY_ACCESS = 'google_access_token';
 const KEY_ACCESS_EXPIRES = 'google_access_expires_at';
 const KEY_ROOT_FOLDER = 'google_root_folder_id';
+const KEY_PHOTO_FOLDER = 'google_photo_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
+const PHOTO_FOLDER_NAME = 'Profile Photos';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -265,6 +267,19 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
   return id;
 }
 
+/** The Profile Photos folder, a subfolder of the app root, created on first use. */
+async function ensurePhotoFolder(env: Env): Promise<string> {
+  const existing = await getSetting(env, KEY_PHOTO_FOLDER);
+  if (existing) {
+    const status = await folderStatus(env, existing);
+    if (status !== 'gone') return existing;
+  }
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, PHOTO_FOLDER_NAME, root)) ?? (await createFolder(env, PHOTO_FOLDER_NAME, root));
+  await putSetting(env, KEY_PHOTO_FOLDER, id);
+  return id;
+}
+
 /**
  * Upload one file. Multipart carries the metadata (name, parent folder) and the
  * bytes in a single request, which is what lets the file land in the tenant's
@@ -320,4 +335,24 @@ export async function deleteDriveFile(env: Env, fileId: string): Promise<void> {
   if (!res.ok && res.status !== 404) {
     throw new Error(`Drive delete failed: ${res.status}`);
   }
+}
+
+/**
+ * Upload a profile photo to the Profile Photos folder and return its Drive id.
+ * When replacing, trashes the old file AFTER the new one is saved so a failure
+ * never loses the existing photo.
+ */
+export async function saveProfilePhoto(env: Env, file: File, oldDriveId?: string): Promise<string> {
+  const folderId = await ensurePhotoFolder(env);
+  const name = `photo-${crypto.randomUUID()}`;
+  const uploaded = await uploadToDrive(env, folderId, name, file.type || 'image/jpeg', file);
+  if (oldDriveId) {
+    try { await deleteDriveFile(env, oldDriveId); } catch { /* old file already gone is fine */ }
+  }
+  return uploaded.id;
+}
+
+/** Remove a profile photo file from Drive. */
+export async function removeProfilePhoto(env: Env, driveId: string): Promise<void> {
+  await deleteDriveFile(env, driveId);
 }
