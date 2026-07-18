@@ -96,6 +96,7 @@ export function serializeLease(r: Row) {
     monthlyRent: r.monthly_rent ?? 0,
     securityDeposit: r.security_deposit ?? 0,
     status: r.status ?? 'active',
+    needsReview: !!r.needs_review,
     notes: r.notes ?? undefined,
     // Filled in by the leases endpoints, which join lease_tenants.
     tenantIds: (r.tenantIds as string[]) ?? [],
