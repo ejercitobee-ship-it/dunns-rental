@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -7,7 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { adminApi } from '../lib/api';
+import { adminApi, realtorsApi } from '../lib/api';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 
@@ -22,6 +22,7 @@ export function Users() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [tempPasswordInfo, setTempPasswordInfo] = useState<{ name: string; password: string } | null>(null);
+  const [addTenantTarget, setAddTenantTarget] = useState<User | null>(null);
 
   const [userForm, setUserForm] = useState({
     firstName: '',
@@ -31,6 +32,13 @@ export function Users() {
     roleId: '',
     department: '',
     isActive: true,
+  });
+
+  const [tenantForm, setTenantForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
   });
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
@@ -142,6 +150,23 @@ export function Users() {
       showToast(`User ${user.isActive ? 'deactivated' : 'activated'}!`, 'success');
     } catch (err) {
       showToast((err as Error).message || 'Failed to update user', 'error');
+    }
+  };
+
+  const openAddTenant = (user: User) => {
+    setTenantForm({ firstName: '', lastName: '', email: '', phone: '' });
+    setAddTenantTarget(user);
+  };
+
+  const handleAddTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addTenantTarget) return;
+    try {
+      await realtorsApi.addTenant(addTenantTarget.id, tenantForm);
+      showToast('Tenant added for this realtor.', 'success');
+      setAddTenantTarget(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to add tenant', 'error');
     }
   };
 
@@ -325,6 +350,15 @@ export function Users() {
                     
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {tab === 'realtor' && hasPermission('tenants_create') && (
+                          <button
+                            onClick={() => openAddTenant(user)}
+                            title="Add tenant"
+                            className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
+                          >
+                            <UserPlus className="h-4 w-4 text-muted" />
+                          </button>
+                        )}
                         {canManageUsers && (
                           <>
                             <button
@@ -493,10 +527,53 @@ export function Users() {
         onClose={() => setUserToDelete(null)}
         onConfirm={handleDeleteUser}
         title="Delete Team Member"
-        message={`Are you sure you want to remove ${userToDelete?.firstName} ${userToDelete?.lastName}? This action cannot be undone.`}
+        message={
+          currentUser?.roleId === 'super_admin'
+            ? 'This permanently deletes this account, purges their income and expense records, and reassigns any properties they own to you. This cannot be undone.'
+            : `Are you sure you want to remove ${userToDelete?.firstName} ${userToDelete?.lastName}? This action cannot be undone.`
+        }
         confirmText="Delete"
         variant="danger"
       />
+
+      {/* Add Tenant (on behalf of a realtor) Modal */}
+      <Modal
+        isOpen={!!addTenantTarget}
+        onClose={() => setAddTenantTarget(null)}
+        title={`Add tenant for ${addTenantTarget ? `${addTenantTarget.firstName} ${addTenantTarget.lastName}` : 'this realtor'}`}
+      >
+        <form onSubmit={handleAddTenant} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">First Name *</label>
+              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={tenantForm.firstName} onChange={(e) => setTenantForm({...tenantForm, firstName: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Last Name *</label>
+              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={tenantForm.lastName} onChange={(e) => setTenantForm({...tenantForm, lastName: e.target.value})} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Email</label>
+            <input type="email" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={tenantForm.email} onChange={(e) => setTenantForm({...tenantForm, email: e.target.value})} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Phone</label>
+            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={tenantForm.phone} onChange={(e) => setTenantForm({...tenantForm, phone: e.target.value})} />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setAddTenantTarget(null)}>Cancel</Button>
+            <Button type="submit" className="flex-1">Add Tenant</Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Temporary password result */}
       <Modal

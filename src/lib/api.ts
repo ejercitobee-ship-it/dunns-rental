@@ -215,6 +215,13 @@ export interface RealtorUserOption {
   email: string;
 }
 
+// Realtors API (staff side: acting on a realtor's behalf).
+export const realtorsApi = {
+  // Staff create a brand new tenant and link it to this realtor in one step.
+  addTenant: (realtorUserId: string, data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<Tenant> =>
+    apiRequest(`/realtors/${realtorUserId}/tenants`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // Household API (admin side: household members for a given tenant's lease).
 // Mirrors portalApi.household, but scoped by tenantId and gated on
 // tenants_edit server side, since only staff with edit rights should be able
@@ -400,8 +407,6 @@ export interface HouseholdInput {
 
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
-  updateMe: (data: unknown): Promise<Tenant> =>
-    apiRequest('/portal/me', { method: 'PUT', body: JSON.stringify(data) }),
   // { lease, payments }, not a bare array: see PortalPaymentsResponse. No
   // payer field travels on any payment row (Belle's decision: on a shared
   // lease a tenant never sees who paid what).
@@ -428,14 +433,12 @@ export const portalApi = {
   downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
   realtorTenants: (): Promise<RealtorTenantSummary[]> => apiRequest('/portal/realtor/tenants'),
   realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
+  addRealtorTenant: (data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<PortalPerson> =>
+    apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
   household: {
     list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
     add: (data: HouseholdInput): Promise<HouseholdMember> =>
       apiRequest('/portal/household', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
-      apiRequest(`/portal/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    remove: (id: string): Promise<{ success: boolean }> =>
-      apiRequest(`/portal/household/${id}`, { method: 'DELETE' }),
   },
 };
 
