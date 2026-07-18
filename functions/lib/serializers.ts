@@ -53,6 +53,17 @@ export function serializeTenant(r: Row) {
   };
 }
 
+export function serializeHouseholdMember(r: Row) {
+  return {
+    id: r.id,
+    leaseId: r.lease_id,
+    name: r.name,
+    phone: r.phone ?? null,
+    relationship: r.relationship ?? null,
+    createdAt: r.created_at,
+  };
+}
+
 /**
  * A tenant as the portal may see them. Identical to serializeTenant minus
  * `notes`, which is Belle's private note about the person and is never shown
