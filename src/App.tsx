@@ -43,7 +43,7 @@ function ProtectedRoute({ children, requiredPermission }: { children: React.Reac
   // server, so a deep link into a management route (e.g. /rents) would show
   // them nothing but errors. Bounce them to their own portal instead of the
   // dashboard.
-  if (isPortalRole(user?.role.id)) {
+  if (isPortalRole(user?.roleId)) {
     return <Navigate to="/portal" replace />;
   }
 
@@ -74,7 +74,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function PortalRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!isPortalRole(user?.role.id)) return <Navigate to="/" replace />;
+  if (!isPortalRole(user?.roleId)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -82,7 +82,7 @@ function PortalRoute({ children }: { children: React.ReactNode }) {
 // list. Both pages are placeholders until Tasks 10 and 11 build them out.
 function PortalIndex() {
   const { user } = useAuth();
-  if (user?.role.id === 'realtor') {
+  if (user?.roleId === 'realtor') {
     return <RealtorDashboard />;
   }
   return <TenantHome />;
@@ -99,7 +99,7 @@ function RootRoute() {
   }
 
   // A portal user never sees the management dashboard.
-  if (isPortalRole(user?.role.id)) {
+  if (isPortalRole(user?.roleId)) {
     return <Navigate to="/portal" replace />;
   }
 

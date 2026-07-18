@@ -34,7 +34,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
     navigate('/login');
   };
 
-  const tabs = user?.role.id === 'realtor' ? REALTOR_TABS : TENANT_TABS;
+  const tabs = user?.roleId === 'realtor' ? REALTOR_TABS : TENANT_TABS;
 
   return (
     <div className="min-h-screen bg-canvas">
