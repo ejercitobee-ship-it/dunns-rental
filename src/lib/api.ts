@@ -478,7 +478,11 @@ export const portalApi = {
   downloadUrl: (id: string) => `${API_BASE}/portal/documents/${id}`,
   realtorTenants: (): Promise<RealtorTenantSummary[]> => apiRequest('/portal/realtor/tenants'),
   realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
-  addRealtorTenant: (data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<PortalPerson> =>
+  addRealtorTenant: (data: {
+    firstName: string; lastName: string; email?: string; phone?: string;
+    emergencyName?: string; emergencyPhone?: string; emergencyRelationship?: string;
+    unitId?: string;
+  }): Promise<PortalPerson> =>
     apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
   // Vacant units the realtor may market, asking rent included on purpose.
   availableUnits: (): Promise<AvailableUnit[]> => apiRequest('/portal/realtor/available-units'),

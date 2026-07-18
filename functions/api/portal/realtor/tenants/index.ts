@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../lib/session';
 import { realtorTenantIds, serverToday } from '../../../../lib/portal';
 import { serializePortalTenant } from '../../../../lib/serializers';
-import { validateTenantContact, createTenantForRealtor } from '../../../../lib/realtorTenants';
+import { validateTenantContact, createTenantForRealtor, UnitUnavailable } from '../../../../lib/realtorTenants';
 
 /** GET /api/portal/realtor/tenants — the realtor's tenants, inside the window. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -70,10 +70,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   if (auth.role !== 'realtor') return jsonError('Not a realtor account', 403);
 
   try {
-    const valid = validateTenantContact((await request.json()) as Record<string, unknown>);
+    const body = (await request.json()) as Record<string, unknown>;
+    const valid = validateTenantContact(body);
     if (!valid.ok) return jsonError(valid.error, 400);
-    const row = await createTenantForRealtor(env, auth.id, valid.value);
-    return jsonOk({ success: true, data: serializePortalTenant(row) }, 201);
+    const unitId = typeof body.unitId === 'string' && body.unitId ? body.unitId : undefined;
+    try {
+      const row = await createTenantForRealtor(env, auth.id, valid.value, unitId);
+      return jsonOk({ success: true, data: serializePortalTenant(row) }, 201);
+    } catch (err) {
+      if (err instanceof UnitUnavailable) return jsonError('That unit is no longer available', 409);
+      throw err;
+    }
   } catch {
     return serverError();
   }
