@@ -430,6 +430,22 @@ export interface RealtorMe {
   tenantsInWindow: number;
 }
 
+/** A vacant unit as a realtor sees it for marketing: no tenant/lease data,
+ * just the unit's own specs, the asking rent, and the property's address. */
+export interface AvailableUnit {
+  id: string;
+  unitNumber: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  squareFeet?: number;
+  monthlyRent: number;
+  description?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   // The tenant's linked realtor(s), contact info only, always visible.
@@ -464,6 +480,8 @@ export const portalApi = {
   realtorTenant: (id: string): Promise<PortalPerson> => apiRequest(`/portal/realtor/tenants/${id}`),
   addRealtorTenant: (data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<PortalPerson> =>
     apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
+  // Vacant units the realtor may market, asking rent included on purpose.
+  availableUnits: (): Promise<AvailableUnit[]> => apiRequest('/portal/realtor/available-units'),
   household: {
     list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
     add: (data: HouseholdInput): Promise<HouseholdMember> =>
