@@ -93,13 +93,14 @@ export function RealtorTenants() {
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : 'Add tenant'}
+          {showForm ? 'Cancel' : 'New Tenant'}
         </Button>
       </div>
 
       {showForm && (
         <Card>
           <CardContent className="p-5 space-y-4">
+            <h2 className="font-display text-lg font-medium text-ink">New tenant</h2>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
@@ -137,7 +138,7 @@ export function RealtorTenants() {
               </Button>
             </div>
             <p className="text-xs text-muted">
-              This adds a new person to your list. If they are already in the system, ask the office to link them instead.
+              This creates a new person in your list and in the system. If they are already in the system, ask the office to link them instead.
             </p>
           </CardContent>
         </Card>

@@ -201,6 +201,9 @@ export const tenantsApi = {
     apiRequest(`/tenants/${id}/realtors`),
   linkRealtor: (id: string, realtorUserId: string) =>
     apiRequest(`/tenants/${id}/realtors`, { method: 'POST', body: JSON.stringify({ realtorUserId }) }),
+  // Tenants not linked to any realtor yet, for the admin "link existing" picker.
+  listUnlinked: (): Promise<{ id: string; firstName: string; lastName: string }[]> =>
+    apiRequest('/tenants/unlinked'),
   unlinkRealtor: (id: string, realtorUserId: string) =>
     apiRequest(`/tenants/${id}/realtors?realtorUserId=${encodeURIComponent(realtorUserId)}`, { method: 'DELETE' }),
   // The realtor-role users, for the link picker. Gated on tenants_edit server
