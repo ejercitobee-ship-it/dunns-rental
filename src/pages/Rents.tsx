@@ -2,8 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
-  Search, Download, Upload, Home, DoorOpen, Users,
-  TrendingUp, TrendingDown, FileText,
+  Search, Download, Upload,
+  TrendingUp, TrendingDown, FileText, ChevronRight, ChevronDown,
   CreditCard, Banknote, Wallet, Smartphone, Receipt,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -13,7 +13,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -135,6 +135,18 @@ export function Rents() {
   // Same synchronous guard as the import loop above, for the same reason:
   // a double-click on "Record Payment" must not create two payments.
   const isRecordingRef = useRef(false);
+
+  // Which tenant rows are expanded to show their month-by-month detail.
+  // Everything starts collapsed; the row summary carries this month's status
+  // and the overdue flag, so most work happens without expanding at all.
+  const [expandedLeaseIds, setExpandedLeaseIds] = useState<Set<string>>(new Set());
+  const toggleExpanded = (leaseId: string) =>
+    setExpandedLeaseIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leaseId)) next.delete(leaseId);
+      else next.add(leaseId);
+      return next;
+    });
 
   // Annual rent collection data. Walks every month of the year against
   // leasesOwingMonth, which is every lease whose term covered that month
@@ -261,6 +273,20 @@ export function Rents() {
       );
     });
   }, [leaseMonthRows, searchTerm]);
+
+  // Collapse the filtered rows into one group per lease (labeled by its
+  // occupants) for the redesigned list. Pre-sort by property then unit so that
+  // order holds within each attention bucket, since groupLeaseMonthRows sorts
+  // attention-first with a stable sort.
+  const tenantGroups = useMemo(() => {
+    const byPropertyUnit = [...filteredRows].sort((a, b) =>
+      (a.property?.name || '').localeCompare(b.property?.name || '') ||
+      (a.unit?.unitNumber || '').localeCompare(b.unit?.unitNumber || '') ||
+      a.month - b.month
+    );
+    const today = new Date();
+    return groupLeaseMonthRows(byPropertyUnit, parseInt(yearFilter, 10), today.getFullYear(), today.getMonth() + 1);
+  }, [filteredRows, yearFilter]);
 
   // Stat cards for the selected year. "Elapsed" months are the ones that
   // have already started, so a future year (or the tail end of the current
@@ -659,98 +685,110 @@ export function Rents() {
             </div>
           </div>
 
-          {/* Payments Table: one row per active lease per month */}
+          {/* Payments list: one collapsible row per tenant, whoever owes on top */}
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <table className="w-full min-w-[900px] sm:min-w-0">
-                  <thead>
-                    <tr className="border-b border-line bg-canvas">
-                      <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property &amp; Unit</th>
-                      <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Occupants</th>
-                      <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Period</th>
-                      <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Due</th>
-                      <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Paid</th>
-                      <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Balance</th>
-                      <th className="text-center py-3 px-4 font-semibold text-ink text-sm">Status</th>
-                      <th className="text-center py-3 px-4 font-semibold text-ink text-sm">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRows.map(row => {
-                      const status = settlementStatusConfig[row.settlement.status];
-                      const StatusIcon = status.icon;
+              {tenantGroups.map(group => {
+                const head = group.monthRows[0];
+                const occupants = head?.occupants ?? [];
+                const names = occupants.length
+                  ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
+                  : '—';
+                const location = [head?.property?.name, head?.unit ? `Unit ${head.unit.unitNumber}` : null]
+                  .filter(Boolean).join(' · ') || '—';
+                const isExpanded = expandedLeaseIds.has(group.lease.id);
+                const thisStatus = group.thisMonth ? settlementStatusConfig[group.thisMonth.settlement.status] : null;
+                const ThisIcon = thisStatus?.icon;
+                const monthAbbr = group.thisMonth ? (MONTHS[group.thisMonth.month - 1] ?? '').slice(0, 3) : '';
+                const canRecordThisMonth = group.thisMonth && group.thisMonth.settlement.status !== 'paid';
 
-                      return (
-                        <tr key={`${row.lease.id}-${row.year}-${row.month}`} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
-                          <td className="py-4 px-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-sm text-ink">
-                                <Home className="h-3.5 w-3.5 text-faint" />
-                                <span>{row.property?.name || '—'}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-muted">
-                                <DoorOpen className="h-3.5 w-3.5 text-faint" />
-                                <span>{row.unit ? `Unit ${row.unit.unitNumber}` : '—'}</span>
-                              </div>
+                return (
+                  <div
+                    key={group.lease.id}
+                    className={`border-b border-line last:border-0 ${group.needsAttention ? '' : 'opacity-60'}`}
+                  >
+                    {/* Collapsed summary row */}
+                    <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02]">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(group.lease.id)}
+                        aria-expanded={isExpanded}
+                        className="flex flex-1 items-center gap-3 text-left min-w-0"
+                      >
+                        {isExpanded
+                          ? <ChevronDown className="h-4 w-4 text-faint flex-shrink-0" />
+                          : <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />}
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-ink truncate">{names}</div>
+                          <div className="text-sm text-muted truncate">{location}</div>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {group.overdue > 0 && (
+                          <Badge variant="destructive" className="whitespace-nowrap">
+                            {formatCurrency(group.overdue)} overdue
+                          </Badge>
+                        )}
+                        {thisStatus && ThisIcon && (
+                          <Badge variant={thisStatus.color} className="hidden sm:inline-flex items-center gap-1 whitespace-nowrap">
+                            <ThisIcon className="h-3 w-3" />
+                            {monthAbbr} {thisStatus.label}
+                          </Badge>
+                        )}
+                        {!group.needsAttention && !thisStatus && (
+                          <Badge variant="success" className="whitespace-nowrap">All paid</Badge>
+                        )}
+                        {canRecordThisMonth && (
+                          <Button size="sm" variant="outline" onClick={() => openRecordModal(group.thisMonth!)}>
+                            Record
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded month-by-month detail for this one tenant */}
+                    {isExpanded && (
+                      <div className="bg-canvas px-4 sm:px-6 pb-2">
+                        {group.monthRows.map(mr => {
+                          const s = settlementStatusConfig[mr.settlement.status];
+                          const SIcon = s.icon;
+                          return (
+                            <div
+                              key={`${mr.month}`}
+                              className="flex items-center gap-3 py-2.5 border-b border-line last:border-0"
+                            >
+                              <span className="text-sm text-ink w-24 sm:w-28 flex-shrink-0">
+                                {formatMonthYear(mr.month, mr.year)}
+                              </span>
+                              <span className="text-sm text-muted tnum flex-1 truncate">
+                                {formatCurrency(mr.settlement.due)} due · {formatCurrency(mr.settlement.paid)} paid
+                              </span>
+                              {mr.settlement.balance > 0 && (
+                                <span className="hidden sm:inline text-sm font-semibold text-danger tnum">
+                                  {formatCurrency(mr.settlement.balance)}
+                                </span>
+                              )}
+                              {mr.settlement.status === 'paid' ? (
+                                <Badge variant={s.color} className="flex items-center gap-1 flex-shrink-0">
+                                  <SIcon className="h-3 w-3" />
+                                  {s.label}
+                                </Badge>
+                              ) : (
+                                <Button size="sm" variant="outline" onClick={() => openRecordModal(mr)} className="flex-shrink-0">
+                                  Record
+                                </Button>
+                              )}
                             </div>
-                          </td>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
-                          <td className="py-4 px-4">
-                            {row.occupants.length > 0 ? (
-                              <div className="flex items-center gap-2 text-sm text-ink">
-                                <Users className="h-3.5 w-3.5 text-faint flex-shrink-0" />
-                                <span>{row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')}</span>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-faint">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-4 text-sm text-ink">
-                            {formatMonthYear(row.month, row.year)}
-                          </td>
-
-                          <td className="py-4 px-4 text-right text-sm text-ink tnum">
-                            {formatCurrency(row.settlement.due)}
-                          </td>
-
-                          <td className="py-4 px-4 text-right text-sm text-ink tnum">
-                            {formatCurrency(row.settlement.paid)}
-                          </td>
-
-                          <td className={`py-4 px-4 text-right font-semibold tnum ${row.settlement.balance > 0 ? 'text-danger' : 'text-ink'}`}>
-                            {formatCurrency(row.settlement.balance)}
-                          </td>
-
-                          <td className="py-4 px-4 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                              <Badge variant={status.color} className="flex items-center gap-1 w-fit mx-auto">
-                                <StatusIcon className="h-3 w-3" />
-                                {status.label}
-                              </Badge>
-                            </div>
-                          </td>
-
-                          <td className="py-4 px-4 text-center">
-                            {row.settlement.status !== 'paid' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openRecordModal(row)}
-                              >
-                                Record
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {filteredRows.length === 0 && (
+              {tenantGroups.length === 0 && (
                 <div className="text-center py-16">
                   <DollarSign className="h-10 w-10 mx-auto text-faint mb-3" />
                   <h3 className="font-medium text-ink">No rent rows found</h3>

@@ -205,3 +205,77 @@ export function settleMonth(
   if (paid + EPSILON >= due) return { due, paid, balance: 0, status: 'paid' };
   return { due, paid, balance: round2(due - paid), status: 'partial' };
 }
+
+/** The minimum a per-lease-per-month row must carry to be grouped. */
+export interface LeaseMonthLike {
+  lease: Lease;
+  month: number;
+  settlement: MonthSettlement;
+}
+
+/** One lease collapsed into a single Rent Management row, keeping its months. */
+export interface TenantRentGroup<R extends LeaseMonthLike> {
+  lease: Lease;
+  /** Every owed month for this lease in the viewed year, sorted ascending. */
+  monthRows: R[];
+  /** The current-month row, only when the viewed year is the current year. */
+  thisMonth: R | null;
+  /** Owed money from elapsed months BEFORE the current one (the "overdue" flag). */
+  overdue: number;
+  /** Overdue money, or this month unpaid/partial. Sorts to the top, undimmed. */
+  needsAttention: boolean;
+}
+
+/**
+ * Collapse per-lease-per-month rows into one group per lease for the Rent
+ * Management list. Pure, so the this-month / overdue / attention logic is
+ * unit-testable without rendering.
+ *
+ * - `thisMonth`: the current-month row, only when the viewed year IS the
+ *   current year (a past or future year has no "this month" on this screen).
+ * - `overdue`: sum of balances for ELAPSED months, excluding the current month
+ *   (surfaced on its own, never double-counted) and any future month (not yet
+ *   due). For a past year every month is elapsed; for a future year none is.
+ * - `needsAttention`: has overdue money, or this month is unpaid/partial.
+ *
+ * Groups come back attention-first; the sort is stable, so the caller's
+ * incoming order (property, then unit) is preserved within each bucket.
+ */
+export function groupLeaseMonthRows<R extends LeaseMonthLike>(
+  rows: R[],
+  selectedYear: number,
+  todayYear: number,
+  todayMonth: number
+): TenantRentGroup<R>[] {
+  const isCurrentYear = selectedYear === todayYear;
+  const isPastYear = selectedYear < todayYear;
+  const elapsedThrough = isPastYear ? 12 : isCurrentYear ? todayMonth : 0;
+  const currentMonth = isCurrentYear ? todayMonth : 0;
+
+  const groups = new Map<string, TenantRentGroup<R>>();
+  for (const row of rows) {
+    let g = groups.get(row.lease.id);
+    if (!g) {
+      g = { lease: row.lease, monthRows: [], thisMonth: null, overdue: 0, needsAttention: false };
+      groups.set(row.lease.id, g);
+    }
+    g.monthRows.push(row);
+  }
+
+  for (const g of groups.values()) {
+    g.monthRows.sort((a, b) => a.month - b.month);
+    if (currentMonth) g.thisMonth = g.monthRows.find(r => r.month === currentMonth) ?? null;
+
+    let overdue = 0;
+    for (const r of g.monthRows) {
+      if (r.month <= elapsedThrough && r.month !== currentMonth) {
+        overdue = round2(overdue + r.settlement.balance);
+      }
+    }
+    g.overdue = overdue;
+    const thisMonthOwing = g.thisMonth ? g.thisMonth.settlement.status !== 'paid' : false;
+    g.needsAttention = overdue > EPSILON || thisMonthOwing;
+  }
+
+  return [...groups.values()].sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
+}
