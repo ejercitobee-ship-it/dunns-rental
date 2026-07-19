@@ -50,6 +50,7 @@ export function serializeTenant(r: Row) {
           relationship: r.emergency_contact_relationship ?? '',
         }
       : undefined,
+    photoUrl: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : null,
   };
 }
 
@@ -83,6 +84,7 @@ export function serializePortalTenant(r: Row) {
     email: full.email,
     phone: full.phone,
     emergencyContact: full.emergencyContact,
+    photoUrl: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : null,
   };
 }
 

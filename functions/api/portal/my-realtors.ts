@@ -20,15 +20,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if (!tenantId) return jsonOk({ success: true, data: [] });
 
     const { results } = await env.DB.prepare(
-      `SELECT u.name, u.email, u.phone FROM user u
+      `SELECT u.name, u.email, u.phone, u.image FROM user u
          JOIN tenant_realtors tr ON tr.realtor_user_id = u.id
         WHERE tr.tenant_id = ?
         ORDER BY u.name`
-    ).bind(tenantId).all<{ name: string | null; email: string; phone: string | null }>();
+    ).bind(tenantId).all<{ name: string | null; email: string; phone: string | null; image: string | null }>();
 
     return jsonOk({
       success: true,
-      data: (results || []).map(r => ({ name: r.name, email: r.email, phone: r.phone })),
+      data: (results || []).map(r => ({ name: r.name, email: r.email, phone: r.phone, photoUrl: r.image ? `/api/photo/${r.image}` : null })),
     });
   } catch {
     return serverError();

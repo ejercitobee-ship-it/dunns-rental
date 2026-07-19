@@ -81,6 +81,7 @@ export interface ApiUser {
   roleId: string;
   isActive: boolean;
   createdAt: string;
+  photoUrl?: string | null;
 }
 
 export const adminApi = {
@@ -399,6 +400,7 @@ export interface PortalPerson {
   phone?: string;
   emergencyContact?: { name: string; phone: string; relationship: string };
   unit?: TenantUnit;
+  photoUrl?: string | null;
 }
 
 /** A tenant as a realtor's list sees them: the allowlisted person plus their
@@ -425,7 +427,7 @@ export interface RealtorContact {
   phone: string | null;
 }
 export interface RealtorMe {
-  profile: RealtorContact;
+  profile: RealtorContact & { photoUrl: string | null };
   tenantsPlaced: number;
   tenantsInWindow: number;
 }
@@ -492,6 +494,27 @@ export const portalApi = {
       apiRequest('/portal/household', { method: 'POST', body: JSON.stringify(data) }),
   },
 };
+
+export const photoApi = {
+  uploadSelf: (file: Blob): Promise<{ photoUrl: string }> => postPhoto('/portal/photo', file),
+  removeSelf: (): Promise<{ success: boolean }> => apiRequest('/portal/photo', { method: 'DELETE' }),
+  uploadTenant: (tenantId: string, file: Blob): Promise<{ photoUrl: string }> => postPhoto(`/tenants/${tenantId}/photo`, file),
+  removeTenant: (tenantId: string): Promise<{ success: boolean }> => apiRequest(`/tenants/${tenantId}/photo`, { method: 'DELETE' }),
+  uploadUser: (userId: string, file: Blob): Promise<{ photoUrl: string }> => postPhoto(`/admin/users/${userId}/photo`, file),
+  removeUser: (userId: string): Promise<{ success: boolean }> => apiRequest(`/admin/users/${userId}/photo`, { method: 'DELETE' }),
+};
+
+async function postPhoto(path: string, file: Blob): Promise<{ photoUrl: string }> {
+  const fd = new FormData();
+  fd.append('photo', file, 'photo.jpg');
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', credentials: 'include', body: fd });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.data !== undefined ? data.data : data;
+}
 
 // Maintenance API
 export const maintenanceApi = {

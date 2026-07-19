@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Users, DoorOpen, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Avatar } from '../../components/ui/Avatar';
 import { useToast } from '../../context/ToastContext';
 import { portalApi, type RealtorTenantSummary, type AvailableUnit } from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
@@ -220,12 +221,11 @@ export function RealtorTenants() {
                   className="flex items-center justify-between px-5 py-4 hover:bg-black/[0.03] transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-semibold text-primary">
-                        {t.firstName[0]}
-                        {t.lastName[0]}
-                      </span>
-                    </div>
+                    <Avatar
+                      photoUrl={t.photoUrl}
+                      initials={`${t.firstName?.[0] ?? ''}${t.lastName?.[0] ?? ''}`}
+                      className="w-9 h-9 flex-shrink-0"
+                    />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-ink truncate">
                         {t.firstName} {t.lastName}

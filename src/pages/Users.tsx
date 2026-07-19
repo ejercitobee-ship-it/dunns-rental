@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Image, ImageOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Avatar } from '../components/ui/Avatar';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { adminApi, realtorsApi, tenantsApi } from '../lib/api';
+import { adminApi, realtorsApi, tenantsApi, photoApi } from '../lib/api';
+import { resizeImage } from '../lib/image';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 
@@ -23,6 +25,14 @@ export function Users() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [tempPasswordInfo, setTempPasswordInfo] = useState<{ name: string; password: string } | null>(null);
   const [addTenantTarget, setAddTenantTarget] = useState<User | null>(null);
+
+  // Realtor row photo controls: local overrides keyed by user id, since the
+  // photo lives on the user row itself (photoApi.uploadUser/removeUser) and
+  // the context list won't refresh until the next fetch.
+  const [photoOverrides, setPhotoOverrides] = useState<Record<string, string | null>>({});
+  const [photoTargetUserId, setPhotoTargetUserId] = useState<string | null>(null);
+  const [photoBusyUserId, setPhotoBusyUserId] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [userForm, setUserForm] = useState({
     firstName: '',
@@ -189,6 +199,47 @@ export function Users() {
     }
   };
 
+  const openPhotoPicker = (user: User) => {
+    setPhotoTargetUserId(user.id);
+    photoInputRef.current?.click();
+  };
+
+  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const userId = photoTargetUserId;
+    if (!file || !userId || photoBusyUserId) {
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      return;
+    }
+    setPhotoBusyUserId(userId);
+    try {
+      const blob = await resizeImage(file);
+      const { photoUrl } = await photoApi.uploadUser(userId, blob);
+      setPhotoOverrides(prev => ({ ...prev, [userId]: `${photoUrl}?t=${Date.now()}` }));
+      showToast('Photo updated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the photo.', 'error');
+    } finally {
+      setPhotoBusyUserId(null);
+      setPhotoTargetUserId(null);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async (user: User) => {
+    if (photoBusyUserId) return;
+    setPhotoBusyUserId(user.id);
+    try {
+      await photoApi.removeUser(user.id);
+      setPhotoOverrides(prev => ({ ...prev, [user.id]: null }));
+      showToast('Photo removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove the photo.', 'error');
+    } finally {
+      setPhotoBusyUserId(null);
+    }
+  };
+
   const getRoleBadgeColor = (roleId: string) => {
     switch (roleId) {
       case 'super_admin':
@@ -311,13 +362,17 @@ export function Users() {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map(user => (
+                {filteredUsers.map(user => {
+                  const rowPhotoUrl = photoOverrides[user.id] !== undefined ? photoOverrides[user.id] : user.photoUrl;
+                  return (
                   <tr key={user.id} className="border-b last:border-0 hover:bg-black/[0.03]">
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
-                          {user.firstName[0]}{user.lastName[0]}
-                        </div>
+                        <Avatar
+                          photoUrl={rowPhotoUrl}
+                          initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`}
+                          className="w-10 h-10"
+                        />
                         <div>
                           <p className="font-medium text-ink">{user.firstName} {user.lastName}</p>
                           <p className="text-xs text-muted">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
@@ -378,6 +433,28 @@ export function Users() {
                             <UserPlus className="h-4 w-4 text-muted" />
                           </button>
                         )}
+                        {tab === 'realtor' && hasPermission('users_edit') && (
+                          <>
+                            <button
+                              onClick={() => openPhotoPicker(user)}
+                              disabled={photoBusyUserId === user.id}
+                              title={rowPhotoUrl ? 'Change photo' : 'Add photo'}
+                              className="p-2 hover:bg-primary-soft rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <Image className="h-4 w-4 text-muted" />
+                            </button>
+                            {rowPhotoUrl && (
+                              <button
+                                onClick={() => handlePhotoRemove(user)}
+                                disabled={photoBusyUserId === user.id}
+                                title="Remove photo"
+                                className="p-2 hover:bg-danger-soft rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                <ImageOff className="h-4 w-4 text-muted" />
+                              </button>
+                            )}
+                          </>
+                        )}
                         {canManageUsers && (
                           <>
                             <button
@@ -414,12 +491,21 @@ export function Users() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
+
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoPick}
+      />
 
       {/* Add User Modal */}
       <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add Team Member">

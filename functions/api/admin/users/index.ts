@@ -21,6 +21,7 @@ interface UserRow {
   department: string | null;
   created_at: number | null;
   role: string | null;
+  image: string | null;
 }
 
 export function serializeUser(r: UserRow) {
@@ -36,6 +37,7 @@ export function serializeUser(r: UserRow) {
     roleId: r.role || 'viewer',
     isActive: r.is_active !== 0,
     createdAt: r.created_at ? new Date(r.created_at * 1000).toISOString() : new Date().toISOString(),
+    photoUrl: r.image ? `/api/photo/${r.image}` : null,
   };
 }
 
@@ -57,7 +59,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const { results } = await env.DB.prepare(
-      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.created_at, r.role AS role
+      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.created_at, u.image, r.role AS role
          FROM user u
          LEFT JOIN user_roles r ON r.user_id = u.id
         ORDER BY u.created_at DESC`
