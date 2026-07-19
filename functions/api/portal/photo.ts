@@ -51,12 +51,11 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   try {
     const target = await currentPhoto(env, auth);
     if (!target) return jsonError('Only a tenant or realtor can remove a photo here', 403);
-    if (target.old) {
-      try { await removeProfilePhoto(env, target.old); } catch { /* already gone is fine */ }
-    }
+    if (target.old) await removeProfilePhoto(env, target.old);
     await env.DB.prepare(`UPDATE ${target.table} SET ${target.column} = NULL WHERE id = ?`).bind(target.recordId).run();
     return jsonOk({ success: true });
-  } catch {
+  } catch (err) {
+    if (err instanceof DriveNotConnected) return jsonError('Google Drive is not connected. Ask the office.', 503);
     return serverError();
   }
 };
