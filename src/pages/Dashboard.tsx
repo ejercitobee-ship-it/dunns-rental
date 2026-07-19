@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf, parseLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth } from '../lib/rent';
 import type { DashboardStats, Property, Tenant } from '../types';
@@ -250,7 +250,7 @@ export function Dashboard() {
     return activeLeases(leases)
       .filter(l => l.endDate)
       .map(l => {
-        const end = new Date(l.endDate!);
+        const end = parseLocalDate(l.endDate!);
         const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         const unit = l.unitId ? units.find(u => u.id === l.unitId) : undefined;
         const occupants = getLeaseTenants(l.id);
@@ -530,7 +530,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {upcomingRenewals.slice(0, 6).map(({ lease, unit, occupants, days, end }) => {
+              {upcomingRenewals.slice(0, 6).map(({ lease, unit, occupants, days }) => {
                 const tone = days <= 30 ? 'destructive' : days <= 60 ? 'warning' : 'secondary';
                 const occupantNames = occupants.length > 0
                   ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
@@ -544,7 +544,7 @@ export function Dashboard() {
                     <div>
                       <p className="font-medium text-ink">{unit ? `Unit ${unit.unitNumber}` : 'Unit unknown'}</p>
                       <p className="text-sm text-muted">{occupantNames}</p>
-                      <p className="text-sm text-muted">Lease ends {formatDate(end.toISOString())}</p>
+                      <p className="text-sm text-muted">Lease ends {lease.endDate ? formatDate(lease.endDate) : '—'}</p>
                     </div>
                     <Badge variant={tone}>
                       {days === 0 ? 'Ends today' : days === 1 ? '1 day left' : `${days} days left`}

@@ -12,8 +12,20 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+// Parse a stored date as a LOCAL calendar day. `new Date('2026-07-01')` parses
+// a date-only string as UTC midnight, which is the PREVIOUS day for anyone
+// behind UTC (the owner is in America/Chicago) — the same trap todayLocalDate/
+// yearOf/monthOf exist to avoid. A full ISO timestamp (with a time and zone) is
+// an unambiguous instant, so it still goes through `new Date` untouched.
+export function parseLocalDate(dateString: string): Date {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+  return dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(dateString);
+}
+
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  return parseLocalDate(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

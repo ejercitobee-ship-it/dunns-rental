@@ -4,7 +4,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
@@ -43,7 +43,7 @@ const emptyForm = {
   status: 'open' as MaintenanceStatus,
   cost: 0,
   vendor: '',
-  reportedDate: new Date().toISOString().split('T')[0],
+  reportedDate: todayLocalDate(),
   notes: '',
 };
 
@@ -101,7 +101,7 @@ export function Maintenance() {
       status: m.status,
       cost: m.cost || 0,
       vendor: m.vendor || '',
-      reportedDate: m.reportedDate || new Date().toISOString().split('T')[0],
+      reportedDate: m.reportedDate || todayLocalDate(),
       notes: m.notes || '',
     });
     setEditingId(m.id);

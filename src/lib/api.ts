@@ -264,8 +264,10 @@ export const leasesApi = {
 export const paymentsApi = {
   getAll: (): Promise<RentPayment[]> => apiRequest('/payments'),
   getById: (id: string): Promise<RentPayment> => apiRequest(`/payments/${id}`),
-  create: (data: Omit<RentPayment, 'id'>): Promise<RentPayment> =>
-    apiRequest('/payments', { method: 'POST', body: JSON.stringify(data) }),
+  // deferSheetSync lets a bulk import skip the per-row master-spreadsheet
+  // rebuild and trigger a single rebuild once, at the end.
+  create: (data: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }): Promise<RentPayment> =>
+    apiRequest(`/payments${opts?.deferSheetSync ? '?deferSheetSync=1' : ''}`, { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: RentPayment): Promise<RentPayment> =>
     apiRequest(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
