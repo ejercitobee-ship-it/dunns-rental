@@ -341,6 +341,14 @@ export const googleApi = {
   disconnect: () => apiRequest('/google/disconnect', { method: 'POST' }),
 };
 
+// Master rent spreadsheet (a Google Sheet in Drive that mirrors tenants/payments)
+export const rentSheetApi = {
+  // connected = Drive linked; url = the sheet's link, null until it exists yet
+  get: (): Promise<{ connected: boolean; url: string | null }> => apiRequest('/rent-sheet'),
+  // Forces creation (if needed) + a full rebuild; returns the sheet's link
+  sync: (): Promise<{ url: string }> => apiRequest('/rent-sheet/sync', { method: 'POST' }),
+};
+
 // Portal API (tenant and realtor self-service)
 // Note: apiRequest already prefixes with API_BASE ('/api'), so these paths
 // must not repeat it: pass '/portal/...', not '/api/portal/...'.

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTenant } from '../../lib/serializers';
+import { syncRentSheet } from '../../lib/sheets';
 
 interface EmergencyContact {
   name?: string;
@@ -68,6 +69,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
+    syncRentSheet(context);
     return jsonOk({ success: true, data: serializeTenant(row as Record<string, unknown>) }, 201);
   } catch {
     return serverError();

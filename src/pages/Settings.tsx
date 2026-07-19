@@ -16,6 +16,9 @@ import {
   ChevronDown,
   ChevronRight,
   Cloud,
+  FileSpreadsheet,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -23,7 +26,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { settingsApi, googleApi } from '../lib/api';
+import { settingsApi, googleApi, rentSheetApi } from '../lib/api';
 import { SYSTEM_PERMISSIONS } from '../types/auth';
 import type { Role } from '../types/auth';
 
@@ -36,6 +39,8 @@ export function Settings() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
   const [isDriveWorking, setIsDriveWorking] = useState(false);
+  const [rentSheetUrl, setRentSheetUrl] = useState<string | null>(null);
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
 
   const [companySettings, setCompanySettings] = useState({
     companyName: "DUNN's Rental",
@@ -109,6 +114,25 @@ export function Settings() {
     };
   }, []);
 
+  // Load the master rent spreadsheet's link (if it exists yet). Gated on
+  // finances_view like the endpoint; a user without it just won't see the row.
+  useEffect(() => {
+    if (!hasPermission('finances_view')) return;
+    let active = true;
+    rentSheetApi
+      .get()
+      .then((data) => {
+        if (!active || !data) return;
+        setRentSheetUrl(data.url);
+      })
+      .catch(() => {
+        // Leave the link hidden if the check fails.
+      });
+    return () => {
+      active = false;
+    };
+  }, [hasPermission]);
+
   // The Google OAuth callback redirects back here with ?drive=connected,
   // ?drive=cancelled, or ?drive=failed. Toast it once, then clear the query
   // param so a refresh does not toast again.
@@ -149,6 +173,19 @@ export function Settings() {
       showToast((err as Error).message || 'Failed to disconnect Google Drive', 'error');
     } finally {
       setIsDriveWorking(false);
+    }
+  };
+
+  const handleSyncSheet = async () => {
+    setIsSyncingSheet(true);
+    try {
+      const { url } = await rentSheetApi.sync();
+      setRentSheetUrl(url);
+      showToast('Rent spreadsheet updated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to sync the rent spreadsheet', 'error');
+    } finally {
+      setIsSyncingSheet(false);
     }
   };
 
@@ -407,6 +444,7 @@ export function Settings() {
             {driveConnected === null ? (
               <p className="text-sm text-muted">Checking connection.</p>
             ) : driveConnected ? (
+              <>
               <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-positive-soft flex items-center justify-center flex-shrink-0">
@@ -423,6 +461,36 @@ export function Settings() {
                   </Button>
                 )}
               </div>
+
+              {hasPermission('finances_view') && (
+                <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
+                      <FileSpreadsheet className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-ink">Master rent spreadsheet</p>
+                      <p className="text-sm text-muted">A Google Sheet in your Drive that mirrors every tenant and rent payment. It updates automatically.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {rentSheetUrl && (
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(rentSheetUrl, '_blank', 'noopener,noreferrer')}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={handleSyncSheet} disabled={isSyncingSheet}>
+                      <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingSheet ? 'animate-spin' : ''}`} />
+                      {isSyncingSheet ? 'Syncing.' : 'Sync now'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              </>
             ) : (
               <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
                 <div>

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializePayment } from '../../lib/serializers';
+import { syncRentSheet } from '../../lib/sheets';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -64,6 +65,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
+    syncRentSheet(context);
     return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>) }, 201);
   } catch {
     return serverError();

@@ -2,6 +2,7 @@ import type { PagesFunction, D1PreparedStatement } from '@cloudflare/workers-typ
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTenant } from '../../lib/serializers';
 import { deleteUserStatements } from '../../lib/users';
+import { syncRentSheet } from '../../lib/sheets';
 
 interface EmergencyContact {
   name?: string;
@@ -57,6 +58,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Tenant not found', 404);
+    syncRentSheet(context);
     return jsonOk({ success: true, data: serializeTenant(row as Record<string, unknown>) });
   } catch {
     return serverError();
@@ -87,6 +89,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     if (tenant.user_id) statements.push(...deleteUserStatements(env, tenant.user_id));
     await env.DB.batch(statements);
 
+    syncRentSheet(context);
     return jsonOk({ success: true });
   } catch {
     return serverError();

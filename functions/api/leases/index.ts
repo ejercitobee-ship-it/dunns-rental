@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeLease } from '../../lib/serializers';
+import { syncRentSheet } from '../../lib/sheets';
 
 /**
  * Attach the tenant ids and pause intervals on each lease, in two extra
@@ -168,6 +169,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     const [data] = await withLeaseDetails(env, [row as Record<string, unknown>]);
+    syncRentSheet(context);
     return jsonOk({ success: true, data }, 201);
   } catch {
     return serverError();

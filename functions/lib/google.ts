@@ -26,14 +26,14 @@ export class DriveNotConnected extends Error {
   }
 }
 
-async function getSetting(env: Env, key: string): Promise<string | null> {
+export async function getSetting(env: Env, key: string): Promise<string | null> {
   const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key = ?')
     .bind(key)
     .first<{ value: string }>();
   return row?.value ?? null;
 }
 
-async function putSetting(env: Env, key: string, value: string): Promise<void> {
+export async function putSetting(env: Env, key: string, value: string): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, unixepoch())
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()`
@@ -219,7 +219,7 @@ async function findFolder(env: Env, name: string, parentId?: string): Promise<st
  * Belle may rename it or move it anywhere in her Drive and it keeps working.
  * Recreated if she deletes it.
  */
-async function ensureRootFolder(env: Env): Promise<string> {
+export async function ensureRootFolder(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_ROOT_FOLDER);
   if (existing) {
     // Reuse unless the folder is DEFINITELY gone. On 'unknown' (a transient
