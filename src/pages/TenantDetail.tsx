@@ -413,6 +413,7 @@ export function TenantDetail() {
               photoUrl={displayedPhotoUrl}
               initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
               className="w-14 h-14 flex-shrink-0"
+              initialsClassName="text-lg"
             />
             {canManagePortal && (
               <div className="flex items-center gap-2 whitespace-nowrap">
@@ -429,7 +430,7 @@ export function TenantDetail() {
                   onClick={() => photoInputRef.current?.click()}
                   className="text-xs font-medium text-primary hover:text-primary-hover disabled:opacity-50"
                 >
-                  {displayedPhotoUrl ? 'Change' : 'Add photo'}
+                  {displayedPhotoUrl ? 'Change photo' : 'Add photo'}
                 </button>
                 {displayedPhotoUrl && (
                   <button

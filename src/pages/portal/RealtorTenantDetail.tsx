@@ -104,6 +104,7 @@ export function RealtorTenantDetail() {
           photoUrl={tenant.photoUrl}
           initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
           className="w-14 h-14 flex-shrink-0"
+          initialsClassName="text-lg"
         />
         <div>
           <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">

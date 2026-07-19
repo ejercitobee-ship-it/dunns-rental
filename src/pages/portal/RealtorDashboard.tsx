@@ -85,6 +85,7 @@ export function RealtorDashboard() {
               photoUrl={photoUrl}
               initials={`${profile.name?.[0] ?? profile.email[0] ?? ''}`}
               className="w-16 h-16 flex-shrink-0"
+              initialsClassName="text-xl"
             />
             <div className="flex items-center gap-3">
               <input

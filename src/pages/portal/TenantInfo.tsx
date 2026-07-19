@@ -138,6 +138,7 @@ export function TenantInfo() {
           photoUrl={photoUrl}
           initials={`${form.firstName?.[0] ?? ''}${form.lastName?.[0] ?? ''}`}
           className="w-16 h-16 flex-shrink-0"
+          initialsClassName="text-xl"
         />
         <div className="flex items-center gap-3">
           <input
