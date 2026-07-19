@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, User, Mail, Phone, ShieldAlert, FileText, Upload, Download, MapPin } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Avatar } from '../../components/ui/Avatar';
 import { portalApi, type AppDocument, type PortalPerson } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 
@@ -99,12 +100,11 @@ export function RealtorTenantDetail() {
       </Link>
 
       <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
-          <span className="text-xl font-semibold text-primary">
-            {tenant.firstName[0]}
-            {tenant.lastName[0]}
-          </span>
-        </div>
+        <Avatar
+          photoUrl={tenant.photoUrl}
+          initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
+          className="w-14 h-14 flex-shrink-0"
+        />
         <div>
           <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
             {tenant.firstName} {tenant.lastName}

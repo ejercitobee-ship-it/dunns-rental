@@ -3,6 +3,7 @@ import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, U
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Avatar } from '../components/ui/Avatar';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
@@ -315,9 +316,11 @@ export function Users() {
                   <tr key={user.id} className="border-b last:border-0 hover:bg-black/[0.03]">
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
-                          {user.firstName[0]}{user.lastName[0]}
-                        </div>
+                        <Avatar
+                          photoUrl={user.photoUrl}
+                          initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`}
+                          className="w-10 h-10"
+                        />
                         <div>
                           <p className="font-medium text-ink">{user.firstName} {user.lastName}</p>
                           <p className="text-xs text-muted">Joined {new Date(user.createdAt).toLocaleDateString()}</p>

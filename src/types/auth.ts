@@ -28,6 +28,7 @@ export interface User {
   createdAt: string;
   phone?: string;
   department?: string;
+  photoUrl?: string | null;
 }
 
 export interface AuthState {

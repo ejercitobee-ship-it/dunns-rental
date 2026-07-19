@@ -68,6 +68,7 @@ export interface Tenant {
     phone: string;
     relationship: string;
   };
+  photoUrl?: string | null;
 }
 
 export interface RentPayment {

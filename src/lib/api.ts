@@ -81,6 +81,7 @@ export interface ApiUser {
   roleId: string;
   isActive: boolean;
   createdAt: string;
+  photoUrl?: string | null;
 }
 
 export const adminApi = {
@@ -399,6 +400,7 @@ export interface PortalPerson {
   phone?: string;
   emergencyContact?: { name: string; phone: string; relationship: string };
   unit?: TenantUnit;
+  photoUrl?: string | null;
 }
 
 /** A tenant as a realtor's list sees them: the allowlisted person plus their
@@ -425,7 +427,7 @@ export interface RealtorContact {
   phone: string | null;
 }
 export interface RealtorMe {
-  profile: RealtorContact;
+  profile: RealtorContact & { photoUrl: string | null };
   tenantsPlaced: number;
   tenantsInWindow: number;
 }

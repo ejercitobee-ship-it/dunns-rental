@@ -7,6 +7,7 @@ import {
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Avatar } from '../components/ui/Avatar';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
@@ -366,11 +367,11 @@ export function TenantDetail() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
-            <span className="text-xl font-semibold text-primary">
-              {tenant.firstName[0]}{tenant.lastName[0]}
-            </span>
-          </div>
+          <Avatar
+            photoUrl={tenant.photoUrl}
+            initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
+            className="w-14 h-14 flex-shrink-0"
+          />
           <div>
             <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
               {tenant.firstName} {tenant.lastName}
