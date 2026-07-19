@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { User, ShieldAlert } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
-import { portalApi } from '../../lib/api';
+import { Avatar } from '../../components/ui/Avatar';
+import { portalApi, photoApi } from '../../lib/api';
+import { resizeImage } from '../../lib/image';
+import { useToast } from '../../context/ToastContext';
 
 // This app has had a React #310 white screen from a useMemo called after an
 // early return, so every hook below runs unconditionally before the
@@ -38,8 +41,12 @@ function Field({ label, value }: { label: string; value: string }) {
 
 export function TenantInfo() {
   const [form, setForm] = useState<InfoForm>(EMPTY_FORM);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +64,7 @@ export function TenantInfo() {
           emergencyPhone: t.emergencyContact?.phone || '',
           emergencyRelationship: t.emergencyContact?.relationship || '',
         });
+        setPhotoUrl(t.photoUrl ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -69,6 +77,37 @@ export function TenantInfo() {
       cancelled = true;
     };
   }, []);
+
+  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      const blob = await resizeImage(file);
+      const { photoUrl: newUrl } = await photoApi.uploadSelf(blob);
+      setPhotoUrl(`${newUrl}?t=${Date.now()}`);
+      showToast('Photo updated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update your photo.', 'error');
+    } finally {
+      setPhotoBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      await photoApi.removeSelf();
+      setPhotoUrl(null);
+      showToast('Photo removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove your photo.', 'error');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   if (loading) {
     return <p className="text-sm text-muted">Loading your information.</p>;
@@ -92,6 +131,41 @@ export function TenantInfo() {
         <p className="text-sm text-muted mt-1">
           This is the information we have on file for you.
         </p>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <Avatar
+          photoUrl={photoUrl}
+          initials={`${form.firstName?.[0] ?? ''}${form.lastName?.[0] ?? ''}`}
+          className="w-16 h-16 flex-shrink-0"
+        />
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoPick}
+          />
+          <button
+            type="button"
+            disabled={photoBusy}
+            onClick={() => fileInputRef.current?.click()}
+            className="text-sm font-medium text-primary hover:text-primary-hover disabled:opacity-50"
+          >
+            {photoUrl ? 'Change photo' : 'Add photo'}
+          </button>
+          {photoUrl && (
+            <button
+              type="button"
+              disabled={photoBusy}
+              onClick={handlePhotoRemove}
+              className="text-sm font-medium text-muted hover:text-danger disabled:opacity-50"
+            >
+              Remove
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-6">

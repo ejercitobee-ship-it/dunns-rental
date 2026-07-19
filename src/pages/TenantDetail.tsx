@@ -15,9 +15,10 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  documentsApi, tenantsApi, householdApi,
+  documentsApi, tenantsApi, householdApi, photoApi,
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember,
 } from '../lib/api';
+import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
@@ -59,6 +60,15 @@ export function TenantDetail() {
 
   const tenant = tenants.find(t => t.id === id);
   const canManagePortal = hasPermission('tenants_edit');
+
+  // The tenant's photo as loaded from context (tenant.photoUrl) can go stale
+  // right after an upload/remove until the next context refresh, so a local
+  // override (undefined = "no override, use tenant.photoUrl") takes
+  // precedence for the avatar shown on this page.
+  const [photoOverride, setPhotoOverride] = useState<string | null | undefined>(undefined);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const displayedPhotoUrl = photoOverride !== undefined ? photoOverride : (tenant?.photoUrl ?? null);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [form, setForm] = useState({
@@ -227,6 +237,37 @@ export function TenantDetail() {
     }
   };
 
+  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      const blob = await resizeImage(file);
+      const { photoUrl } = await photoApi.uploadTenant(id, blob);
+      setPhotoOverride(`${photoUrl}?t=${Date.now()}`);
+      showToast('Photo updated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the photo.', 'error');
+    } finally {
+      setPhotoBusy(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    if (!id || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      await photoApi.removeTenant(id);
+      setPhotoOverride(null);
+      showToast('Photo removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove the photo.', 'error');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const handleDeleteDoc = async (docId: string) => {
     try {
       await documentsApi.delete(docId);
@@ -367,11 +408,42 @@ export function TenantDetail() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Avatar
-            photoUrl={tenant.photoUrl}
-            initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
-            className="w-14 h-14 flex-shrink-0"
-          />
+          <div className="flex flex-col items-center gap-1.5">
+            <Avatar
+              photoUrl={displayedPhotoUrl}
+              initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
+              className="w-14 h-14 flex-shrink-0"
+            />
+            {canManagePortal && (
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoPick}
+                />
+                <button
+                  type="button"
+                  disabled={photoBusy}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="text-xs font-medium text-primary hover:text-primary-hover disabled:opacity-50"
+                >
+                  {displayedPhotoUrl ? 'Change' : 'Add photo'}
+                </button>
+                {displayedPhotoUrl && (
+                  <button
+                    type="button"
+                    disabled={photoBusy}
+                    onClick={handlePhotoRemove}
+                    className="text-xs font-medium text-muted hover:text-danger disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <div>
             <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
               {tenant.firstName} {tenant.lastName}
