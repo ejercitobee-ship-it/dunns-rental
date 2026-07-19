@@ -12,18 +12,20 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function formatDate(dateString: string): string {
-  // A stored date is 'YYYY-MM-DD' with no time. `new Date('2026-07-01')` parses
-  // that as UTC midnight, which renders as the PREVIOUS day for anyone behind
-  // UTC (the owner is in America/Chicago), so a lease starting July 1 showed as
-  // "Jun 30". Build the date from its local parts instead, the same reason
-  // todayLocalDate/yearOf/monthOf exist. A full ISO timestamp (with a time and
-  // zone) is an unambiguous instant, so it still goes through `new Date`.
+// Parse a stored date as a LOCAL calendar day. `new Date('2026-07-01')` parses
+// a date-only string as UTC midnight, which is the PREVIOUS day for anyone
+// behind UTC (the owner is in America/Chicago) — the same trap todayLocalDate/
+// yearOf/monthOf exist to avoid. A full ISO timestamp (with a time and zone) is
+// an unambiguous instant, so it still goes through `new Date` untouched.
+export function parseLocalDate(dateString: string): Date {
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
-  const date = dateOnly
+  return dateOnly
     ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
     : new Date(dateString);
-  return date.toLocaleDateString('en-US', {
+}
+
+export function formatDate(dateString: string): string {
+  return parseLocalDate(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

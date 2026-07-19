@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear, todayLocalDate } from '../lib/utils';
+import { rentSheetApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, type MonthSettlement } from '../lib/rent';
@@ -483,8 +484,15 @@ export function Rents() {
           status,
           month,
           year,
-        });
+        }, { deferSheetSync: true });
         imported++;
+      }
+
+      // One master-spreadsheet rebuild for the whole import, instead of one
+      // per row. Best-effort: a Drive/Sheets hiccup must not fail the import
+      // (the database is the source of truth and the next change reconciles).
+      if (imported > 0) {
+        rentSheetApi.sync().catch(() => {});
       }
 
       const skipped = skippedInvalid + skippedNoLease;
@@ -845,14 +853,16 @@ export function Rents() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Collection Rate</CardTitle>
+                <CardTitle className="text-sm font-medium">Collection Rate</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {(annualData.reduce((s, m) => s + m.collectionRate, 0) / 12).toFixed(1)}%
-                </div>
-                <p className="text-xs text-muted-foreground">Monthly average</p>
+                {/* Collected over expected for months that have actually begun,
+                    the same figure the Payments tab shows. The old "average of
+                    12 monthly rates" counted not-yet-due future months as 0%
+                    and read far below reality mid-year. */}
+                <div className="text-2xl font-bold">{yearStats.collectionRate.toFixed(1)}%</div>
+                <p className="text-xs text-muted-foreground">Collected of expected, months elapsed</p>
               </CardContent>
             </Card>
           </div>

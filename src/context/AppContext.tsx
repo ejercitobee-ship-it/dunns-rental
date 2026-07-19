@@ -177,7 +177,7 @@ interface AppContextType extends AppState {
   deleteLease: (id: string) => Promise<void>;
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
-  addRentPayment: (payment: Omit<RentPayment, 'id'>) => Promise<void>;
+  addRentPayment: (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
   addMaintenance: (request: Omit<MaintenanceRequest, 'id'>) => Promise<void>;
   updateMaintenance: (request: MaintenanceRequest) => Promise<void>;
@@ -327,8 +327,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ADD_INCOME', payload: newIncome });
   };
 
-  const addRentPayment = async (payment: Omit<RentPayment, 'id'>) => {
-    const newPayment = await paymentsApi.create(payment);
+  const addRentPayment = async (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => {
+    const newPayment = await paymentsApi.create(payment, opts);
     dispatch({ type: 'ADD_RENT_PAYMENT', payload: newPayment });
   };
 

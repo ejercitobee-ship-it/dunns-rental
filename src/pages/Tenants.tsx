@@ -8,7 +8,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
+import { formatCurrency, formatDate, todayLocalDate, parseLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { monthlyRevenue } from '../lib/rent';
@@ -106,7 +106,7 @@ export function Tenants() {
     const today = new Date();
     const expiringSoon = leases.filter(l => {
       if (l.status !== 'active' || !l.endDate) return false;
-      const daysUntilEnd = Math.ceil((new Date(l.endDate).getTime() - today.getTime()) / DAY_MS);
+      const daysUntilEnd = Math.ceil((parseLocalDate(l.endDate).getTime() - today.getTime()) / DAY_MS);
       return daysUntilEnd > 0 && daysUntilEnd <= 60;
     }).length;
     return {

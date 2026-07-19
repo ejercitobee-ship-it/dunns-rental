@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf, parseLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth } from '../lib/rent';
 import type { DashboardStats, Property, Tenant } from '../types';
@@ -250,7 +250,7 @@ export function Dashboard() {
     return activeLeases(leases)
       .filter(l => l.endDate)
       .map(l => {
-        const end = new Date(l.endDate!);
+        const end = parseLocalDate(l.endDate!);
         const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         const unit = l.unitId ? units.find(u => u.id === l.unitId) : undefined;
         const occupants = getLeaseTenants(l.id);
