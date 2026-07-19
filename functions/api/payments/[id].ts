@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializePayment } from '../../lib/serializers';
+import { syncRentSheet } from '../../lib/sheets';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -70,6 +71,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Payment not found', 404);
+    syncRentSheet(context);
     return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>) });
   } catch {
     return serverError();
@@ -83,6 +85,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   try {
     await env.DB.prepare('DELETE FROM rent_payments WHERE id = ?').bind(params.id as string).run();
+    syncRentSheet(context);
     return jsonOk({ success: true });
   } catch {
     return serverError();

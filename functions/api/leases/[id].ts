@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { withLeaseDetails, findMissingTenantIds, readLeaseStatus, isValidDateString } from './index';
+import { syncRentSheet } from '../../lib/sheets';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -122,6 +123,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Lease not found', 404);
     const [data] = await withLeaseDetails(env, [row as Record<string, unknown>]);
+    syncRentSheet(context);
     return jsonOk({ success: true, data });
   } catch {
     return serverError();
@@ -135,6 +137,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   try {
     await env.DB.prepare('DELETE FROM leases WHERE id = ?').bind(params.id as string).run();
+    syncRentSheet(context);
     return jsonOk({ success: true });
   } catch {
     return serverError();
