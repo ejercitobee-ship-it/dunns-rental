@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths } from './rent';
-import type { Lease, RentPayment } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows } from './rent';
+import type { Lease, RentPayment, MonthSettlement } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
   id: 'L1',
@@ -356,5 +356,72 @@ describe('rentIncomeForYear', () => {
 
   it('returns 0 with no paid payments', () => {
     expect(rentIncomeForYear([payment({ status: 'pending' })], 2026)).toBe(0);
+  });
+});
+
+describe('groupLeaseMonthRows', () => {
+  const settle = (over: Partial<MonthSettlement> = {}): MonthSettlement => ({
+    due: 1000, paid: 0, balance: 1000, status: 'unpaid', ...over,
+  });
+  const paid = settle({ paid: 1000, balance: 0, status: 'paid' });
+  // Minimal row: the helper only reads lease/month/settlement, plus whatever
+  // extra the caller carries through (here, a `tag` to prove pass-through).
+  const row = (leaseId: string, month: number, s: MonthSettlement, tag = '') =>
+    ({ lease: lease({ id: leaseId }), month, settlement: s, tag });
+
+  it('collapses each lease into one group, months sorted ascending', () => {
+    const rows = [row('L1', 7, paid), row('L1', 5, paid), row('L2', 6, paid)];
+    const groups = groupLeaseMonthRows(rows, 2026, 2026, 7);
+    expect(groups).toHaveLength(2);
+    const g1 = groups.find(g => g.lease.id === 'L1')!;
+    expect(g1.monthRows.map(r => r.month)).toEqual([5, 7]);
+  });
+
+  it('picks this month only in the current year', () => {
+    const rows = [row('L1', 6, paid), row('L1', 7, settle())];
+    expect(groupLeaseMonthRows(rows, 2026, 2026, 7)[0].thisMonth?.month).toBe(7);
+    expect(groupLeaseMonthRows(rows, 2025, 2026, 7)[0].thisMonth).toBeNull();
+    expect(groupLeaseMonthRows(rows, 2027, 2026, 7)[0].thisMonth).toBeNull();
+  });
+
+  it('sums overdue from elapsed months before the current one, excluding this and future months', () => {
+    const rows = [
+      row('L1', 5, settle({ balance: 400, status: 'partial', paid: 600 })),
+      row('L1', 6, settle({ balance: 1000 })),
+      row('L1', 7, settle({ balance: 1000 })),  // current month: not overdue
+      row('L1', 8, settle({ balance: 1000 })),  // future month: not yet due
+    ];
+    const g = groupLeaseMonthRows(rows, 2026, 2026, 7)[0];
+    expect(g.overdue).toBe(1400);
+  });
+
+  it('treats every unpaid month of a past year as overdue', () => {
+    const rows = [row('L1', 1, settle()), row('L1', 12, settle())];
+    expect(groupLeaseMonthRows(rows, 2025, 2026, 7)[0].overdue).toBe(2000);
+  });
+
+  it('flags attention for overdue or an unpaid current month, and clears it when settled', () => {
+    const overdueOnly = [row('L1', 6, settle()), row('L1', 7, paid)];
+    const thisMonthOnly = [row('L1', 6, paid), row('L1', 7, settle())];
+    const allPaid = [row('L1', 6, paid), row('L1', 7, paid)];
+    expect(groupLeaseMonthRows(overdueOnly, 2026, 2026, 7)[0].needsAttention).toBe(true);
+    expect(groupLeaseMonthRows(thisMonthOnly, 2026, 2026, 7)[0].needsAttention).toBe(true);
+    expect(groupLeaseMonthRows(allPaid, 2026, 2026, 7)[0].needsAttention).toBe(false);
+  });
+
+  it('sorts attention groups first while preserving incoming order within a bucket', () => {
+    const rows = [
+      row('PAID_A', 7, paid),
+      row('OWES_B', 7, settle()),
+      row('PAID_C', 7, paid),
+      row('OWES_D', 7, settle()),
+    ];
+    const ids = groupLeaseMonthRows(rows, 2026, 2026, 7).map(g => g.lease.id);
+    expect(ids).toEqual(['OWES_B', 'OWES_D', 'PAID_A', 'PAID_C']);
+  });
+
+  it('carries caller fields through untouched', () => {
+    const groups = groupLeaseMonthRows([row('L1', 7, paid, 'hello')], 2026, 2026, 7);
+    expect(groups[0].monthRows[0].tag).toBe('hello');
   });
 });
