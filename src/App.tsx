@@ -23,7 +23,6 @@ import { Users } from './pages/Users';
 import { PortalLayout } from './components/PortalLayout';
 import { TenantHome } from './pages/portal/TenantHome';
 import { TenantPayments } from './pages/portal/TenantPayments';
-import { TenantInfo } from './pages/portal/TenantInfo';
 import { TenantDocuments } from './pages/portal/TenantDocuments';
 import { RealtorTenants } from './pages/portal/RealtorTenants';
 import { RealtorTenantDetail } from './pages/portal/RealtorTenantDetail';
@@ -163,11 +162,9 @@ function AppRoutes() {
         </PortalRoute>
       } />
 
-      <Route path="/portal/information" element={
-        <PortalRoute>
-          <PortalLayout><TenantInfo /></PortalLayout>
-        </PortalRoute>
-      } />
+      {/* Retired: the tenant's profile now lives on the Home page. Keep the
+          path so old bookmarks land somewhere sensible. */}
+      <Route path="/portal/information" element={<Navigate to="/portal" replace />} />
 
       <Route path="/portal/documents" element={
         <PortalRoute>

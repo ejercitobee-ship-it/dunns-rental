@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Home, DoorOpen, Calendar, DollarSign } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Home, DoorOpen, Calendar, DollarSign, User, ShieldAlert } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Avatar } from '../../components/ui/Avatar';
 import { useToast } from '../../context/ToastContext';
-import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
+import { portalApi, photoApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
+import { resizeImage } from '../../lib/image';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth } from '../../lib/rent';
-import type { Lease, RentPayment } from '../../types';
+import type { Lease, RentPayment, Tenant } from '../../types';
 
 const settlementBadge = {
   paid: 'success',
@@ -111,6 +113,8 @@ export function TenantHome() {
         </h1>
       </div>
 
+      <ProfileCard tenant={tenant} />
+
       {!lease ? (
         <Card>
           <CardContent className="p-6">
@@ -171,6 +175,132 @@ export function TenantHome() {
       <HouseholdCard hasLease={!!me?.lease} />
 
       <RealtorCard realtors={realtors} />
+    </div>
+  );
+}
+
+// The tenant's own profile, front and center on their Home page (folded in
+// from the retired "My information" tab). Details are read-only except the
+// photo, which they manage here with the same self-service photo API the
+// realtor Dashboard uses.
+function ProfileCard({ tenant }: { tenant: Tenant }) {
+  const { showToast } = useToast();
+  const [photoUrl, setPhotoUrl] = useState<string | null>(tenant.photoUrl ?? null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      const blob = await resizeImage(file);
+      const { photoUrl: newUrl } = await photoApi.uploadSelf(blob);
+      setPhotoUrl(`${newUrl}?t=${Date.now()}`);
+      showToast('Photo updated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update your photo.', 'error');
+    } finally {
+      setPhotoBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      await photoApi.removeSelf();
+      setPhotoUrl(null);
+      showToast('Photo removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove your photo.', 'error');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const emergency = tenant.emergencyContact;
+  const hasEmergency = !!(emergency?.name || emergency?.phone || emergency?.relationship);
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-5">
+        <div className="flex items-center gap-4">
+          <Avatar
+            photoUrl={photoUrl}
+            initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
+            className="w-16 h-16 flex-shrink-0"
+            initialsClassName="text-xl"
+          />
+          <div>
+            <p className="text-ink font-medium">{`${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim() || 'Your profile'}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoPick}
+              />
+              <button
+                type="button"
+                disabled={photoBusy}
+                onClick={() => fileInputRef.current?.click()}
+                className="text-sm font-medium text-primary hover:text-primary-hover disabled:opacity-50"
+              >
+                {photoUrl ? 'Change photo' : 'Add photo'}
+              </button>
+              {photoUrl && (
+                <button
+                  type="button"
+                  disabled={photoBusy}
+                  onClick={handlePhotoRemove}
+                  className="text-sm font-medium text-muted hover:text-danger disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 border-t border-line pt-4">
+          <h3 className="font-semibold text-ink flex items-center gap-2">
+            <User className="h-4 w-4 text-faint" /> Contact
+          </h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <ProfileField label="Email" value={tenant.email} />
+            <ProfileField label="Phone" value={tenant.phone} />
+          </div>
+        </div>
+
+        <div className="space-y-3 border-t border-line pt-4">
+          <h3 className="font-semibold text-ink flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-faint" /> Emergency contact
+          </h3>
+          {hasEmergency ? (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <ProfileField label="Name" value={emergency?.name} />
+              <ProfileField label="Phone" value={emergency?.phone} />
+              <ProfileField label="Relationship" value={emergency?.relationship} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted">None on file.</p>
+          )}
+        </div>
+
+        <p className="text-xs text-muted">To update these details, please contact us.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProfileField({ label, value }: { label: string; value?: string }) {
+  return (
+    <div>
+      <p className="text-sm font-medium text-ink mb-1">{label}</p>
+      <p className="text-sm text-muted">{value || 'Not on file'}</p>
     </div>
   );
 }

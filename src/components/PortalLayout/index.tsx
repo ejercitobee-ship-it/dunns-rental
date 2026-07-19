@@ -15,7 +15,6 @@ interface PortalLayoutProps {
 const TENANT_TABS = [
   { name: 'Home', path: '/portal' },
   { name: 'Payments', path: '/portal/payments' },
-  { name: 'My information', path: '/portal/information' },
   { name: 'Documents', path: '/portal/documents' },
 ];
 
