@@ -288,6 +288,10 @@ export function Rents() {
     return groupLeaseMonthRows(byPropertyUnit, parseInt(yearFilter, 10), today.getFullYear(), today.getMonth() + 1);
   }, [filteredRows, yearFilter]);
 
+  // A future year has nothing due yet, so a fully-unowed row reads "Upcoming"
+  // rather than the "All paid" a past/current year would show.
+  const isFutureYear = parseInt(yearFilter, 10) > new Date().getFullYear();
+
   // Stat cards for the selected year. "Elapsed" months are the ones that
   // have already started, so a future year (or the tail end of the current
   // year) doesn't get counted as outstanding before it's even due.
@@ -737,7 +741,9 @@ export function Rents() {
                           </Badge>
                         )}
                         {!group.needsAttention && !thisStatus && (
-                          <Badge variant="success" className="whitespace-nowrap">All paid</Badge>
+                          isFutureYear
+                            ? <Badge variant="secondary" className="whitespace-nowrap">Upcoming</Badge>
+                            : <Badge variant="success" className="whitespace-nowrap">All paid</Badge>
                         )}
                         {canRecordThisMonth && (
                           <Button size="sm" variant="outline" onClick={() => openRecordModal(group.thisMonth!)}>

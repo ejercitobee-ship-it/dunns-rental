@@ -530,7 +530,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {upcomingRenewals.slice(0, 6).map(({ lease, unit, occupants, days, end }) => {
+              {upcomingRenewals.slice(0, 6).map(({ lease, unit, occupants, days }) => {
                 const tone = days <= 30 ? 'destructive' : days <= 60 ? 'warning' : 'secondary';
                 const occupantNames = occupants.length > 0
                   ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
@@ -544,7 +544,7 @@ export function Dashboard() {
                     <div>
                       <p className="font-medium text-ink">{unit ? `Unit ${unit.unitNumber}` : 'Unit unknown'}</p>
                       <p className="text-sm text-muted">{occupantNames}</p>
-                      <p className="text-sm text-muted">Lease ends {formatDate(end.toISOString())}</p>
+                      <p className="text-sm text-muted">Lease ends {lease.endDate ? formatDate(lease.endDate) : '—'}</p>
                     </div>
                     <Badge variant={tone}>
                       {days === 0 ? 'Ends today' : days === 1 ? '1 day left' : `${days} days left`}
