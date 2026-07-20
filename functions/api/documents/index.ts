@@ -16,13 +16,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const tenantId = url.searchParams.get('tenantId');
     const propertyId = url.searchParams.get('propertyId');
 
-    let query = 'SELECT * FROM documents';
+    // Rent receipts are documents too, but they live on the Payments view (a
+    // Receipt link per payment), not in the Documents list, so they don't
+    // clutter it. Exclude any document referenced as a payment's receipt.
+    let query =
+      'SELECT * FROM documents WHERE id NOT IN (SELECT receipt_document_id FROM rent_payments WHERE receipt_document_id IS NOT NULL)';
     const binds: unknown[] = [];
     if (tenantId) {
-      query += ' WHERE tenant_id = ?';
+      query += ' AND tenant_id = ?';
       binds.push(tenantId);
     } else if (propertyId) {
-      query += ' WHERE property_id = ?';
+      query += ' AND property_id = ?';
       binds.push(propertyId);
     }
     query += ' ORDER BY created_at DESC';

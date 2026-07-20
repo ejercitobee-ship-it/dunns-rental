@@ -27,9 +27,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const ids = asked ? reachable.filter(id => id === asked) : reachable;
     if (ids.length === 0) return jsonOk({ success: true, data: [] });
 
+    // Rent receipts are excluded here: the tenant gets them on the Payments
+    // tab (a Download per paid month), so the Documents tab stays uncluttered.
     const placeholders = ids.map(() => '?').join(',');
     const { results } = await env.DB.prepare(
-      `SELECT * FROM documents WHERE tenant_id IN (${placeholders}) ORDER BY created_at DESC`
+      `SELECT * FROM documents
+        WHERE tenant_id IN (${placeholders})
+          AND id NOT IN (SELECT receipt_document_id FROM rent_payments WHERE receipt_document_id IS NOT NULL)
+        ORDER BY created_at DESC`
     ).bind(...ids).all();
 
     return jsonOk({ success: true, data: (results || []).map(serializeDocument) });
