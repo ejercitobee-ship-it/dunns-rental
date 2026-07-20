@@ -126,8 +126,8 @@ interface CompanySettings {
 }
 
 const COMPANY_DEFAULTS: CompanySettings = {
-  companyName: "DUNN's Rental",
-  address: '', city: '', state: '', zipCode: '', phone: '', email: '',
+  companyName: 'MH Dunn Property',
+  address: '', city: '', state: '', zipCode: '', phone: '', email: 'info@mhdunnproperty.net',
 };
 
 async function companySettings(env: Env): Promise<CompanySettings> {
