@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializePayment } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
+import { generateReceipt } from '../../lib/receipts';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -70,12 +71,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
-    // A bulk CSV import posts one row at a time with ?deferSheetSync=1 so it
-    // does NOT rebuild the whole spreadsheet on every row (dozens of redundant
-    // rebuilds that could hit the Sheets rate limit); it triggers one rebuild
-    // itself after the last row.
-    if (new URL(request.url).searchParams.get('deferSheetSync') !== '1') {
+    // A bulk CSV import posts one row at a time with ?deferSheetSync=1: it skips
+    // both the per-row spreadsheet rebuild (dozens of redundant rebuilds that
+    // could hit the Sheets rate limit; it rebuilds once at the end) AND per-row
+    // receipt generation (Belle asked receipts only for payments she records).
+    const isBulk = new URL(request.url).searchParams.get('deferSheetSync') === '1';
+    if (!isBulk) {
       syncRentSheet(context);
+      // Best-effort receipt for a manually recorded paid payment; never blocks
+      // or fails the payment (the database is the record of truth).
+      if (body.status === 'paid') {
+        context.waitUntil(generateReceipt(env, id, auth.id).catch(() => {}));
+      }
     }
     return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>) }, 201);
   } catch {

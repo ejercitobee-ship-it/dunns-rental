@@ -5,13 +5,13 @@ import { type Env, requirePermission, jsonOk, serverError } from '../../lib/sess
 // shapes the Settings page expects.
 const DEFAULTS = {
   company: {
-    companyName: "DUNN's Rental",
+    companyName: 'MH Dunn Property',
     address: '',
     city: '',
     state: '',
     zipCode: '',
     phone: '',
-    email: '',
+    email: 'info@mhdunnproperty.net',
     taxId: '',
   },
   rent: {

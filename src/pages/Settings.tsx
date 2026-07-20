@@ -43,14 +43,14 @@ export function Settings() {
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
 
   const [companySettings, setCompanySettings] = useState({
-    companyName: "DUNN's Rental",
-    address: '123 Main Street',
-    city: 'Los Angeles',
-    state: 'CA',
-    zipCode: '90001',
-    phone: '(555) 123-4567',
-    email: 'contact@dunnsrental.com',
-    taxId: '12-3456789',
+    companyName: 'MH Dunn Property',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    phone: '',
+    email: 'info@mhdunnproperty.net',
+    taxId: '',
   });
 
   const [rentSettings, setRentSettings] = useState({

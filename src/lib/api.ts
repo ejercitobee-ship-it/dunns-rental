@@ -272,6 +272,10 @@ export const paymentsApi = {
   // rebuild and trigger a single rebuild once, at the end.
   create: (data: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }): Promise<RentPayment> =>
     apiRequest(`/payments${opts?.deferSheetSync ? '?deferSheetSync=1' : ''}`, { method: 'POST', body: JSON.stringify(data) }),
+  // Generate (or refresh) the PDF receipt for a paid payment; returns its
+  // document id so the UI can link to the download.
+  generateReceipt: (id: string): Promise<{ receiptDocumentId: string }> =>
+    apiRequest(`/payments/${id}/receipt`, { method: 'POST' }),
   update: (id: string, data: RentPayment): Promise<RentPayment> =>
     apiRequest(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>

@@ -15,7 +15,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  documentsApi, tenantsApi, householdApi, photoApi,
+  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi,
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
@@ -96,6 +96,10 @@ export function TenantDetail() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [resettingPw, setResettingPw] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  // Receipt ids generated in this session, so a freshly created receipt links
+  // immediately without a full payments refetch (they overlay p.receiptDocumentId).
+  const [receiptIds, setReceiptIds] = useState<Record<string, string>>({});
+  const [generatingReceipt, setGeneratingReceipt] = useState<string | null>(null);
   const [selectedRealtorId, setSelectedRealtorId] = useState('');
   const [linking, setLinking] = useState(false);
   const [removingRealtorId, setRemovingRealtorId] = useState<string | null>(null);
@@ -325,6 +329,20 @@ export function TenantDetail() {
       showToast((err as Error).message || 'Could not reset the password', 'error');
     } finally {
       setResettingPw(false);
+    }
+  };
+
+  const handleGenerateReceipt = async (paymentId: string) => {
+    if (generatingReceipt) return;
+    setGeneratingReceipt(paymentId);
+    try {
+      const { receiptDocumentId } = await paymentsApi.generateReceipt(paymentId);
+      setReceiptIds(prev => ({ ...prev, [paymentId]: receiptDocumentId }));
+      showToast('Receipt created.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not create the receipt', 'error');
+    } finally {
+      setGeneratingReceipt(null);
     }
   };
 
@@ -895,10 +913,13 @@ export function TenantDetail() {
                   <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Amount</th>
                   <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
                   <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Date</th>
+                  <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map(p => (
+                {payments.map(p => {
+                  const receiptId = p.receiptDocumentId ?? receiptIds[p.id];
+                  return (
                   <tr key={p.id} className="border-b border-line last:border-0">
                     <td className="py-3 px-5 text-sm text-ink">{formatMonthYear(p.month, p.year)}</td>
                     <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(p.amount)}</td>
@@ -906,8 +927,32 @@ export function TenantDetail() {
                     <td className="py-3 px-5 text-sm text-muted">
                       {p.paidDate ? formatDate(p.paidDate) : p.dueDate ? formatDate(p.dueDate) : '—'}
                     </td>
+                    <td className="py-3 px-5 text-sm">
+                      {receiptId ? (
+                        <a
+                          href={`/api/documents/${receiptId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-primary hover:text-primary-hover"
+                        >
+                          Download
+                        </a>
+                      ) : p.status === 'paid' && hasPermission('rents_record') ? (
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateReceipt(p.id)}
+                          disabled={generatingReceipt === p.id}
+                          className="font-medium text-muted hover:text-ink disabled:opacity-50"
+                        >
+                          {generatingReceipt === p.id ? 'Generating...' : 'Generate'}
+                        </button>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

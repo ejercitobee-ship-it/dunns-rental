@@ -86,6 +86,7 @@ export interface RentPayment {
   paymentMethod?: PaymentMethod;
   uploadedBy?: string;
   uploadedAt?: string;
+  receiptDocumentId?: string;
 }
 
 export type PaymentMethod =
