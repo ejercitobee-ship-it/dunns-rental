@@ -4,8 +4,8 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
-import { formatCurrency, getMonthName, yearOf, monthOf } from '../../lib/utils';
-import { settleMonth, leasesOwingMonth } from '../../lib/rent';
+import { formatCurrency, getMonthName } from '../../lib/utils';
+import { settleMonth, rentMonthsToShow } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
 
 // This app has had a React #310 white screen from a useMemo called after an
@@ -95,20 +95,10 @@ export function TenantPayments() {
     const now = new Date();
     const nowMonth = now.getMonth() + 1;
     const nowYear = now.getFullYear();
-    const startYear = lease.startDate ? yearOf(lease.startDate) : nowYear;
-    const startMonth = lease.startDate ? monthOf(lease.startDate) : nowMonth;
 
-    const months: { month: number; year: number }[] = [];
-    let y = startYear;
-    let m = startMonth;
-    while (y < nowYear || (y === nowYear && m <= nowMonth)) {
-      if (leasesOwingMonth([fullLease], m, y).length > 0) months.push({ month: m, year: y });
-      m += 1;
-      if (m > 12) {
-        m = 1;
-        y += 1;
-      }
-    }
+    // Owed months from the lease start through now, PLUS any future month paid
+    // ahead (an advance payment), so paying early is visible. Newest first.
+    const months = rentMonthsToShow(fullLease, payments, nowYear, nowMonth);
 
     return months.reverse().map(({ month, year }) => {
       const monthRaw = rawPayments.filter(p => p.month === month && p.year === year);
