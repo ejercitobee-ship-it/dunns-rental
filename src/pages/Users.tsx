@@ -464,13 +464,18 @@ export function Users() {
                             >
                               <Edit2 className="h-4 w-4 text-muted" />
                             </button>
-                            <button
-                              onClick={() => handleResetPassword(user)}
-                              title="Reset password"
-                              className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
-                            >
-                              <KeyRound className="h-4 w-4 text-muted" />
-                            </button>
+                            {/* Tenants reset their password from their own
+                                profile (Tenants -> the person), so the tenant
+                                tab has no reset here; staff and realtors keep it. */}
+                            {tab !== 'tenant' && (
+                              <button
+                                onClick={() => handleResetPassword(user)}
+                                title="Reset password"
+                                className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
+                              >
+                                <KeyRound className="h-4 w-4 text-muted" />
+                              </button>
+                            )}
                             {/* Show delete to anyone who can delete users, for
                                 anyone but themselves. Tenants are the exception:
                                 they are deleted from their own profile (Tenants
