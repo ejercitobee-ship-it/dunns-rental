@@ -198,6 +198,10 @@ export const tenantsApi = {
   // tenant that says this up front, so the caller shows that message as-is.
   invite: (id: string): Promise<InviteResult> =>
     apiRequest(`/tenants/${id}/invite`, { method: 'POST' }),
+  // Reset the tenant's portal login password; returns a one-time temp password
+  // to share. 400s with a message if they have no login yet.
+  resetPassword: (id: string): Promise<{ tempPassword: string; message: string }> =>
+    apiRequest(`/tenants/${id}/reset-password`, { method: 'POST' }),
   getRealtors: (id: string): Promise<TenantRealtorLink[]> =>
     apiRequest(`/tenants/${id}/realtors`),
   linkRealtor: (id: string, realtorUserId: string) =>
