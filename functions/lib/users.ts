@@ -1,4 +1,44 @@
 import type { Env } from './session';
+import { hashPassword, generateTempPassword } from './session';
+
+/**
+ * Reset a login's password to a fresh temporary one, force a change at next
+ * sign-in, and drop existing sessions. Returns the temporary password so the
+ * caller can share it out of band. Shared by the admin "reset user password"
+ * and the tenant-profile "reset password" so the two cannot drift apart.
+ */
+export async function resetUserPassword(env: Env, userId: string, email: string): Promise<string> {
+  const tempPassword = generateTempPassword();
+  const hash = await hashPassword(tempPassword);
+  const now = Math.floor(Date.now() / 1000);
+
+  const updated = await env.DB.prepare(
+    'UPDATE account SET password = ?, updated_at = ? WHERE user_id = ? AND provider_id = ?'
+  )
+    .bind(hash, now, userId, 'credential')
+    .run();
+
+  // If the user somehow has no credential row, create one so they can sign in.
+  if (!updated.meta.changes) {
+    await env.DB.prepare(
+      'INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    )
+      .bind(crypto.randomUUID(), email, 'credential', userId, hash, now, now)
+      .run();
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO user_metadata (id, user_id, key, value, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+  )
+    .bind(crypto.randomUUID(), userId, 'force_password_reset', 'true', now, now)
+    .run();
+
+  await env.DB.prepare('DELETE FROM session WHERE user_id = ?').bind(userId).run();
+
+  return tempPassword;
+}
 
 /**
  * The statements that remove a login and everything that references it, in a

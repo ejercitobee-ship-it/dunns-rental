@@ -472,12 +472,13 @@ export function Users() {
                               <KeyRound className="h-4 w-4 text-muted" />
                             </button>
                             {/* Show delete to anyone who can delete users, for
-                                anyone but themselves. This used to check
-                                !user.role.isSystem, but every built in role is
-                                a system role, so the button never appeared for
-                                a single member. The server enforces the same
-                                two rules. */}
-                            {hasPermission('users_delete') && currentUser?.id !== user.id && (
+                                anyone but themselves. Tenants are the exception:
+                                they are deleted from their own profile (Tenants
+                                -> the person), which fully removes their lease,
+                                rent, and records, so the tenant tab has no
+                                delete. The server enforces the self/permission
+                                rules. */}
+                            {hasPermission('users_delete') && currentUser?.id !== user.id && tab !== 'tenant' && (
                               <button
                                 onClick={() => setUserToDelete(user)}
                                 title="Remove member"

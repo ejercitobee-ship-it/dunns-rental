@@ -2,6 +2,7 @@ import type { PagesFunction, D1PreparedStatement } from '@cloudflare/workers-typ
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTenant } from '../../lib/serializers';
 import { deleteUserStatements } from '../../lib/users';
+import { soleOccupantLeaseIds, tenantWipeStatements } from '../../lib/tenants';
 import { syncRentSheet } from '../../lib/sheets';
 
 interface EmergencyContact {
@@ -77,16 +78,27 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       .first<{ user_id: string | null }>();
     if (!tenant) return jsonError('Tenant not found', 404);
 
-    // Deleting the tenant cascades lease_tenants and tenant_realtors and nulls
-    // rent_payments.paid_by_tenant_id. A Super Admin additionally purges the
-    // payment history recorded as paid by this person (done first, so the rows
-    // are deleted rather than nulled by the cascade).
-    const statements: D1PreparedStatement[] = [];
+    let statements: D1PreparedStatement[];
     if (auth.role === 'super_admin') {
-      statements.push(env.DB.prepare('DELETE FROM rent_payments WHERE paid_by_tenant_id = ?').bind(id));
+      // Full wipe: free up the unit and remove every record of this tenant
+      // (lease, all its rent, documents, login), leaving only their Drive
+      // folder. A lease shared with a roommate is kept so the roommate's
+      // tenancy survives — see tenantWipeStatements.
+      const leaseRows = await env.DB.prepare(
+        `SELECT lt.lease_id AS lease_id,
+                (SELECT COUNT(*) FROM lease_tenants x WHERE x.lease_id = lt.lease_id) AS tenant_count
+           FROM lease_tenants lt
+          WHERE lt.tenant_id = ?`
+      ).bind(id).all<{ lease_id: string; tenant_count: number }>();
+      const soleLeaseIds = soleOccupantLeaseIds(leaseRows.results || []);
+      statements = tenantWipeStatements(env, id, tenant.user_id, soleLeaseIds);
+    } else {
+      // A normal admin removes the person but keeps the lease and its payment
+      // history (the confirm dialog says as much). Deleting the tenant cascades
+      // lease_tenants and tenant_realtors and nulls rent_payments.paid_by_tenant_id.
+      statements = [env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id)];
+      if (tenant.user_id) statements.push(...deleteUserStatements(env, tenant.user_id));
     }
-    statements.push(env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id));
-    if (tenant.user_id) statements.push(...deleteUserStatements(env, tenant.user_id));
     await env.DB.batch(statements);
 
     syncRentSheet(context);

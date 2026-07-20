@@ -94,6 +94,8 @@ export function TenantDetail() {
   const [inviting, setInviting] = useState(false);
   const [invited, setInvited] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [resettingPw, setResettingPw] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [selectedRealtorId, setSelectedRealtorId] = useState('');
   const [linking, setLinking] = useState(false);
   const [removingRealtorId, setRemovingRealtorId] = useState<string | null>(null);
@@ -173,10 +175,16 @@ export function TenantDetail() {
 
   const payments = useMemo(() => {
     if (!id) return [];
+    // Rent lives on the LEASE, not the payer: a payment recorded without a
+    // "who paid" (the common case) has a null paidByTenantId, so filtering by
+    // payer showed nothing here even though the tenant portal (which scopes by
+    // lease) showed the same payments. Match that: every payment on any lease
+    // this person is on.
+    const leaseIds = new Set(getTenantLeases(id).map(l => l.id));
     return rentPayments
-      .filter(p => p.paidByTenantId === id)
+      .filter(p => leaseIds.has(p.leaseId))
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
-  }, [rentPayments, id]);
+  }, [rentPayments, id, getTenantLeases]);
 
   const openEdit = () => {
     if (!tenant) return;
@@ -301,6 +309,22 @@ export function TenantDetail() {
       showToast((err as Error).message || 'Could not send the invite', 'error');
     } finally {
       setInviting(false);
+    }
+  };
+
+  // Like invite, the server is the source of truth on whether a login exists:
+  // a tenant with none gets a 400 ("no portal login yet"), shown as the toast.
+  const handleResetPassword = async () => {
+    if (!id || resettingPw) return;
+    setResettingPw(true);
+    try {
+      const result = await tenantsApi.resetPassword(id);
+      setTempPassword(result.tempPassword);
+      showToast('Temporary password generated. Share it with the tenant.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not reset the password', 'error');
+    } finally {
+      setResettingPw(false);
     }
   };
 
@@ -740,13 +764,40 @@ export function TenantDetail() {
               <div>
                 <p className="text-sm text-ink font-medium">Tenant login</p>
                 <p className="text-xs text-muted mt-0.5">
-                  Give this person their own sign in to the tenant portal.
+                  Give this person their own sign in to the tenant portal, or reset it for them.
                 </p>
               </div>
-              <Button variant="outline" size="sm" disabled={inviting || invited} onClick={handleInvite}>
-                {invited ? 'Invited' : inviting ? 'Sending...' : 'Invite to Portal'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={inviting || invited} onClick={handleInvite}>
+                  {invited ? 'Invited' : inviting ? 'Sending...' : 'Invite to Portal'}
+                </Button>
+                <Button variant="outline" size="sm" disabled={resettingPw} onClick={handleResetPassword}>
+                  {resettingPw ? 'Resetting...' : 'Reset Password'}
+                </Button>
+              </div>
             </div>
+
+            {tempPassword && (
+              <div className="px-3 py-2.5 bg-canvas border border-line rounded-lg space-y-1.5">
+                <p className="text-xs text-muted">
+                  Temporary password. Share it securely; the tenant must change it at next sign in.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm text-ink break-all flex-1">{tempPassword}</code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(tempPassword);
+                      showToast('Password copied', 'success');
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {inviteUrl && (
               <div className="px-3 py-2.5 bg-canvas border border-line rounded-lg space-y-1.5">
@@ -983,7 +1034,7 @@ export function TenantDetail() {
         title="Delete tenant"
         message={
           user?.roleId === 'super_admin'
-            ? 'This permanently deletes this tenant and their payment history. This cannot be undone.'
+            ? 'This permanently deletes this tenant, frees up their unit, and removes their lease and all their rent records (paid and unpaid). Their Google Drive folder is left as is. This cannot be undone.'
             : 'This removes this tenant. Their lease payment records are kept. This cannot be undone.'
         }
         confirmText="Delete"
