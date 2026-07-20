@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { Env } from './session';
-import { getSetting, ensureTenantFolder, uploadToDrive } from './google';
+import { getSetting, ensureTenantFolder, uploadToDrive, deleteDriveFile } from './google';
 import { sendEmail } from './email';
 
 const MONTHS = [
@@ -154,6 +154,7 @@ interface PaymentJoin {
   property_id: string | null;
   unit_number: string | null;
   property_name: string | null;
+  receipt_document_id: string | null;
 }
 
 interface TenantRow {
@@ -176,6 +177,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   const p = await env.DB.prepare(
     `SELECT rp.id, rp.amount, rp.month, rp.year, rp.paid_date, rp.received_date,
             rp.payment_method, rp.status, rp.paid_by_tenant_id, rp.lease_id,
+            rp.receipt_document_id,
             l.property_id AS property_id, u.unit_number AS unit_number, pr.name AS property_name
        FROM rent_payments rp
        LEFT JOIN leases l ON l.id = rp.lease_id
@@ -240,10 +242,23 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     env.DB.prepare('UPDATE rent_payments SET receipt_document_id = ? WHERE id = ?').bind(docId, paymentId),
   ]);
 
+  // Regenerating replaces the receipt: remove the old one so duplicates do not
+  // pile up in Drive. Best-effort — the new receipt is already the linked one.
+  if (p.receipt_document_id && p.receipt_document_id !== docId) {
+    try {
+      const old = await env.DB.prepare('SELECT drive_file_id FROM documents WHERE id = ?')
+        .bind(p.receipt_document_id).first<{ drive_file_id: string | null }>();
+      if (old?.drive_file_id) await deleteDriveFile(env, old.drive_file_id);
+      await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(p.receipt_document_id).run();
+    } catch {
+      // Leave the old copy if cleanup fails; the Documents list hides it by name.
+    }
+  }
+
   if (tenant.email) {
     try {
       const subject = `Your rent receipt${period ? ` for ${period}` : ''}`;
-      const body = `Hi ${tenant.first_name}, your payment of ${money(p.amount)}${period ? ` for ${period}` : ''} has been received. Your receipt is attached in your tenant portal under Documents.`;
+      const body = `Hi ${tenant.first_name}, your payment of ${money(p.amount)}${period ? ` for ${period}` : ''} has been received. You can download your receipt in your tenant portal under Payments.`;
       await sendEmail(env, {
         to: tenant.email,
         subject,

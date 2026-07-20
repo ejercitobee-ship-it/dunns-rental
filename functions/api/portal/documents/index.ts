@@ -29,10 +29,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Rent receipts are excluded here: the tenant gets them on the Payments
     // tab (a Download per paid month), so the Documents tab stays uncluttered.
+    // Exclude by name too, so a leftover copy from a regenerated receipt (no
+    // longer the linked one) is hidden as well.
     const placeholders = ids.map(() => '?').join(',');
     const { results } = await env.DB.prepare(
       `SELECT * FROM documents
         WHERE tenant_id IN (${placeholders})
+          AND name NOT LIKE 'Rent receipt -%'
           AND id NOT IN (SELECT receipt_document_id FROM rent_payments WHERE receipt_document_id IS NOT NULL)
         ORDER BY created_at DESC`
     ).bind(...ids).all();
