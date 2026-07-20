@@ -196,6 +196,9 @@ export function isPortalRole(roleId?: string): boolean {
 }
 
 export interface PortalPayment {
+  // The payment's own id and receipt, so a tenant can download or generate the
+  // receipt for their own rent. Still never the payer (shared-lease privacy).
+  id?: string;
   amount: number;
   dueDate?: string;
   paidDate?: string;
@@ -205,4 +208,5 @@ export interface PortalPayment {
   // How the payment was recorded (cash, check, zelle, ...). The method only:
   // still never who paid, so the shared-lease privacy rule holds.
   paymentMethod?: PaymentMethod;
+  receiptDocumentId?: string;
 }

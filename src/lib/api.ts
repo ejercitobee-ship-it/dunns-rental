@@ -476,6 +476,10 @@ export const portalApi = {
   // payer field travels on any payment row (Belle's decision: on a shared
   // lease a tenant never sees who paid what).
   payments: (): Promise<PortalPaymentsResponse> => apiRequest('/portal/payments'),
+  // A tenant generates the receipt for one of their own paid payments; returns
+  // its document id so the page can link straight to the download.
+  generateReceipt: (paymentId: string): Promise<{ receiptDocumentId: string }> =>
+    apiRequest(`/portal/payments/${paymentId}/receipt`, { method: 'POST' }),
   documents: (tenantId?: string): Promise<AppDocument[]> =>
     apiRequest(`/portal/documents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
   // Multipart, like documentsApi.upload: no Content-Type header, so the
