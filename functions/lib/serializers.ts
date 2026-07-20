@@ -147,6 +147,7 @@ export function serializePayment(r: Row) {
     paymentMethod: r.payment_method ?? undefined,
     uploadedBy: r.uploaded_by ?? undefined,
     uploadedAt: r.uploaded_at ?? undefined,
+    receiptDocumentId: r.receipt_document_id ?? undefined,
   };
 }
 
