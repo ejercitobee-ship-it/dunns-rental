@@ -3,6 +3,7 @@ import { DollarSign, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease } from '../../lib/api';
+import { useToast } from '../../context/ToastContext';
 import { formatCurrency, getMonthName, yearOf, monthOf } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
@@ -51,8 +52,14 @@ function prettyMethod(method: string): string {
 }
 
 export function TenantPayments() {
+  const { showToast } = useToast();
   const [lease, setLease] = useState<PortalLease | null>(null);
   const [payments, setPayments] = useState<RentPayment[]>([]);
+  // The raw rows (with real id + receiptDocumentId) kept alongside, so a month
+  // can offer its receipt; `payments` above stays the id-less shape settleMonth uses.
+  const [rawPayments, setRawPayments] = useState<PortalPayment[]>([]);
+  const [receiptOverrides, setReceiptOverrides] = useState<Record<string, string>>({});
+  const [generating, setGenerating] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +71,7 @@ export function TenantPayments() {
         if (cancelled) return;
         setLease(res.lease);
         setPayments(res.lease ? toRentPayments(res.lease.id, res.payments) : []);
+        setRawPayments(res.lease ? res.payments : []);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -102,20 +110,48 @@ export function TenantPayments() {
       }
     }
 
-    return months.reverse().map(({ month, year }) => ({
-      month,
-      year,
-      settlement: settleMonth(fullLease, payments, month, year),
-      // The distinct methods recorded for this month's payment(s). Usually one.
-      methods: Array.from(
-        new Set(
-          payments
-            .filter(p => p.month === month && p.year === year && p.paymentMethod)
-            .map(p => p.paymentMethod as string)
-        )
-      ),
-    }));
-  }, [lease, payments]);
+    return months.reverse().map(({ month, year }) => {
+      const monthRaw = rawPayments.filter(p => p.month === month && p.year === year);
+      // An existing receipt for this month (freshly generated ones overlay via
+      // receiptOverrides), else a paid payment we can generate one for.
+      const withReceipt = monthRaw.find(p => (p.id && receiptOverrides[p.id]) || p.receiptDocumentId);
+      const receiptDocId = withReceipt
+        ? (withReceipt.id && receiptOverrides[withReceipt.id]) || withReceipt.receiptDocumentId
+        : undefined;
+      const generatePaymentId = !receiptDocId
+        ? monthRaw.find(p => p.status === 'paid' && p.id)?.id
+        : undefined;
+      return {
+        month,
+        year,
+        settlement: settleMonth(fullLease, payments, month, year),
+        // The distinct methods recorded for this month's payment(s). Usually one.
+        methods: Array.from(
+          new Set(
+            payments
+              .filter(p => p.month === month && p.year === year && p.paymentMethod)
+              .map(p => p.paymentMethod as string)
+          )
+        ),
+        receiptDocId,
+        generatePaymentId,
+      };
+    });
+  }, [lease, payments, rawPayments, receiptOverrides]);
+
+  const handleGenerateReceipt = async (paymentId: string) => {
+    if (generating) return;
+    setGenerating(paymentId);
+    try {
+      const { receiptDocumentId } = await portalApi.generateReceipt(paymentId);
+      setReceiptOverrides(prev => ({ ...prev, [paymentId]: receiptDocumentId }));
+      showToast('Receipt ready.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not get the receipt', 'error');
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   if (loading) {
     return <p className="text-sm text-muted">Loading your payment history.</p>;
@@ -159,6 +195,7 @@ export function TenantPayments() {
                     <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Balance</th>
                     <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
+                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -189,6 +226,29 @@ export function TenantPayments() {
                         </td>
                         <td className="py-3 px-5 text-sm text-muted">
                           {row.methods.map(prettyMethod).join(', ')}
+                        </td>
+                        <td className="py-3 px-5 text-sm">
+                          {row.receiptDocId ? (
+                            <a
+                              href={`/api/portal/documents/${row.receiptDocId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-primary hover:text-primary-hover"
+                            >
+                              Download
+                            </a>
+                          ) : row.generatePaymentId ? (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateReceipt(row.generatePaymentId!)}
+                              disabled={generating === row.generatePaymentId}
+                              className="font-medium text-muted hover:text-ink disabled:opacity-50"
+                            >
+                              {generating === row.generatePaymentId ? 'Getting...' : 'Get receipt'}
+                            </button>
+                          ) : (
+                            <span className="text-faint">—</span>
+                          )}
                         </td>
                       </tr>
                     );

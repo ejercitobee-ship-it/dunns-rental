@@ -34,9 +34,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     (lease as Record<string, unknown>).pauses = await leasePauses(env, lease.id as string);
 
     // Only the columns a tenant may see. payment_method is the method only
-    // (cash, check, zelle): still no payer, no uploaded_by, no notes.
+    // (cash, check, zelle): still no payer, no uploaded_by, no notes. The id and
+    // receipt_document_id ARE exposed: they are the tenant's OWN rent on their
+    // OWN lease, and are what let them download or generate their receipt. The
+    // sensitive field (paid_by_tenant_id) is still never selected.
     const { results } = await env.DB.prepare(
-      `SELECT amount, due_date, paid_date, status, month, year, payment_method
+      `SELECT id, amount, due_date, paid_date, status, month, year, payment_method, receipt_document_id
          FROM rent_payments
         WHERE lease_id = ?
         ORDER BY year DESC, month DESC`
@@ -47,6 +50,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       data: {
         lease: serializePortalLease(lease as Record<string, unknown>),
         payments: (results || []).map(r => ({
+          id: r.id,
           amount: r.amount,
           dueDate: r.due_date ?? undefined,
           paidDate: r.paid_date ?? undefined,
@@ -54,6 +58,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           month: r.month,
           year: r.year,
           paymentMethod: r.payment_method ?? undefined,
+          receiptDocumentId: r.receipt_document_id ?? undefined,
         })),
       },
     });
