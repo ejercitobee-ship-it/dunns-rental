@@ -36,6 +36,18 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const id = params.id as string;
     const body = (await request.json()) as Record<string, unknown>;
     const ec = (body.emergencyContact as EmergencyContact) || {};
+    const newEmail = (typeof body.email === 'string' && body.email.trim()) ? body.email.trim() : null;
+
+    // Keep the tenant's portal LOGIN email in sync with their profile email, so
+    // changing it here means they both receive AND sign in with the new address
+    // (the password lives in `account` keyed by user_id, so it is unaffected).
+    const linked = await env.DB.prepare('SELECT user_id FROM tenants WHERE id = ?')
+      .bind(id).first<{ user_id: string | null }>();
+    if (linked?.user_id && newEmail) {
+      const clash = await env.DB.prepare('SELECT id FROM user WHERE email = ? AND id != ?')
+        .bind(newEmail, linked.user_id).first();
+      if (clash) return jsonError('That email is already used by another login account.', 409);
+    }
 
     await env.DB.prepare(
       `UPDATE tenants SET
@@ -56,6 +68,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         id
       )
       .run();
+
+    if (linked?.user_id && newEmail) {
+      await env.DB.prepare('UPDATE user SET email = ?, updated_at = ? WHERE id = ?')
+        .bind(newEmail, Math.floor(Date.now() / 1000), linked.user_id).run();
+    }
 
     const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Tenant not found', 404);

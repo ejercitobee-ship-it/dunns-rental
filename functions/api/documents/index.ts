@@ -18,9 +18,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Rent receipts are documents too, but they live on the Payments view (a
     // Receipt link per payment), not in the Documents list, so they don't
-    // clutter it. Exclude any document referenced as a payment's receipt.
+    // clutter it. Exclude any document referenced as a payment's receipt, AND
+    // anything named like an auto-generated receipt (catches leftover copies
+    // from a regenerated receipt that are no longer the linked one).
     let query =
-      'SELECT * FROM documents WHERE id NOT IN (SELECT receipt_document_id FROM rent_payments WHERE receipt_document_id IS NOT NULL)';
+      `SELECT * FROM documents
+        WHERE name NOT LIKE 'Rent receipt -%'
+          AND id NOT IN (SELECT receipt_document_id FROM rent_payments WHERE receipt_document_id IS NOT NULL)`;
     const binds: unknown[] = [];
     if (tenantId) {
       query += ' AND tenant_id = ?';

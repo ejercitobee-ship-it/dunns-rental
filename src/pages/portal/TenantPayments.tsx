@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
-import { formatCurrency, getMonthName } from '../../lib/utils';
+import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
 import { settleMonth, rentMonthsToShow } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
 
@@ -85,48 +85,55 @@ export function TenantPayments() {
     };
   }, []);
 
-  // One row per month the lease actually OWED rent, from its start through the
-  // current month, newest first. Gated by leasesOwingMonth so a month the owner
-  // paused shows no row at all, matching the owner's Rent Management. Figures
-  // come from settleMonth alone; no rent arithmetic is re-derived here.
-  const rows = useMemo(() => {
+  // One row PER PAYMENT (each with its own receipt), matching the admin tenant
+  // profile, plus a row for any outstanding balance so the tenant still sees
+  // what they owe. Months come from rentMonthsToShow (owed months through now,
+  // plus any month paid ahead), newest first.
+  interface Row {
+    key: string;
+    label: string;
+    amount: number;
+    method: string;
+    date?: string;
+    status: 'paid' | 'partial' | 'unpaid';
+    receiptDocId?: string;
+    generatePaymentId?: string;
+  }
+  const rows = useMemo<Row[]>(() => {
     if (!lease) return [];
     const fullLease = toLease(lease);
     const now = new Date();
-    const nowMonth = now.getMonth() + 1;
-    const nowYear = now.getFullYear();
+    const months = rentMonthsToShow(fullLease, payments, now.getFullYear(), now.getMonth() + 1);
 
-    // Owed months from the lease start through now, PLUS any future month paid
-    // ahead (an advance payment), so paying early is visible. Newest first.
-    const months = rentMonthsToShow(fullLease, payments, nowYear, nowMonth);
+    const out: Row[] = [];
+    for (const { month, year } of months.reverse()) {
+      const label = `${getMonthName(month)} ${year}`;
+      const monthPayments = rawPayments
+        .filter(p => p.status === 'paid' && p.month === month && p.year === year)
+        .sort((a, b) => (a.paidDate || '').localeCompare(b.paidDate || ''));
 
-    return months.reverse().map(({ month, year }) => {
-      const monthRaw = rawPayments.filter(p => p.month === month && p.year === year);
-      // An existing receipt for this month (freshly generated ones overlay via
-      // receiptOverrides), else a paid payment we can generate one for.
-      const withReceipt = monthRaw.find(p => (p.id && receiptOverrides[p.id]) || p.receiptDocumentId);
-      const receiptDocId = withReceipt
-        ? (withReceipt.id && receiptOverrides[withReceipt.id]) || withReceipt.receiptDocumentId
-        : undefined;
-      const generatePaymentId = !receiptDocId
-        ? monthRaw.find(p => p.status === 'paid' && p.id)?.id
-        : undefined;
-      return {
-        month,
-        year,
-        settlement: settleMonth(fullLease, payments, month, year),
-        // The distinct methods recorded for this month's payment(s). Usually one.
-        methods: Array.from(
-          new Set(
-            payments
-              .filter(p => p.month === month && p.year === year && p.paymentMethod)
-              .map(p => p.paymentMethod as string)
-          )
-        ),
-        receiptDocId,
-        generatePaymentId,
-      };
-    });
+      for (const p of monthPayments) {
+        const receiptDocId = (p.id && receiptOverrides[p.id]) || p.receiptDocumentId;
+        out.push({
+          key: `${year}-${month}-${p.id ?? out.length}`,
+          label,
+          amount: p.amount,
+          method: p.paymentMethod ? prettyMethod(p.paymentMethod) : '',
+          date: p.paidDate,
+          status: 'paid',
+          receiptDocId,
+          generatePaymentId: !receiptDocId && p.id ? p.id : undefined,
+        });
+      }
+
+      // Whatever is still owed for the month (the full amount if unpaid, the
+      // remainder if only partly paid), so nothing outstanding is hidden.
+      const balance = settleMonth(fullLease, payments, month, year).balance;
+      if (balance > 0) {
+        out.push({ key: `${year}-${month}-due`, label, amount: balance, method: '', status: 'unpaid' });
+      }
+    }
+    return out;
   }, [lease, payments, rawPayments, receiptOverrides]);
 
   const handleGenerateReceipt = async (paymentId: string) => {
@@ -180,42 +187,30 @@ export function TenantPayments() {
                 <thead>
                   <tr className="border-b border-line bg-canvas">
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Month</th>
-                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Due</th>
-                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Paid</th>
-                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Balance</th>
-                    <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
+                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Amount</th>
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
+                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Date</th>
+                    <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => {
-                    const status = statusConfig[row.settlement.status];
+                    const status = statusConfig[row.status];
                     const StatusIcon = status.icon;
                     return (
-                      <tr key={`${row.year}-${row.month}`} className="border-b border-line last:border-0">
-                        <td className="py-3 px-5 text-sm text-ink">
-                          {getMonthName(row.month)} {row.year}
+                      <tr key={row.key} className="border-b border-line last:border-0">
+                        <td className="py-3 px-5 text-sm text-ink">{row.label}</td>
+                        <td className={`py-3 px-5 text-right tnum text-sm ${row.status === 'unpaid' ? 'font-semibold text-danger' : 'text-ink'}`}>
+                          {formatCurrency(row.amount)}
                         </td>
-                        <td className="py-3 px-5 text-sm text-ink text-right tnum">
-                          {formatCurrency(row.settlement.due)}
-                        </td>
-                        <td className="py-3 px-5 text-sm text-ink text-right tnum">
-                          {formatCurrency(row.settlement.paid)}
-                        </td>
-                        <td
-                          className={`py-3 px-5 text-right font-semibold tnum ${row.settlement.balance > 0 ? 'text-danger' : 'text-ink'}`}
-                        >
-                          {formatCurrency(row.settlement.balance)}
-                        </td>
+                        <td className="py-3 px-5 text-sm text-muted">{row.method || '—'}</td>
+                        <td className="py-3 px-5 text-sm text-muted">{row.date ? formatDate(row.date) : '—'}</td>
                         <td className="py-3 px-5 text-center">
                           <Badge variant={status.variant} className="flex items-center gap-1 w-fit mx-auto">
                             <StatusIcon className="h-3 w-3" />
                             {status.label}
                           </Badge>
-                        </td>
-                        <td className="py-3 px-5 text-sm text-muted">
-                          {row.methods.map(prettyMethod).join(', ')}
                         </td>
                         <td className="py-3 px-5 text-sm">
                           {row.receiptDocId ? (
