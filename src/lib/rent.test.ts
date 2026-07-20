@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow } from './rent';
 import type { Lease, RentPayment, MonthSettlement } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -423,5 +423,33 @@ describe('groupLeaseMonthRows', () => {
   it('carries caller fields through untouched', () => {
     const groups = groupLeaseMonthRows([row('L1', 7, paid, 'hello')], 2026, 2026, 7);
     expect(groups[0].monthRows[0].tag).toBe('hello');
+  });
+});
+
+describe('rentMonthsToShow', () => {
+  // lease() runs Jan 2026 -> Jan 2027; "today" is July 2026 in these tests.
+  it('lists owed months from the lease start through the current month', () => {
+    const res = rentMonthsToShow(lease(), [], 2026, 7);
+    expect(res).toEqual([1, 2, 3, 4, 5, 6, 7].map(m => ({ month: m, year: 2026 })));
+  });
+
+  it('includes a FUTURE month that has an advance payment', () => {
+    const res = rentMonthsToShow(lease(), [payment({ month: 8, year: 2026 })], 2026, 7);
+    expect(res.some(r => r.month === 8 && r.year === 2026)).toBe(true);
+    // The last shown month is the advance one, not just the current month.
+    expect(res[res.length - 1]).toEqual({ month: 8, year: 2026 });
+  });
+
+  it('does not show a future month with no payment (not due yet)', () => {
+    const res = rentMonthsToShow(lease(), [payment({ month: 8, year: 2026 })], 2026, 7);
+    expect(res.some(r => r.month === 9 && r.year === 2026)).toBe(false);
+  });
+
+  it('shows the paid advance months and skips an unpaid future month between them', () => {
+    // Paid Aug and Oct ahead, skipping Sep. Sep is future and unpaid, so it is
+    // not shown (never present a not-yet-due month as owing); Aug and Oct are.
+    const payments = [payment({ month: 8, year: 2026 }), payment({ month: 10, year: 2026 })];
+    const res = rentMonthsToShow(lease(), payments, 2026, 7);
+    expect(res.map(r => r.month)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10]);
   });
 });

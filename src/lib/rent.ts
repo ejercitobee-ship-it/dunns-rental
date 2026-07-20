@@ -279,3 +279,32 @@ export function groupLeaseMonthRows<R extends LeaseMonthLike>(
 
   return [...groups.values()].sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
 }
+
+/**
+ * The months to show a tenant on the portal Payments page: every month the
+ * lease owed from its start through the current month, PLUS any FUTURE month
+ * that has already been paid (an advance payment), so paying ahead is visible.
+ * A future month with no payment is not shown — it is not due yet. Returned
+ * ascending; the caller reverses for newest-first display.
+ */
+export function rentMonthsToShow(
+  lease: Lease,
+  payments: RentPayment[],
+  todayYear: number,
+  todayMonth: number
+): { month: number; year: number }[] {
+  const nowYM = todayYear * 12 + todayMonth;
+  const paidYMs = new Set(payments.map(p => p.year * 12 + p.month));
+  const latestPaymentYM = payments.reduce((mx, p) => Math.max(mx, p.year * 12 + p.month), 0);
+  const endYM = Math.max(nowYM, latestPaymentYM);
+  const startYM = lease.startDate ? yearMonthOf(lease.startDate) : nowYM;
+
+  const out: { month: number; year: number }[] = [];
+  for (let ym = startYM; ym <= endYM; ym++) {
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    if (leasesOwingMonth([lease], month, year).length === 0) continue;
+    if (ym <= nowYM || paidYMs.has(ym)) out.push({ month, year });
+  }
+  return out;
+}
