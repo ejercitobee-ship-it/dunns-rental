@@ -91,23 +91,55 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
 }
 
 /** Portal invite email, sent when Belle invites a tenant to their own login. */
-export function portalInviteEmail(inviteUrl: string, name?: string) {
+export function portalInviteEmail(
+  inviteUrl: string,
+  name?: string,
+  opts?: { companyName?: string; contact?: string; resend?: boolean }
+) {
+  const companyName = opts?.companyName || 'MH Dunn Property';
+  const contact = opts?.contact || '';
   const greeting = name ? `Hi ${name},` : 'Hi,';
-  return {
-    subject: 'Your MH Dunn Property account',
-    text: `${greeting}
+  const intro = opts?.resend
+    ? `Here is a fresh link to set your password for your ${companyName} tenant portal.`
+    : `${companyName} has set up your online tenant portal. You can view your lease, your rent history and receipts, and keep your own details up to date.`;
 
-MH Dunn Property has set up an account for you. You can see your lease, your rent history, and your documents, and you can correct your own details.
+  const text = `${greeting}
 
-Set your password here: ${inviteUrl}
+${intro}
+
+Set your password: ${inviteUrl}
 
 This link expires in 7 days.
 
-MH Dunn Property`,
-    html: `<p>${greeting}</p>
-<p>MH Dunn Property has set up an account for you. You can see your lease, your rent history, and your documents, and you can correct your own details.</p>
-<p><a href="${inviteUrl}">Set your password</a></p>
-<p>This link expires in 7 days.</p>
-<p>MH Dunn Property</p>`,
+${companyName}${contact ? `\n${contact}` : ''}`;
+
+  const html = `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">${companyName}</div>
+        ${contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${contact}</div>` : ''}
+      </td></tr>
+      <tr><td style="padding:26px 32px 6px;">
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;">${opts?.resend ? 'Set your password' : 'Your tenant portal is ready'}</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:14px 0 6px;">${greeting}</p>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 20px;">${intro}</p>
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#24503f;border-radius:8px;">
+          <a href="${inviteUrl}" style="display:inline-block;padding:12px 26px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Set your password</a>
+        </td></tr></table>
+        <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:20px 0 0;">This link expires in 7 days. If the button doesn't work, paste this address into your browser:<br><a href="${inviteUrl}" style="color:#24503f;word-break:break-all;">${inviteUrl}</a></p>
+      </td></tr>
+      <tr><td style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        ${companyName}${contact ? ` &nbsp;&middot;&nbsp; ${contact}` : ''}
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+
+  return {
+    subject: opts?.resend ? `Set your password — ${companyName}` : `Your ${companyName} tenant portal`,
+    text,
+    html,
   };
 }

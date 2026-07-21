@@ -199,7 +199,7 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
   return pdf.save();
 }
 
-interface CompanySettings {
+export interface CompanySettings {
   companyName: string;
   address: string;
   city: string;
@@ -214,7 +214,8 @@ const COMPANY_DEFAULTS: CompanySettings = {
   address: '', city: '', state: '', zipCode: '', phone: '', email: 'info@mhdunnproperty.net',
 };
 
-async function companySettings(env: Env): Promise<CompanySettings> {
+/** The company identity from app_settings, for receipts, invites, and emails. */
+export async function companySettings(env: Env): Promise<CompanySettings> {
   const raw = await getSetting(env, 'company');
   if (!raw) return COMPANY_DEFAULTS;
   try {

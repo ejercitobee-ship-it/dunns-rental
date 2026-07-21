@@ -69,6 +69,7 @@ export interface Tenant {
     relationship: string;
   };
   photoUrl?: string | null;
+  hasLogin?: boolean;
 }
 
 export interface RentPayment {
