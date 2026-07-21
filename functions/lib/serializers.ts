@@ -187,7 +187,7 @@ export function serializeMaintenance(r: Row) {
     propertyId: r.property_id ?? undefined,
     unitId: r.unit_id ?? undefined,
     tenantId: r.tenant_id ?? undefined,
-    title: r.title,
+    title: r.title as string,
     description: r.description ?? undefined,
     category: r.category ?? undefined,
     priority: r.priority ?? 'medium',

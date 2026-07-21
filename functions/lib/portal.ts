@@ -84,6 +84,23 @@ export async function tenantIdForUser(env: Env, userId: string): Promise<string 
   return row?.id ?? null;
 }
 
+/** The active handyman roster row for a login, or null. Scopes the handyman portal. */
+export async function handymanForUser(
+  env: Env,
+  userId: string
+): Promise<{ id: string; trades: string[] } | null> {
+  const row = await env.DB.prepare('SELECT id, trades FROM handymen WHERE user_id = ? AND is_active = 1')
+    .bind(userId)
+    .first<{ id: string; trades: string | null }>();
+  if (!row) return null;
+  let trades: string[] = [];
+  try {
+    const parsed = JSON.parse(row.trades || '[]');
+    if (Array.isArray(parsed)) trades = parsed.filter((t): t is string => typeof t === 'string');
+  } catch { /* leave empty */ }
+  return { id: row.id, trades };
+}
+
 /** Every lease id a tenant is on. Used to authorise edits to lease-scoped data. */
 export async function tenantLeaseIds(env: Env, tenantId: string): Promise<string[]> {
   const { results } = await env.DB.prepare('SELECT lease_id FROM lease_tenants WHERE tenant_id = ?')
