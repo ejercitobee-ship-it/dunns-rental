@@ -238,6 +238,10 @@ interface PaymentJoin {
   property_id: string | null;
   unit_number: string | null;
   property_name: string | null;
+  property_address: string | null;
+  property_city: string | null;
+  property_state: string | null;
+  property_zip: string | null;
   receipt_document_id: string | null;
 }
 
@@ -262,7 +266,9 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     `SELECT rp.id, rp.amount, rp.month, rp.year, rp.paid_date, rp.received_date,
             rp.payment_method, rp.status, rp.paid_by_tenant_id, rp.lease_id,
             rp.receipt_document_id,
-            l.property_id AS property_id, u.unit_number AS unit_number, pr.name AS property_name
+            l.property_id AS property_id, u.unit_number AS unit_number,
+            pr.name AS property_name, pr.address AS property_address,
+            pr.city AS property_city, pr.state AS property_state, pr.zip_code AS property_zip
        FROM rent_payments rp
        LEFT JOIN leases l ON l.id = rp.lease_id
        LEFT JOIN units u ON u.id = l.unit_id
@@ -290,7 +296,17 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   const company = await companySettings(env);
   const tenantName = `${tenant.first_name} ${tenant.last_name}`.trim();
   const period = periodLabel(p.month, p.year);
-  const location = [p.property_name, p.unit_number ? `Unit ${p.unit_number}` : null].filter(Boolean).join(' · ') || '—';
+  // The Property line: the complete street address (falling back to the
+  // property's name if no address is on file), plus the unit.
+  const cityStateZip = [
+    [p.property_city, p.property_state].filter(Boolean).join(', '),
+    p.property_zip,
+  ].filter(Boolean).join(' ');
+  const fullAddress = [p.property_address, cityStateZip].filter(Boolean).join(', ');
+  const location = [
+    fullAddress || p.property_name,
+    p.unit_number ? `Unit ${p.unit_number}` : null,
+  ].filter(Boolean).join(' · ') || '—';
   const rawDatePaid = p.paid_date || p.received_date || '';
   const datePaid = rawDatePaid ? prettyDate(rawDatePaid) : '';
   const rNumber = receiptNumber(p.id, p.month, p.year);
