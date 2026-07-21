@@ -37,4 +37,9 @@ plumbing, electrical, hvac, appliance, carpentry, general, other (align to exist
 - [ ] **Slice 6 — Polish + full test + deploy.** End-to-end sanity, unit tests for matching + lifecycle guards, merge, deploy, poll bundle.
 
 ## Progress ledger
-(append one line per slice as it lands: `Slice N: complete (commit <sha7>)`)
+- Slice 1: complete (commit 4f77045) — data model + migration 0015 + types/serializers.
+- Slice 2: complete (commit 3fcdf78) — handyman roster API + role plumbing + admin roster UI + shared invite lib.
+- Slice 3: complete (commit cc2ec87) — tenant request submission + notifications + portal tab/route.
+- Slice 4: complete (commit d95a7dd) — handyman portal (jobs/claim/schedule/status) + full HandymanJobs page.
+- Slice 5: complete (commit 127fe71) — admin assign + mark paid + expense row into Finances.
+- Slice 6: in progress — full branch verified green (build/99 tests/lint of changed files clean; the 10 repo lint errors pre-exist on main). BLOCKED on remote D1 migration: wrangler token lost D1 scope (7403). Belle must run `npx wrangler login`, then apply 0015 --remote, then merge+push to deploy.
