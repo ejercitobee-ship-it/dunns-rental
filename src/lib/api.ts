@@ -589,6 +589,12 @@ export const maintenanceApi = {
     apiRequest(`/maintenance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/maintenance/${id}`, { method: 'DELETE' }),
+  // Assign (or clear, with handymanId null) a handyman. Notifies them + tenant.
+  assign: (id: string, handymanId: string | null): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}/assign`, { method: 'POST', body: JSON.stringify({ handymanId }) }),
+  // Record paying the handyman: sets the cost, stamps paid, counts in Finances.
+  pay: (id: string, cost: number): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}/pay`, { method: 'POST', body: JSON.stringify({ cost }) }),
 };
 
 // Handymen roster API (admin side).

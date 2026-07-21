@@ -27,12 +27,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const id = params.id as string;
     const body = (await request.json()) as Record<string, unknown>;
 
-    // When marking resolved, stamp the resolved date if the caller didn't.
-    const resolvedDate =
-      body.status === 'resolved'
-        ? body.resolvedDate ?? new Date().toISOString().split('T')[0]
-        : body.resolvedDate ?? null;
-
+    // This is the content edit (the admin modal and quick status). It never
+    // touches the workflow columns (assigned_handyman_id, scheduled_for,
+    // paid_at, created_by): those are owned by the assign and pay endpoints and
+    // the handyman portal, so a content edit here can't wipe an assignment.
     await env.DB.prepare(
       `UPDATE maintenance_requests SET
         property_id = ?, unit_id = ?, tenant_id = ?, title = ?, description = ?, category = ?,
@@ -48,11 +46,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.description ?? null,
         body.category ?? null,
         body.priority ?? 'medium',
-        body.status ?? 'open',
+        body.status ?? 'submitted',
         body.cost ?? 0,
         body.vendor ?? null,
         body.reportedDate ?? null,
-        resolvedDate,
+        body.resolvedDate ?? null,
         body.notes ?? null,
         id
       )
