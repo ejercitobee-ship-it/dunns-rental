@@ -1,33 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError, hashPassword, generateTempPassword } from '../../../lib/session';
-import { sendEmail, portalInviteEmail } from '../../../lib/email';
-import { companySettings } from '../../../lib/receipts';
-
-const SEVEN_DAYS = 7 * 24 * 60 * 60;
-
-/**
- * Issue a fresh set-password token for a login and email the branded invite
- * link, using the company identity from settings. Shared by a first invite and
- * a resend, so both look the same and a resend always gives a working link.
- */
-async function sendInviteLink(
-  env: Env, request: Request, userId: string, firstName: string, toEmail: string, resend: boolean
-): Promise<{ sent: boolean; inviteUrl: string }> {
-  const now = Math.floor(Date.now() / 1000);
-  const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-  await env.DB.prepare(
-    'INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).bind(crypto.randomUUID(), userId, token, now + SEVEN_DAYS, now).run();
-
-  const inviteUrl = `${new URL(request.url).origin}/reset-password?token=${token}`;
-  const c = await companySettings(env);
-  const cityStateZip = [[c.city, c.state].filter(Boolean).join(', '), c.zipCode].filter(Boolean).join(' ');
-  const contact = [c.address, cityStateZip, [c.phone, c.email].filter(Boolean).join(' · ')]
-    .filter(s => s && s.trim()).join(' · ');
-  const mail = portalInviteEmail(inviteUrl, firstName, { companyName: c.companyName, contact, resend });
-  const sent = await sendEmail(env, { to: toEmail, ...mail });
-  return { sent, inviteUrl };
-}
+import { sendInviteLink } from '../../../lib/invite';
 
 /**
  * POST /api/tenants/:id/invite — give a tenant a portal login.

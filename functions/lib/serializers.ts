@@ -168,22 +168,55 @@ export function serializeExpense(r: Row) {
   };
 }
 
+/** Parse a JSON text column into an array, tolerating null and bad data. */
+function parseJsonArray<T>(value: unknown): T[] {
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export type AvailabilityWindow = { date: string; start: string; end: string };
+
 export function serializeMaintenance(r: Row) {
   return {
     id: r.id,
     propertyId: r.property_id ?? undefined,
     unitId: r.unit_id ?? undefined,
     tenantId: r.tenant_id ?? undefined,
-    title: r.title,
+    title: r.title as string,
     description: r.description ?? undefined,
     category: r.category ?? undefined,
     priority: r.priority ?? 'medium',
-    status: r.status ?? 'open',
+    status: r.status ?? 'submitted',
     cost: r.cost ?? 0,
     vendor: r.vendor ?? undefined,
     reportedDate: r.reported_date ?? undefined,
     resolvedDate: r.resolved_date ?? undefined,
     notes: r.notes ?? undefined,
+    // Maintenance portal fields.
+    assignedHandymanId: r.assigned_handyman_id ?? undefined,
+    scheduledFor: r.scheduled_for ?? undefined,
+    availability: parseJsonArray<AvailabilityWindow>(r.availability),
+    paidAt: r.paid_at ?? undefined,
+    createdBy: r.created_by ?? undefined,
+  };
+}
+
+export function serializeHandyman(r: Row) {
+  return {
+    id: r.id,
+    userId: r.user_id ?? undefined,
+    name: r.name,
+    phone: r.phone ?? undefined,
+    email: r.email ?? undefined,
+    trades: parseJsonArray<string>(r.trades),
+    isActive: !!r.is_active,
+    // Whether this handyman already has a portal login (Invite vs Resend).
+    hasLogin: !!r.user_id,
   };
 }
 

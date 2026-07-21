@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, Wrench, Search, Edit2, Trash2, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -7,29 +7,25 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { MAINTENANCE_TRADES, type Handyman } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
+import { STATUS_BADGE, STATUS_LABEL } from '../lib/maintenance';
+import { HandymenManager } from '../components/HandymenManager';
+import { handymenApi, maintenanceApi } from '../lib/api';
 
-const CATEGORIES = ['plumbing', 'electrical', 'hvac', 'appliance', 'structural', 'general', 'other'];
+/** Which active handymen may take a job in this category (general sees all). */
+function eligibleHandymen(handymen: Handyman[], category?: string): Handyman[] {
+  const cat = category && category.trim() ? category : 'general';
+  return handymen.filter((h) => h.isActive && (h.trades.includes('general') || h.trades.includes(cat)));
+}
+
+const CATEGORIES = [...MAINTENANCE_TRADES];
 
 const priorityBadge: Record<MaintenancePriority, 'secondary' | 'warning' | 'destructive'> = {
   low: 'secondary',
   medium: 'secondary',
   high: 'warning',
   urgent: 'destructive',
-};
-
-const statusBadge: Record<MaintenanceStatus, 'warning' | 'default' | 'success' | 'secondary'> = {
-  open: 'warning',
-  in_progress: 'default',
-  resolved: 'success',
-  cancelled: 'secondary',
-};
-
-const statusLabel: Record<MaintenanceStatus, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  resolved: 'Resolved',
-  cancelled: 'Cancelled',
 };
 
 const emptyForm = {
@@ -40,7 +36,7 @@ const emptyForm = {
   tenantId: '',
   category: 'general',
   priority: 'medium' as MaintenancePriority,
-  status: 'open' as MaintenanceStatus,
+  status: 'submitted' as MaintenanceStatus,
   cost: 0,
   vendor: '',
   reportedDate: todayLocalDate(),
@@ -48,22 +44,70 @@ const emptyForm = {
 };
 
 export function Maintenance() {
-  const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance } = useApp();
+  const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance, dispatch } = useApp();
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<MaintenanceStatus | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [handymen, setHandymen] = useState<Handyman[]>([]);
+  const [payTarget, setPayTarget] = useState<MaintenanceRequest | null>(null);
+  const [payCost, setPayCost] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    handymenApi.getAll().then(setHandymen).catch(() => setHandymen([]));
+  }, []);
+
+  const handymanName = (id?: string) => handymen.find(h => h.id === id)?.name;
+
+  const assignHandyman = async (m: MaintenanceRequest, handymanId: string) => {
+    setBusyId(m.id);
+    try {
+      const updated = await maintenanceApi.assign(m.id, handymanId || null);
+      dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      showToast(handymanId ? 'Handyman assigned' : 'Assignment cleared', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not assign', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const openPay = (m: MaintenanceRequest) => {
+    setPayTarget(m);
+    setPayCost(m.cost ? String(m.cost) : '');
+  };
+
+  const confirmPay = async () => {
+    if (!payTarget) return;
+    const cost = Number(payCost);
+    if (!Number.isFinite(cost) || cost < 0) {
+      showToast('Enter a valid amount', 'error');
+      return;
+    }
+    setBusyId(payTarget.id);
+    try {
+      const updated = await maintenanceApi.pay(payTarget.id, cost);
+      dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      showToast('Recorded as paid. It now counts in Finances.', 'success');
+      setPayTarget(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not record payment', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const propertyName = (id?: string) => properties.find(p => p.id === id)?.name || '—';
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber;
 
   const stats = useMemo(() => {
-    const open = maintenance.filter(m => m.status === 'open').length;
+    const open = maintenance.filter(m => m.status === 'submitted').length;
     const inProgress = maintenance.filter(m => m.status === 'in_progress').length;
-    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'resolved' && m.status !== 'cancelled').length;
-    const spend = maintenance.filter(m => m.status === 'resolved').reduce((s, m) => s + (m.cost || 0), 0);
+    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'cancelled').length;
+    const spend = maintenance.filter(m => m.status === 'paid').reduce((s, m) => s + (m.cost || 0), 0);
     return { open, inProgress, urgent, spend };
   }, [maintenance]);
 
@@ -135,7 +179,7 @@ export function Maintenance() {
   const quickStatus = async (m: MaintenanceRequest, status: MaintenanceStatus) => {
     try {
       await updateMaintenance({ ...m, status });
-      showToast(`Marked ${statusLabel[status].toLowerCase()}`, 'success');
+      showToast(`Marked ${STATUS_LABEL[status].toLowerCase()}`, 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not update', 'error');
     }
@@ -152,10 +196,10 @@ export function Maintenance() {
   };
 
   const statCards = [
-    { label: 'Open', value: stats.open, icon: <Clock /> },
-    { label: 'In Progress', value: stats.inProgress, icon: <Wrench /> },
+    { label: 'New', value: stats.open, icon: <Clock /> },
+    { label: 'In progress', value: stats.inProgress, icon: <Wrench /> },
     { label: 'Urgent', value: stats.urgent, icon: <AlertTriangle /> },
-    { label: 'Resolved Spend', value: formatCurrency(stats.spend), icon: <CheckCircle2 /> },
+    { label: 'Paid spend', value: formatCurrency(stats.spend), icon: <CheckCircle2 /> },
   ];
 
   return (
@@ -204,9 +248,12 @@ export function Maintenance() {
           onChange={e => setStatusFilter(e.target.value as MaintenanceStatus | 'all')}
         >
           <option value="all">All Statuses</option>
-          <option value="open">Open</option>
-          <option value="in_progress">In Progress</option>
-          <option value="resolved">Resolved</option>
+          <option value="submitted">Submitted</option>
+          <option value="assigned">Assigned</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="in_progress">In progress</option>
+          <option value="completed">Completed</option>
+          <option value="paid">Paid</option>
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
@@ -222,6 +269,7 @@ export function Maintenance() {
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Priority</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Status</th>
+                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Handyman</th>
                   <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Cost</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Reported</th>
                   <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Actions</th>
@@ -242,7 +290,28 @@ export function Maintenance() {
                       <Badge variant={priorityBadge[m.priority]} className="capitalize">{m.priority}</Badge>
                     </td>
                     <td className="py-3 px-4">
-                      <Badge variant={statusBadge[m.status]}>{statusLabel[m.status]}</Badge>
+                      <Badge variant={STATUS_BADGE[m.status]}>{STATUS_LABEL[m.status]}</Badge>
+                    </td>
+                    <td className="py-3 px-4">
+                      {m.status === 'paid' || m.status === 'cancelled' ? (
+                        <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || '—'}</span>
+                      ) : (
+                        <select
+                          value={m.assignedHandymanId || ''}
+                          disabled={busyId === m.id}
+                          onChange={(e) => assignHandyman(m, e.target.value)}
+                          className="text-sm px-2 py-1 border border-line rounded-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 max-w-[150px]"
+                        >
+                          <option value="">Unassigned</option>
+                          {eligibleHandymen(handymen, m.category).map((h) => (
+                            <option key={h.id} value={h.id}>{h.name}</option>
+                          ))}
+                          {/* Keep the current assignee selectable even if now ineligible. */}
+                          {m.assignedHandymanId && !eligibleHandymen(handymen, m.category).some((h) => h.id === m.assignedHandymanId) && (
+                            <option value={m.assignedHandymanId}>{handymanName(m.assignedHandymanId) || 'Assigned'}</option>
+                          )}
+                        </select>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-ink tnum">
                       {m.cost ? formatCurrency(m.cost) : '—'}
@@ -252,12 +321,20 @@ export function Maintenance() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-1">
-                        {m.status !== 'resolved' && m.status !== 'cancelled' && (
+                        {m.status !== 'paid' && m.status !== 'cancelled' && (
                           <button
-                            onClick={() => quickStatus(m, m.status === 'open' ? 'in_progress' : 'resolved')}
+                            onClick={() => quickStatus(m, m.status === 'in_progress' ? 'completed' : 'in_progress')}
                             className="text-xs font-medium text-primary hover:text-primary-hover px-2 py-1 rounded-md hover:bg-primary-soft transition-colors"
                           >
-                            {m.status === 'open' ? 'Start' : 'Resolve'}
+                            {m.status === 'in_progress' ? 'Complete' : 'Start'}
+                          </button>
+                        )}
+                        {m.status !== 'paid' && m.status !== 'cancelled' && (
+                          <button
+                            onClick={() => openPay(m)}
+                            className="text-xs font-medium text-positive hover:opacity-80 px-2 py-1 rounded-md hover:bg-positive-soft transition-colors"
+                          >
+                            Mark paid
                           </button>
                         )}
                         <button
@@ -290,6 +367,35 @@ export function Maintenance() {
           )}
         </CardContent>
       </Card>
+
+      {/* Handyman roster */}
+      <HandymenManager />
+
+      {/* Record payment */}
+      <Modal isOpen={!!payTarget} onClose={() => setPayTarget(null)} title="Record payment" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Record what you paid the handyman for <span className="font-medium text-ink">{payTarget?.title}</span>. This
+            marks the job paid and counts it as an expense in Finances. It does not touch the tenant's rent.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Amount paid</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={payCost}
+              onChange={(e) => setPayCost(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setPayTarget(null)}>Cancel</Button>
+            <Button onClick={confirmPay} disabled={busyId === payTarget?.id}>Mark paid</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Add / Edit Modal */}
       <Modal

@@ -40,7 +40,7 @@ export function Login() {
         setError(result.error || 'Invalid email or password');
         showToast(result.error || 'Invalid credentials', 'error');
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
       showToast('Login failed', 'error');
     } finally {

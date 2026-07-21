@@ -23,6 +23,8 @@ import { Users } from './pages/Users';
 import { PortalLayout } from './components/PortalLayout';
 import { TenantHome } from './pages/portal/TenantHome';
 import { TenantPayments } from './pages/portal/TenantPayments';
+import { TenantMaintenance } from './pages/portal/TenantMaintenance';
+import { HandymanJobs } from './pages/portal/HandymanJobs';
 import { TenantDocuments } from './pages/portal/TenantDocuments';
 import { RealtorTenants } from './pages/portal/RealtorTenants';
 import { RealtorTenantDetail } from './pages/portal/RealtorTenantDetail';
@@ -84,6 +86,9 @@ function PortalIndex() {
   const { user } = useAuth();
   if (user?.roleId === 'realtor') {
     return <RealtorDashboard />;
+  }
+  if (user?.roleId === 'handyman') {
+    return <HandymanJobs />;
   }
   return <TenantHome />;
 }
@@ -165,6 +170,12 @@ function AppRoutes() {
       {/* Retired: the tenant's profile now lives on the Home page. Keep the
           path so old bookmarks land somewhere sensible. */}
       <Route path="/portal/information" element={<Navigate to="/portal" replace />} />
+
+      <Route path="/portal/maintenance" element={
+        <PortalRoute>
+          <PortalLayout><TenantMaintenance /></PortalLayout>
+        </PortalRoute>
+      } />
 
       <Route path="/portal/documents" element={
         <PortalRoute>

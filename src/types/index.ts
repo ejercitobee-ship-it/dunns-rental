@@ -154,8 +154,37 @@ export interface Income {
   relatedPaymentId?: string;
 }
 
-export type MaintenanceStatus = 'open' | 'in_progress' | 'resolved' | 'cancelled';
+// The maintenance job lifecycle:
+// submitted -> assigned -> scheduled -> in_progress -> completed -> paid
+// (cancelled at any point). scheduled_for is set when a handyman confirms a time.
+export type MaintenanceStatus =
+  | 'submitted'
+  | 'assigned'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'paid'
+  | 'cancelled';
 export type MaintenancePriority = 'low' | 'medium' | 'high' | 'urgent';
+
+/** The trade categories a handyman works and a request is filed under. */
+export const MAINTENANCE_TRADES = [
+  'plumbing',
+  'electrical',
+  'hvac',
+  'appliance',
+  'carpentry',
+  'general',
+  'other',
+] as const;
+export type MaintenanceTrade = (typeof MAINTENANCE_TRADES)[number];
+
+/** A window when the tenant is home for the work. Local calendar day + times. */
+export interface AvailabilityWindow {
+  date: string; // YYYY-MM-DD
+  start: string; // HH:MM
+  end: string; // HH:MM
+}
 
 export interface MaintenanceRequest {
   id: string;
@@ -172,6 +201,23 @@ export interface MaintenanceRequest {
   reportedDate?: string;
   resolvedDate?: string;
   notes?: string;
+  // Maintenance portal fields.
+  assignedHandymanId?: string;
+  scheduledFor?: string;
+  availability?: AvailabilityWindow[];
+  paidAt?: string;
+  createdBy?: 'tenant' | 'admin';
+}
+
+export interface Handyman {
+  id: string;
+  userId?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  trades: string[];
+  isActive: boolean;
+  hasLogin: boolean;
 }
 
 export interface DashboardStats {
@@ -190,7 +236,7 @@ export interface DashboardStats {
 export type ViewType = 'dashboard' | 'properties' | 'tenants' | 'rents' | 'expenses' | 'income';
 
 /** Roles that belong in the portal and must never reach the management app. */
-export const PORTAL_ROLES = ['tenant', 'realtor'] as const;
+export const PORTAL_ROLES = ['tenant', 'realtor', 'handyman'] as const;
 
 export function isPortalRole(roleId?: string): boolean {
   return roleId === 'tenant' || roleId === 'realtor';

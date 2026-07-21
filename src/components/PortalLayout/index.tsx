@@ -15,6 +15,7 @@ interface PortalLayoutProps {
 const TENANT_TABS = [
   { name: 'Home', path: '/portal' },
   { name: 'Payments', path: '/portal/payments' },
+  { name: 'Maintenance', path: '/portal/maintenance' },
   { name: 'Documents', path: '/portal/documents' },
 ];
 
@@ -22,6 +23,10 @@ const REALTOR_TABS = [
   { name: 'Dashboard', path: '/portal' },
   { name: 'My tenants', path: '/portal/tenants' },
   { name: 'Available Units', path: '/portal/available' },
+];
+
+const HANDYMAN_TABS = [
+  { name: 'Jobs', path: '/portal' },
 ];
 
 export function PortalLayout({ children }: PortalLayoutProps) {
@@ -34,7 +39,8 @@ export function PortalLayout({ children }: PortalLayoutProps) {
     navigate('/login');
   };
 
-  const tabs = user?.roleId === 'realtor' ? REALTOR_TABS : TENANT_TABS;
+  const tabs =
+    user?.roleId === 'realtor' ? REALTOR_TABS : user?.roleId === 'handyman' ? HANDYMAN_TABS : TENANT_TABS;
 
   return (
     <div className="min-h-screen bg-canvas">

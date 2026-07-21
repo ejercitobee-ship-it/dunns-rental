@@ -73,7 +73,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Auto-logout after 30 minutes of inactivity
   const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
+  // Starts at 0 (updated on the first activity); Date.now() in a ref initializer
+  // is an impure call during render.
+  const lastActivityRef = useRef<number>(0);
+
+  const logout = async () => {
+    try {
+      await authApi.signOut();
+    } finally {
+      setUser(null);
+    }
+  };
 
   const resetInactivityTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -204,14 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
-    try {
-      await authApi.signOut();
-    } finally {
-      setUser(null);
-    }
-  };
-
   const register = async (email: string, password: string, name: string) => {
     try {
       const result = await authApi.signUp(email, password, name);
@@ -336,6 +338,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// The hook is co-located with its provider on purpose; splitting it out only to
+// satisfy a dev-only fast-refresh rule would churn every import site.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
