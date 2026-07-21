@@ -7,7 +7,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { useToast } from '../../context/ToastContext';
 import { portalApi, photoApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
-import { formatCurrency, formatDate } from '../../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth } from '../../lib/rent';
 import type { Lease, RentPayment, Tenant } from '../../types';
 
@@ -104,6 +104,16 @@ export function TenantHome() {
 
   const { tenant, lease, unit, property } = me;
 
+  // The exact memo the tenant should put on their Zelle payment: street, unit,
+  // current month, and their name (the household who signed the lease).
+  const nowD = new Date();
+  const paymentMemo = [
+    property?.address,
+    unit ? `Unit ${unit.unitNumber}` : null,
+    formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear()),
+    `${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim(),
+  ].filter(Boolean).join(', ');
+
   return (
     <div className="space-y-6">
       <div>
@@ -124,6 +134,7 @@ export function TenantHome() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="grid gap-6 sm:grid-cols-2">
           <Card>
             <CardContent className="p-5 space-y-3">
@@ -170,6 +181,9 @@ export function TenantHome() {
             </CardContent>
           </Card>
         </div>
+
+        <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
+        </>
       )}
 
       <HouseholdCard hasLease={!!me?.lease} />
@@ -350,6 +364,38 @@ function ProfileField({ label, value }: { label: string; value?: string }) {
       <p className="text-sm font-medium text-ink mb-1">{label}</p>
       <p className="text-sm text-muted">{value || 'Not on file'}</p>
     </div>
+  );
+}
+
+function HowToPayCard({ instructions, memo }: { instructions?: string; memo: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(memo);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard unavailable; the memo is shown to copy by hand */ }
+  };
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-3">
+        <h3 className="font-semibold text-ink flex items-center gap-2">
+          <DollarSign className="h-4 w-4 text-faint" /> How to pay
+        </h3>
+        {instructions && <p className="text-sm text-ink">{instructions}</p>}
+        {memo && (
+          <div className="rounded-lg border border-line bg-canvas p-3 space-y-2">
+            <p className="eyebrow">Put this in the memo</p>
+            <div className="flex items-center gap-2">
+              <code className="text-sm text-ink flex-1 break-words">{memo}</code>
+              <Button type="button" variant="outline" size="sm" onClick={copy} className="flex-shrink-0">
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

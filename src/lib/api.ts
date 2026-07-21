@@ -129,6 +129,7 @@ export interface AppSettings {
   rent: {
     lateFeeAmount: number; lateFeeDay: number; gracePeriod: number;
     defaultLeaseTerm: number; securityDepositMultiplier: number;
+    paymentInstructions: string;
   };
   notifications: {
     emailNotifications: boolean; smsNotifications: boolean; rentReminders: boolean;
@@ -390,6 +391,8 @@ export interface PortalMeResponse {
   lease: PortalLease | null;
   unit: Unit | null;
   property: Property | null;
+  // The owner's "how to pay" text from Settings; the portal adds the memo.
+  paymentInstructions?: string;
 }
 
 export interface PortalPaymentsResponse {
