@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
-import { formatCurrency, getMonthName } from '../../lib/utils';
+import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
 import { settleMonth, rentMonthsToShow } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
 
@@ -95,6 +95,7 @@ export function TenantPayments() {
     year: number;
     settlement: ReturnType<typeof settleMonth>;
     methods: string[];
+    receivedOn?: string;
     receipts: ReceiptEntry[];
   }
   const rows = useMemo<Row[]>(() => {
@@ -112,6 +113,8 @@ export function TenantPayments() {
         year,
         settlement: settleMonth(fullLease, payments, month, year),
         methods: Array.from(new Set(monthPayments.map(p => p.paymentMethod).filter(Boolean) as string[])),
+        // When the most recent payment for this month was received.
+        receivedOn: monthPayments.length ? monthPayments[monthPayments.length - 1].paidDate : undefined,
         receipts: monthPayments.map((p, i) => ({
           key: `${p.id ?? i}`,
           paymentId: p.id,
@@ -169,7 +172,7 @@ export function TenantPayments() {
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px]">
+              <table className="w-full min-w-[760px]">
                 <thead>
                   <tr className="border-b border-line bg-canvas">
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Month</th>
@@ -178,6 +181,7 @@ export function TenantPayments() {
                     <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Balance</th>
                     <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
+                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Paid on</th>
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
                   </tr>
                 </thead>
@@ -202,6 +206,9 @@ export function TenantPayments() {
                         </td>
                         <td className="py-3 px-5 text-sm text-muted">
                           {row.methods.map(prettyMethod).join(', ') || '—'}
+                        </td>
+                        <td className="py-3 px-5 text-sm text-muted whitespace-nowrap">
+                          {row.receivedOn ? formatDate(row.receivedOn) : '—'}
                         </td>
                         <td className="py-3 px-5 text-sm">
                           {row.receipts.length === 0 ? (
