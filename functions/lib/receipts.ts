@@ -30,6 +30,90 @@ function prettyMethod(method: string | null | undefined): string {
   return method.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
+/** "2026-07-01" -> "July 1, 2026"; leaves anything unexpected as-is. */
+function prettyDate(dateStr: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (!m) return dateStr;
+  return `${MONTHS[Number(m[2]) - 1] ?? ''} ${Number(m[3])}, ${m[1]}`.trim();
+}
+
+export interface ReceiptEmailData {
+  companyName: string;
+  contact: string;
+  receiptNumber: string;
+  firstName: string;
+  tenantName: string;
+  location: string;
+  period: string;
+  amount: string;
+  method: string;
+  datePaid: string;
+}
+
+/** A branded, receipt-styled HTML email (inline styles, table layout for email clients). */
+export function receiptEmailHtml(d: ReceiptEmailData): string {
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:7px 0;color:#75726b;font-size:13px;">${label}</td>` +
+    `<td style="padding:7px 0;text-align:right;font-size:13px;color:#1c1a17;font-weight:500;">${value || '—'}</td></tr>`;
+  return `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">${d.companyName}</div>
+        ${d.contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${d.contact}</div>` : ''}
+      </td></tr>
+      <tr><td style="padding:24px 32px 4px;">
+        <div style="font-size:16px;font-weight:bold;color:#1c1a17;">Rent receipt</div>
+        <div style="font-size:12px;color:#8a887f;margin-top:4px;">No. ${d.receiptNumber}${d.datePaid ? ` &nbsp;&middot;&nbsp; Paid ${d.datePaid}` : ''}</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:16px 0 4px;">Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.</p>
+      </td></tr>
+      <tr><td style="padding:8px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          ${row('Received from', d.tenantName)}
+          ${row('Property', d.location)}
+          ${row('Rent period', d.period)}
+          ${row('Payment method', d.method)}
+        </table>
+      </td></tr>
+      <tr><td style="padding:16px 32px 4px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f4;border:1px solid #e7e5dd;border-radius:8px;"><tr>
+          <td style="padding:16px 18px;">
+            <div style="font-size:11px;letter-spacing:0.08em;color:#8a887f;font-weight:bold;">AMOUNT PAID</div>
+            <div style="font-size:22px;font-weight:bold;color:#1c1a17;margin-top:2px;">${d.amount}</div>
+          </td>
+          <td style="padding:16px 18px;text-align:right;font-size:16px;font-weight:bold;color:#2b7a59;">PAID</td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:16px 32px 24px;">
+        <p style="font-size:13px;color:#75726b;line-height:1.6;margin:0;">You can view and download this receipt anytime in your tenant portal, under <strong>Payments</strong>.</p>
+      </td></tr>
+      <tr><td style="padding:14px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        ${d.companyName}${d.contact ? ` &nbsp;&middot;&nbsp; ${d.contact}` : ''}
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+}
+
+/** Plain-text fallback for the receipt email. */
+export function receiptEmailText(d: ReceiptEmailData): string {
+  return [
+    `${d.companyName} — Rent receipt`,
+    `No. ${d.receiptNumber}${d.datePaid ? ` · Paid ${d.datePaid}` : ''}`,
+    '',
+    `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`,
+    '',
+    `Received from: ${d.tenantName}`,
+    `Property: ${d.location}`,
+    `Rent period: ${d.period}`,
+    `Payment method: ${d.method}`,
+    `Amount paid: ${d.amount} (PAID)`,
+    '',
+    'You can view and download this receipt anytime in your tenant portal, under Payments.',
+  ].join('\n');
+}
+
 export interface ReceiptData {
   receiptNumber: string;
   datePaid: string;
@@ -207,10 +291,12 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   const tenantName = `${tenant.first_name} ${tenant.last_name}`.trim();
   const period = periodLabel(p.month, p.year);
   const location = [p.property_name, p.unit_number ? `Unit ${p.unit_number}` : null].filter(Boolean).join(' · ') || '—';
-  const datePaid = p.paid_date || p.received_date || '';
+  const rawDatePaid = p.paid_date || p.received_date || '';
+  const datePaid = rawDatePaid ? prettyDate(rawDatePaid) : '';
+  const rNumber = receiptNumber(p.id, p.month, p.year);
 
   const pdfBytes = await buildReceiptPdf({
-    receiptNumber: receiptNumber(p.id, p.month, p.year),
+    receiptNumber: rNumber,
     datePaid,
     company: {
       name: company.companyName,
@@ -257,13 +343,27 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
 
   if (tenant.email) {
     try {
-      const subject = `Your rent receipt${period ? ` for ${period}` : ''}`;
-      const body = `Hi ${tenant.first_name}, your payment of ${money(p.amount)}${period ? ` for ${period}` : ''} has been received. You can download your receipt in your tenant portal under Payments.`;
+      const emailData: ReceiptEmailData = {
+        companyName: company.companyName,
+        contact: [
+          company.address,
+          [company.city, company.state, company.zipCode].filter(Boolean).join(', '),
+          [company.phone, company.email].filter(Boolean).join(' · '),
+        ].filter(Boolean).join(' · '),
+        receiptNumber: rNumber,
+        firstName: tenant.first_name,
+        tenantName,
+        location,
+        period,
+        amount: money(p.amount),
+        method: prettyMethod(p.payment_method),
+        datePaid,
+      };
       await sendEmail(env, {
         to: tenant.email,
-        subject,
-        text: body,
-        html: `<p>${body}</p>`,
+        subject: `Your rent receipt${period ? ` for ${period}` : ''} — ${company.companyName}`,
+        html: receiptEmailHtml(emailData),
+        text: receiptEmailText(emailData),
       });
     } catch {
       // Best-effort: the receipt is already filed regardless of email.

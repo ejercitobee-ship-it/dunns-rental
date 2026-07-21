@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
-import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
+import { formatCurrency, getMonthName } from '../../lib/utils';
 import { settleMonth, rentMonthsToShow } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
 
@@ -85,19 +85,17 @@ export function TenantPayments() {
     };
   }, []);
 
-  // One row PER PAYMENT (each with its own receipt), matching the admin tenant
-  // profile, plus a row for any outstanding balance so the tenant still sees
-  // what they owe. Months come from rentMonthsToShow (owed months through now,
-  // plus any month paid ahead), newest first.
+  // One row per month the lease owed rent (from its start through now, plus any
+  // month paid ahead), newest first — the clean monthly settlement view. Each
+  // month carries a receipt entry PER payment, so a month paid in parts still
+  // exposes every receipt (not just the first).
+  interface ReceiptEntry { key: string; paymentId?: string; amount: number; docId?: string }
   interface Row {
-    key: string;
-    label: string;
-    amount: number;
-    method: string;
-    date?: string;
-    status: 'paid' | 'partial' | 'unpaid';
-    receiptDocId?: string;
-    generatePaymentId?: string;
+    month: number;
+    year: number;
+    settlement: ReturnType<typeof settleMonth>;
+    methods: string[];
+    receipts: ReceiptEntry[];
   }
   const rows = useMemo<Row[]>(() => {
     if (!lease) return [];
@@ -105,35 +103,23 @@ export function TenantPayments() {
     const now = new Date();
     const months = rentMonthsToShow(fullLease, payments, now.getFullYear(), now.getMonth() + 1);
 
-    const out: Row[] = [];
-    for (const { month, year } of months.reverse()) {
-      const label = `${getMonthName(month)} ${year}`;
+    return months.reverse().map(({ month, year }) => {
       const monthPayments = rawPayments
         .filter(p => p.status === 'paid' && p.month === month && p.year === year)
         .sort((a, b) => (a.paidDate || '').localeCompare(b.paidDate || ''));
-
-      for (const p of monthPayments) {
-        const receiptDocId = (p.id && receiptOverrides[p.id]) || p.receiptDocumentId;
-        out.push({
-          key: `${year}-${month}-${p.id ?? out.length}`,
-          label,
+      return {
+        month,
+        year,
+        settlement: settleMonth(fullLease, payments, month, year),
+        methods: Array.from(new Set(monthPayments.map(p => p.paymentMethod).filter(Boolean) as string[])),
+        receipts: monthPayments.map((p, i) => ({
+          key: `${p.id ?? i}`,
+          paymentId: p.id,
           amount: p.amount,
-          method: p.paymentMethod ? prettyMethod(p.paymentMethod) : '',
-          date: p.paidDate,
-          status: 'paid',
-          receiptDocId,
-          generatePaymentId: !receiptDocId && p.id ? p.id : undefined,
-        });
-      }
-
-      // Whatever is still owed for the month (the full amount if unpaid, the
-      // remainder if only partly paid), so nothing outstanding is hidden.
-      const balance = settleMonth(fullLease, payments, month, year).balance;
-      if (balance > 0) {
-        out.push({ key: `${year}-${month}-due`, label, amount: balance, method: '', status: 'unpaid' });
-      }
-    }
-    return out;
+          docId: (p.id && receiptOverrides[p.id]) || p.receiptDocumentId,
+        })),
+      };
+    });
   }, [lease, payments, rawPayments, receiptOverrides]);
 
   const handleGenerateReceipt = async (paymentId: string) => {
@@ -187,52 +173,69 @@ export function TenantPayments() {
                 <thead>
                   <tr className="border-b border-line bg-canvas">
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Month</th>
-                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Amount</th>
-                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
-                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Date</th>
+                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Due</th>
+                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Paid</th>
+                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Balance</th>
                     <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
+                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
                     <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => {
-                    const status = statusConfig[row.status];
+                    const status = statusConfig[row.settlement.status];
                     const StatusIcon = status.icon;
+                    const multiple = row.receipts.length > 1;
                     return (
-                      <tr key={row.key} className="border-b border-line last:border-0">
-                        <td className="py-3 px-5 text-sm text-ink">{row.label}</td>
-                        <td className={`py-3 px-5 text-right tnum text-sm ${row.status === 'unpaid' ? 'font-semibold text-danger' : 'text-ink'}`}>
-                          {formatCurrency(row.amount)}
+                      <tr key={`${row.year}-${row.month}`} className="border-b border-line last:border-0">
+                        <td className="py-3 px-5 text-sm text-ink">{getMonthName(row.month)} {row.year}</td>
+                        <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(row.settlement.due)}</td>
+                        <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(row.settlement.paid)}</td>
+                        <td className={`py-3 px-5 text-right font-semibold tnum ${row.settlement.balance > 0 ? 'text-danger' : 'text-ink'}`}>
+                          {formatCurrency(row.settlement.balance)}
                         </td>
-                        <td className="py-3 px-5 text-sm text-muted">{row.method || '—'}</td>
-                        <td className="py-3 px-5 text-sm text-muted">{row.date ? formatDate(row.date) : '—'}</td>
                         <td className="py-3 px-5 text-center">
                           <Badge variant={status.variant} className="flex items-center gap-1 w-fit mx-auto">
                             <StatusIcon className="h-3 w-3" />
                             {status.label}
                           </Badge>
                         </td>
+                        <td className="py-3 px-5 text-sm text-muted">
+                          {row.methods.map(prettyMethod).join(', ') || '—'}
+                        </td>
                         <td className="py-3 px-5 text-sm">
-                          {row.receiptDocId ? (
-                            <a
-                              href={`/api/portal/documents/${row.receiptDocId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium text-primary hover:text-primary-hover"
-                            >
-                              Download
-                            </a>
-                          ) : row.generatePaymentId ? (
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateReceipt(row.generatePaymentId!)}
-                              disabled={generating === row.generatePaymentId}
-                              className="font-medium text-muted hover:text-ink disabled:opacity-50"
-                            >
-                              {generating === row.generatePaymentId ? 'Getting...' : 'Get receipt'}
-                            </button>
-                          ) : (
+                          {row.receipts.length === 0 ? (
                             <span className="text-faint">—</span>
+                          ) : (
+                            // One entry per payment, so a split month exposes every receipt.
+                            // Label each with its amount only when there's more than one.
+                            <div className="flex flex-col gap-1">
+                              {row.receipts.map((r) => (
+                                r.docId ? (
+                                  <a
+                                    key={r.key}
+                                    href={`/api/portal/documents/${r.docId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium text-primary hover:text-primary-hover whitespace-nowrap"
+                                  >
+                                    {multiple ? `Download (${formatCurrency(r.amount)})` : 'Download'}
+                                  </a>
+                                ) : r.paymentId ? (
+                                  <button
+                                    key={r.key}
+                                    type="button"
+                                    onClick={() => handleGenerateReceipt(r.paymentId!)}
+                                    disabled={generating === r.paymentId}
+                                    className="text-left font-medium text-muted hover:text-ink disabled:opacity-50 whitespace-nowrap"
+                                  >
+                                    {generating === r.paymentId
+                                      ? 'Getting...'
+                                      : multiple ? `Get receipt (${formatCurrency(r.amount)})` : 'Get receipt'}
+                                  </button>
+                                ) : null
+                              ))}
+                            </div>
                           )}
                         </td>
                       </tr>
