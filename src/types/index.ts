@@ -215,9 +215,14 @@ export interface Handyman {
   name: string;
   phone?: string;
   email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   trades: string[];
   isActive: boolean;
   hasLogin: boolean;
+  photoUrl?: string | null;
 }
 
 export interface DashboardStats {

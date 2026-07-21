@@ -213,10 +213,17 @@ export function serializeHandyman(r: Row) {
     name: r.name,
     phone: r.phone ?? undefined,
     email: r.email ?? undefined,
+    address: r.address ?? undefined,
+    city: r.city ?? undefined,
+    state: r.state ?? undefined,
+    zipCode: r.zip_code ?? undefined,
     trades: parseJsonArray<string>(r.trades),
     isActive: !!r.is_active,
     // Whether this handyman already has a portal login (Invite vs Resend).
     hasLogin: !!r.user_id,
+    // Present only when the query joins user.image (the handyman "me" endpoint
+    // and the admin roster do; the plain roster serialize leaves it null).
+    photoUrl: r.image ? `/api/photo/${r.image}` : null,
   };
 }
 

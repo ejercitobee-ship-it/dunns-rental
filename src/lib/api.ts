@@ -543,6 +543,12 @@ export const portalApi = {
     availability: { date: string; start: string; end: string }[];
   }): Promise<MaintenanceRequest> =>
     apiRequest('/portal/maintenance', { method: 'POST', body: JSON.stringify(data) }),
+  // A handyman's own profile, and updating their own contact details.
+  handymanMe: (): Promise<Handyman> => apiRequest('/portal/handyman/me'),
+  updateHandymanMe: (data: {
+    name: string; phone?: string; address?: string; city?: string; state?: string; zipCode?: string;
+  }): Promise<Handyman> =>
+    apiRequest('/portal/handyman/me', { method: 'PUT', body: JSON.stringify(data) }),
   // A handyman's own jobs and the open jobs matching their trades.
   handymanJobs: (): Promise<HandymanJobsResponse> => apiRequest('/portal/handyman/jobs'),
   claimJob: (id: string): Promise<PortalMaintenanceRequest> =>
