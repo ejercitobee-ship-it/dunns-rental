@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface AvatarProps {
   photoUrl?: string | null;
@@ -14,18 +14,16 @@ export function Avatar({
   className = 'w-10 h-10',
   initialsClassName = 'text-xs',
 }: AvatarProps) {
-  const [failed, setFailed] = useState(false);
+  // Track which URL failed to load rather than a boolean reset by an effect, so
+  // a new photoUrl is tried again automatically (no setState in an effect).
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    setFailed(false);
-  }, [photoUrl]);
-
-  if (photoUrl && !failed) {
+  if (photoUrl && failedUrl !== photoUrl) {
     return (
       <img
         src={photoUrl}
         alt=""
-        onError={() => setFailed(true)}
+        onError={() => setFailedUrl(photoUrl)}
         className={`${className} rounded-full object-cover bg-primary-soft`}
       />
     );

@@ -59,6 +59,10 @@ export function Reports() {
     // it: a lease starting next month is never counted as outstanding today.
     const outstanding = rentRoll.reduce((s, r) => s + (r.settlement?.balance || 0), 0);
     return { scheduled, collected, outstanding };
+    // Depends on rentRoll, a manual memo that intentionally excludes unstable
+    // context helpers; the compiler cannot preserve it without an upstream
+    // refactor of those helpers.
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
   }, [leases, rentPayments, rentRoll, currentMonth, currentYear]);
 
   // Outstanding balances: every active lease whose current month settled as

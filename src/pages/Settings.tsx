@@ -144,6 +144,9 @@ export function Settings() {
 
     if (result === 'connected') {
       showToast('Connected to Google Drive.', 'success');
+      // A one-time reaction to the OAuth redirect param on mount, not a render
+      // loop; the rule is conservative here.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDriveConnected(true);
     } else if (result === 'cancelled') {
       showToast('Google Drive connection was cancelled.', 'info');

@@ -127,6 +127,8 @@ export function TenantDetail() {
   useEffect(() => {
     if (!id || !canManagePortal) return;
     let cancelled = false;
+    // Flip to loading before this fetch; the async result clears it in finally.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRealtorsLoading(true);
     // The realtor-role users come from /api/realtors (gated on tenants_edit),
     // not the full users list, so the picker is populated for any staff member

@@ -407,6 +407,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// The hook is co-located with its provider on purpose; splitting it out only to
+// satisfy a dev-only fast-refresh rule would churn every import site.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useApp() {
   const context = useContext(AppContext);
   if (!context) {
