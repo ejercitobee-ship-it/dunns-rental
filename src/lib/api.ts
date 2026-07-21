@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman } from '../types';
 
 const API_BASE = '/api';
 
@@ -556,4 +556,32 @@ export const maintenanceApi = {
     apiRequest(`/maintenance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/maintenance/${id}`, { method: 'DELETE' }),
+};
+
+// Handymen roster API (admin side).
+export interface HandymanInput {
+  name: string;
+  phone?: string;
+  email?: string;
+  trades: string[];
+  isActive?: boolean;
+}
+
+/** The result of adding or inviting a handyman: the row plus whether mail went out. */
+export interface HandymanInviteResult {
+  handyman?: Handyman;
+  emailSent: boolean;
+  inviteUrl?: string;
+}
+
+export const handymenApi = {
+  getAll: (): Promise<Handyman[]> => apiRequest('/handymen'),
+  create: (data: HandymanInput): Promise<HandymanInviteResult> =>
+    apiRequest('/handymen', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: HandymanInput): Promise<Handyman> =>
+    apiRequest(`/handymen/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deactivate: (id: string) =>
+    apiRequest(`/handymen/${id}`, { method: 'DELETE' }),
+  invite: (id: string): Promise<HandymanInviteResult> =>
+    apiRequest(`/handymen/${id}/invite`, { method: 'POST' }),
 };

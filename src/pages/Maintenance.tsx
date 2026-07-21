@@ -10,6 +10,7 @@ import { useToast } from '../context/ToastContext';
 import { MAINTENANCE_TRADES } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
 import { STATUS_BADGE, STATUS_LABEL } from '../lib/maintenance';
+import { HandymenManager } from '../components/HandymenManager';
 
 const CATEGORIES = [...MAINTENANCE_TRADES];
 
@@ -281,6 +282,9 @@ export function Maintenance() {
           )}
         </CardContent>
       </Card>
+
+      {/* Handyman roster */}
+      <HandymenManager />
 
       {/* Add / Edit Modal */}
       <Modal
