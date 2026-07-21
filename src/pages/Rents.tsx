@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatMonthYear, todayLocalDate } from '../lib/utils';
+import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
 import { rentSheetApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -767,6 +767,14 @@ export function Rents() {
                         {group.monthRows.map(mr => {
                           const s = settlementStatusConfig[mr.settlement.status];
                           const SIcon = s.icon;
+                          // The most recent date rent was received for this month, so the
+                          // owner sees WHEN each month's payment was tracked.
+                          const receivedOn = rentPayments
+                            .filter(pm => pm.leaseId === mr.lease.id && pm.month === mr.month && pm.year === mr.year && pm.status === 'paid')
+                            .map(pm => pm.paidDate || pm.receivedDate || '')
+                            .filter(Boolean)
+                            .sort()
+                            .at(-1);
                           return (
                             <div
                               key={`${mr.month}`}
@@ -777,6 +785,7 @@ export function Rents() {
                               </span>
                               <span className="text-sm text-muted tnum flex-1 truncate">
                                 {formatCurrency(mr.settlement.due)} due · {formatCurrency(mr.settlement.paid)} paid
+                                {receivedOn ? ` · received ${formatDate(receivedOn)}` : ''}
                               </span>
                               {mr.settlement.balance > 0 && (
                                 <span className="hidden sm:inline text-sm font-semibold text-danger tnum">
