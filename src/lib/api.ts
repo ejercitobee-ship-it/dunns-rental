@@ -471,6 +471,23 @@ export interface AvailableUnit {
   zipCode?: string;
 }
 
+/** A maintenance request as a portal user sees it: the base request plus the
+ * few contact fields the endpoint attaches (handyman for tenants; tenant and
+ * location for handymen). */
+export interface PortalMaintenanceRequest extends MaintenanceRequest {
+  handymanName?: string;
+  handymanPhone?: string;
+  tenantName?: string;
+  tenantPhone?: string;
+  locationLabel?: string;
+}
+
+/** A handyman's portal view: open jobs matching their trades, plus their own. */
+export interface HandymanJobsResponse {
+  available: PortalMaintenanceRequest[];
+  mine: PortalMaintenanceRequest[];
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   // The tenant's linked realtor(s), contact info only, always visible.
@@ -518,6 +535,22 @@ export const portalApi = {
     apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
   // Vacant units the realtor may market, asking rent included on purpose.
   availableUnits: (): Promise<AvailableUnit[]> => apiRequest('/portal/realtor/available-units'),
+  // A tenant's own maintenance requests, with the assigned handyman's name and
+  // phone attached when there is one.
+  maintenance: (): Promise<PortalMaintenanceRequest[]> => apiRequest('/portal/maintenance'),
+  createMaintenance: (data: {
+    title: string; category: string; description?: string;
+    availability: { date: string; start: string; end: string }[];
+  }): Promise<MaintenanceRequest> =>
+    apiRequest('/portal/maintenance', { method: 'POST', body: JSON.stringify(data) }),
+  // A handyman's own jobs and the open jobs matching their trades.
+  handymanJobs: (): Promise<HandymanJobsResponse> => apiRequest('/portal/handyman/jobs'),
+  claimJob: (id: string): Promise<PortalMaintenanceRequest> =>
+    apiRequest(`/portal/handyman/jobs/${id}/claim`, { method: 'POST' }),
+  scheduleJob: (id: string, scheduledFor: string): Promise<PortalMaintenanceRequest> =>
+    apiRequest(`/portal/handyman/jobs/${id}/schedule`, { method: 'POST', body: JSON.stringify({ scheduledFor }) }),
+  jobStatus: (id: string, status: 'in_progress' | 'completed'): Promise<PortalMaintenanceRequest> =>
+    apiRequest(`/portal/handyman/jobs/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   household: {
     list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
     add: (data: HouseholdInput): Promise<HouseholdMember> =>
