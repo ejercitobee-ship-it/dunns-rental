@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, todayLocalDate, parseLocalDate } from '../lib/utils';
+import { tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { monthlyRevenue } from '../lib/rent';
@@ -74,6 +75,9 @@ export function Tenants() {
   const isSubmittingRef = useRef(false);
   const [tenancyForm, setTenancyForm] = useState(emptyTenancyForm);
   const [personRows, setPersonRows] = useState<PersonRow[]>(() => [createPersonRow()]);
+  // Invite people with an email to the portal as soon as the tenancy is created,
+  // so it's never a forgotten second step. Only those with an email are invited.
+  const [inviteOnCreate, setInviteOnCreate] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -140,6 +144,7 @@ export function Tenants() {
   const resetTenancyModal = () => {
     setTenancyForm(emptyTenancyForm);
     setPersonRows([createPersonRow()]);
+    setInviteOnCreate(true);
   };
 
   const closeTenancyModal = () => {
@@ -222,7 +227,23 @@ export function Tenants() {
         pauses: [],
       });
 
-      showToast('Tenancy added.', 'success');
+      // Best-effort portal invites right after the tenancy exists, so onboarding
+      // is one step. Only people with an email are invited; a failed invite
+      // never fails the tenancy (it can be re-sent from the profile).
+      let invited = 0;
+      if (inviteOnCreate) {
+        for (const row of nextRows) {
+          if (!row.tenantId || !row.email.trim()) continue;
+          try { await tenantsApi.invite(row.tenantId); invited += 1; } catch { /* re-send from profile */ }
+        }
+      }
+
+      showToast(
+        invited > 0
+          ? `Tenancy added. Portal invite sent to ${invited} ${invited === 1 ? 'tenant' : 'tenants'}.`
+          : 'Tenancy added.',
+        'success'
+      );
       closeTenancyModal();
     } catch (err) {
       showToast((err as Error).message, 'error');
@@ -649,6 +670,19 @@ export function Tenants() {
               </div>
             ))}
           </div>
+
+          <label className="flex items-start gap-2.5 rounded-lg border border-line p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={inviteOnCreate}
+              onChange={(e) => setInviteOnCreate(e.target.checked)}
+            />
+            <span className="text-sm text-ink">
+              Invite to the tenant portal now
+              <span className="block text-xs text-muted">Emails a set-password link to anyone above with an email address.</span>
+            </span>
+          </label>
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={closeTenancyModal} disabled={isSubmitting}>
