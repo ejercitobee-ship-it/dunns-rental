@@ -58,6 +58,10 @@ export function Users() {
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
 
+  // The Users page manages internal staff only. Portal roles (tenant, realtor,
+  // handyman) are created in their own places, so they are never offered here.
+  const assignableRoles = roles.filter(r => userCategory(r.id) === 'internal');
+
   const inTab = users.filter(u => userCategory(u.roleId) === tab);
   const filteredUsers = inTab.filter(user => {
     const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
@@ -70,10 +74,11 @@ export function Users() {
     );
   });
 
-  const counts = {
+  const counts: Record<UserCategory, number> = {
     internal: users.filter(u => userCategory(u.roleId) === 'internal').length,
     realtor: users.filter(u => userCategory(u.roleId) === 'realtor').length,
     tenant: users.filter(u => userCategory(u.roleId) === 'tenant').length,
+    handyman: users.filter(u => userCategory(u.roleId) === 'handyman').length,
   };
   const TABS: { key: UserCategory; label: string }[] = [
     { key: 'internal', label: 'Internal' },
@@ -87,7 +92,7 @@ export function Users() {
       lastName: '',
       email: '',
       phone: '',
-      roleId: roles[0]?.id || '',
+      roleId: assignableRoles[0]?.id || '',
       department: '',
       isActive: true,
     });
@@ -545,7 +550,7 @@ export function Users() {
             <label className="block text-sm font-medium mb-1">Role *</label>
             <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
-              {roles.map(role => (
+              {assignableRoles.map(role => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
             </select>
@@ -607,7 +612,7 @@ export function Users() {
             <label className="block text-sm font-medium mb-1">Role *</label>
             <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
-              {roles.map(role => (
+              {assignableRoles.map(role => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
             </select>

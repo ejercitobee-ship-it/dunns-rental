@@ -50,6 +50,9 @@ function generateTempPassword(): string {
 }
 
 const ASSIGNABLE_ROLES = new Set(['super_admin', 'admin', 'manager', 'accountant', 'viewer']);
+// Portal roles never belong to an internal team member; they are created through
+// their own flows and would strand a login with no matching portal record here.
+const PORTAL_ROLES = new Set(['tenant', 'realtor', 'handyman']);
 
 // GET /api/admin/users - list team members.
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -98,6 +101,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!firstName || !lastName || !email || !roleId) {
       return jsonError('Missing required fields', 400);
+    }
+    // Portal roles are created in their own areas (tenants on the Tenants page,
+    // handymen on the Maintenance page), never as internal team members here.
+    if (PORTAL_ROLES.has(roleId)) {
+      return jsonError('That role is managed elsewhere, not on the Users page', 400);
     }
     if (!ASSIGNABLE_ROLES.has(roleId)) {
       // Allow custom roles that exist in the roles table.

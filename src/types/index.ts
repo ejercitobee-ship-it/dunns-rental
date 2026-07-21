@@ -239,7 +239,7 @@ export type ViewType = 'dashboard' | 'properties' | 'tenants' | 'rents' | 'expen
 export const PORTAL_ROLES = ['tenant', 'realtor', 'handyman'] as const;
 
 export function isPortalRole(roleId?: string): boolean {
-  return roleId === 'tenant' || roleId === 'realtor';
+  return !!roleId && (PORTAL_ROLES as readonly string[]).includes(roleId);
 }
 
 export interface PortalPayment {
