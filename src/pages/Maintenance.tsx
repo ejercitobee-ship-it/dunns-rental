@@ -7,29 +7,17 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { MAINTENANCE_TRADES } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
+import { STATUS_BADGE, STATUS_LABEL } from '../lib/maintenance';
 
-const CATEGORIES = ['plumbing', 'electrical', 'hvac', 'appliance', 'structural', 'general', 'other'];
+const CATEGORIES = [...MAINTENANCE_TRADES];
 
 const priorityBadge: Record<MaintenancePriority, 'secondary' | 'warning' | 'destructive'> = {
   low: 'secondary',
   medium: 'secondary',
   high: 'warning',
   urgent: 'destructive',
-};
-
-const statusBadge: Record<MaintenanceStatus, 'warning' | 'default' | 'success' | 'secondary'> = {
-  open: 'warning',
-  in_progress: 'default',
-  resolved: 'success',
-  cancelled: 'secondary',
-};
-
-const statusLabel: Record<MaintenanceStatus, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  resolved: 'Resolved',
-  cancelled: 'Cancelled',
 };
 
 const emptyForm = {
@@ -40,7 +28,7 @@ const emptyForm = {
   tenantId: '',
   category: 'general',
   priority: 'medium' as MaintenancePriority,
-  status: 'open' as MaintenanceStatus,
+  status: 'submitted' as MaintenanceStatus,
   cost: 0,
   vendor: '',
   reportedDate: todayLocalDate(),
@@ -60,10 +48,10 @@ export function Maintenance() {
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber;
 
   const stats = useMemo(() => {
-    const open = maintenance.filter(m => m.status === 'open').length;
+    const open = maintenance.filter(m => m.status === 'submitted').length;
     const inProgress = maintenance.filter(m => m.status === 'in_progress').length;
-    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'resolved' && m.status !== 'cancelled').length;
-    const spend = maintenance.filter(m => m.status === 'resolved').reduce((s, m) => s + (m.cost || 0), 0);
+    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'cancelled').length;
+    const spend = maintenance.filter(m => m.status === 'paid').reduce((s, m) => s + (m.cost || 0), 0);
     return { open, inProgress, urgent, spend };
   }, [maintenance]);
 
@@ -135,7 +123,7 @@ export function Maintenance() {
   const quickStatus = async (m: MaintenanceRequest, status: MaintenanceStatus) => {
     try {
       await updateMaintenance({ ...m, status });
-      showToast(`Marked ${statusLabel[status].toLowerCase()}`, 'success');
+      showToast(`Marked ${STATUS_LABEL[status].toLowerCase()}`, 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not update', 'error');
     }
@@ -152,10 +140,10 @@ export function Maintenance() {
   };
 
   const statCards = [
-    { label: 'Open', value: stats.open, icon: <Clock /> },
-    { label: 'In Progress', value: stats.inProgress, icon: <Wrench /> },
+    { label: 'New', value: stats.open, icon: <Clock /> },
+    { label: 'In progress', value: stats.inProgress, icon: <Wrench /> },
     { label: 'Urgent', value: stats.urgent, icon: <AlertTriangle /> },
-    { label: 'Resolved Spend', value: formatCurrency(stats.spend), icon: <CheckCircle2 /> },
+    { label: 'Paid spend', value: formatCurrency(stats.spend), icon: <CheckCircle2 /> },
   ];
 
   return (
@@ -204,9 +192,12 @@ export function Maintenance() {
           onChange={e => setStatusFilter(e.target.value as MaintenanceStatus | 'all')}
         >
           <option value="all">All Statuses</option>
-          <option value="open">Open</option>
-          <option value="in_progress">In Progress</option>
-          <option value="resolved">Resolved</option>
+          <option value="submitted">Submitted</option>
+          <option value="assigned">Assigned</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="in_progress">In progress</option>
+          <option value="completed">Completed</option>
+          <option value="paid">Paid</option>
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
@@ -242,7 +233,7 @@ export function Maintenance() {
                       <Badge variant={priorityBadge[m.priority]} className="capitalize">{m.priority}</Badge>
                     </td>
                     <td className="py-3 px-4">
-                      <Badge variant={statusBadge[m.status]}>{statusLabel[m.status]}</Badge>
+                      <Badge variant={STATUS_BADGE[m.status]}>{STATUS_LABEL[m.status]}</Badge>
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-ink tnum">
                       {m.cost ? formatCurrency(m.cost) : '—'}
@@ -252,12 +243,12 @@ export function Maintenance() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-1">
-                        {m.status !== 'resolved' && m.status !== 'cancelled' && (
+                        {m.status !== 'paid' && m.status !== 'cancelled' && (
                           <button
-                            onClick={() => quickStatus(m, m.status === 'open' ? 'in_progress' : 'resolved')}
+                            onClick={() => quickStatus(m, m.status === 'in_progress' ? 'completed' : 'in_progress')}
                             className="text-xs font-medium text-primary hover:text-primary-hover px-2 py-1 rounded-md hover:bg-primary-soft transition-colors"
                           >
-                            {m.status === 'open' ? 'Start' : 'Resolve'}
+                            {m.status === 'in_progress' ? 'Complete' : 'Start'}
                           </button>
                         )}
                         <button
