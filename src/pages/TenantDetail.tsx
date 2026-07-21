@@ -305,9 +305,9 @@ export function TenantDetail() {
       // unverified sending domain, say). Say which happened so Belle knows
       // whether she still needs to pass the link below on by hand.
       if (result.emailSent) {
-        showToast('Invite email sent', 'success');
+        showToast(result.resent ? 'A fresh set-password link was sent.' : 'Invite email sent.', 'success');
       } else {
-        showToast('Account created, but the email could not be sent. Copy the link below and send it to the tenant.', 'info');
+        showToast('Link ready, but the email could not be sent. Copy the link below and send it to the tenant.', 'info');
       }
     } catch (err) {
       showToast((err as Error).message || 'Could not send the invite', 'error');
@@ -786,8 +786,13 @@ export function TenantDetail() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={inviting || invited} onClick={handleInvite}>
-                  {invited ? 'Invited' : inviting ? 'Sending...' : 'Invite to Portal'}
+                {/* A tenant who already has a login (or was just invited) can be
+                    RE-sent a fresh set-password link — vital when the first one
+                    expired. Otherwise it's a first invite. */}
+                <Button variant="outline" size="sm" disabled={inviting} onClick={handleInvite}>
+                  {inviting
+                    ? 'Sending...'
+                    : (tenant?.hasLogin || invited) ? 'Resend invite' : 'Invite to Portal'}
                 </Button>
                 <Button variant="outline" size="sm" disabled={resettingPw} onClick={handleResetPassword}>
                   {resettingPw ? 'Resetting...' : 'Reset Password'}

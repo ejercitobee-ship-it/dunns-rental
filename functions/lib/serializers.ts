@@ -51,6 +51,8 @@ export function serializeTenant(r: Row) {
         }
       : undefined,
     photoUrl: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : null,
+    // Whether this tenant already has a portal login (drives Invite vs Resend).
+    hasLogin: !!r.user_id,
   };
 }
 

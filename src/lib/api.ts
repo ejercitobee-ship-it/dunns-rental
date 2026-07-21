@@ -181,6 +181,8 @@ export interface TenantRealtorLink {
 export interface InviteResult {
   emailSent: boolean;
   inviteUrl?: string;
+  // True when this re-sent a fresh link to an existing login (vs a first invite).
+  resent?: boolean;
 }
 
 // Tenants API
