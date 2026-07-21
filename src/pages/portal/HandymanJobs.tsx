@@ -142,6 +142,7 @@ export function HandymanJobs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'available' | 'in_progress' | 'completed'>('available');
 
   const load = () => {
     portalApi
@@ -169,6 +170,19 @@ export function HandymanJobs() {
   if (loading) return <p className="text-sm text-muted">Loading your jobs.</p>;
   if (error) return <Card><CardContent className="py-8 text-center text-sm text-danger">{error}</CardContent></Card>;
 
+  // Their own jobs split into work they are still on versus work they finished.
+  const inProgress = data.mine.filter(
+    (j) => j.status === 'assigned' || j.status === 'scheduled' || j.status === 'in_progress'
+  );
+  const completed = data.mine.filter((j) => j.status === 'completed' || j.status === 'paid');
+
+  const TABS = [
+    { key: 'available' as const, label: 'Available', jobs: data.available, mine: false, empty: 'No open jobs in your trades right now. Check back soon.' },
+    { key: 'in_progress' as const, label: 'In progress', jobs: inProgress, mine: true, empty: 'No jobs in progress. Claim one from Available to get started.' },
+    { key: 'completed' as const, label: 'Completed', jobs: completed, mine: true, empty: 'No completed jobs yet.' },
+  ];
+  const active = TABS.find((t) => t.key === tab) ?? TABS[0];
+
   return (
     <div className="space-y-8">
       <div>
@@ -179,56 +193,49 @@ export function HandymanJobs() {
 
       <HandymanProfileCard />
 
-      <section>
-        <h2 className="font-medium text-ink mb-3">My jobs</h2>
-        {data.mine.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-sm text-muted">You have no active jobs right now.</CardContent></Card>
-        ) : (
-          <div className="space-y-3">
-            {data.mine.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                mine
-                busy={busyId === job.id}
-                onClaim={() => {}}
-                onSchedule={(when) => run(job.id, portalApi.scheduleJob(job.id, when), 'Time confirmed, the tenant was notified')}
-                onStart={() => run(job.id, portalApi.jobStatus(job.id, 'in_progress'), 'Marked in progress')}
-                onComplete={() => run(job.id, portalApi.jobStatus(job.id, 'completed'), 'Marked complete')}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Tabs: the open pool, the work they are on, and what they have finished. */}
+      <div className="flex gap-1 border-b border-line">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+              tab === t.key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            {t.label}
+            <span className="ml-1.5 text-xs text-faint tnum">{t.jobs.length}</span>
+          </button>
+        ))}
+      </div>
 
-      <section>
-        <h2 className="font-medium text-ink mb-3">Available jobs</h2>
-        {data.available.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <div className="w-11 h-11 rounded-full bg-primary-soft flex items-center justify-center mx-auto mb-3">
-                <Wrench className="h-5 w-5 text-primary" />
-              </div>
-              <p className="text-sm text-muted">No open jobs in your trades right now. Check back soon.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {data.available.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                mine={false}
-                busy={busyId === job.id}
-                onClaim={() => run(job.id, portalApi.claimJob(job.id), 'Job claimed. It is now in My jobs.')}
-                onSchedule={() => {}}
-                onStart={() => {}}
-                onComplete={() => {}}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {active.jobs.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="w-11 h-11 rounded-full bg-primary-soft flex items-center justify-center mx-auto mb-3">
+              <Wrench className="h-5 w-5 text-primary" />
+            </div>
+            <p className="text-sm text-muted">{active.empty}</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {active.jobs.map((job) => (
+            <JobCard
+              key={job.id}
+              job={job}
+              mine={active.mine}
+              busy={busyId === job.id}
+              onClaim={() => run(job.id, portalApi.claimJob(job.id), 'Job claimed. It is now in In progress.')}
+              onSchedule={(when) => run(job.id, portalApi.scheduleJob(job.id, when), 'Time confirmed, the tenant was notified')}
+              onStart={() => run(job.id, portalApi.jobStatus(job.id, 'in_progress'), 'Marked in progress')}
+              onComplete={() => run(job.id, portalApi.jobStatus(job.id, 'completed'), 'Marked complete')}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
