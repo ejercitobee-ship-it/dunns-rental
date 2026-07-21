@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate, yearOf, monthOf } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, yearOf, monthOf } from '../lib/utils';
+import { rentIncomeForMonths } from '../lib/rent';
 import { useApp } from '../context/AppContext';
 import type { ExpenseCategory } from '../types';
 import {
@@ -59,7 +60,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, addExpense, addIncome } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, addExpense, addIncome } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
   const [propertyFilter, setPropertyFilter] = useState('all');
@@ -70,9 +71,18 @@ export function Expenses() {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
+  // Rent collected (paid rent_payments) is real income, the same figure the
+  // Dashboard and Reports use. Before, Finances summed ONLY the manual `incomes`
+  // table, so rent never showed here and the totals disagreed with the Dashboard.
+  const rentCollected = useMemo(
+    () => rentPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.amount || 0), 0),
+    [rentPayments]
+  );
+
   const stats = useMemo(() => {
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
+    const otherIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
+    const totalIncome = rentCollected + otherIncome;
     const netIncome = totalIncome - totalExpenses;
 
     const monthlyExpenses = expenses
@@ -80,7 +90,7 @@ export function Expenses() {
       .reduce((sum, e) => sum + e.amount, 0);
 
     return { totalExpenses, totalIncome, netIncome, monthlyExpenses };
-  }, [expenses, incomes, currentMonth, currentYear]);
+  }, [expenses, incomes, rentCollected, currentMonth, currentYear]);
 
   const expenseByCategory = useMemo(() => {
     const categories: Record<string, number> = {};
@@ -101,9 +111,11 @@ export function Expenses() {
       const monthExpenses = expenses
         .filter(e => isInMonth(e.date, month, currentYear))
         .reduce((sum, e) => sum + e.amount, 0);
-      const monthIncome = incomes
-        .filter(i => isInMonth(i.date, month, currentYear))
-        .reduce((sum, i) => sum + i.amount, 0);
+      const monthIncome =
+        rentIncomeForMonths(rentPayments, [month], currentYear) +
+        incomes
+          .filter(i => isInMonth(i.date, month, currentYear))
+          .reduce((sum, i) => sum + i.amount, 0);
 
       return {
         name: new Date(currentYear, month - 1).toLocaleDateString('en-US', { month: 'short' }),
@@ -111,7 +123,7 @@ export function Expenses() {
         income: monthIncome,
       };
     });
-  }, [expenses, incomes, currentYear]);
+  }, [expenses, incomes, rentPayments, currentYear]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(expense => {
@@ -132,24 +144,59 @@ export function Expenses() {
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [expenses, properties, units, searchTerm, categoryFilter, propertyFilter]);
 
+  // The income list = rent collected (from paid rent_payments, read-only) PLUS
+  // the manually-entered `incomes`, so the list matches the totals above and the
+  // Dashboard. Rent rows come from the payment's lease for their property/unit.
+  interface IncomeRow {
+    id: string;
+    date: string;
+    propertyId?: string;
+    unitId?: string;
+    source: string;
+    description: string;
+    amount: number;
+  }
+  const incomeRows = useMemo<IncomeRow[]>(() => {
+    const manual: IncomeRow[] = incomes.map(i => ({
+      id: i.id, date: i.date, propertyId: i.propertyId, unitId: i.unitId,
+      source: i.source, description: i.description, amount: i.amount,
+    }));
+    const rent: IncomeRow[] = rentPayments
+      .filter(p => p.status === 'paid')
+      .map(p => {
+        const lease = leases.find(l => l.id === p.leaseId);
+        return {
+          id: `rent-${p.id}`,
+          date: p.paidDate || p.receivedDate || `${p.year}-${String(p.month).padStart(2, '0')}-01`,
+          propertyId: lease?.propertyId,
+          unitId: lease?.unitId,
+          source: 'rent',
+          description: `Rent — ${formatMonthYear(p.month, p.year)}`,
+          amount: p.amount,
+        };
+      });
+    return [...manual, ...rent];
+  }, [incomes, rentPayments, leases]);
+
   const filteredIncome = useMemo(() => {
-    return incomes.filter(income => {
+    return incomeRows.filter(income => {
       const property = properties.find(p => p.id === income.propertyId);
       const unit = income.unitId ? units.find(u => u.id === income.unitId) : null;
-      
-      const matchesSearch = 
+
+      const matchesSearch =
         !searchTerm ||
         income.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        income.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
         property?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         unit?.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesProperty = propertyFilter === 'all' || income.propertyId === propertyFilter;
-      
+
       return matchesSearch && matchesProperty;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [incomes, properties, units, searchTerm, propertyFilter]);
+  }, [incomeRows, properties, units, searchTerm, propertyFilter]);
 
-  const getProperty = (propertyId: string) => properties.find(p => p.id === propertyId);
+  const getProperty = (propertyId?: string) => propertyId ? properties.find(p => p.id === propertyId) : undefined;
   const getUnit = (unitId?: string) => unitId ? units.find(u => u.id === unitId) : null;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
