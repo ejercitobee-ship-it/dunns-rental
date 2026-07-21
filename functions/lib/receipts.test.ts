@@ -32,3 +32,28 @@ describe('buildReceiptPdf', () => {
     expect(String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3])).toBe('%PDF');
   });
 });
+
+describe('receipt email', () => {
+  const data = {
+    companyName: 'MH Dunn Property', contact: '5116 North Kolmar · Chicago, IL 60630 · info@mhdunnproperty.net',
+    receiptNumber: 'R-202607-ABC123', firstName: 'Pat', tenantName: 'Pat Payer',
+    location: 'Oakwood · Unit 4B', period: 'July 2026', amount: '$1,650.00',
+    method: 'Zelle', datePaid: 'July 1, 2026',
+  };
+
+  it('renders a branded HTML email carrying the key details', async () => {
+    const { receiptEmailHtml } = await import('./receipts');
+    const html = receiptEmailHtml(data);
+    for (const s of ['MH Dunn Property', 'Rent receipt', 'R-202607-ABC123', '$1,650.00', 'Oakwood · Unit 4B', 'July 2026', 'PAID', 'Payments']) {
+      expect(html).toContain(s);
+    }
+  });
+
+  it('renders a plain-text fallback with the same details', async () => {
+    const { receiptEmailText } = await import('./receipts');
+    const text = receiptEmailText(data);
+    expect(text).toContain('MH Dunn Property');
+    expect(text).toContain('$1,650.00 (PAID)');
+    expect(text).toContain('Rent period: July 2026');
+  });
+});
