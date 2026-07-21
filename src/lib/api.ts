@@ -482,6 +482,9 @@ export const portalApi = {
   // its document id so the page can link straight to the download.
   generateReceipt: (paymentId: string): Promise<{ receiptDocumentId: string }> =>
     apiRequest(`/portal/payments/${paymentId}/receipt`, { method: 'POST' }),
+  // A tenant adds their emergency contact (only allowed when none is on file).
+  setEmergencyContact: (data: { name: string; phone: string; relationship: string }): Promise<{ name: string; phone: string; relationship: string }> =>
+    apiRequest('/portal/emergency-contact', { method: 'POST', body: JSON.stringify(data) }),
   documents: (tenantId?: string): Promise<AppDocument[]> =>
     apiRequest(`/portal/documents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
   // Multipart, like documentsApi.upload: no Content-Type header, so the
