@@ -207,6 +207,7 @@ export interface MaintenanceRequest {
   availability?: AvailabilityWindow[];
   paidAt?: string;
   createdBy?: 'tenant' | 'admin';
+  photoUrl?: string | null;
 }
 
 export interface Handyman {

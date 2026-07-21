@@ -13,10 +13,12 @@ const KEY_ACCESS = 'google_access_token';
 const KEY_ACCESS_EXPIRES = 'google_access_expires_at';
 const KEY_ROOT_FOLDER = 'google_root_folder_id';
 const KEY_PHOTO_FOLDER = 'google_photo_folder_id';
+const KEY_MAINTENANCE_FOLDER = 'google_maintenance_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
 const PHOTO_FOLDER_NAME = 'Profile Photos';
+const MAINTENANCE_FOLDER_NAME = 'Maintenance Photos';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -345,6 +347,30 @@ export async function deleteDriveFile(env: Env, fileId: string): Promise<void> {
 export async function saveProfilePhoto(env: Env, file: File, oldDriveId?: string): Promise<string> {
   const folderId = await ensurePhotoFolder(env);
   const name = `photo-${crypto.randomUUID()}`;
+  const uploaded = await uploadToDrive(env, folderId, name, file.type || 'image/jpeg', file);
+  if (oldDriveId) {
+    try { await deleteDriveFile(env, oldDriveId); } catch { /* old file already gone is fine */ }
+  }
+  return uploaded.id;
+}
+
+/** The one folder that holds every maintenance-request photo. */
+async function ensureMaintenanceFolder(env: Env): Promise<string> {
+  const existing = await getSetting(env, KEY_MAINTENANCE_FOLDER);
+  if (existing) {
+    const status = await folderStatus(env, existing);
+    if (status !== 'gone') return existing;
+  }
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, MAINTENANCE_FOLDER_NAME, root)) ?? (await createFolder(env, MAINTENANCE_FOLDER_NAME, root));
+  await putSetting(env, KEY_MAINTENANCE_FOLDER, id);
+  return id;
+}
+
+/** Store a maintenance photo in the Maintenance Photos folder; replace any old one. */
+export async function saveMaintenancePhoto(env: Env, file: File, oldDriveId?: string): Promise<string> {
+  const folderId = await ensureMaintenanceFolder(env);
+  const name = `maintenance-${crypto.randomUUID()}`;
   const uploaded = await uploadToDrive(env, folderId, name, file.type || 'image/jpeg', file);
   if (oldDriveId) {
     try { await deleteDriveFile(env, oldDriveId); } catch { /* old file already gone is fine */ }

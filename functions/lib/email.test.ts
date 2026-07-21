@@ -17,7 +17,7 @@ describe('portalInviteEmail', () => {
   it('uses resend wording when re-sending a link', () => {
     const first = portalInviteEmail(url, 'Pat', {});
     const again = portalInviteEmail(url, 'Pat', { resend: true });
-    expect(first.html).toContain('set up your online tenant portal');
+    expect(first.html).toContain('set up your online portal');
     expect(again.html).toContain('fresh link');
     expect(again.subject.toLowerCase()).toContain('set your password');
   });

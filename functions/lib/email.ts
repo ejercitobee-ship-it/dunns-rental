@@ -100,8 +100,8 @@ export function portalInviteEmail(
   const contact = opts?.contact || '';
   const greeting = name ? `Hi ${name},` : 'Hi,';
   const intro = opts?.resend
-    ? `Here is a fresh link to set your password for your ${companyName} tenant portal.`
-    : `${companyName} has set up your online tenant portal. You can view your lease, your rent history and receipts, and keep your own details up to date.`;
+    ? `Here is a fresh link to set your password for your ${companyName} portal.`
+    : `${companyName} has set up your online portal. Sign in to see your information and keep your own details up to date.`;
 
   const text = `${greeting}
 
@@ -122,7 +122,7 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
         ${contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${contact}</div>` : ''}
       </td></tr>
       <tr><td style="padding:26px 32px 6px;">
-        <div style="font-size:17px;font-weight:bold;color:#1c1a17;">${opts?.resend ? 'Set your password' : 'Your tenant portal is ready'}</div>
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;">${opts?.resend ? 'Set your password' : `Your ${companyName} portal is ready`}</div>
         <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:14px 0 6px;">${greeting}</p>
         <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 20px;">${intro}</p>
         <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#24503f;border-radius:8px;">
@@ -138,7 +138,7 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
 </div>`.trim();
 
   return {
-    subject: opts?.resend ? `Set your password — ${companyName}` : `Your ${companyName} tenant portal`,
+    subject: opts?.resend ? `Set your password — ${companyName}` : `Your ${companyName} portal`,
     text,
     html,
   };
