@@ -42,4 +42,4 @@ plumbing, electrical, hvac, appliance, carpentry, general, other (align to exist
 - Slice 3: complete (commit cc2ec87) — tenant request submission + notifications + portal tab/route.
 - Slice 4: complete (commit d95a7dd) — handyman portal (jobs/claim/schedule/status) + full HandymanJobs page.
 - Slice 5: complete (commit 127fe71) — admin assign + mark paid + expense row into Finances.
-- Slice 6: in progress — full branch verified green (build/99 tests/lint of changed files clean; the 10 repo lint errors pre-exist on main). BLOCKED on remote D1 migration: wrangler token lost D1 scope (7403). Belle must run `npx wrangler login`, then apply 0015 --remote, then merge+push to deploy.
+- Slice 6: complete — migration 0015 applied to remote D1, merged to main (1e032bd), deployed (bundle index-DsOgc48b). Verified live: site 200, all new API routes 401 (auth-gated, not 500). Also cleared the 10 pre-existing repo lint errors (commit fc57c05).
