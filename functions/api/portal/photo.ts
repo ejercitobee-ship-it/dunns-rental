@@ -13,7 +13,8 @@ async function currentPhoto(env: Env, auth: { id: string; role: string }) {
     const row = await env.DB.prepare('SELECT photo_drive_id FROM tenants WHERE id = ?').bind(tid).first<{ photo_drive_id: string | null }>();
     return { table: 'tenants' as const, recordId: tid, column: 'photo_drive_id', old: row?.photo_drive_id ?? null };
   }
-  if (auth.role === 'realtor') {
+  // Realtors and handymen both keep their photo on their user row.
+  if (auth.role === 'realtor' || auth.role === 'handyman') {
     const row = await env.DB.prepare('SELECT image FROM user WHERE id = ?').bind(auth.id).first<{ image: string | null }>();
     return { table: 'user' as const, recordId: auth.id, column: 'image', old: row?.image ?? null };
   }
@@ -27,7 +28,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const target = await currentPhoto(env, auth);
-    if (!target) return jsonError('Only a tenant or realtor can set a photo here', 403);
+    if (!target) return jsonError('You cannot set a photo here', 403);
 
     const form = await request.formData();
     const file = form.get('photo') as unknown as File | null;
@@ -50,7 +51,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   try {
     const target = await currentPhoto(env, auth);
-    if (!target) return jsonError('Only a tenant or realtor can remove a photo here', 403);
+    if (!target) return jsonError('You cannot remove a photo here', 403);
     if (target.old) await removeProfilePhoto(env, target.old);
     await env.DB.prepare(`UPDATE ${target.table} SET ${target.column} = NULL WHERE id = ?`).bind(target.recordId).run();
     return jsonOk({ success: true });

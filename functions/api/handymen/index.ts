@@ -19,7 +19,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const { results } = await env.DB.prepare(
-      'SELECT * FROM handymen ORDER BY is_active DESC, name'
+      `SELECT h.*, u.image AS image
+         FROM handymen h
+         LEFT JOIN user u ON u.id = h.user_id
+        ORDER BY h.is_active DESC, h.name`
     ).all();
     return jsonOk({ success: true, data: (results || []).map(serializeHandyman) });
   } catch {

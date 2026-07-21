@@ -7,6 +7,7 @@ import { portalApi, type PortalMaintenanceRequest, type HandymanJobsResponse } f
 import { useToast } from '../../context/ToastContext';
 import { STATUS_BADGE, STATUS_LABEL, tradeLabel } from '../../lib/maintenance';
 import { formatDate } from '../../lib/utils';
+import { HandymanProfileCard } from '../../components/HandymanProfileCard';
 
 function formatSchedule(s?: string): string {
   if (!s) return '';
@@ -175,6 +176,8 @@ export function HandymanJobs() {
         <h1 className="font-display text-2xl text-ink mt-1">Jobs</h1>
         <p className="text-sm text-muted mt-1">Claim available jobs in your trades, confirm a time, and update progress.</p>
       </div>
+
+      <HandymanProfileCard />
 
       <section>
         <h2 className="font-medium text-ink mb-3">My jobs</h2>
