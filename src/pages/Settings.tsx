@@ -59,6 +59,7 @@ export function Settings() {
     gracePeriod: 3,
     defaultLeaseTerm: 12,
     securityDepositMultiplier: 2,
+    paymentInstructions: '',
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -569,6 +570,20 @@ export function Settings() {
                 value={rentSettings.securityDepositMultiplier}
                 onChange={(e) => setRentSettings({...rentSettings, securityDepositMultiplier: parseInt(e.target.value)})}
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Payment instructions (shown to tenants)</label>
+              <textarea
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Pay your rent by Zelle to 7739917112."
+                value={rentSettings.paymentInstructions}
+                onChange={(e) => setRentSettings({ ...rentSettings, paymentInstructions: e.target.value })}
+              />
+              <p className="text-xs text-muted">
+                Shown on the tenant portal under "How to pay." Each tenant also sees their own memo (street, unit, month, and name) automatically.
+              </p>
             </div>
 
             <Button onClick={handleSave} className="mt-4" disabled={isSaving}>

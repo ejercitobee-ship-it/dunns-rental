@@ -1,7 +1,24 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib/session';
 import { tenantIdForUser, leasePauses } from '../../lib/portal';
+import { getSetting } from '../../lib/google';
 import { serializePortalTenant, serializePortalLease, serializeUnit, serializeProperty } from '../../lib/serializers';
+
+const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to 7739917112.';
+
+/** The owner's payment instructions from Settings (rent), for the portal "How to pay". */
+async function paymentInstructions(env: Env): Promise<string> {
+  const raw = await getSetting(env, 'rent');
+  if (raw) {
+    try {
+      const r = JSON.parse(raw) as { paymentInstructions?: unknown };
+      if (typeof r.paymentInstructions === 'string' && r.paymentInstructions.trim()) {
+        return r.paymentInstructions;
+      }
+    } catch { /* fall through to default */ }
+  }
+  return DEFAULT_PAYMENT_INSTRUCTIONS;
+}
 
 /** GET /api/portal/me — the caller's own person record, lease, unit, property. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -45,6 +62,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         lease: lease ? serializePortalLease(lease as Record<string, unknown>) : null,
         unit: unit ? serializeUnit(unit as Record<string, unknown>) : null,
         property: property ? serializeProperty(property as Record<string, unknown>) : null,
+        paymentInstructions: await paymentInstructions(env),
       },
     });
   } catch {
