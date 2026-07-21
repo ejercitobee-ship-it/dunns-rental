@@ -203,6 +203,7 @@ export function serializeMaintenance(r: Row) {
     availability: parseJsonArray<AvailabilityWindow>(r.availability),
     paidAt: r.paid_at ?? undefined,
     createdBy: r.created_by ?? undefined,
+    photoUrl: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : null,
   };
 }
 

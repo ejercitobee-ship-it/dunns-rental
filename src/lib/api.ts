@@ -543,6 +543,10 @@ export const portalApi = {
     availability: { date: string; start: string; end: string }[];
   }): Promise<MaintenanceRequest> =>
     apiRequest('/portal/maintenance', { method: 'POST', body: JSON.stringify(data) }),
+  // Attach (or replace) a photo on one of the tenant's own requests. Multipart,
+  // like the other photo uploads: postPhoto sets the boundary itself.
+  uploadMaintenancePhoto: (id: string, file: Blob): Promise<{ photoUrl: string }> =>
+    postPhoto(`/portal/maintenance/${id}/photo`, file),
   // A handyman's own profile, and updating their own contact details.
   handymanMe: (): Promise<Handyman> => apiRequest('/portal/handyman/me'),
   updateHandymanMe: (data: {

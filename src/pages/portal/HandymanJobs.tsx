@@ -59,6 +59,12 @@ function JobCard({
 
         {job.description && <p className="text-sm text-muted mt-2">{job.description}</p>}
 
+        {job.photoUrl && (
+          <a href={job.photoUrl} target="_blank" rel="noreferrer" className="inline-block mt-2">
+            <img src={job.photoUrl} alt="Reported issue" className="w-24 h-24 rounded-lg object-cover border border-line" />
+          </a>
+        )}
+
         <div className="mt-3 space-y-1.5 text-sm">
           {job.locationLabel && (
             <p className="text-ink inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-faint" />{job.locationLabel}</p>

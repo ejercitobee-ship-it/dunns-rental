@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { MAINTENANCE_TRADES } from '../../types';
 import { STATUS_BADGE, STATUS_LABEL, tradeLabel } from '../../lib/maintenance';
 import { formatDate } from '../../lib/utils';
+import { resizeImage } from '../../lib/image';
 
 const inputClass =
   'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25';
@@ -44,6 +45,7 @@ export function TenantMaintenance() {
   const [category, setCategory] = useState('general');
   const [description, setDescription] = useState('');
   const [windows, setWindows] = useState<Window[]>([]);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   const load = () => {
     portalApi
@@ -63,6 +65,7 @@ export function TenantMaintenance() {
     setCategory('general');
     setDescription('');
     setWindows([]);
+    setPhotoFile(null);
   };
 
   const openForm = () => {
@@ -86,7 +89,17 @@ export function TenantMaintenance() {
         description: description.trim() || undefined,
         availability: windows.filter((w) => w.date),
       })
-      .then(() => {
+      .then(async (created) => {
+        // The request exists now; the photo is a best-effort extra so a Drive
+        // hiccup never loses the request.
+        if (photoFile) {
+          try {
+            const blob = await resizeImage(photoFile, 1280);
+            await portalApi.uploadMaintenancePhoto(created.id, blob);
+          } catch (err) {
+            showToast((err as Error).message || 'Request sent, but the photo could not attach.', 'info');
+          }
+        }
         showToast('Request sent. We will be in touch to schedule.', 'success');
         setOpen(false);
         resetForm();
@@ -142,6 +155,11 @@ export function TenantMaintenance() {
                     </p>
                     {r.description && <p className="text-sm text-muted mt-2">{r.description}</p>}
                   </div>
+                  {r.photoUrl && (
+                    <a href={r.photoUrl} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                      <img src={r.photoUrl} alt="Reported issue" className="w-16 h-16 rounded-lg object-cover border border-line" />
+                    </a>
+                  )}
                 </div>
 
                 {(r.scheduledFor || r.handymanName) && (
@@ -204,6 +222,16 @@ export function TenantMaintenance() {
               placeholder="Anything that helps us come prepared."
               className={inputClass}
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Photo (optional)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-muted file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-line file:bg-surface file:text-ink file:text-sm file:font-medium hover:file:bg-black/[0.02]"
+            />
+            <p className="text-xs text-muted mt-1">A picture of the problem helps us come prepared.</p>
           </div>
           <div>
             <div className="flex items-center justify-between mb-1.5">

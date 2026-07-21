@@ -279,8 +279,17 @@ export function Maintenance() {
                 {filtered.map(m => (
                   <tr key={m.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
                     <td className="py-3 px-4">
-                      <p className="font-medium text-ink">{m.title}</p>
-                      {m.category && <p className="text-xs text-muted capitalize">{m.category}</p>}
+                      <div className="flex items-center gap-3">
+                        {m.photoUrl && (
+                          <a href={m.photoUrl} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                            <img src={m.photoUrl} alt="" className="w-10 h-10 rounded object-cover border border-line" />
+                          </a>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium text-ink">{m.title}</p>
+                          {m.category && <p className="text-xs text-muted capitalize">{m.category}</p>}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-sm text-muted">
                       {propertyName(m.propertyId)}
