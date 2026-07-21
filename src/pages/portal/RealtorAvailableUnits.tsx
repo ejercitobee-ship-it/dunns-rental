@@ -27,7 +27,14 @@ export function RealtorAvailableUnits() {
   useEffect(() => {
     let cancelled = false;
     portalApi.availableUnits()
-      .then((u) => { if (!cancelled) setUnits(u); })
+      .then((u) => {
+        if (cancelled) return;
+        setUnits(u);
+        // Open by default when everything is at one address (still collapsible);
+        // multiple addresses start collapsed until opened.
+        const addresses = [...new Set(u.map(addressOf))];
+        if (u.length > 0 && addresses.length === 1) setExpanded(new Set(addresses));
+      })
       .catch(() => { if (!cancelled) setUnits([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -54,8 +61,9 @@ export function RealtorAvailableUnits() {
       else next.add(address);
       return next;
     });
-  // A single address opens by default; with several, each is collapsed until opened.
-  const isOpen = (address: string) => groups.length === 1 || expanded.has(address);
+  // Purely driven by the expanded set, so every header toggles reliably (a
+  // single address is pre-opened above but can still be collapsed).
+  const isOpen = (address: string) => expanded.has(address);
 
   if (loading) return <p className="text-sm text-muted">Loading available units.</p>;
 
