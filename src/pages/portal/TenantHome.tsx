@@ -188,6 +188,11 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(tenant.photoUrl ?? null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The tenant can ADD an emergency contact if they have none yet; once saved
+  // it overlays the (read-only) value from the server.
+  const [emergencyOverride, setEmergencyOverride] = useState<Tenant['emergencyContact'] | null>(null);
+  const [ecForm, setEcForm] = useState({ name: '', phone: '', relationship: '' });
+  const [ecBusy, setEcBusy] = useState(false);
 
   const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -220,7 +225,25 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
     }
   };
 
-  const emergency = tenant.emergencyContact;
+  const handleAddEmergency = async () => {
+    if (ecBusy || !ecForm.name.trim()) return;
+    setEcBusy(true);
+    try {
+      const saved = await portalApi.setEmergencyContact({
+        name: ecForm.name.trim(),
+        phone: ecForm.phone.trim(),
+        relationship: ecForm.relationship.trim(),
+      });
+      setEmergencyOverride(saved);
+      showToast('Emergency contact added.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not save your emergency contact.', 'error');
+    } finally {
+      setEcBusy(false);
+    }
+  };
+
+  const emergency = emergencyOverride ?? tenant.emergencyContact;
   const hasEmergency = !!(emergency?.name || emergency?.phone || emergency?.relationship);
 
   return (
@@ -286,11 +309,36 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
               <ProfileField label="Relationship" value={emergency?.relationship} />
             </div>
           ) : (
-            <p className="text-sm text-muted">None on file.</p>
+            <div className="space-y-2.5">
+              <p className="text-sm text-muted">None on file yet — you can add one here.</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <input
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  placeholder="Name"
+                  value={ecForm.name}
+                  onChange={e => setEcForm({ ...ecForm, name: e.target.value })}
+                />
+                <input
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  placeholder="Relationship"
+                  value={ecForm.relationship}
+                  onChange={e => setEcForm({ ...ecForm, relationship: e.target.value })}
+                />
+                <input
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  placeholder="Phone"
+                  value={ecForm.phone}
+                  onChange={e => setEcForm({ ...ecForm, phone: e.target.value })}
+                />
+              </div>
+              <Button size="sm" disabled={!ecForm.name.trim() || ecBusy} onClick={handleAddEmergency}>
+                {ecBusy ? 'Saving...' : 'Add emergency contact'}
+              </Button>
+            </div>
           )}
         </div>
 
-        <p className="text-xs text-muted">To update these details, please contact us.</p>
+        <p className="text-xs text-muted">To change details already on file, please contact us.</p>
       </CardContent>
     </Card>
   );
