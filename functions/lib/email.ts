@@ -55,7 +55,7 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
   const text = [
     greeting,
     '',
-    'We received a request to reset your Dunn\'s Rental password.',
+    'We received a request to reset your MH Dunn Property password.',
     'Open this link to choose a new one:',
     resetUrl,
     '',
@@ -66,7 +66,7 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
   const html = `
   <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
     <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
-      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">Dunn's Rental</div>
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
       <p style="margin:0 0 16px;font-size:15px;">${greeting}</p>
       <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
         We received a request to reset your password. Choose a new one using the button below.
@@ -87,7 +87,7 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
     </div>
   </div>`;
 
-  return { subject: "Reset your Dunn's Rental password", html, text };
+  return { subject: 'Reset your MH Dunn Property password', html, text };
 }
 
 /** Portal invite email, sent when Belle invites a tenant to their own login. */
