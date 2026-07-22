@@ -640,6 +640,25 @@ export interface HandymanInviteResult {
   inviteUrl?: string;
 }
 
+/** One entry in the activity log: who did what, to which record, and when. */
+export interface ActivityEntry {
+  id: string;
+  userId?: string;
+  userName?: string;
+  userRole?: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  method: string;
+  statusCode?: number;
+  createdAt: number;
+}
+
+export const activityApi = {
+  list: (limit = 100, offset = 0): Promise<ActivityEntry[]> =>
+    apiRequest(`/activity?limit=${limit}&offset=${offset}`),
+};
+
 export const handymenApi = {
   getAll: (): Promise<Handyman[]> => apiRequest('/handymen'),
   create: (data: HandymanInput): Promise<HandymanInviteResult> =>
