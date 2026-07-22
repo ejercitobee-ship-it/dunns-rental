@@ -239,6 +239,9 @@ export const realtorsApi = {
   // Staff create a brand new tenant and link it to this realtor in one step.
   addTenant: (realtorUserId: string, data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<Tenant> =>
     apiRequest(`/realtors/${realtorUserId}/tenants`, { method: 'POST', body: JSON.stringify(data) }),
+  // Add a realtor: creates their portal login with the realtor role and invites them.
+  create: (data: { firstName: string; lastName: string; email: string; phone?: string }): Promise<{ userId: string; emailSent: boolean; inviteUrl?: string }> =>
+    apiRequest('/realtors', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Household API (admin side: household members for a given tenant's lease).

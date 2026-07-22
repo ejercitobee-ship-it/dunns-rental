@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Image, ImageOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -8,14 +8,13 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { adminApi, realtorsApi, tenantsApi, photoApi, handymenApi } from '../lib/api';
-import { resizeImage } from '../lib/image';
+import { adminApi, realtorsApi, tenantsApi, handymenApi } from '../lib/api';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 import { HandymenManager } from '../components/HandymenManager';
 
 export function Users() {
-  const { user: currentUser, users, roles, addUser, updateUser, deleteUser, hasPermission } = useAuth();
+  const { user: currentUser, users, roles, addUser, updateUser, deleteUser, hasPermission, refreshTeam } = useAuth();
   const { showToast } = useToast();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,14 +25,6 @@ export function Users() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [tempPasswordInfo, setTempPasswordInfo] = useState<{ name: string; password: string } | null>(null);
   const [addTenantTarget, setAddTenantTarget] = useState<User | null>(null);
-
-  // Realtor row photo controls: local overrides keyed by user id, since the
-  // photo lives on the user row itself (photoApi.uploadUser/removeUser) and
-  // the context list won't refresh until the next fetch.
-  const [photoOverrides, setPhotoOverrides] = useState<Record<string, string | null>>({});
-  const [photoTargetUserId, setPhotoTargetUserId] = useState<string | null>(null);
-  const [photoBusyUserId, setPhotoBusyUserId] = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [userForm, setUserForm] = useState({
     firstName: '',
@@ -58,10 +49,36 @@ export function Users() {
   const [addTenantBusy, setAddTenantBusy] = useState(false);
   // Handyman roster count for the Vendors tab (kept fresh by the manager below).
   const [handymanCount, setHandymanCount] = useState(0);
+  const [isAddRealtorOpen, setAddRealtorOpen] = useState(false);
+  const [realtorForm, setRealtorForm] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+  const [realtorSaving, setRealtorSaving] = useState(false);
 
   useEffect(() => {
     handymenApi.getAll().then(h => setHandymanCount(h.length)).catch(() => {});
   }, []);
+
+  const handleAddRealtor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!realtorForm.firstName.trim() || !realtorForm.email.trim() || realtorSaving) return;
+    setRealtorSaving(true);
+    realtorsApi
+      .create({
+        firstName: realtorForm.firstName.trim(),
+        lastName: realtorForm.lastName.trim(),
+        email: realtorForm.email.trim(),
+        phone: realtorForm.phone.trim() || undefined,
+      })
+      .then((res) => {
+        if (res.emailSent) showToast('Realtor added, invite emailed', 'success');
+        else if (res.inviteUrl) showToast('Realtor added. Mail is off, share the invite link from their row.', 'info');
+        else showToast('Realtor added', 'success');
+        setAddRealtorOpen(false);
+        setRealtorForm({ firstName: '', lastName: '', email: '', phone: '' });
+        refreshTeam();
+      })
+      .catch((err) => showToast((err as Error).message || 'Could not add realtor', 'error'))
+      .finally(() => setRealtorSaving(false));
+  };
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
 
@@ -215,47 +232,6 @@ export function Users() {
     }
   };
 
-  const openPhotoPicker = (user: User) => {
-    setPhotoTargetUserId(user.id);
-    photoInputRef.current?.click();
-  };
-
-  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const userId = photoTargetUserId;
-    if (!file || !userId || photoBusyUserId) {
-      if (photoInputRef.current) photoInputRef.current.value = '';
-      return;
-    }
-    setPhotoBusyUserId(userId);
-    try {
-      const blob = await resizeImage(file);
-      const { photoUrl } = await photoApi.uploadUser(userId, blob);
-      setPhotoOverrides(prev => ({ ...prev, [userId]: `${photoUrl}?t=${Date.now()}` }));
-      showToast('Photo updated.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not update the photo.', 'error');
-    } finally {
-      setPhotoBusyUserId(null);
-      setPhotoTargetUserId(null);
-      if (photoInputRef.current) photoInputRef.current.value = '';
-    }
-  };
-
-  const handlePhotoRemove = async (user: User) => {
-    if (photoBusyUserId) return;
-    setPhotoBusyUserId(user.id);
-    try {
-      await photoApi.removeUser(user.id);
-      setPhotoOverrides(prev => ({ ...prev, [user.id]: null }));
-      showToast('Photo removed.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not remove the photo.', 'error');
-    } finally {
-      setPhotoBusyUserId(null);
-    }
-  };
-
   const getRoleBadgeColor = (roleId: string) => {
     switch (roleId) {
       case 'super_admin':
@@ -362,7 +338,9 @@ export function Users() {
         <p className="text-muted text-sm mb-3">Your business partners. Realtors are added by linking them from a tenant's page; handymen are managed below.</p>
       )}
 
-      {/* Users Table */}
+      {/* Internal and Tenant tabs use the members table. The Vendors tab uses
+          matching cards (realtors + handymen) rendered below instead. */}
+      {tab !== 'realtor' && (
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -379,7 +357,7 @@ export function Users() {
               </thead>
               <tbody>
                 {filteredUsers.map(user => {
-                  const rowPhotoUrl = photoOverrides[user.id] !== undefined ? photoOverrides[user.id] : user.photoUrl;
+                  const rowPhotoUrl = user.photoUrl;
                   return (
                   <tr key={user.id} className="border-b last:border-0 hover:bg-black/[0.03]">
                     <td className="py-4 px-4">
@@ -440,37 +418,6 @@ export function Users() {
                     
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {tab === 'realtor' && hasPermission('tenants_create') && (
-                          <button
-                            onClick={() => openAddTenant(user)}
-                            title="Add tenant"
-                            className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
-                          >
-                            <UserPlus className="h-4 w-4 text-muted" />
-                          </button>
-                        )}
-                        {tab === 'realtor' && hasPermission('users_edit') && (
-                          <>
-                            <button
-                              onClick={() => openPhotoPicker(user)}
-                              disabled={photoBusyUserId === user.id}
-                              title={rowPhotoUrl ? 'Change photo' : 'Add photo'}
-                              className="p-2 hover:bg-primary-soft rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              <Image className="h-4 w-4 text-muted" />
-                            </button>
-                            {rowPhotoUrl && (
-                              <button
-                                onClick={() => handlePhotoRemove(user)}
-                                disabled={photoBusyUserId === user.id}
-                                title="Remove photo"
-                                className="p-2 hover:bg-danger-soft rounded-lg transition-colors disabled:opacity-50"
-                              >
-                                <ImageOff className="h-4 w-4 text-muted" />
-                              </button>
-                            )}
-                          </>
-                        )}
                         {canManageUsers && (
                           <>
                             <button
@@ -520,22 +467,96 @@ export function Users() {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {/* Handymen (maintenance vendors) live on the Vendors tab, managed here
-          rather than on the Maintenance page. */}
+      {/* Vendors tab: realtors and handymen as matching cards. */}
       {tab === 'realtor' && (
-        <div className="mt-6">
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4 text-faint" />
+                  <h2 className="font-medium text-ink">Realtors</h2>
+                  <span className="text-xs text-muted">partners who place tenants</span>
+                </div>
+                {hasPermission('tenants_edit') && (
+                  <Button variant="secondary" onClick={() => setAddRealtorOpen(true)}>
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Add realtor
+                  </Button>
+                )}
+              </div>
+
+              {filteredUsers.length === 0 ? (
+                <p className="text-sm text-muted py-4">No realtors yet. Add one so they can place tenants and see their portal.</p>
+              ) : (
+                <div className="divide-y divide-line">
+                  {filteredUsers.map(user => {
+                    const rowPhotoUrl = user.photoUrl;
+                    return (
+                      <div key={user.id} className="py-3 flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex items-start gap-3">
+                          <Avatar
+                            photoUrl={rowPhotoUrl}
+                            initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`}
+                            className="w-9 h-9 flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-medium ${user.isActive ? 'text-ink' : 'text-faint line-through'}`}>
+                                {user.firstName} {user.lastName}
+                              </span>
+                              {!user.isActive && <Badge variant="secondary">Inactive</Badge>}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-muted flex-wrap">
+                              {user.phone && (
+                                <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{user.phone}</span>
+                              )}
+                              <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{user.email}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {hasPermission('tenants_create') && (
+                            <button onClick={() => openAddTenant(user)} title="Add tenant" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
+                              <UserPlus className="h-4 w-4 text-muted" />
+                            </button>
+                          )}
+                          {canManageUsers && (
+                            <>
+                              <button onClick={() => handleEditUser(user)} title="Edit" className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors">
+                                <Edit2 className="h-4 w-4 text-muted" />
+                              </button>
+                              <button onClick={() => handleResetPassword(user)} title="Resend invite / reset password" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
+                                <KeyRound className="h-4 w-4 text-muted" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleStatus(user)}
+                                title={user.isActive ? 'Deactivate' : 'Reactivate'}
+                                className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors"
+                              >
+                                {user.isActive ? <UserX className="h-4 w-4 text-muted" /> : <UserCheck className="h-4 w-4 text-muted" />}
+                              </button>
+                              {hasPermission('users_delete') && currentUser?.id !== user.id && (
+                                <button onClick={() => setUserToDelete(user)} title="Remove" className="p-2 hover:bg-danger-soft rounded-lg transition-colors">
+                                  <Trash2 className="h-4 w-4 text-danger" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <HandymenManager onCountChange={setHandymanCount} />
         </div>
       )}
-
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handlePhotoPick}
-      />
 
       {/* Add User Modal */}
       <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add Team Member">
@@ -670,6 +691,58 @@ export function Users() {
         confirmText="Delete"
         variant="danger"
       />
+
+      {/* Add Realtor Modal */}
+      <Modal isOpen={isAddRealtorOpen} onClose={() => setAddRealtorOpen(false)} title="Add realtor">
+        <form onSubmit={handleAddRealtor} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">First name *</label>
+              <input
+                type="text"
+                required
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={realtorForm.firstName}
+                onChange={(e) => setRealtorForm({ ...realtorForm, firstName: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Last name</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={realtorForm.lastName}
+                onChange={(e) => setRealtorForm({ ...realtorForm, lastName: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Email *</label>
+            <input
+              type="email"
+              required
+              placeholder="For their portal login and invite"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={realtorForm.email}
+              onChange={(e) => setRealtorForm({ ...realtorForm, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Phone</label>
+            <input
+              type="tel"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={realtorForm.phone}
+              onChange={(e) => setRealtorForm({ ...realtorForm, phone: e.target.value })}
+            />
+          </div>
+          <p className="text-xs text-muted">An invite to set their password will be emailed when you save.</p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={() => setAddRealtorOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={realtorSaving}>{realtorSaving ? 'Saving.' : 'Add realtor'}</Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Tenant (on behalf of a realtor) Modal */}
       <Modal
