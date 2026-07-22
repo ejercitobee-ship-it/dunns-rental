@@ -242,6 +242,9 @@ export const realtorsApi = {
   // Add a realtor: creates their portal login with the realtor role and invites them.
   create: (data: { firstName: string; lastName: string; email: string; phone?: string }): Promise<{ userId: string; emailSent: boolean; inviteUrl?: string }> =>
     apiRequest('/realtors', { method: 'POST', body: JSON.stringify(data) }),
+  // Resend the set-password invite to an existing realtor.
+  resendInvite: (userId: string): Promise<{ emailSent: boolean; inviteUrl?: string }> =>
+    apiRequest(`/realtors/${userId}/invite`, { method: 'POST' }),
 };
 
 // Household API (admin side: household members for a given tenant's lease).
@@ -638,7 +641,9 @@ export const handymenApi = {
     apiRequest('/handymen', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: HandymanInput): Promise<Handyman> =>
     apiRequest(`/handymen/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deactivate: (id: string) =>
+  // Hard delete: removes the roster row and their login. Deactivate (a pause)
+  // goes through update({ isActive: false }) instead.
+  remove: (id: string) =>
     apiRequest(`/handymen/${id}`, { method: 'DELETE' }),
   invite: (id: string): Promise<HandymanInviteResult> =>
     apiRequest(`/handymen/${id}/invite`, { method: 'POST' }),

@@ -80,6 +80,17 @@ export function Users() {
       .finally(() => setRealtorSaving(false));
   };
 
+  const handleResendRealtorInvite = (user: User) => {
+    realtorsApi
+      .resendInvite(user.id)
+      .then((res) => {
+        if (res.emailSent) showToast('Invite resent', 'success');
+        else if (res.inviteUrl) showToast('Mail is off. Invite link: ' + res.inviteUrl, 'info');
+        else showToast('Invite sent', 'success');
+      })
+      .catch((err) => showToast((err as Error).message || 'Could not resend invite', 'error'));
+  };
+
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
 
   // The Users page manages internal staff only. Portal roles (tenant, realtor,
@@ -518,6 +529,14 @@ export function Users() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
+                          {hasPermission('tenants_edit') && (
+                            <button
+                              onClick={() => handleResendRealtorInvite(user)}
+                              className="text-xs font-medium text-primary hover:text-primary-hover px-2 py-1 rounded-md hover:bg-primary-soft transition-colors"
+                            >
+                              Resend invite
+                            </button>
+                          )}
                           {hasPermission('tenants_create') && (
                             <button onClick={() => openAddTenant(user)} title="Add tenant" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
                               <UserPlus className="h-4 w-4 text-muted" />
@@ -528,7 +547,7 @@ export function Users() {
                               <button onClick={() => handleEditUser(user)} title="Edit" className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors">
                                 <Edit2 className="h-4 w-4 text-muted" />
                               </button>
-                              <button onClick={() => handleResetPassword(user)} title="Resend invite / reset password" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
+                              <button onClick={() => handleResetPassword(user)} title="Reset password (temporary)" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
                                 <KeyRound className="h-4 w-4 text-muted" />
                               </button>
                               <button

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeHandyman } from '../../lib/serializers';
+import { deleteUserStatements } from '../../lib/users';
 import { MAINTENANCE_TRADES } from '../../lib/maintenance';
 
 function cleanTrades(input: unknown): string[] {
@@ -63,9 +64,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 };
 
 /**
- * DELETE /api/handymen/:id — deactivate the handyman. Kept as a soft delete
- * because assigned and completed jobs reference this row for the handyman's
- * name; hard-deleting would blank out history. Reactivate via PUT isActive.
+ * DELETE /api/handymen/:id — remove the handyman entirely: the roster row and
+ * their portal login. Their jobs keep their history (assigned_handyman_id is set
+ * NULL by the foreign key). To only pause someone, deactivate them (PUT
+ * isActive: false) instead of deleting.
  */
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -74,12 +76,15 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   try {
     const id = params.id as string;
-    const res = await env.DB.prepare(
-      'UPDATE handymen SET is_active = 0, updated_at = unixepoch() WHERE id = ?'
-    )
+    const h = await env.DB.prepare('SELECT id, user_id FROM handymen WHERE id = ?')
       .bind(id)
-      .run();
-    if (!res.meta.changes) return jsonError('Handyman not found', 404);
+      .first<{ id: string; user_id: string | null }>();
+    if (!h) return jsonError('Handyman not found', 404);
+
+    const statements = [env.DB.prepare('DELETE FROM handymen WHERE id = ?').bind(id)];
+    if (h.user_id) statements.push(...deleteUserStatements(env, h.user_id));
+    await env.DB.batch(statements);
+
     return jsonOk({ success: true });
   } catch {
     return serverError();
