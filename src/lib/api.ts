@@ -245,6 +245,9 @@ export const realtorsApi = {
   // Resend the set-password invite to an existing realtor.
   resendInvite: (userId: string): Promise<{ emailSent: boolean; inviteUrl?: string }> =>
     apiRequest(`/realtors/${userId}/invite`, { method: 'POST' }),
+  // Edit a realtor's own details (never changes their role).
+  update: (userId: string, data: { firstName: string; lastName: string; email: string; phone?: string }): Promise<unknown> =>
+    apiRequest(`/realtors/${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // Household API (admin side: household members for a given tenant's lease).

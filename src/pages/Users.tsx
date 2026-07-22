@@ -50,6 +50,7 @@ export function Users() {
   // Handyman roster count for the Vendors tab (kept fresh by the manager below).
   const [handymanCount, setHandymanCount] = useState(0);
   const [isAddRealtorOpen, setAddRealtorOpen] = useState(false);
+  const [editingRealtorId, setEditingRealtorId] = useState<string | null>(null);
   const [realtorForm, setRealtorForm] = useState({ firstName: '', lastName: '', email: '', phone: '' });
   const [realtorSaving, setRealtorSaving] = useState(false);
 
@@ -57,27 +58,57 @@ export function Users() {
     handymenApi.getAll().then(h => setHandymanCount(h.length)).catch(() => {});
   }, []);
 
-  const handleAddRealtor = (e: React.FormEvent) => {
+  const openAddRealtor = () => {
+    setEditingRealtorId(null);
+    setRealtorForm({ firstName: '', lastName: '', email: '', phone: '' });
+    setAddRealtorOpen(true);
+  };
+
+  const openEditRealtor = (user: User) => {
+    setEditingRealtorId(user.id);
+    setRealtorForm({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+    });
+    setAddRealtorOpen(true);
+  };
+
+  const handleSaveRealtor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!realtorForm.firstName.trim() || !realtorForm.email.trim() || realtorSaving) return;
     setRealtorSaving(true);
-    realtorsApi
-      .create({
-        firstName: realtorForm.firstName.trim(),
-        lastName: realtorForm.lastName.trim(),
-        email: realtorForm.email.trim(),
-        phone: realtorForm.phone.trim() || undefined,
-      })
-      .then((res) => {
-        if (res.emailSent) showToast('Realtor added, invite emailed', 'success');
-        else if (res.inviteUrl) showToast('Realtor added. Mail is off, share the invite link from their row.', 'info');
-        else showToast('Realtor added', 'success');
-        setAddRealtorOpen(false);
-        setRealtorForm({ firstName: '', lastName: '', email: '', phone: '' });
-        refreshTeam();
-      })
-      .catch((err) => showToast((err as Error).message || 'Could not add realtor', 'error'))
-      .finally(() => setRealtorSaving(false));
+    const data = {
+      firstName: realtorForm.firstName.trim(),
+      lastName: realtorForm.lastName.trim(),
+      email: realtorForm.email.trim(),
+      phone: realtorForm.phone.trim() || undefined,
+    };
+    const done = () => setRealtorSaving(false);
+    if (editingRealtorId) {
+      realtorsApi
+        .update(editingRealtorId, data)
+        .then(() => {
+          showToast('Realtor updated', 'success');
+          setAddRealtorOpen(false);
+          refreshTeam();
+        })
+        .catch((err) => showToast((err as Error).message || 'Could not update realtor', 'error'))
+        .finally(done);
+    } else {
+      realtorsApi
+        .create(data)
+        .then((res) => {
+          if (res.emailSent) showToast('Realtor added, invite emailed', 'success');
+          else if (res.inviteUrl) showToast('Realtor added. Mail is off, share the invite link from their row.', 'info');
+          else showToast('Realtor added', 'success');
+          setAddRealtorOpen(false);
+          refreshTeam();
+        })
+        .catch((err) => showToast((err as Error).message || 'Could not add realtor', 'error'))
+        .finally(done);
+    }
   };
 
   const handleResendRealtorInvite = (user: User) => {
@@ -492,7 +523,7 @@ export function Users() {
                   <span className="text-xs text-muted">partners who place tenants</span>
                 </div>
                 {hasPermission('tenants_edit') && (
-                  <Button variant="secondary" onClick={() => setAddRealtorOpen(true)}>
+                  <Button variant="secondary" onClick={openAddRealtor}>
                     <Plus className="h-4 w-4 mr-1.5" />
                     Add realtor
                   </Button>
@@ -544,7 +575,7 @@ export function Users() {
                           )}
                           {canManageUsers && (
                             <>
-                              <button onClick={() => handleEditUser(user)} title="Edit" className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors">
+                              <button onClick={() => openEditRealtor(user)} title="Edit" className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors">
                                 <Edit2 className="h-4 w-4 text-muted" />
                               </button>
                               <button onClick={() => handleResetPassword(user)} title="Reset password (temporary)" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
@@ -711,9 +742,9 @@ export function Users() {
         variant="danger"
       />
 
-      {/* Add Realtor Modal */}
-      <Modal isOpen={isAddRealtorOpen} onClose={() => setAddRealtorOpen(false)} title="Add realtor">
-        <form onSubmit={handleAddRealtor} className="space-y-4">
+      {/* Add / Edit Realtor Modal */}
+      <Modal isOpen={isAddRealtorOpen} onClose={() => setAddRealtorOpen(false)} title={editingRealtorId ? 'Edit realtor' : 'Add realtor'}>
+        <form onSubmit={handleSaveRealtor} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">First name *</label>
@@ -755,10 +786,15 @@ export function Users() {
               onChange={(e) => setRealtorForm({ ...realtorForm, phone: e.target.value })}
             />
           </div>
-          <p className="text-xs text-muted">An invite to set their password will be emailed when you save.</p>
+          {!editingRealtorId && (
+            <p className="text-xs text-muted">An invite to set their password will be emailed when you save.</p>
+          )}
+          {editingRealtorId && (
+            <p className="text-xs text-muted">Changing the email also moves their login to the new address.</p>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setAddRealtorOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={realtorSaving}>{realtorSaving ? 'Saving.' : 'Add realtor'}</Button>
+            <Button type="submit" disabled={realtorSaving}>{realtorSaving ? 'Saving.' : editingRealtorId ? 'Save' : 'Add realtor'}</Button>
           </div>
         </form>
       </Modal>
