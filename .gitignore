@@ -28,3 +28,4 @@ dist-ssr
 
 # Local secrets for `wrangler pages dev`. Never commit.
 .dev.vars
+.gstack/
