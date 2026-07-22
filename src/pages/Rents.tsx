@@ -4,7 +4,7 @@ import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
   Search, Download, Upload,
   TrendingUp, TrendingDown, FileText, ChevronRight, ChevronDown,
-  CreditCard, Banknote, Wallet, Smartphone, Receipt,
+  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -13,6 +13,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
 import { rentSheetApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
@@ -105,8 +106,9 @@ function matchSinglePayer(cell: string, occupants: Tenant[]): Tenant | undefined
 export function Rents() {
   const {
     properties, units, leases, rentPayments,
-    getLeaseTenants, addRentPayment,
+    getLeaseTenants, addRentPayment, deleteRentPayment,
   } = useApp();
+  const { isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
@@ -332,6 +334,31 @@ export function Rents() {
     { label: 'Collection Rate', value: `${yearStats.collectionRate.toFixed(1)}%`, icon: <TrendingUp />, valueClass: 'text-ink' },
     { label: 'Overdue', value: yearStats.overdueCount, icon: <XCircle />, valueClass: yearStats.overdueCount > 0 ? 'text-danger' : 'text-ink' },
   ];
+
+  // Super Admin only: undo a mistakenly recorded payment. Removes every payment
+  // logged for this lease-month (and its receipt), so the month goes back to owed.
+  const [deletingRow, setDeletingRow] = useState<string | null>(null);
+  const handleDeleteRent = async (mr: LeaseMonthRow) => {
+    const pmts = rentPayments.filter(
+      pm => pm.leaseId === mr.lease.id && pm.month === mr.month && pm.year === mr.year
+    );
+    if (pmts.length === 0) return;
+    const total = pmts.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const label = `${pmts.length} payment${pmts.length > 1 ? 's' : ''} totaling ${formatCurrency(total)}`;
+    if (!confirm(
+      `Delete the recorded rent for ${formatMonthYear(mr.month, mr.year)}?\n\nThis removes ${label} and any receipt, and the month goes back to owed. This cannot be undone.`
+    )) return;
+    const rowKey = `${mr.lease.id}-${mr.month}-${mr.year}`;
+    setDeletingRow(rowKey);
+    try {
+      for (const p of pmts) await deleteRentPayment(p.id);
+      showToast('Rent payment deleted. The month is back to owed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete the payment', 'error');
+    } finally {
+      setDeletingRow(null);
+    }
+  };
 
   const openRecordModal = (row: LeaseMonthRow) => {
     setRecordRow(row);
@@ -801,6 +828,16 @@ export function Rents() {
                                 <Button size="sm" variant="outline" onClick={() => openRecordModal(mr)} className="flex-shrink-0">
                                   Record
                                 </Button>
+                              )}
+                              {isSuperAdmin() && mr.settlement.paid > 0 && (
+                                <button
+                                  onClick={() => handleDeleteRent(mr)}
+                                  disabled={deletingRow === `${mr.lease.id}-${mr.month}-${mr.year}`}
+                                  title="Delete this recorded rent"
+                                  className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               )}
                             </div>
                           );

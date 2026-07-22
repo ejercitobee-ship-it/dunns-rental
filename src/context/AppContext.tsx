@@ -48,6 +48,7 @@ type Action =
   | { type: 'ADD_INCOME'; payload: Income }
   | { type: 'ADD_RENT_PAYMENT'; payload: RentPayment }
   | { type: 'UPDATE_PAYMENT_STATUS'; payload: RentPayment }
+  | { type: 'DELETE_RENT_PAYMENT'; payload: string }
   | { type: 'ADD_MAINTENANCE'; payload: MaintenanceRequest }
   | { type: 'UPDATE_MAINTENANCE'; payload: MaintenanceRequest }
   | { type: 'DELETE_MAINTENANCE'; payload: string };
@@ -142,6 +143,8 @@ function reducer(state: AppState, action: Action): AppState {
           p.id === action.payload.id ? action.payload : p
         ),
       };
+    case 'DELETE_RENT_PAYMENT':
+      return { ...state, rentPayments: state.rentPayments.filter(p => p.id !== action.payload) };
     case 'ADD_MAINTENANCE':
       return { ...state, maintenance: [action.payload, ...state.maintenance] };
     case 'UPDATE_MAINTENANCE':
@@ -179,6 +182,7 @@ interface AppContextType extends AppState {
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
   addRentPayment: (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
+  deleteRentPayment: (id: string) => Promise<void>;
   addMaintenance: (request: Omit<MaintenanceRequest, 'id'>) => Promise<void>;
   updateMaintenance: (request: MaintenanceRequest) => Promise<void>;
   deleteMaintenance: (id: string) => Promise<void>;
@@ -351,6 +355,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
   };
 
+  const deleteRentPayment = async (id: string) => {
+    await paymentsApi.delete(id);
+    dispatch({ type: 'DELETE_RENT_PAYMENT', payload: id });
+  };
+
   const addMaintenance = async (request: Omit<MaintenanceRequest, 'id'>) => {
     const created = await maintenanceApi.create(request);
     dispatch({ type: 'ADD_MAINTENANCE', payload: created });
@@ -396,6 +405,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addIncome,
         addRentPayment,
         updatePaymentStatus,
+        deleteRentPayment,
         addMaintenance,
         updateMaintenance,
         deleteMaintenance,

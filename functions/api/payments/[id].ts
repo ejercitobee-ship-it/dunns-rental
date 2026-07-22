@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializePayment } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
+import { deleteDriveFile } from '../../lib/google';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -84,7 +85,25 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    await env.DB.prepare('DELETE FROM rent_payments WHERE id = ?').bind(params.id as string).run();
+    const id = params.id as string;
+
+    // If this payment had an auto-generated receipt, clean it up too: remove the
+    // PDF from Drive and the documents row, so a deleted payment leaves no
+    // orphaned receipt behind. Best-effort on the Drive side.
+    const payment = await env.DB.prepare('SELECT receipt_document_id FROM rent_payments WHERE id = ?')
+      .bind(id)
+      .first<{ receipt_document_id: string | null }>();
+    if (payment?.receipt_document_id) {
+      const doc = await env.DB.prepare('SELECT drive_file_id FROM documents WHERE id = ?')
+        .bind(payment.receipt_document_id)
+        .first<{ drive_file_id: string | null }>();
+      if (doc?.drive_file_id) {
+        try { await deleteDriveFile(env, doc.drive_file_id); } catch { /* already gone or Drive down */ }
+      }
+      await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(payment.receipt_document_id).run();
+    }
+
+    await env.DB.prepare('DELETE FROM rent_payments WHERE id = ?').bind(id).run();
     syncRentSheet(context);
     return jsonOk({ success: true });
   } catch {
