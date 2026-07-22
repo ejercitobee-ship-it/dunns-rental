@@ -1,3 +1,47 @@
+// A push arrives as a light "tickle". The worker fetches the queued messages
+// (the session cookie rides along same-origin) and shows each one. If the fetch
+// fails, it still shows a generic notice so the push is never silently dropped.
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    let items = [];
+    try {
+      const res = await fetch('/api/portal/push/pending', { credentials: 'include' });
+      if (res.ok) {
+        const j = await res.json();
+        items = j.data || j || [];
+      }
+    } catch (e) { /* offline or signed out */ }
+    if (!Array.isArray(items) || items.length === 0) {
+      items = [{ title: 'MH Dunn Property', body: 'You have a new update.', url: '/portal' }];
+    }
+    await Promise.all(
+      items.map((n) =>
+        self.registration.showNotification(n.title || 'MH Dunn Property', {
+          body: n.body || '',
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          data: { url: n.url || '/portal' },
+        })
+      )
+    );
+  })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/portal';
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      if ('focus' in client) {
+        try { await client.navigate(url); } catch (e) { /* cross-origin or not allowed */ }
+        return client.focus();
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(url);
+  })());
+});
+
 // MH Dunn Property service worker. Deliberately conservative so a frequently
 // deployed app never serves a stale screen:
 //   - Page loads (navigations): network first, so people always get the current

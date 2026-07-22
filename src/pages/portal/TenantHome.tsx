@@ -9,6 +9,7 @@ import { portalApi, photoApi, type PortalMeResponse, type PortalLease, type Hous
 import { resizeImage } from '../../lib/image';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
+import { NotificationsCard } from '../../components/NotificationsCard';
 import type { Lease, RentPayment, Tenant } from '../../types';
 
 const settlementBadge = {
@@ -142,6 +143,8 @@ export function TenantHome() {
           </div>
         </div>
       )}
+
+      <NotificationsCard />
 
       <ProfileCard tenant={tenant} />
 

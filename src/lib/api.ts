@@ -578,6 +578,12 @@ export const portalApi = {
     apiRequest(`/portal/handyman/jobs/${id}/schedule`, { method: 'POST', body: JSON.stringify({ scheduledFor }) }),
   jobStatus: (id: string, status: 'in_progress' | 'completed'): Promise<PortalMaintenanceRequest> =>
     apiRequest(`/portal/handyman/jobs/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  // Web push: register/unregister this device, and send a test to yourself.
+  pushSubscribe: (sub: { endpoint?: string | null; keys?: { p256dh?: string; auth?: string } }): Promise<{ success: boolean }> =>
+    apiRequest('/portal/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  pushUnsubscribe: (endpoint: string): Promise<{ success: boolean }> =>
+    apiRequest('/portal/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+  pushTest: (): Promise<{ success: boolean }> => apiRequest('/portal/push/test', { method: 'POST' }),
   household: {
     list: (): Promise<HouseholdMember[]> => apiRequest('/portal/household'),
     add: (data: HouseholdInput): Promise<HouseholdMember> =>

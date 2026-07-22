@@ -4,6 +4,7 @@ import { handymanForUser } from '../../../../../lib/portal';
 import { tradeMatches } from '../../../../../lib/maintenance';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
 import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
+import { sendPushToTenant } from '../../../../../lib/push';
 
 /**
  * POST /api/portal/handyman/jobs/:id/claim — the handyman takes an open job.
@@ -61,6 +62,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           ['Handyman', hName?.name || 'Unknown'],
           ['Location', job2.locationLabel || 'Not set'],
         ]),
+        sendPushToTenant(env, row.tenant_id as string | null, {
+          title: 'Your maintenance request is being handled',
+          body: `${job2.title}: ${hName?.name || 'a handyman'} will confirm a time.`,
+          url: '/portal/maintenance',
+        }),
       ]).catch((e) => console.error('claim notify failed', e))
     );
 
