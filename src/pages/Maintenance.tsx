@@ -10,7 +10,6 @@ import { useToast } from '../context/ToastContext';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
 import { STATUS_BADGE, STATUS_LABEL } from '../lib/maintenance';
-import { HandymenManager } from '../components/HandymenManager';
 import { handymenApi, maintenanceApi } from '../lib/api';
 
 /** Which active handymen may take a job in this category (general sees all). */
@@ -376,9 +375,6 @@ export function Maintenance() {
           )}
         </CardContent>
       </Card>
-
-      {/* Handyman roster */}
-      <HandymenManager />
 
       {/* Record payment */}
       <Modal isOpen={!!payTarget} onClose={() => setPayTarget(null)} title="Record payment" size="sm">
