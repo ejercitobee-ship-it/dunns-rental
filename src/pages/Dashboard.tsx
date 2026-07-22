@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf, parseLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../lib/rent';
 import type { DashboardStats, Property, Tenant } from '../types';
 import {
   BarChart,
@@ -238,6 +238,23 @@ export function Dashboard() {
     return rows;
   }, [leases, rentPayments, properties, getLeaseTenants]);
 
+  // Tenancies that owe two or more months of rent, the ones to chase first.
+  const pastDue = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    return activeLeases(leases)
+      .map(lease => ({ lease, ...monthsBehind(lease, rentPayments, month, year) }))
+      .filter(x => x.months >= PAST_DUE_MONTHS)
+      .map(x => ({
+        ...x,
+        property: x.lease.propertyId ? properties.find(p => p.id === x.lease.propertyId) : undefined,
+        unit: x.lease.unitId ? units.find(u => u.id === x.lease.unitId) : undefined,
+        occupants: getLeaseTenants(x.lease.id),
+      }))
+      .sort((a, b) => b.months - a.months || b.balance - a.balance);
+  }, [leases, rentPayments, properties, units, getLeaseTenants]);
+
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
   // never disagree (maintenance is the one status still set by hand).
@@ -291,6 +308,41 @@ export function Dashboard() {
           Updated {formatDate(new Date().toISOString())}
         </div>
       </div>
+
+      {/* Past due: tenancies 2+ months behind on rent */}
+      {pastDue.length > 0 && (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className="h-5 w-5 text-danger flex-shrink-0" />
+            <h2 className="font-semibold text-ink">
+              {pastDue.length} {pastDue.length === 1 ? 'tenancy is' : 'tenancies are'} 2 or more months past due
+            </h2>
+          </div>
+          <div className="divide-y divide-danger/15">
+            {pastDue.map(row => {
+              const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
+              const place = [row.property?.name || row.property?.address, row.unit ? `Unit ${row.unit.unitNumber}` : null].filter(Boolean).join(' · ');
+              const firstTenant = row.occupants[0];
+              return (
+                <button
+                  key={row.lease.id}
+                  onClick={() => firstTenant && navigate(`/tenants/${firstTenant.id}`)}
+                  className="w-full flex items-center justify-between gap-4 py-2.5 text-left hover:opacity-80 transition-opacity"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink truncate">{names}</p>
+                    {place && <p className="text-xs text-muted truncate">{place}</p>}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-semibold text-danger tnum">{formatCurrency(row.balance)}</p>
+                    <p className="text-xs text-muted">{row.months} months behind</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid - All Clickable */}
       <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">

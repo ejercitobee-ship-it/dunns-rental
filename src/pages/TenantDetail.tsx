@@ -19,7 +19,7 @@ import {
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
-import { leasesOwingMonth, settleMonth } from '../lib/rent';
+import { leasesOwingMonth, settleMonth, monthsBehind, PAST_DUE_MONTHS } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
@@ -177,6 +177,13 @@ export function TenantDetail() {
     // owner never billed.
     if (!leasesOwingMonth([lease], month, year).length) return undefined;
     return settleMonth(lease, rentPayments, month, year);
+  }, [lease, rentPayments]);
+
+  const pastDue = useMemo(() => {
+    if (!lease) return null;
+    const now = new Date();
+    const pd = monthsBehind(lease, rentPayments, now.getMonth() + 1, now.getFullYear());
+    return pd.months >= PAST_DUE_MONTHS ? pd : null;
   }, [lease, rentPayments]);
 
   const payments = useMemo(() => {
@@ -449,6 +456,18 @@ export function TenantDetail() {
       <Link to="/tenants" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover">
         <ArrowLeft className="h-4 w-4" /> Back to Tenants
       </Link>
+
+      {pastDue && (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-ink">Past due: {pastDue.months} months behind</p>
+            <p className="text-sm text-muted mt-0.5">
+              This tenancy owes {formatCurrency(pastDue.balance)} across {pastDue.months} unpaid months. Consider following up.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
