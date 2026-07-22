@@ -8,7 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { portalApi, photoApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
-import { settleMonth, leasesOwingMonth } from '../../lib/rent';
+import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import type { Lease, RentPayment, Tenant } from '../../types';
 
 const settlementBadge = {
@@ -86,6 +86,13 @@ export function TenantHome() {
     return settleMonth(lease, payments, month, year);
   }, [me, payments]);
 
+  const pastDue = useMemo(() => {
+    if (!me?.lease) return null;
+    const now = new Date();
+    const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear());
+    return pd.months >= PAST_DUE_MONTHS ? pd : null;
+  }, [me, payments]);
+
   if (loading) {
     return <p className="text-sm text-muted">Loading your account.</p>;
   }
@@ -122,6 +129,18 @@ export function TenantHome() {
           Hello, {tenant.firstName}. Here is where things stand.
         </h1>
       </div>
+
+      {pastDue && (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-ink">Your rent is {pastDue.months} months past due</p>
+            <p className="text-sm text-muted mt-1">
+              You have an outstanding balance of {formatCurrency(pastDue.balance)}. Please bring your account current as soon as you can. See the payment instructions below, and reach out to us with any questions.
+            </p>
+          </div>
+        </div>
+      )}
 
       <ProfileCard tenant={tenant} />
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind } from './rent';
 import type { Lease, RentPayment, MonthSettlement } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -108,6 +108,50 @@ describe('settleMonth', () => {
     const s = settleMonth(lease(), [payment({ amount: 1400 })], 7, 2026);
     expect(s.status).toBe('paid');
     expect(s.balance).toBe(0);
+  });
+});
+
+describe('monthsBehind', () => {
+  // Lease starts Jan 2026, rent 1325. "Now" is May 2026 (months Jan..May owed).
+  const L = lease({ startDate: '2026-01-01', endDate: '2027-01-01', monthlyRent: 1325 });
+
+  it('counts every owed month with an outstanding balance', () => {
+    // Only Jan and Feb paid; Mar, Apr, May unpaid = 3 months behind.
+    const paid = [
+      payment({ id: 'a', month: 1, year: 2026 }),
+      payment({ id: 'b', month: 2, year: 2026 }),
+    ];
+    const pd = monthsBehind(L, paid, 5, 2026);
+    expect(pd.months).toBe(3);
+    expect(pd.balance).toBe(1325 * 3);
+  });
+
+  it('is zero when everything owed so far is paid', () => {
+    const paid = [1, 2, 3, 4, 5].map(m => payment({ id: `p${m}`, month: m, year: 2026 }));
+    expect(monthsBehind(L, paid, 5, 2026)).toEqual({ months: 0, balance: 0 });
+  });
+
+  it('counts a partial month as behind, for the unpaid remainder', () => {
+    const paid = [
+      payment({ id: 'a', month: 1, year: 2026 }),
+      payment({ id: 'b', month: 2, year: 2026 }),
+      payment({ id: 'c', month: 3, year: 2026 }),
+      payment({ id: 'd', month: 4, year: 2026 }),
+      payment({ id: 'e', month: 5, year: 2026, amount: 325 }), // 1000 short
+    ];
+    const pd = monthsBehind(L, paid, 5, 2026);
+    expect(pd.months).toBe(1);
+    expect(pd.balance).toBe(1000);
+  });
+
+  it('does not count months the lease had not started', () => {
+    const later = lease({ startDate: '2026-04-01', monthlyRent: 1325 });
+    // Owed Apr and May only; none paid = 2 months, not 5.
+    expect(monthsBehind(later, [], 5, 2026).months).toBe(2);
+  });
+
+  it('ignores a draft (needs review) lease', () => {
+    expect(monthsBehind(lease({ needsReview: true }), [], 5, 2026)).toEqual({ months: 0, balance: 0 });
   });
 });
 

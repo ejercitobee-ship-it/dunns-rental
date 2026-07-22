@@ -206,6 +206,48 @@ export function settleMonth(
   return { due, paid, balance: round2(due - paid), status: 'partial' };
 }
 
+/** A lease is flagged past due once it owes this many months or more. */
+export const PAST_DUE_MONTHS = 2;
+
+export interface PastDue {
+  /** How many owed months (up to and including now) are unpaid or partial. */
+  months: number;
+  /** The total outstanding balance across those months. */
+  balance: number;
+}
+
+/**
+ * How far behind a lease is: the count of months it actually owed (term covers
+ * it, not paused) from the lease start through the current month that are not
+ * fully paid, plus the total outstanding. Same owed-month rule as the rest of
+ * the app (leasesOwingMonth) and the same settlement (settleMonth), so this
+ * cannot disagree with the Rent Management numbers. The window is capped so a
+ * very old lease cannot loop unbounded.
+ */
+export function monthsBehind(
+  lease: Lease,
+  payments: RentPayment[],
+  currentMonth: number,
+  currentYear: number
+): PastDue {
+  if (!lease.startDate || lease.needsReview) return { months: 0, balance: 0 };
+  const currentTarget = currentYear * 12 + currentMonth;
+  const from = Math.max(yearMonthOf(lease.startDate), currentTarget - 60);
+  let months = 0;
+  let balance = 0;
+  for (let t = from; t <= currentTarget; t++) {
+    const year = Math.floor((t - 1) / 12);
+    const month = t - year * 12;
+    if (leasesOwingMonth([lease], month, year).length === 0) continue;
+    const s = settleMonth(lease, payments, month, year);
+    if (s.balance > 0) {
+      months += 1;
+      balance = round2(balance + s.balance);
+    }
+  }
+  return { months, balance };
+}
+
 /** The minimum a per-lease-per-month row must carry to be grouped. */
 export interface LeaseMonthLike {
   lease: Lease;
