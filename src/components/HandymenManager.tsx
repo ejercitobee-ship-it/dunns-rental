@@ -14,8 +14,9 @@ const inputClass =
 
 const emptyForm: HandymanInput = { name: '', phone: '', email: '', trades: [], isActive: true };
 
-/** The admin roster of handymen: add, edit trades, invite/resend, deactivate. */
-export function HandymenManager() {
+/** The admin roster of handymen: add, edit trades, invite/resend, deactivate.
+ * onCountChange lets a host (the Vendors tab) keep its count in sync. */
+export function HandymenManager({ onCountChange }: { onCountChange?: (n: number) => void } = {}) {
   const { showToast } = useToast();
   const [handymen, setHandymen] = useState<Handyman[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +28,10 @@ export function HandymenManager() {
   const load = () => {
     handymenApi
       .getAll()
-      .then((list) => setHandymen(list))
+      .then((list) => {
+        setHandymen(list);
+        onCountChange?.(list.length);
+      })
       .catch(() => showToast('Could not load handymen', 'error'))
       .finally(() => setLoading(false));
   };

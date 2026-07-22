@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Image, ImageOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -8,10 +8,11 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { adminApi, realtorsApi, tenantsApi, photoApi } from '../lib/api';
+import { adminApi, realtorsApi, tenantsApi, photoApi, handymenApi } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
+import { HandymenManager } from '../components/HandymenManager';
 
 export function Users() {
   const { user: currentUser, users, roles, addUser, updateUser, deleteUser, hasPermission } = useAuth();
@@ -55,6 +56,12 @@ export function Users() {
   const [unlinkedTenants, setUnlinkedTenants] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [addTenantBusy, setAddTenantBusy] = useState(false);
+  // Handyman roster count for the Vendors tab (kept fresh by the manager below).
+  const [handymanCount, setHandymanCount] = useState(0);
+
+  useEffect(() => {
+    handymenApi.getAll().then(h => setHandymanCount(h.length)).catch(() => {});
+  }, []);
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
 
@@ -80,11 +87,15 @@ export function Users() {
     tenant: users.filter(u => userCategory(u.roleId) === 'tenant').length,
     handyman: users.filter(u => userCategory(u.roleId) === 'handyman').length,
   };
+  // The Vendors tab holds business partners: realtors (role users) and handymen
+  // (the maintenance roster). Handymen are counted separately from the users
+  // table, so the tab count reflects both.
   const TABS: { key: UserCategory; label: string }[] = [
     { key: 'internal', label: 'Internal' },
-    { key: 'realtor', label: 'Realtors' },
+    { key: 'realtor', label: 'Vendors' },
     { key: 'tenant', label: 'Tenants' },
   ];
+  const tabCount = (key: UserCategory) => (key === 'realtor' ? counts.realtor + handymanCount : counts[key]);
 
   const resetForm = () => {
     setUserForm({
@@ -339,7 +350,7 @@ export function Users() {
               tab === t.key ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            {t.label} <span className="text-faint">({counts[t.key]})</span>
+            {t.label} <span className="text-faint">({tabCount(t.key)})</span>
           </button>
         ))}
       </div>
@@ -348,7 +359,7 @@ export function Users() {
         <p className="text-muted text-sm mb-3">Tenants get portal access by inviting them from their own page.</p>
       )}
       {tab === 'realtor' && (
-        <p className="text-muted text-sm mb-3">Realtors are added by linking them from a tenant's page.</p>
+        <p className="text-muted text-sm mb-3">Your business partners. Realtors are added by linking them from a tenant's page; handymen are managed below.</p>
       )}
 
       {/* Users Table */}
@@ -509,6 +520,14 @@ export function Users() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Handymen (maintenance vendors) live on the Vendors tab, managed here
+          rather than on the Maintenance page. */}
+      {tab === 'realtor' && (
+        <div className="mt-6">
+          <HandymenManager onCountChange={setHandymanCount} />
+        </div>
+      )}
 
       <input
         ref={photoInputRef}
