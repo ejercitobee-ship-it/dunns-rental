@@ -20,6 +20,9 @@ const DEFAULTS = {
     gracePeriod: 3,
     defaultLeaseTerm: 12,
     securityDepositMultiplier: 2,
+    // Flag a tenancy as past due once it owes this many months of rent. Used by
+    // the dashboard, the tenant profile, and the tenant portal.
+    pastDueMonths: 2,
     // Shown to tenants on their portal under "How to pay". The portal adds each
     // tenant's own memo (street, unit, month, name) beneath this.
     paymentInstructions: 'Pay your rent by Zelle to 7739917112.',

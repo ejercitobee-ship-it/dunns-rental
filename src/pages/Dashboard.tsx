@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, monthOf, parseLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind } from '../lib/rent';
+import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { DashboardStats, Property, Tenant } from '../types';
 import {
   BarChart,
@@ -86,6 +87,7 @@ function ClickableCard({ children, onClick, className = '' }: ClickableCardProps
 export function Dashboard() {
   const navigate = useNavigate();
   const { properties, units, leases, rentPayments, expenses, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
+  const pastDueMonths = usePastDueMonths();
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
@@ -245,7 +247,7 @@ export function Dashboard() {
     const year = now.getFullYear();
     return activeLeases(leases)
       .map(lease => ({ lease, ...monthsBehind(lease, rentPayments, month, year) }))
-      .filter(x => x.months >= PAST_DUE_MONTHS)
+      .filter(x => x.months >= pastDueMonths)
       .map(x => ({
         ...x,
         property: x.lease.propertyId ? properties.find(p => p.id === x.lease.propertyId) : undefined,
@@ -253,7 +255,7 @@ export function Dashboard() {
         occupants: getLeaseTenants(x.lease.id),
       }))
       .sort((a, b) => b.months - a.months || b.balance - a.balance);
-  }, [leases, rentPayments, properties, units, getLeaseTenants]);
+  }, [leases, rentPayments, properties, units, getLeaseTenants, pastDueMonths]);
 
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
@@ -315,7 +317,7 @@ export function Dashboard() {
           <div className="flex items-center gap-2 mb-3">
             <AlertCircle className="h-5 w-5 text-danger flex-shrink-0" />
             <h2 className="font-semibold text-ink">
-              {pastDue.length} {pastDue.length === 1 ? 'tenancy is' : 'tenancies are'} 2 or more months past due
+              {pastDue.length} {pastDue.length === 1 ? 'tenancy is' : 'tenancies are'} {pastDueMonths} or more months past due
             </h2>
           </div>
           <div className="divide-y divide-danger/15">

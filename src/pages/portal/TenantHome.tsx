@@ -89,8 +89,9 @@ export function TenantHome() {
   const pastDue = useMemo(() => {
     if (!me?.lease) return null;
     const now = new Date();
+    const threshold = me.pastDueMonths ?? PAST_DUE_MONTHS;
     const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear());
-    return pd.months >= PAST_DUE_MONTHS ? pd : null;
+    return pd.months >= threshold ? pd : null;
   }, [me, payments]);
 
   if (loading) {

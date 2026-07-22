@@ -6,18 +6,24 @@ import { serializePortalTenant, serializePortalLease, serializeUnit, serializePr
 
 const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to 7739917112.';
 
-/** The owner's payment instructions from Settings (rent), for the portal "How to pay". */
-async function paymentInstructions(env: Env): Promise<string> {
+/** The rent settings the portal needs: payment instructions and the past-due
+ * threshold. Reads app_settings 'rent' once, falling back to defaults. */
+async function rentPortalSettings(env: Env): Promise<{ paymentInstructions: string; pastDueMonths: number }> {
   const raw = await getSetting(env, 'rent');
+  let paymentInstructions = DEFAULT_PAYMENT_INSTRUCTIONS;
+  let pastDueMonths = 2;
   if (raw) {
     try {
-      const r = JSON.parse(raw) as { paymentInstructions?: unknown };
+      const r = JSON.parse(raw) as { paymentInstructions?: unknown; pastDueMonths?: unknown };
       if (typeof r.paymentInstructions === 'string' && r.paymentInstructions.trim()) {
-        return r.paymentInstructions;
+        paymentInstructions = r.paymentInstructions;
       }
-    } catch { /* fall through to default */ }
+      if (typeof r.pastDueMonths === 'number' && r.pastDueMonths >= 1) {
+        pastDueMonths = Math.floor(r.pastDueMonths);
+      }
+    } catch { /* fall through to defaults */ }
   }
-  return DEFAULT_PAYMENT_INSTRUCTIONS;
+  return { paymentInstructions, pastDueMonths };
 }
 
 /** GET /api/portal/me — the caller's own person record, lease, unit, property. */
@@ -62,7 +68,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         lease: lease ? serializePortalLease(lease as Record<string, unknown>) : null,
         unit: unit ? serializeUnit(unit as Record<string, unknown>) : null,
         property: property ? serializeProperty(property as Record<string, unknown>) : null,
-        paymentInstructions: await paymentInstructions(env),
+        ...(await rentPortalSettings(env)),
       },
     });
   } catch {
