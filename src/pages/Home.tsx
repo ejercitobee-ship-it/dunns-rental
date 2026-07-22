@@ -44,24 +44,24 @@ function Hero() {
         <div className="max-w-xl">
           <p className="eyebrow text-white/70">MH Dunn Property</p>
           <h1 className="font-display text-4xl sm:text-5xl font-medium text-white leading-tight mt-3">
-            A home you'll love, renting made simple
+            A place you'll be glad to call home
           </h1>
           <p className="mt-5 text-lg text-white/85 leading-relaxed">
             We are a family that owns and cares for the homes we rent. Living here is meant to feel easy. Pay your rent online, ask for a repair, and find your lease and receipts in one place, whenever it suits you.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-primary hover:bg-white/90 transition-colors"
-            >
-              Resident login <ArrowRight className="h-4 w-4" />
-            </Link>
             <button
               onClick={() => scrollToId('contact')}
+              className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-primary hover:bg-white/90 transition-colors"
+            >
+              Contact us <ArrowRight className="h-4 w-4" />
+            </button>
+            <Link
+              to="/login"
               className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-5 py-3 text-sm font-medium text-white hover:bg-white/10 transition-colors"
             >
-              Contact us
-            </button>
+              Resident login
+            </Link>
           </div>
         </div>
       </div>
