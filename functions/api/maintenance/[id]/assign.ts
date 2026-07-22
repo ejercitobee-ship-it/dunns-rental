@@ -5,6 +5,7 @@ import { JOB_COLUMNS, JOB_JOINS, buildNotice, tenantEmail, type JobRow } from '.
 import { availabilityText, notifyTenant } from '../../../lib/maintenance-notify';
 import { sendEmail } from '../../../lib/email';
 import { companySettings } from '../../../lib/receipts';
+import { sendPushToTenant } from '../../../lib/push';
 
 /**
  * POST /api/maintenance/:id/assign — the admin assigns a job to a handyman (or
@@ -77,6 +78,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             ['Handyman', hName],
             ['Next', 'They will confirm a time from your availability.'],
           ]);
+          await sendPushToTenant(env, (row.tenant_id as string) || null, {
+            title: 'Your maintenance request is being handled',
+            body: `${notice.title}: ${hName} will confirm a time.`,
+            url: '/portal/maintenance',
+          });
         })().catch((e) => console.error('assign notify failed', e))
       );
     }

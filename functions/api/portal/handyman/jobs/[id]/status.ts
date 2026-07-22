@@ -3,6 +3,7 @@ import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../
 import { handymanForUser } from '../../../../../lib/portal';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
 import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
+import { sendPushToTenant } from '../../../../../lib/push';
 
 // Which prior statuses each move is allowed from. Start work from an assigned or
 // scheduled job; complete only from in progress. Anything else is a 409.
@@ -54,17 +55,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     context.waitUntil(
       (async () => {
+        const tenantId = row.tenant_id as string | null;
         if (status === 'in_progress') {
           await notifyTenant(env, row.tenant_email as string | null, 'Your maintenance is under way', [
             ['Issue', job.title],
             ['Status', 'The handyman has started the work.'],
           ]);
+          await sendPushToTenant(env, tenantId, {
+            title: 'Maintenance under way',
+            body: `${job.title}: the handyman has started the work.`,
+            url: '/portal/maintenance',
+          });
         } else {
           const hName = await handymanName(env, handyman.id);
           await notifyTenant(env, row.tenant_email as string | null, 'Your maintenance is complete', [
             ['Issue', job.title],
             ['Status', 'The work is finished. Thank you.'],
           ]);
+          await sendPushToTenant(env, tenantId, {
+            title: 'Maintenance complete',
+            body: `${job.title}: the work is finished.`,
+            url: '/portal/maintenance',
+          });
           await notifyOffice(env, `Job completed, ready to pay: ${job.title}`, [
             ['Handyman', hName],
             ['Location', job.locationLabel || 'Not set'],

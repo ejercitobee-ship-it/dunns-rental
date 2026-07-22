@@ -3,6 +3,7 @@ import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../
 import { handymanForUser } from '../../../../../lib/portal';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
 import { notifyTenant, prettyDay } from '../../../../../lib/maintenance-notify';
+import { sendPushToTenant } from '../../../../../lib/push';
 
 /** Accept 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM' (or with a T). Returns '' if bad. */
 function normalizeSchedule(input: unknown): string {
@@ -56,9 +57,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const job = serializeJob(row);
 
     context.waitUntil(
-      notifyTenant(env, row.tenant_email as string | null, 'Your maintenance visit is scheduled', [
-        ['Issue', job.title],
-        ['When', scheduleLabel(scheduledFor)],
+      Promise.all([
+        notifyTenant(env, row.tenant_email as string | null, 'Your maintenance visit is scheduled', [
+          ['Issue', job.title],
+          ['When', scheduleLabel(scheduledFor)],
+        ]),
+        sendPushToTenant(env, row.tenant_id as string | null, {
+          title: 'Maintenance visit scheduled',
+          body: `${job.title}: ${scheduleLabel(scheduledFor)}`,
+          url: '/portal/maintenance',
+        }),
       ]).catch((e) => console.error('schedule notify failed', e))
     );
 
