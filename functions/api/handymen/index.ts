@@ -64,7 +64,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         throw e;
       }
       const firstName = name.split(' ')[0] || name;
-      const res = await sendInviteLink(env, request, userId, firstName, email, false);
+      const res = await sendInviteLink(env, userId, firstName, email, false);
       emailSent = res.sent;
       inviteUrl = res.sent ? undefined : res.inviteUrl;
     }

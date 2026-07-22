@@ -3,6 +3,7 @@ import { sendEmail } from './email';
 import { companySettings } from './receipts';
 import { tradeMatches } from './maintenance';
 import { serializeHandyman } from './serializers';
+import { SITE_URL } from './site';
 
 /** A tenant availability window, as stored on the request. */
 export interface AvailabilityWindow {
@@ -80,9 +81,9 @@ function textBlock(companyName: string, heading: string, rows: [string, string][
  * when a new request comes in. Best-effort: callers run this in waitUntil, and a
  * mail failure never blocks the request.
  */
-export async function notifyNewRequest(env: Env, origin: string, req: RequestNotice): Promise<void> {
+export async function notifyNewRequest(env: Env, req: RequestNotice): Promise<void> {
   const c = await companySettings(env);
-  const portalUrl = `${origin}/portal`;
+  const portalUrl = `${SITE_URL}/portal`;
   const rows: [string, string][] = [
     ['Issue', req.title],
     ['Category', req.category || 'General'],

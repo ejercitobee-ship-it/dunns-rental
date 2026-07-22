@@ -135,7 +135,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const tenantName = tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : undefined;
 
     context.waitUntil(
-      notifyNewRequest(env, new URL(request.url).origin, {
+      notifyNewRequest(env, {
         id,
         title,
         category,

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, jsonOk, serverError } from '../../lib/session';
 import { sendEmail, passwordResetEmail } from '../../lib/email';
+import { SITE_URL } from '../../lib/site';
 
 const GENERIC_MESSAGE =
   'If an account exists with this email, you will receive password reset instructions.';
@@ -38,8 +39,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .bind(crypto.randomUUID(), user.id, resetToken, expiresAt, now)
         .run();
 
-      const origin = new URL(request.url).origin;
-      const resetUrl = `${origin}/reset-password?token=${resetToken}`;
+      const resetUrl = `${SITE_URL}/reset-password?token=${resetToken}`;
       const firstName = (user.name || '').split(' ')[0] || undefined;
       const mail = passwordResetEmail(resetUrl, firstName);
 

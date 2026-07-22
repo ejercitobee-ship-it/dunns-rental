@@ -68,7 +68,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       await env.DB.prepare('UPDATE user SET phone = ?, updated_at = unixepoch() WHERE id = ?').bind(phone, userId).run();
     }
 
-    const res = await sendInviteLink(env, request, userId, firstName, email, false);
+    const res = await sendInviteLink(env, userId, firstName, email, false);
     return jsonOk(
       { success: true, data: { userId, emailSent: res.sent, inviteUrl: res.sent ? undefined : res.inviteUrl } },
       201

@@ -31,7 +31,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // when the first invite expired (7 days) — the old flow just 400'd here,
     // leaving no way to re-invite without hand-delivering a temp password.
     if (tenant.user_id) {
-      const { sent, inviteUrl } = await sendInviteLink(env, request, tenant.user_id, tenant.first_name, tenant.email, true);
+      const { sent, inviteUrl } = await sendInviteLink(env, tenant.user_id, tenant.first_name, tenant.email, true);
       return jsonOk({ success: true, data: { emailSent: sent, inviteUrl: sent ? undefined : inviteUrl, resent: true } });
     }
 
@@ -69,7 +69,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // When mail is not configured the account still exists, so hand the link
     // back rather than stranding the tenant.
-    const { sent, inviteUrl } = await sendInviteLink(env, request, userId, tenant.first_name, tenant.email, false);
+    const { sent, inviteUrl } = await sendInviteLink(env, userId, tenant.first_name, tenant.email, false);
     return jsonOk({ success: true, data: { emailSent: sent, inviteUrl: sent ? undefined : inviteUrl } });
   } catch {
     return serverError();

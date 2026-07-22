@@ -1,6 +1,7 @@
 import { type Env, hashPassword, generateTempPassword } from './session';
 import { sendEmail, portalInviteEmail } from './email';
 import { companySettings } from './receipts';
+import { SITE_URL } from './site';
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
 
@@ -13,7 +14,6 @@ const SEVEN_DAYS = 7 * 24 * 60 * 60;
  */
 export async function sendInviteLink(
   env: Env,
-  request: Request,
   userId: string,
   firstName: string,
   toEmail: string,
@@ -25,7 +25,7 @@ export async function sendInviteLink(
     'INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
   ).bind(crypto.randomUUID(), userId, token, now + SEVEN_DAYS, now).run();
 
-  const inviteUrl = `${new URL(request.url).origin}/reset-password?token=${token}`;
+  const inviteUrl = `${SITE_URL}/reset-password?token=${token}`;
   const c = await companySettings(env);
   const cityStateZip = [[c.city, c.state].filter(Boolean).join(', '), c.zipCode].filter(Boolean).join(' ');
   const contact = [c.address, cityStateZip, [c.phone, c.email].filter(Boolean).join(' · ')]
