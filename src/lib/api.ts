@@ -50,7 +50,13 @@ export const authApi = {
   
   getSession: () =>
     apiRequest('/auth/session'),
-  
+
+  // Self-service profile: any signed-in user edits their own name, phone, photo.
+  updateMe: (data: { firstName: string; lastName?: string; phone?: string }): Promise<{ firstName: string; lastName: string; phone?: string }> =>
+    apiRequest('/me', { method: 'PUT', body: JSON.stringify(data) }),
+  uploadMyPhoto: (file: Blob): Promise<{ photoUrl: string }> => postPhoto('/me/photo', file),
+  removeMyPhoto: (): Promise<{ success: boolean }> => apiRequest('/me/photo', { method: 'DELETE' }),
+
   forgotPassword: (email: string) =>
     apiRequest('/auth/forgot-password', {
       method: 'POST',

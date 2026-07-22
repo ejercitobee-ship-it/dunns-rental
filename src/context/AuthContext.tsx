@@ -42,6 +42,8 @@ interface AuthContextType {
   updateUser: (user: User) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   refreshTeam: () => Promise<void>;
+  /** Merge a partial update into the signed-in user (after a self-profile save). */
+  updateCurrentUser: (partial: Partial<User>) => void;
   isSuperAdmin: () => boolean;
 }
 
@@ -56,6 +58,8 @@ function mapSessionUser(sessionUser: Record<string, unknown>, role: Role): User 
     lastName: (sessionUser.lastName as string) || parts.slice(1).join(' ') || '',
     email: sessionUser.email as string,
     avatar: (sessionUser.image as string) || undefined,
+    phone: (sessionUser.phone as string) || undefined,
+    photoUrl: sessionUser.image ? `/api/photo/${sessionUser.image as string}` : undefined,
     roleId: (sessionUser.roleId as string) || 'viewer',
     role,
     isActive: true,
@@ -250,6 +254,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user?.roleId === 'super_admin';
   };
 
+  const updateCurrentUser = (partial: Partial<User>) => {
+    setUser(prev => (prev ? { ...prev, ...partial } : prev));
+  };
+
   const addRole = async (role: Omit<Role, 'id'>) => {
     const created = await rolesApi.create({
       name: role.name,
@@ -330,6 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateUser,
         deleteUser,
         refreshTeam,
+        updateCurrentUser,
         isSuperAdmin,
       }}
     >

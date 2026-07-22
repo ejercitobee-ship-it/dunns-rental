@@ -21,6 +21,9 @@ export interface SessionUser {
   role: string;
   /** Permissions for the user's role, loaded from the roles table. */
   permissions: string[] | null;
+  /** The user's own profile photo Drive id and phone, for the self-profile UI. */
+  image?: string | null;
+  phone?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +73,7 @@ export async function getSessionUser(
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
     `SELECT u.id AS id, u.email AS email, u.name AS name, u.is_active AS is_active,
+            u.image AS image, u.phone AS phone,
             r.role AS role, ro.permissions AS permissions
        FROM session s
        JOIN user u ON u.id = s.user_id
@@ -83,6 +87,8 @@ export async function getSessionUser(
       email: string;
       name: string;
       is_active: number | null;
+      image: string | null;
+      phone: string | null;
       role: string | null;
       permissions: string | null;
     }>();
@@ -107,6 +113,8 @@ export async function getSessionUser(
     name: row.name,
     role: row.role || 'viewer',
     permissions,
+    image: row.image,
+    phone: row.phone,
   };
 }
 
