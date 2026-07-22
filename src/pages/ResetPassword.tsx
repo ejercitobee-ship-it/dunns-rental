@@ -49,7 +49,7 @@ export function ResetPassword() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-primary rounded-2xl ring-1 ring-black/5 mb-4">
             <Building2 className="h-7 w-7 text-[#c9ddd2]" />
           </div>
-          <h1 className="text-[26px] font-medium text-ink">Dunn's Rental</h1>
+          <h1 className="text-[26px] font-medium text-ink">MH Dunn Property</h1>
           <p className="text-muted mt-1 text-sm">Property Management</p>
         </div>
 

@@ -6,7 +6,7 @@ export interface Env {
   DOCS?: R2Bucket;
   /** Resend API key. When unset, password reset emails are not sent. */
   RESEND_API_KEY?: string;
-  /** From address for outgoing mail, e.g. "Dunn's Rental <info@mhdunnproperty.net>" */
+  /** From address for outgoing mail, e.g. "MH Dunn Property <info@mhdunnproperty.net>" */
   MAIL_FROM?: string;
   /** Google OAuth client id for Drive storage. */
   GOOGLE_CLIENT_ID?: string;
