@@ -111,6 +111,8 @@ Set your password: ${inviteUrl}
 
 This link expires in 7 days.
 
+If you do not see this email in your inbox, please check your spam or junk folder, and add info@mhdunnproperty.net to your contacts so future messages arrive.
+
 ${companyName}${contact ? `\n${contact}` : ''}`;
 
   const html = `
@@ -129,6 +131,7 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
           <a href="${inviteUrl}" style="display:inline-block;padding:12px 26px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Set your password</a>
         </td></tr></table>
         <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:20px 0 0;">This link expires in 7 days. If the button doesn't work, paste this address into your browser:<br><a href="${inviteUrl}" style="color:#24503f;word-break:break-all;">${inviteUrl}</a></p>
+        <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:12px 0 0;">Not in your inbox? Check your spam or junk folder, and add info@mhdunnproperty.net to your contacts so future messages arrive.</p>
       </td></tr>
       <tr><td style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
         ${companyName}${contact ? ` &nbsp;&middot;&nbsp; ${contact}` : ''}
