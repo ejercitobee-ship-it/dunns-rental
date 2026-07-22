@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Plus, Hammer, Mail, Phone, Edit2, UserX, RotateCcw } from 'lucide-react';
+import { Plus, Hammer, Mail, Phone, Edit2, UserX, RotateCcw, Trash2 } from 'lucide-react';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { handymenApi, type HandymanInput } from '../lib/api';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
 import { tradeLabel } from '../lib/maintenance';
@@ -18,6 +19,7 @@ const emptyForm: HandymanInput = { name: '', phone: '', email: '', trades: [], i
  * onCountChange lets a host (the Vendors tab) keep its count in sync. */
 export function HandymenManager({ onCountChange }: { onCountChange?: (n: number) => void } = {}) {
   const { showToast } = useToast();
+  const { isSuperAdmin } = useAuth();
   const [handymen, setHandymen] = useState<Handyman[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setModalOpen] = useState(false);
@@ -102,24 +104,25 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
   };
 
   const handleDeactivate = (h: Handyman) => {
-    if (h.isActive) {
-      if (!confirm(`Deactivate ${h.name}? They stop receiving jobs but their history stays.`)) return;
-      handymenApi
-        .deactivate(h.id)
-        .then(() => {
-          showToast('Handyman deactivated', 'success');
-          load();
-        })
-        .catch((err) => showToast((err as Error).message || 'Could not deactivate', 'error'));
-    } else {
-      handymenApi
-        .update(h.id, { name: h.name, phone: h.phone, email: h.email, trades: h.trades, isActive: true })
-        .then(() => {
-          showToast('Handyman reactivated', 'success');
-          load();
-        })
-        .catch((err) => showToast((err as Error).message || 'Could not reactivate', 'error'));
-    }
+    if (h.isActive && !confirm(`Deactivate ${h.name}? They stop receiving jobs but their record stays.`)) return;
+    handymenApi
+      .update(h.id, { name: h.name, phone: h.phone, email: h.email, trades: h.trades, isActive: !h.isActive })
+      .then(() => {
+        showToast(h.isActive ? 'Handyman deactivated' : 'Handyman reactivated', 'success');
+        load();
+      })
+      .catch((err) => showToast((err as Error).message || 'Could not update', 'error'));
+  };
+
+  const handleDelete = (h: Handyman) => {
+    if (!confirm(`Permanently remove ${h.name}? This deletes their record and login. Their past jobs stay but no longer show a handyman. This cannot be undone.`)) return;
+    handymenApi
+      .remove(h.id)
+      .then(() => {
+        showToast('Handyman removed', 'success');
+        load();
+      })
+      .catch((err) => showToast((err as Error).message || 'Could not remove', 'error'));
   };
 
   return (
@@ -199,6 +202,15 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
                   >
                     {h.isActive ? <UserX className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
                   </button>
+                  {isSuperAdmin() && (
+                    <button
+                      onClick={() => handleDelete(h)}
+                      className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"
+                      title="Remove permanently"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
