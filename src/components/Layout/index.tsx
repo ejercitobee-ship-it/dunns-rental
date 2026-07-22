@@ -17,6 +17,7 @@ import {
   Settings,
   Wrench,
   ClipboardList,
+  ScrollText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -52,6 +53,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings') },
     { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings') },
     { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users') },
+    { name: 'Activity', path: '/activity', icon: ScrollText, show: user?.roleId === 'super_admin' || user?.roleId === 'admin' },
   ].filter(item => item.show);
 
   return (

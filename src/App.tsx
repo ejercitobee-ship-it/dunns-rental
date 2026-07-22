@@ -19,6 +19,7 @@ import { TaxReport } from './pages/TaxReport';
 import { DataMigration } from './pages/DataMigration';
 import { Settings } from './pages/Settings';
 import { Users } from './pages/Users';
+import { Activity } from './pages/Activity';
 import { PortalLayout } from './components/PortalLayout';
 import { TenantHome } from './pages/portal/TenantHome';
 import { TenantPayments } from './pages/portal/TenantPayments';
@@ -262,7 +263,15 @@ function AppRoutes() {
           <Layout><Users /></Layout>
         </ProtectedRoute>
       } />
-      
+
+      {/* Admins and Super Admins only; the Activity page enforces the role and
+          the server does too. */}
+      <Route path="/activity" element={
+        <ProtectedRoute>
+          <Layout><Activity /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
