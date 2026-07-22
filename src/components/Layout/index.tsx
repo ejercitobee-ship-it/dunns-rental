@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import { Avatar } from '../ui/Avatar';
+import { ProfileModal } from '../ProfileModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -30,6 +32,7 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const { user, logout, hasModuleAccess } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -116,29 +119,37 @@ export function Layout({ children }: LayoutProps) {
           })}
         </nav>
 
-        {/* User Profile */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-sidebar-line">
-          <div className="px-3 py-3 rounded-lg bg-white/[0.04]">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-primary ring-1 ring-white/10 flex items-center justify-center text-[#c9ddd2] text-sm font-medium">
-                {user?.firstName?.[0]}{user?.lastName?.[0]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user?.firstName} {user?.lastName}</p>
-                <p className="text-xs text-sidebar-muted truncate">{user?.role.name}</p>
-              </div>
-            </div>
-
+        {/* User: one compact row — click to open your profile, plus a sign-out icon. */}
+        <div className="absolute bottom-0 left-0 right-0 p-2.5 border-t border-sidebar-line">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setProfileOpen(true)}
+              title="Your profile"
+              className="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+            >
+              <Avatar
+                photoUrl={user?.photoUrl}
+                initials={`${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`}
+                className="w-8 h-8 flex-shrink-0"
+                initialsClassName="text-xs"
+              />
+              <span className="min-w-0 text-left">
+                <span className="block text-sm font-medium text-white truncate leading-tight">{user?.firstName} {user?.lastName}</span>
+                <span className="block text-[11px] text-sidebar-muted truncate leading-tight">{user?.role.name}</span>
+              </span>
+            </button>
             <button
               onClick={handleLogout}
-              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-sidebar-muted hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors"
+              title="Sign out"
+              className="p-2 rounded-lg text-sidebar-muted hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
             >
-              <LogOut className="h-4 w-4" />
-              Sign Out
+              <LogOut className="h-[18px] w-[18px]" />
             </button>
           </div>
         </div>
       </aside>
+
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
 
       {/* Main content */}
       <main className="lg:ml-72 min-h-screen">
