@@ -44,23 +44,23 @@ function Hero() {
         <div className="max-w-xl">
           <p className="eyebrow text-white/70">MH Dunn Property</p>
           <h1 className="font-display text-4xl sm:text-5xl font-medium text-white leading-tight mt-3">
-            Quality multi family homes for rent
+            A home you'll love, renting made simple
           </h1>
           <p className="mt-5 text-lg text-white/85 leading-relaxed">
-            Family run, well cared for homes where people are glad to live. If you are looking for a place to call home, we would love to hear from you.
+            We are a family that owns and cares for the homes we rent. Living here is meant to feel easy. Pay your rent online, ask for a repair, and find your lease and receipts in one place, whenever it suits you.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <button
-              onClick={() => scrollToId('contact')}
+            <Link
+              to="/login"
               className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-primary hover:bg-white/90 transition-colors"
             >
-              Get in touch <ArrowRight className="h-4 w-4" />
-            </button>
+              Resident login <ArrowRight className="h-4 w-4" />
+            </Link>
             <button
-              onClick={() => scrollToId('about')}
+              onClick={() => scrollToId('contact')}
               className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-5 py-3 text-sm font-medium text-white hover:bg-white/10 transition-colors"
             >
-              Learn more
+              Contact us
             </button>
           </div>
         </div>
@@ -112,7 +112,7 @@ function About() {
 
 const FEATURES = [
   { icon: HomeIcon, title: 'Well maintained homes', body: 'Clean, safe, and cared for. We fix things properly and keep our homes in the condition we would want for our own family.' },
-  { icon: PhoneCall, title: 'Responsive management', body: 'A real person answers. When something needs attention, you are not left waiting or wondering.' },
+  { icon: PhoneCall, title: 'Responsive and personal', body: 'A real person answers. When something needs attention, you are not left waiting or wondering.' },
   { icon: Wallet, title: 'Easy online rent', body: 'Pay rent and keep your documents in one simple place, from any device, whenever it suits you.' },
   { icon: Users, title: 'Family friendly', body: 'Comfortable homes with room to live, in neighborhoods that families are happy to settle into.' },
 ];
@@ -141,20 +141,20 @@ function Features() {
   );
 }
 
-function Owners() {
+function RentingExperience() {
   return (
     <section className="bg-primary">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 py-16 text-center">
-        <h2 className="font-display text-3xl font-medium text-white">Own a property? Let us manage it.</h2>
+        <h2 className="font-display text-3xl font-medium text-white">Everything about your home, in one place</h2>
         <p className="mt-4 text-lg text-white/80 leading-relaxed max-w-2xl mx-auto">
-          We also manage homes for other owners with the same care we give our own. If you would like a dependable team looking after your property and your tenants, reach out and let us talk.
+          Renting with us is simple. From your resident portal you can pay rent online, request a repair, view your lease and receipts, and keep your details up to date, any time, from any device. And when you need a real person, we are only a message away.
         </p>
-        <a
-          href={`mailto:${EMAIL}?subject=Property%20management%20enquiry`}
+        <Link
+          to="/login"
           className="mt-8 inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-primary hover:bg-white/90 transition-colors"
         >
-          Email us about management <ArrowRight className="h-4 w-4" />
-        </a>
+          Sign in to your portal <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
     </section>
   );
@@ -167,7 +167,7 @@ function Contact() {
         <p className="eyebrow text-primary">Contact</p>
         <h2 className="font-display text-3xl font-medium text-ink mt-3">Get in touch</h2>
         <p className="mt-4 text-lg text-muted leading-relaxed">
-          Ask us about current availability or anything else. We are happy to help.
+          A question about your home, a payment, or a home you would like to rent? We are happy to help.
         </p>
 
         {/* Phone and service area go here once Belle supplies them. Publishing a
@@ -224,7 +224,7 @@ export function Home() {
         <Hero />
         <About />
         <Features />
-        <Owners />
+        <RentingExperience />
         <Contact />
       </main>
       <PublicFooter />
