@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check } from 'lucide-react';
+import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -39,6 +39,15 @@ export function Properties() {
   const { showToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
+  // Each property collapses so the page stays tidy as more are added. Collapsed
+  // by default; the header still shows the unit summary and all property actions.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleProperty = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isEditPropertyOpen, setIsEditPropertyOpen] = useState(false);
   const [isAddUnitOpen, setIsAddUnitOpen] = useState(false);
@@ -344,17 +353,29 @@ export function Properties() {
         {filteredProperties.map(property => {
           const propertyUnits = getPropertyUnits(property.id);
           const occupiedCount = propertyUnits.filter(u => !!getUnitLease(u.id)).length;
-          
+          const open = expanded.has(property.id);
+
           return (
             <Card key={property.id} className="overflow-hidden">
               <div className="h-24 sm:h-32 bg-gradient-to-br from-[#2b5a48] to-[#1c4032] flex items-center justify-between px-4 sm:px-6 relative">
-                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                  <Building2 className="h-8 w-8 sm:h-12 sm:w-12 text-white/50 flex-shrink-0" />
+                <button
+                  type="button"
+                  onClick={() => toggleProperty(property.id)}
+                  aria-expanded={open}
+                  className="flex items-center gap-2 sm:gap-3 min-w-0 text-left group/toggle"
+                >
+                  {open
+                    ? <ChevronDown className="h-5 w-5 text-white/70 flex-shrink-0" />
+                    : <ChevronRight className="h-5 w-5 text-white/70 flex-shrink-0" />}
+                  <Building2 className="h-8 w-8 sm:h-11 sm:w-11 text-white/50 flex-shrink-0" />
                   <div className="text-white min-w-0">
                     <h3 className="text-lg sm:text-xl font-bold truncate">{property.name}</h3>
                     <p className="text-white/80 text-xs sm:text-sm truncate">{property.address}, {property.city}</p>
+                    <p className="text-white/70 text-xs mt-0.5">
+                      {propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'} · {occupiedCount} occupied · {propertyUnits.length - occupiedCount} vacant
+                    </p>
                   </div>
-                </div>
+                </button>
                 <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                   <Button 
                     size="sm" 
@@ -386,6 +407,7 @@ export function Properties() {
                 </div>
               </div>
               
+              {open && (
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold flex items-center gap-2 text-ink">
@@ -522,6 +544,7 @@ export function Properties() {
                   })}
                 </div>
               </CardContent>
+              )}
             </Card>
           );
         })}
