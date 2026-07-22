@@ -60,6 +60,7 @@ export function Settings() {
     defaultLeaseTerm: 12,
     securityDepositMultiplier: 2,
     paymentInstructions: '',
+    pastDueMonths: 2,
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -563,6 +564,18 @@ export function Settings() {
                   onChange={(e) => setRentSettings({...rentSettings, defaultLeaseTerm: parseInt(e.target.value)})}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Flag past due after (Months)</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                value={rentSettings.pastDueMonths}
+                onChange={(e) => setRentSettings({...rentSettings, pastDueMonths: Math.max(1, parseInt(e.target.value) || 1)})}
+              />
+              <p className="text-xs text-muted">A tenancy is flagged as past due, on the dashboard, their profile, and their portal, once it owes this many months of rent.</p>
             </div>
 
             <div className="space-y-2">

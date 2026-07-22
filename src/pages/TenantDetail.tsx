@@ -19,7 +19,8 @@ import {
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
-import { leasesOwingMonth, settleMonth, monthsBehind, PAST_DUE_MONTHS } from '../lib/rent';
+import { leasesOwingMonth, settleMonth, monthsBehind } from '../lib/rent';
+import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
@@ -179,12 +180,13 @@ export function TenantDetail() {
     return settleMonth(lease, rentPayments, month, year);
   }, [lease, rentPayments]);
 
+  const pastDueMonths = usePastDueMonths();
   const pastDue = useMemo(() => {
     if (!lease) return null;
     const now = new Date();
     const pd = monthsBehind(lease, rentPayments, now.getMonth() + 1, now.getFullYear());
-    return pd.months >= PAST_DUE_MONTHS ? pd : null;
-  }, [lease, rentPayments]);
+    return pd.months >= pastDueMonths ? pd : null;
+  }, [lease, rentPayments, pastDueMonths]);
 
   const payments = useMemo(() => {
     if (!id) return [];

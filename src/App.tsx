@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
-import { Register } from './pages/Register';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
@@ -137,11 +136,8 @@ function AppRoutes() {
         </PublicRoute>
       } />
 
-      <Route path="/register" element={
-        <PublicRoute>
-          <Register />
-        </PublicRoute>
-      } />
+      {/* Self sign-up is disabled: access is invite only. Old links land on login. */}
+      <Route path="/register" element={<Navigate to="/login" replace />} />
 
       <Route path="/forgot-password" element={
         <PublicRoute>

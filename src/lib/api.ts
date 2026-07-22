@@ -135,7 +135,7 @@ export interface AppSettings {
   rent: {
     lateFeeAmount: number; lateFeeDay: number; gracePeriod: number;
     defaultLeaseTerm: number; securityDepositMultiplier: number;
-    paymentInstructions: string;
+    paymentInstructions: string; pastDueMonths: number;
   };
   notifications: {
     emailNotifications: boolean; smsNotifications: boolean; rentReminders: boolean;
@@ -408,6 +408,8 @@ export interface PortalMeResponse {
   property: Property | null;
   // The owner's "how to pay" text from Settings; the portal adds the memo.
   paymentInstructions?: string;
+  // The past-due threshold (months) from Settings; defaults to 2.
+  pastDueMonths?: number;
 }
 
 export interface PortalPaymentsResponse {
