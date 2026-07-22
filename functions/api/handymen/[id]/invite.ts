@@ -25,7 +25,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Already has a login: resend a fresh link.
     if (h.user_id) {
-      const { sent, inviteUrl } = await sendInviteLink(env, request, h.user_id, firstName, h.email, true);
+      const { sent, inviteUrl } = await sendInviteLink(env, h.user_id, firstName, h.email, true);
       return jsonOk({ success: true, data: { emailSent: sent, inviteUrl: sent ? undefined : inviteUrl, resent: true } });
     }
 
@@ -43,7 +43,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(userId, id)
       .run();
 
-    const { sent, inviteUrl } = await sendInviteLink(env, request, userId, firstName, h.email, false);
+    const { sent, inviteUrl } = await sendInviteLink(env, userId, firstName, h.email, false);
     return jsonOk({ success: true, data: { emailSent: sent, inviteUrl: sent ? undefined : inviteUrl } });
   } catch {
     return serverError();

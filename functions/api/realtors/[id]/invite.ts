@@ -26,7 +26,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!u.email) return jsonError('This realtor has no email address to invite', 400);
 
     const firstName = (u.name || '').split(' ')[0] || u.name || 'there';
-    const { sent, inviteUrl } = await sendInviteLink(env, request, u.id, firstName, u.email, true);
+    const { sent, inviteUrl } = await sendInviteLink(env, u.id, firstName, u.email, true);
     return jsonOk({ success: true, data: { emailSent: sent, inviteUrl: sent ? undefined : inviteUrl } });
   } catch {
     return serverError();
