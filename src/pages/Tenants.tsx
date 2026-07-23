@@ -11,6 +11,7 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, todayLocalDate, parseLocalDate } from '../lib/utils';
 import { tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { monthlyRevenue } from '../lib/rent';
 import type { Lease, LeaseStatus } from '../types';
@@ -62,6 +63,9 @@ export function Tenants() {
     addTenant, addLease, updateLease,
   } = useApp();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canCreateTenant = hasPermission('tenants_create');
+  const canEditTenant = hasPermission('tenants_edit');
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -281,10 +285,12 @@ export function Tenants() {
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tenants</h1>
           <p className="text-muted mt-1 text-sm">People, their households and where they live.</p>
         </div>
-        <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Tenancy
-        </Button>
+        {canCreateTenant && (
+          <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Tenancy
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -418,7 +424,7 @@ export function Tenants() {
                     </td>
 
                     <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      {lease ? (
+                      {lease && canEditTenant ? (
                         <div className="relative inline-block">
                           <button
                             type="button"

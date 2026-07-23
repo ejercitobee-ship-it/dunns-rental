@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
@@ -45,6 +46,10 @@ const emptyForm = {
 export function Maintenance() {
   const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance, dispatch } = useApp();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  // Maintenance create/edit map to properties_edit; delete to properties_delete.
+  const canEditMaintenance = hasPermission('properties_edit');
+  const canDeleteMaintenance = hasPermission('properties_delete');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<MaintenanceStatus | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -208,10 +213,12 @@ export function Maintenance() {
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Maintenance</h1>
           <p className="text-muted mt-1 text-sm">Track repairs and work orders across your properties.</p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Request
-        </Button>
+        {canEditMaintenance && (
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Request
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -337,7 +344,7 @@ export function Maintenance() {
                             {m.status === 'in_progress' ? 'Complete' : 'Start'}
                           </button>
                         )}
-                        {m.status !== 'paid' && m.status !== 'cancelled' && (
+                        {canEditMaintenance && m.status !== 'paid' && m.status !== 'cancelled' && (
                           <button
                             onClick={() => openPay(m)}
                             className="text-xs font-medium text-positive hover:opacity-80 px-2 py-1 rounded-md hover:bg-positive-soft transition-colors"
@@ -345,20 +352,24 @@ export function Maintenance() {
                             Mark paid
                           </button>
                         )}
-                        <button
-                          onClick={() => openEdit(m)}
-                          className="p-1.5 text-faint hover:text-ink hover:bg-black/[0.05] rounded-md transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(m)}
-                          className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canEditMaintenance && (
+                          <button
+                            onClick={() => openEdit(m)}
+                            className="p-1.5 text-faint hover:text-ink hover:bg-black/[0.05] rounded-md transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDeleteMaintenance && (
+                          <button
+                            onClick={() => handleDelete(m)}
+                            className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

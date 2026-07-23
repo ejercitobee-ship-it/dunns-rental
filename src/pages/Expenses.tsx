@@ -63,8 +63,10 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 
 export function Expenses() {
   const { expenses, incomes, properties, units, rentPayments, leases, maintenance, addExpense, addIncome, deleteExpense, deleteIncome } = useApp();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, hasPermission } = useAuth();
   const { showToast } = useToast();
+  const canAddExpense = hasPermission('finances_expenses');
+  const canAddIncome = hasPermission('finances_income');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
   const [propertyFilter, setPropertyFilter] = useState('all');
@@ -291,10 +293,12 @@ export function Expenses() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Add {view === 'expenses' ? 'Expense' : 'Income'}
-          </Button>
+          {(view === 'expenses' ? canAddExpense : canAddIncome) && (
+            <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              Add {view === 'expenses' ? 'Expense' : 'Income'}
+            </Button>
+          )}
         </div>
       </div>
 

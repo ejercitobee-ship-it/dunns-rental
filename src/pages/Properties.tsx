@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type { Property, Unit, LeaseStatus } from '../types';
 
@@ -37,6 +38,15 @@ export function Properties() {
     refreshData,
   } = useApp();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  // Action buttons only appear when the signed-in role is allowed to do them,
+  // so what a role can access on screen matches what the server enforces.
+  const canCreateProperty = hasPermission('properties_create');
+  const canEditProperty = hasPermission('properties_edit');
+  const canDeleteProperty = hasPermission('properties_delete');
+  const canCreateUnit = hasPermission('units_create');
+  const canEditUnit = hasPermission('units_edit');
+  const canDeleteUnit = hasPermission('units_delete');
 
   const [searchTerm, setSearchTerm] = useState('');
   // Each property collapses so the page stays tidy as more are added. Collapsed
@@ -282,10 +292,12 @@ export function Properties() {
           <h1 className="text-2xl sm:text-3xl font-bold text-ink">Properties</h1>
           <p className="text-muted mt-1 text-sm sm:text-base">Manage your rental properties and units</p>
         </div>
-        <Button onClick={() => setIsAddPropertyOpen(true)} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Property
-        </Button>
+        {canCreateProperty && (
+          <Button onClick={() => setIsAddPropertyOpen(true)} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Property
+          </Button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -377,33 +389,39 @@ export function Properties() {
                   </div>
                 </button>
                 <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                  <Button 
-                    size="sm" 
-                    variant="secondary"
-                    onClick={() => {
-                      setPropertyForUnit(property);
-                      setIsAddUnitOpen(true);
-                    }}
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Unit
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    className="text-white hover:bg-white/20"
-                    onClick={() => handleEditProperty(property)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    className="text-white hover:bg-white/20 hover:text-red-200"
-                    onClick={() => setPropertyToDelete(property)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {canCreateUnit && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setPropertyForUnit(property);
+                        setIsAddUnitOpen(true);
+                      }}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Unit
+                    </Button>
+                  )}
+                  {canEditProperty && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-white hover:bg-white/20"
+                      onClick={() => handleEditProperty(property)}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canDeleteProperty && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-white hover:bg-white/20 hover:text-red-200"
+                      onClick={() => setPropertyToDelete(property)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
               
@@ -449,18 +467,22 @@ export function Properties() {
                               {displayStatus}
                             </Badge>
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                              <button
-                                onClick={() => handleEditUnit(unit)}
-                                className="p-1 hover:bg-black/[0.05] rounded"
-                              >
-                                <Edit2 className="h-3 w-3 text-muted" />
-                              </button>
-                              <button
-                                onClick={() => setUnitToDelete(unit)}
-                                className="p-1 hover:bg-danger-soft rounded"
-                              >
-                                <Trash2 className="h-3 w-3 text-danger" />
-                              </button>
+                              {canEditUnit && (
+                                <button
+                                  onClick={() => handleEditUnit(unit)}
+                                  className="p-1 hover:bg-black/[0.05] rounded"
+                                >
+                                  <Edit2 className="h-3 w-3 text-muted" />
+                                </button>
+                              )}
+                              {canDeleteUnit && (
+                                <button
+                                  onClick={() => setUnitToDelete(unit)}
+                                  className="p-1 hover:bg-danger-soft rounded"
+                                >
+                                  <Trash2 className="h-3 w-3 text-danger" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -525,10 +525,12 @@ export function TenantDetail() {
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <Button onClick={openEdit} className="flex-1 sm:flex-none">
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit Person
-          </Button>
+          {canManagePortal && (
+            <Button onClick={openEdit} className="flex-1 sm:flex-none">
+              <Edit2 className="h-4 w-4 mr-2" />
+              Edit Person
+            </Button>
+          )}
           {hasPermission('tenants_delete') && (
             <Button
               variant="destructive"
