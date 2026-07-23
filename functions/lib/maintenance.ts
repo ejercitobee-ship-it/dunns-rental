@@ -25,6 +25,17 @@ export const MAINTENANCE_STATUSES = [
 export type MaintenanceStatus = (typeof MAINTENANCE_STATUSES)[number];
 
 /**
+ * The id of the expenses row that "mark paid" writes for a maintenance request.
+ * Derived from the request id so paying is idempotent (one expense per request)
+ * and so deleting the request can find and remove that exact expense. Both the
+ * pay endpoint and the delete endpoint MUST use this, or a deleted report would
+ * leave its cost counting in Finances.
+ */
+export function maintenanceExpenseId(requestId: string): string {
+  return `maint-${requestId}`;
+}
+
+/**
  * Whether a handyman with these trades should be offered a request in this
  * category. 'general' handymen see everything; an unknown/blank category falls
  * back to 'general' so nothing silently reaches no one.

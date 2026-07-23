@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeMaintenance } from '../../../lib/serializers';
+import { maintenanceExpenseId } from '../../../lib/maintenance';
 
 /**
  * POST /api/maintenance/:id/pay — the admin records paying the handyman. Sets
@@ -36,7 +37,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       : null;
 
     const today = new Date().toISOString().slice(0, 10);
-    const expenseId = `maint-${id}`;
+    const expenseId = maintenanceExpenseId(id);
 
     await env.DB.batch([
       env.DB.prepare(

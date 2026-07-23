@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tradeMatches } from './maintenance';
+import { tradeMatches, maintenanceExpenseId } from './maintenance';
 
 describe('tradeMatches', () => {
   it('offers a job to a handyman who works that trade', () => {
@@ -23,5 +23,11 @@ describe('tradeMatches', () => {
 
   it('a handyman with no trades is offered nothing', () => {
     expect(tradeMatches([], 'plumbing')).toBe(false);
+  });
+});
+
+describe('maintenanceExpenseId', () => {
+  it('derives the expense id from the request id so pay and delete agree', () => {
+    expect(maintenanceExpenseId('abc-123')).toBe('maint-abc-123');
   });
 });

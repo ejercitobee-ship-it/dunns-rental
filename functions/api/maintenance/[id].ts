@@ -1,6 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeMaintenance } from '../../lib/serializers';
+import { deleteDriveFile } from '../../lib/google';
+import { maintenanceExpenseId } from '../../lib/maintenance';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -70,7 +72,30 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    await env.DB.prepare('DELETE FROM maintenance_requests WHERE id = ?').bind(params.id as string).run();
+    const id = params.id as string;
+
+    // Deleting a report removes everything tied to it, so nothing is left
+    // behind in Finances or storage:
+    //   1. the maintenance expense the "mark paid" step wrote (id = maint-<id>),
+    //      which otherwise keeps counting against income on the Dashboard and
+    //      the per-property breakdown;
+    //   2. the tenant's attached photo in Google Drive (best-effort);
+    //   3. the request row itself, which carries the whole history (status,
+    //      assignment, schedule, availability) in its own columns.
+    const row = await env.DB.prepare('SELECT photo_drive_id FROM maintenance_requests WHERE id = ?')
+      .bind(id)
+      .first<{ photo_drive_id: string | null }>();
+    if (!row) return jsonOk({ success: true });
+
+    if (row.photo_drive_id) {
+      try { await deleteDriveFile(env, row.photo_drive_id); } catch { /* already gone or Drive down */ }
+    }
+
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM expenses WHERE id = ?').bind(maintenanceExpenseId(id)),
+      env.DB.prepare('DELETE FROM maintenance_requests WHERE id = ?').bind(id),
+    ]);
+
     return jsonOk({ success: true });
   } catch {
     return serverError();

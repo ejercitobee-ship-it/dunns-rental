@@ -153,7 +153,14 @@ function reducer(state: AppState, action: Action): AppState {
         maintenance: state.maintenance.map(m => m.id === action.payload.id ? action.payload : m),
       };
     case 'DELETE_MAINTENANCE':
-      return { ...state, maintenance: state.maintenance.filter(m => m.id !== action.payload) };
+      // Also drop the derived maintenance expense (id = maint-<requestId>) the
+      // "mark paid" step created, so Finances and the Dashboard stop counting it
+      // the moment the report is deleted, matching the server-side cleanup.
+      return {
+        ...state,
+        maintenance: state.maintenance.filter(m => m.id !== action.payload),
+        expenses: state.expenses.filter(e => e.id !== `maint-${action.payload}`),
+      };
     default:
       return state;
   }
