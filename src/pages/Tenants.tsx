@@ -39,6 +39,7 @@ const emptyTenancyForm = {
   endDate: '',
   monthlyRent: '',
   securityDeposit: '',
+  moveInFeePaid: true,
   notes: '',
 };
 
@@ -259,6 +260,7 @@ export function Tenants() {
         endDate: tenancyForm.endDate || undefined,
         monthlyRent: Number(tenancyForm.monthlyRent) || 0,
         securityDeposit: tenancyForm.securityDeposit ? Number(tenancyForm.securityDeposit) : undefined,
+        moveInFeePaid: tenancyForm.moveInFeePaid,
         status: 'active',
         notes: tenancyForm.notes.trim() || undefined,
         tenantIds,
@@ -628,7 +630,7 @@ export function Tenants() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">Security Deposit</label>
+                <label className="block text-sm font-medium text-ink mb-1.5">Move-In Fee</label>
                 <input
                   type="number"
                   min={0}
@@ -638,6 +640,18 @@ export function Tenants() {
                   onChange={(e) => setTenancyForm({ ...tenancyForm, securityDeposit: e.target.value })}
                   placeholder="0.00"
                 />
+                <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-line-strong"
+                    checked={tenancyForm.moveInFeePaid}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaid: e.target.checked })}
+                  />
+                  Move-in fee already paid
+                </label>
+                {!tenancyForm.moveInFeePaid && tenancyForm.securityDeposit && (
+                  <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
+                )}
               </div>
             </div>
 

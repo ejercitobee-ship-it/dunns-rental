@@ -54,7 +54,7 @@ export function TenantDetail() {
   const navigate = useNavigate();
   const {
     tenants, properties, units, rentPayments,
-    updateTenant, deleteTenant, getLeaseTenants, getTenantLeases,
+    updateTenant, deleteTenant, updateLease, getLeaseTenants, getTenantLeases,
   } = useApp();
   const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
@@ -214,6 +214,16 @@ export function TenantDetail() {
       emergencyRelationship: tenant.emergencyContact?.relationship || '',
     });
     setIsEditOpen(true);
+  };
+
+  const markMoveInFeePaid = async () => {
+    if (!lease) return;
+    try {
+      await updateLease({ ...lease, moveInFeePaid: true });
+      showToast('Move-in fee marked as paid.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the move-in fee.', 'error');
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -613,6 +623,21 @@ export function TenantDetail() {
                   <span className="font-semibold tnum">{formatCurrency(lease.monthlyRent)}</span>
                   <span className="text-muted">/month</span>
                 </div>
+                {(lease.securityDeposit ?? 0) > 0 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-line">
+                    <span className="text-sm text-muted">Move-in fee {formatCurrency(lease.securityDeposit ?? 0)}</span>
+                    {lease.moveInFeePaid === false ? (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="destructive">Owed</Badge>
+                        {canManagePortal && (
+                          <button onClick={markMoveInFeePaid} className="text-xs text-primary hover:underline">Mark paid</button>
+                        )}
+                      </div>
+                    ) : (
+                      <Badge variant="success">Paid</Badge>
+                    )}
+                  </div>
+                )}
                 {thisMonth && (
                   <div className="pt-2 border-t border-line flex items-center justify-between">
                     <span className="eyebrow">This Month</span>

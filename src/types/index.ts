@@ -34,7 +34,10 @@ export interface Lease {
   startDate?: string;
   endDate?: string;
   monthlyRent: number;
+  /** The move-in fee amount (labelled "Move-In Fee" in the UI). */
   securityDeposit?: number;
+  /** Whether the move-in fee has been paid. Defaults to paid. */
+  moveInFeePaid?: boolean;
   status: LeaseStatus;
   needsReview?: boolean;
   /**
