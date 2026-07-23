@@ -62,7 +62,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, addExpense, addIncome, deleteExpense, deleteIncome } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, addExpense, addIncome, deleteExpense, deleteIncome } = useApp();
   const { isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -113,6 +113,15 @@ export function Expenses() {
   const rentCollected = useMemo(
     () => rentPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.amount || 0), 0),
     [rentPayments]
+  );
+
+  // Maintenance expenses (id `maint-<requestId>`) are normally managed from the
+  // Maintenance page. But if the report was already deleted, the expense is an
+  // orphan with nowhere else to remove it, so it must be deletable right here.
+  // This set holds only the maintenance expenses whose report still exists.
+  const linkedMaintenanceExpenseIds = useMemo(
+    () => new Set(maintenance.map(m => `maint-${m.id}`)),
+    [maintenance]
   );
 
   const stats = useMemo(() => {
@@ -503,7 +512,7 @@ export function Expenses() {
                         </td>
                         {canDelete && (
                           <td className="py-4 px-4 text-right">
-                            {expense.id.startsWith('maint-') ? (
+                            {linkedMaintenanceExpenseIds.has(expense.id) ? (
                               <span
                                 className="text-xs text-muted-foreground"
                                 title="This came from a maintenance job. Delete it from the Maintenance page."
