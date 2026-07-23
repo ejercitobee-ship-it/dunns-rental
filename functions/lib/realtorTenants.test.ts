@@ -1,36 +1,45 @@
 import { describe, it, expect } from 'vitest';
 import { validateTenantContact, MAX_CONTACT_FIELD } from './realtorTenants';
 
+// A complete, valid input. Realtors must supply every field.
+const full = {
+  firstName: 'Jane',
+  lastName: 'Doe',
+  email: 'jane@example.com',
+  phone: '555',
+  emergencyName: 'Bob',
+  emergencyPhone: '556',
+  emergencyRelationship: 'Spouse',
+};
+
 describe('validateTenantContact', () => {
-  it('accepts first and last name, trims, nulls blank optional fields', () => {
-    const r = validateTenantContact({ firstName: '  Jane ', lastName: 'Doe ', email: '', phone: ' 555 ' });
-    expect(r).toEqual({
-      ok: true,
-      value: { firstName: 'Jane', lastName: 'Doe', email: null, phone: '555',
-        emergencyName: null, emergencyPhone: null, emergencyRelationship: null },
+  it('accepts a complete record and trims every field', () => {
+    const r = validateTenantContact({
+      firstName: '  Jane ', lastName: 'Doe ', email: ' jane@example.com ', phone: ' 555 ',
+      emergencyName: '  Bob  ', emergencyPhone: ' 556 ', emergencyRelationship: ' Spouse ',
     });
+    expect(r).toEqual({ ok: true, value: full });
   });
 
   it('requires both first and last name', () => {
-    expect(validateTenantContact({ firstName: 'Jane' })).toEqual({ ok: false, error: 'First and last name are required' });
-    expect(validateTenantContact({ lastName: 'Doe' })).toEqual({ ok: false, error: 'First and last name are required' });
-    expect(validateTenantContact({})).toEqual({ ok: false, error: 'First and last name are required' });
+    expect(validateTenantContact({ ...full, firstName: '' })).toEqual({ ok: false, error: 'First and last name are required' });
+    expect(validateTenantContact({ ...full, lastName: '' })).toEqual({ ok: false, error: 'First and last name are required' });
+  });
+
+  it('requires email and phone', () => {
+    expect(validateTenantContact({ ...full, email: '' })).toEqual({ ok: false, error: 'Email is required' });
+    expect(validateTenantContact({ ...full, phone: '' })).toEqual({ ok: false, error: 'Phone is required' });
+  });
+
+  it('requires all three emergency contact fields', () => {
+    const err = { ok: false, error: 'Emergency contact name, phone, and relationship are required' };
+    expect(validateTenantContact({ ...full, emergencyName: '' })).toEqual(err);
+    expect(validateTenantContact({ ...full, emergencyPhone: '' })).toEqual(err);
+    expect(validateTenantContact({ ...full, emergencyRelationship: '' })).toEqual(err);
   });
 
   it('rejects an over-long field', () => {
     const long = 'x'.repeat(MAX_CONTACT_FIELD + 1);
-    expect(validateTenantContact({ firstName: long, lastName: 'Doe' })).toEqual({ ok: false, error: 'A field is too long' });
-  });
-
-  it('keeps trimmed emergency contact fields when present', () => {
-    const r = validateTenantContact({
-      firstName: 'Jane', lastName: 'Doe',
-      emergencyName: '  Bob  ', emergencyPhone: ' 555 ', emergencyRelationship: ' Spouse ',
-    });
-    expect(r).toEqual({
-      ok: true,
-      value: { firstName: 'Jane', lastName: 'Doe', email: null, phone: null,
-        emergencyName: 'Bob', emergencyPhone: '555', emergencyRelationship: 'Spouse' },
-    });
+    expect(validateTenantContact({ ...full, firstName: long })).toEqual({ ok: false, error: 'A field is too long' });
   });
 });

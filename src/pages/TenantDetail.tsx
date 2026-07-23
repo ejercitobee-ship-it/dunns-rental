@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
-  FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase,
+  FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -223,6 +223,52 @@ export function TenantDetail() {
       showToast('Move-in fee marked as paid.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not update the move-in fee.', 'error');
+    }
+  };
+
+  // Approving a realtor's draft placement: the office confirms the rent and
+  // dates, then it becomes a live tenancy (needs_review cleared, so it starts
+  // billing and shows Active). The unit was already occupied while pending.
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '' });
+
+  const openApprove = () => {
+    if (!lease) return;
+    setApproveForm({
+      monthlyRent: lease.monthlyRent ? String(lease.monthlyRent) : '',
+      startDate: lease.startDate || '',
+      endDate: lease.endDate || '',
+    });
+    setApproveOpen(true);
+  };
+
+  const handleApprove = async () => {
+    if (!lease || approving) return;
+    const rent = Number(approveForm.monthlyRent);
+    if (!Number.isFinite(rent) || rent <= 0) {
+      showToast('Enter the monthly rent.', 'error');
+      return;
+    }
+    if (!approveForm.startDate) {
+      showToast('Enter the start date.', 'error');
+      return;
+    }
+    setApproving(true);
+    try {
+      await updateLease({
+        ...lease,
+        monthlyRent: rent,
+        startDate: approveForm.startDate,
+        endDate: approveForm.endDate || undefined,
+        needsReview: false,
+      });
+      showToast('Tenancy approved. It is now active.', 'success');
+      setApproveOpen(false);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not approve the tenancy.', 'error');
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -526,8 +572,13 @@ export function TenantDetail() {
             </h1>
             {lease ? (
               <div className="flex items-center gap-1.5 mt-1">
-                <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
-                {lease.needsReview && <Badge variant="warning">Needs review</Badge>}
+                {/* While a realtor's placement is under review it is not yet a
+                    live tenancy, so it shows "Pending review", not "Active". */}
+                {lease.needsReview ? (
+                  <Badge variant="warning">Pending review</Badge>
+                ) : (
+                  <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                )}
               </div>
             ) : (
               <Badge variant="outline" className="mt-1">No tenancy</Badge>
@@ -535,8 +586,14 @@ export function TenantDetail() {
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          {lease?.needsReview && canManagePortal && (
+            <Button onClick={openApprove} className="flex-1 sm:flex-none">
+              <Check className="h-4 w-4 mr-2" />
+              Approve
+            </Button>
+          )}
           {canManagePortal && (
-            <Button onClick={openEdit} className="flex-1 sm:flex-none">
+            <Button variant="outline" onClick={openEdit} className="flex-1 sm:flex-none">
               <Edit2 className="h-4 w-4 mr-2" />
               Edit Person
             </Button>
@@ -1021,6 +1078,59 @@ export function TenantDetail() {
       </Card>
 
       {/* Edit modal */}
+      <Modal isOpen={approveOpen} onClose={() => (approving ? undefined : setApproveOpen(false))} title="Approve tenancy" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Confirm the rent and dates for this placement. Approving makes it a live tenancy: it starts billing rent and
+            the status becomes Active. The unit is already marked occupied.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Monthly Rent *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={approveForm.monthlyRent}
+                onChange={(e) => setApproveForm({ ...approveForm, monthlyRent: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Start Date *</label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={approveForm.startDate}
+                onChange={(e) => setApproveForm({ ...approveForm, startDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={approveForm.endDate}
+                onChange={(e) => setApproveForm({ ...approveForm, endDate: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setApproveOpen(false)} disabled={approving}>
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleApprove} disabled={approving}>
+              <Check className="h-4 w-4 mr-2" />
+              {approving ? 'Approving…' : 'Approve tenancy'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Person" size="lg">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

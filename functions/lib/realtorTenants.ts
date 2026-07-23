@@ -38,13 +38,20 @@ export function validateTenantContact(body: {
   const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
   const firstName = str(body.firstName);
   const lastName = str(body.lastName);
-  if (!firstName || !lastName) return { ok: false, error: 'First and last name are required' };
-
   const email = str(body.email);
   const phone = str(body.phone);
   const emergencyName = str(body.emergencyName);
   const emergencyPhone = str(body.emergencyPhone);
   const emergencyRelationship = str(body.emergencyRelationship);
+
+  // Realtors must give the office a complete record: every field is required.
+  if (!firstName || !lastName) return { ok: false, error: 'First and last name are required' };
+  if (!email) return { ok: false, error: 'Email is required' };
+  if (!phone) return { ok: false, error: 'Phone is required' };
+  if (!emergencyName || !emergencyPhone || !emergencyRelationship) {
+    return { ok: false, error: 'Emergency contact name, phone, and relationship are required' };
+  }
+
   for (const v of [firstName, lastName, email, phone, emergencyName, emergencyPhone, emergencyRelationship]) {
     if (v.length > MAX_CONTACT_FIELD) return { ok: false, error: 'A field is too long' };
   }

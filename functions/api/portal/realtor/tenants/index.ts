@@ -74,6 +74,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const valid = validateTenantContact(body);
     if (!valid.ok) return jsonError(valid.error, 400);
     const unitId = typeof body.unitId === 'string' && body.unitId ? body.unitId : undefined;
+    if (!unitId) return jsonError('Please choose a unit for this tenant', 400);
+
+    // If this email already belongs to someone in the system, do not create a
+    // duplicate. Send the realtor to the office to link the existing record.
+    const existing = await env.DB.prepare(
+      'SELECT id FROM tenants WHERE email IS NOT NULL AND email != \'\' AND lower(email) = lower(?) LIMIT 1'
+    ).bind(valid.value.email).first();
+    if (existing) {
+      return jsonError('A tenant with this email is already in the system. Please call the office to link them instead.', 409);
+    }
+
     try {
       const row = await createTenantForRealtor(env, auth.id, valid.value, unitId);
       return jsonOk({ success: true, data: serializePortalTenant(row) }, 201);

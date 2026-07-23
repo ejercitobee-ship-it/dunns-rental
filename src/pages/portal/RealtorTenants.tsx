@@ -31,6 +31,12 @@ export function RealtorTenants() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [units, setUnits] = useState<AvailableUnit[]>([]);
+  // Set when the office needs to link an existing record (email already used).
+  const [emailFlag, setEmailFlag] = useState(false);
+
+  const allFieldsFilled =
+    !!form.firstName.trim() && !!form.lastName.trim() && !!form.email.trim() && !!form.phone.trim() &&
+    !!form.emergencyName.trim() && !!form.emergencyPhone.trim() && !!form.emergencyRelationship.trim() && !!form.unitId;
 
   const loadTenants = () => portalApi.realtorTenants().then(setTenants);
   const loadUnits = () => portalApi.availableUnits().then(setUnits);
@@ -64,25 +70,33 @@ export function RealtorTenants() {
   };
 
   const submitNewTenant = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || submitting) return;
+    if (!allFieldsFilled || submitting) return;
     setSubmitting(true);
+    setEmailFlag(false);
     try {
       await portalApi.addRealtorTenant({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        email: form.email.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        emergencyName: form.emergencyName.trim() || undefined,
-        emergencyPhone: form.emergencyPhone.trim() || undefined,
-        emergencyRelationship: form.emergencyRelationship.trim() || undefined,
-        unitId: form.unitId || undefined,
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        emergencyName: form.emergencyName.trim(),
+        emergencyPhone: form.emergencyPhone.trim(),
+        emergencyRelationship: form.emergencyRelationship.trim(),
+        unitId: form.unitId,
       });
       await Promise.all([loadTenants(), loadUnits()]);
       setForm(emptyForm);
       setShowForm(false);
       showToast('Tenant added.', 'success');
     } catch (err) {
-      showToast((err as Error).message || 'Could not add tenant.', 'error');
+      const msg = (err as Error).message || '';
+      // Duplicate email: flag the realtor to call the office instead of showing
+      // a transient toast, since it is an action they must take.
+      if (/already in the system/i.test(msg)) {
+        setEmailFlag(true);
+      } else {
+        showToast(msg || 'Could not add tenant.', 'error');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -121,49 +135,57 @@ export function RealtorTenants() {
         <Card>
           <CardContent className="p-5 space-y-4">
             <h2 className="font-display text-lg font-medium text-ink">New tenant</h2>
+            <p className="text-xs text-muted">All fields are required.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="First name"
+                placeholder="First name *"
                 value={form.firstName}
                 onChange={(e) => setForm({ ...form, firstName: e.target.value })}
               />
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Last name"
+                placeholder="Last name *"
                 value={form.lastName}
                 onChange={(e) => setForm({ ...form, lastName: e.target.value })}
               />
               <input
-                className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Email"
+                className={`rounded-lg border px-3 py-2 text-sm ${emailFlag ? 'border-danger' : 'border-line'}`}
+                placeholder="Email *"
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => { setForm({ ...form, email: e.target.value }); setEmailFlag(false); }}
               />
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Phone"
+                placeholder="Phone *"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </div>
+
+            {emailFlag && (
+              <div className="rounded-lg border border-danger/40 bg-danger-soft p-3 text-sm text-danger">
+                This email is already in the system. Please <span className="font-semibold">call the office</span> to link this tenant instead of creating a new record.
+              </div>
+            )}
+
             <div className="grid gap-2 sm:grid-cols-3">
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Emergency contact name"
+                placeholder="Emergency contact name *"
                 value={form.emergencyName}
                 onChange={(e) => setForm({ ...form, emergencyName: e.target.value })}
               />
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Emergency contact phone"
+                placeholder="Emergency contact phone *"
                 value={form.emergencyPhone}
                 onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })}
               />
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Emergency contact relationship"
+                placeholder="Emergency contact relationship *"
                 value={form.emergencyRelationship}
                 onChange={(e) => setForm({ ...form, emergencyRelationship: e.target.value })}
               />
@@ -174,7 +196,7 @@ export function RealtorTenants() {
                 value={form.unitId}
                 onChange={(e) => setForm({ ...form, unitId: e.target.value })}
               >
-                <option value="">No unit yet</option>
+                <option value="">Select a unit *</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.address ? `${u.address}, ` : ''}Unit {u.unitNumber} ({formatCurrency(u.monthlyRent)})
@@ -185,14 +207,14 @@ export function RealtorTenants() {
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                disabled={!form.firstName.trim() || !form.lastName.trim() || submitting}
+                disabled={!allFieldsFilled || submitting}
                 onClick={submitNewTenant}
               >
                 Save tenant
               </Button>
             </div>
             <p className="text-xs text-muted">
-              This creates a new person in your list and in the system. If they are already in the system, ask the office to link them instead.
+              This creates a new tenant in your list and in the system. If they are already in the system, ask the office to link them instead.
             </p>
             <p className="text-xs text-muted">
               Choosing a unit places this tenant there as a draft. The office sets the rent and dates.
