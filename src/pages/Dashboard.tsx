@@ -258,6 +258,44 @@ export function Dashboard() {
       .sort((a, b) => b.months - a.months || b.balance - a.balance);
   }, [leases, rentPayments, properties, units, getLeaseTenants, pastDueMonths]);
 
+  // Both danger lists are grouped by property so they stay tidy across a large
+  // portfolio: one collapsible row per address, expanding to the detail.
+  const pastDueByProperty = useMemo(() => {
+    const groups = new Map<string, { key: string; name: string; total: number; items: typeof pastDue }>();
+    for (const row of pastDue) {
+      const key = row.property?.id ?? 'unassigned';
+      const name = row.property?.name ?? row.property?.address ?? 'Unassigned';
+      let g = groups.get(key);
+      if (!g) { g = { key, name, total: 0, items: [] }; groups.set(key, g); }
+      g.items.push(row);
+      g.total += row.balance;
+    }
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
+  }, [pastDue]);
+
+  const overdueByProperty = useMemo(() => {
+    const groups = new Map<string, { key: string; name: string; total: number; items: typeof overduePayments }>();
+    for (const row of overduePayments) {
+      const key = row.property?.id ?? 'unassigned';
+      const name = row.property?.name ?? 'Unassigned';
+      let g = groups.get(key);
+      if (!g) { g = { key, name, total: 0, items: [] }; groups.set(key, g); }
+      g.items.push(row);
+      g.total += row.amount;
+    }
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
+  }, [overduePayments]);
+
+  const [expandedPastDue, setExpandedPastDue] = useState<Set<string>>(new Set());
+  const [expandedOverdue, setExpandedOverdue] = useState<Set<string>>(new Set());
+  const toggleIn = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
+    setter(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
   // never disagree (maintenance is the one status still set by hand).
@@ -347,25 +385,51 @@ export function Dashboard() {
             </h2>
           </div>
           <div className="divide-y divide-danger/15">
-            {pastDue.map(row => {
-              const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
-              const place = [row.property?.name || row.property?.address, row.unit ? `Unit ${row.unit.unitNumber}` : null].filter(Boolean).join(' · ');
-              const firstTenant = row.occupants[0];
+            {pastDueByProperty.map(group => {
+              const isOpen = expandedPastDue.has(group.key);
               return (
-                <button
-                  key={row.lease.id}
-                  onClick={() => firstTenant && navigate(`/tenants/${firstTenant.id}`)}
-                  className="w-full flex items-center justify-between gap-4 py-2.5 text-left hover:opacity-80 transition-opacity"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-ink truncate">{names}</p>
-                    {place && <p className="text-xs text-muted truncate">{place}</p>}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-semibold text-danger tnum">{formatCurrency(row.balance)}</p>
-                    <p className="text-xs text-muted">{row.months} months behind</p>
-                  </div>
-                </button>
+                <div key={group.key}>
+                  <button
+                    type="button"
+                    onClick={() => toggleIn(setExpandedPastDue, group.key)}
+                    aria-expanded={isOpen}
+                    className="w-full flex items-center gap-3 py-2.5 text-left hover:opacity-80 transition-opacity"
+                  >
+                    {isOpen
+                      ? <ChevronDown className="h-4 w-4 text-danger/70 flex-shrink-0" />
+                      : <ChevronRight className="h-4 w-4 text-danger/70 flex-shrink-0" />}
+                    <span className="font-medium text-ink flex-1 truncate">{group.name}</span>
+                    <span className="text-xs text-muted whitespace-nowrap">
+                      {group.items.length} {group.items.length === 1 ? 'tenancy' : 'tenancies'}
+                    </span>
+                    <span className="text-sm font-semibold text-danger tnum whitespace-nowrap ml-2">{formatCurrency(group.total)}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="pl-7 pb-1">
+                      {group.items.map(row => {
+                        const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
+                        const place = row.unit ? `Unit ${row.unit.unitNumber}` : '';
+                        const firstTenant = row.occupants[0];
+                        return (
+                          <button
+                            key={row.lease.id}
+                            onClick={() => firstTenant && navigate(`/tenants/${firstTenant.id}`)}
+                            className="w-full flex items-center justify-between gap-4 py-2 text-left hover:opacity-80 transition-opacity"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-ink truncate">{names}</p>
+                              {place && <p className="text-xs text-muted truncate">{place}</p>}
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-sm font-semibold text-danger tnum">{formatCurrency(row.balance)}</p>
+                              <p className="text-xs text-muted">{row.months} months behind</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -716,46 +780,49 @@ export function Dashboard() {
               <ArrowRight className="h-4 w-4 ml-auto" />
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-line">
-                    <th className="text-left py-3 px-4 font-semibold text-ink">Occupants</th>
-                    <th className="text-left py-3 px-4 font-semibold text-ink">Property</th>
-                    <th className="text-left py-3 px-4 font-semibold text-ink">Period</th>
-                    <th className="text-right py-3 px-4 font-semibold text-ink">Amount</th>
-                    <th className="text-center py-3 px-4 font-semibold text-ink">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overduePayments.slice(0, 5).map(row => (
-                    <tr
-                      key={row.key}
-                      className="border-b border-line last:border-0 hover:bg-danger-soft/50 cursor-pointer transition-colors"
-                      onClick={() => navigate('/rents')}
+          <CardContent className="p-0">
+            <div className="border-t border-line">
+              {overdueByProperty.map(group => {
+                const isOpen = expandedOverdue.has(group.key);
+                return (
+                  <div key={group.key} className="border-b border-line last:border-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleIn(setExpandedOverdue, group.key)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-danger-soft/40 text-left transition-colors"
                     >
-                      <td className="py-3 px-4 font-medium text-ink">
-                        {row.occupants.length > 0
-                          ? row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
-                          : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-muted">
-                        {row.property?.name}
-                      </td>
-                      <td className="py-3 px-4 text-muted">
-                        {formatMonthYear(row.month, row.year)}
-                      </td>
-                      <td className="py-3 px-4 text-right font-bold text-ink">
-                        {formatCurrency(row.amount)}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <Badge variant="destructive">Overdue</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      {isOpen
+                        ? <ChevronDown className="h-4 w-4 text-faint flex-shrink-0" />
+                        : <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />}
+                      <span className="text-sm font-medium text-ink flex-1 truncate">{group.name}</span>
+                      <span className="text-xs text-muted whitespace-nowrap">
+                        {group.items.length} {group.items.length === 1 ? 'month overdue' : 'months overdue'}
+                      </span>
+                      <span className="text-sm font-semibold text-danger tnum whitespace-nowrap ml-2">{formatCurrency(group.total)}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="bg-danger-soft/30 px-4 sm:px-6 pb-2">
+                        {group.items.map(row => (
+                          <button
+                            key={row.key}
+                            onClick={() => navigate('/rents')}
+                            className="w-full flex items-center gap-3 py-2.5 border-b border-line last:border-0 text-left hover:opacity-80 transition-opacity"
+                          >
+                            <span className="text-sm text-ink flex-1 min-w-0 truncate">
+                              {row.occupants.length > 0
+                                ? row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
+                                : '—'}
+                            </span>
+                            <span className="text-sm text-muted whitespace-nowrap w-28 text-right">{formatMonthYear(row.month, row.year)}</span>
+                            <span className="text-sm font-semibold text-ink tnum whitespace-nowrap w-24 text-right">{formatCurrency(row.amount)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
