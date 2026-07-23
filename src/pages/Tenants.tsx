@@ -14,7 +14,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { monthlyRevenue } from '../lib/rent';
-import type { Lease, LeaseStatus } from '../types';
+import type { Lease, LeaseStatus, Property, Unit, Tenant } from '../types';
 
 interface PersonRow {
   key: string;
@@ -95,18 +95,54 @@ export function Tenants() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenants, leases, properties, units]);
 
-  const filteredRows = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(({ tenant }) => {
-      const fullName = `${tenant.firstName} ${tenant.lastName}`.toLowerCase();
-      return (
-        fullName.includes(q) ||
-        (tenant.email || '').toLowerCase().includes(q) ||
-        (tenant.phone || '').toLowerCase().includes(q)
-      );
+  // One row per household (lease/unit) rather than per person: everyone on the
+  // same lease is shown together on a single line. People with no current
+  // tenancy each stand alone. Sorted by property then unit. (This replaces the
+  // old per-person filteredRows list.)
+  interface HouseholdRow {
+    key: string;
+    lease?: Lease;
+    property?: Property;
+    unit?: Unit;
+    occupants: Tenant[];
+  }
+  const households = useMemo<HouseholdRow[]>(() => {
+    const byLease = new Map<string, HouseholdRow>();
+    const singles: HouseholdRow[] = [];
+    for (const r of rows) {
+      if (r.lease) {
+        const g = byLease.get(r.lease.id);
+        if (g) g.occupants.push(r.tenant);
+        else byLease.set(r.lease.id, { key: r.lease.id, lease: r.lease, property: r.property, unit: r.unit, occupants: [r.tenant] });
+      } else {
+        singles.push({ key: r.tenant.id, occupants: [r.tenant] });
+      }
+    }
+    const groups = [...byLease.values(), ...singles];
+    groups.forEach(g =>
+      g.occupants.sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+    );
+    return groups.sort((a, b) => {
+      const an = a.property?.name || '~';
+      const bn = b.property?.name || '~';
+      if (an !== bn) return an.localeCompare(bn);
+      return (a.unit?.unitNumber || '').localeCompare(b.unit?.unitNumber || '');
     });
-  }, [rows, searchTerm]);
+  }, [rows]);
+
+  const filteredGroups = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return households;
+    return households.filter(g =>
+      g.occupants.some(t =>
+        `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
+        (t.email || '').toLowerCase().includes(q) ||
+        (t.phone || '').toLowerCase().includes(q)
+      ) ||
+      (g.property?.name || '').toLowerCase().includes(q) ||
+      (g.unit ? `unit ${g.unit.unitNumber}`.toLowerCase().includes(q) : false)
+    );
+  }, [households, searchTerm]);
 
   const stats = useMemo(() => {
     const totalPeople = tenants.length;
@@ -329,7 +365,7 @@ export function Tenants() {
             <table className="w-full min-w-[860px] sm:min-w-0">
               <thead>
                 <tr className="border-b border-line bg-canvas">
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Person</th>
+                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Household</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property &amp; Unit</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Contact</th>
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Lease Term</th>
@@ -339,32 +375,42 @@ export function Tenants() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map(({ tenant, lease, property, unit, housemates }) => (
+                {filteredGroups.map(({ key, lease, property, unit, occupants }) => (
                   <tr
-                    key={tenant.id}
-                    onClick={() => navigate(`/tenants/${tenant.id}`)}
-                    className="border-b border-line last:border-0 hover:bg-black/[0.02] cursor-pointer"
+                    key={key}
+                    onClick={() => navigate(`/tenants/${occupants[0].id}`)}
+                    className="border-b border-line last:border-0 hover:bg-black/[0.02] cursor-pointer align-top"
                   >
                     <td className="py-4 px-4">
-                      <Link
-                        to={`/tenants/${tenant.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-3"
-                      >
+                      <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
-                          <span className="font-semibold text-primary text-sm">
-                            {tenant.firstName[0]}{tenant.lastName[0]}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-ink truncate">{tenant.firstName} {tenant.lastName}</p>
-                          {housemates.length > 0 && (
-                            <p className="text-xs text-muted truncate">
-                              with {housemates.map(h => `${h.firstName} ${h.lastName}`).join(', ')}
-                            </p>
+                          {occupants.length > 1 ? (
+                            <Users className="h-4 w-4 text-primary" />
+                          ) : (
+                            <span className="font-semibold text-primary text-sm">
+                              {occupants[0].firstName[0]}{occupants[0].lastName[0]}
+                            </span>
                           )}
                         </div>
-                      </Link>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap gap-x-1.5">
+                            {occupants.map((t, i) => (
+                              <span key={t.id} className="whitespace-nowrap">
+                                <Link
+                                  to={`/tenants/${t.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="font-medium text-ink hover:text-primary"
+                                >
+                                  {t.firstName} {t.lastName}
+                                </Link>{i < occupants.length - 1 ? ',' : ''}
+                              </span>
+                            ))}
+                          </div>
+                          {occupants.length > 1 && (
+                            <p className="text-xs text-muted mt-0.5">{occupants.length} housemates</p>
+                          )}
+                        </div>
+                      </div>
                     </td>
 
                     <td className="py-4 px-4">
@@ -385,16 +431,20 @@ export function Tenants() {
                     </td>
 
                     <td className="py-4 px-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm text-muted">
-                          <Mail className="h-3 w-3 text-faint" />
-                          <span className="truncate">{tenant.email || '—'}</span>
+                      {occupants.length === 1 ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm text-muted">
+                            <Mail className="h-3 w-3 text-faint" />
+                            <span className="truncate">{occupants[0].email || '—'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted">
+                            <Phone className="h-3 w-3 text-faint" />
+                            <span>{occupants[0].phone || '—'}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-muted">
-                          <Phone className="h-3 w-3 text-faint" />
-                          <span>{tenant.phone || '—'}</span>
-                        </div>
-                      </div>
+                      ) : (
+                        <span className="text-sm text-muted">{occupants.length} people</span>
+                      )}
                     </td>
 
                     <td className="py-4 px-4">
@@ -428,12 +478,12 @@ export function Tenants() {
                         <div className="relative inline-block">
                           <button
                             type="button"
-                            onClick={() => setOpenMenuId(openMenuId === tenant.id ? null : tenant.id)}
+                            onClick={() => setOpenMenuId(openMenuId === key ? null : key)}
                             className="p-1.5 hover:bg-black/[0.05] rounded-lg transition-colors"
                           >
                             <MoreVertical className="h-4 w-4 text-faint" />
                           </button>
-                          {openMenuId === tenant.id && (
+                          {openMenuId === key && (
                             <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-line bg-surface shadow-[0_12px_28px_-8px_rgba(27,26,23,0.28)] py-1">
                               {lease.status === 'active' && (
                                 <button
@@ -490,7 +540,7 @@ export function Tenants() {
             </table>
           </div>
 
-          {filteredRows.length === 0 && (
+          {filteredGroups.length === 0 && (
             <div className="text-center py-16">
               <Users className="h-10 w-10 mx-auto text-faint mb-3" />
               <h3 className="font-medium text-ink">No people found</h3>

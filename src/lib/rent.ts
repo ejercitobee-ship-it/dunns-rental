@@ -17,6 +17,15 @@ export interface MonthSettlement {
 /** Money is compared to the cent; anything closer than half a cent is equal. */
 const EPSILON = 0.005;
 
+/**
+ * The business started tracking rent in the app in January 2026. No rent is ever
+ * owed for a month before this, no matter how far back a lease actually started,
+ * so a tenant entered with a real move-in date from years ago does not show
+ * years of back rent. "Start fresh this year." Change the year here to move the
+ * cutoff. Stored as a YYYY*12+MM ordinal to compare against month targets.
+ */
+export const RENT_TRACKING_START = 2026 * 12 + 1; // January 2026
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -50,6 +59,9 @@ export function leaseCoversMonth(lease: Lease, month: number, year: number): boo
   // draft (which has a null start date) never bills every month by mistake.
   if (lease.needsReview) return false;
   const target = year * 12 + month;
+  // Nothing before the fresh-start cutoff is ever owed, regardless of how far
+  // back the lease began.
+  if (target < RENT_TRACKING_START) return false;
   if (lease.startDate && target < yearMonthOf(lease.startDate)) return false;
   if (lease.endDate && target > yearMonthOf(lease.endDate)) return false;
   return true;

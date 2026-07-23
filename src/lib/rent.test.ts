@@ -26,6 +26,17 @@ const payment = (over: Partial<RentPayment> = {}): RentPayment => ({
   ...over,
 });
 
+describe('rent tracking start floor (Jan 2026)', () => {
+  it('never owes a month before January 2026, even for a lease that began years earlier', () => {
+    const l = lease({ startDate: '2019-06-01', endDate: undefined });
+    expect(leaseCoversMonth(l, 6, 2019)).toBe(false);
+    expect(leaseCoversMonth(l, 12, 2025)).toBe(false);
+    expect(leaseCoversMonth(l, 1, 2026)).toBe(true);
+    expect(leasesOwingMonth([l], 6, 2019)).toEqual([]);
+    expect(monthsBehind(l, [], 3, 2026).months).toBe(3); // Jan, Feb, Mar 2026 only
+  });
+});
+
 describe('unsettledMonths', () => {
   it('lists every owed month from the start through the target, oldest first', () => {
     // Lease starts Jan 2026, no payments; settle through March 2026 = 3 months.
@@ -210,9 +221,11 @@ describe('leaseCoversMonth', () => {
     expect(leaseCoversMonth(ongoing, 12, 2030)).toBe(true);
   });
 
-  it('is true with no lower bound when there is no startDate', () => {
+  it('has no lower bound from the lease itself, but still respects the 2026 tracking floor', () => {
     const noStart = lease({ startDate: undefined, endDate: '2027-01-01' });
-    expect(leaseCoversMonth(noStart, 1, 2020)).toBe(true);
+    expect(leaseCoversMonth(noStart, 1, 2026)).toBe(true); // at the floor
+    expect(leaseCoversMonth(noStart, 6, 2026)).toBe(true);
+    expect(leaseCoversMonth(noStart, 1, 2020)).toBe(false); // before the floor, never owed
   });
 
   it('is true for the one month a lease both starts and ends in', () => {
