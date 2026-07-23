@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/mh-dunn-logo.png';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import { useAutoEnablePush } from '../../lib/useAutoPush';
 import { cn } from '../../lib/utils';
 
 // The portal shell for tenants and realtors. This is a separate world from
@@ -33,6 +34,10 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Tenants get push notifications on by default, enabled automatically the
+  // first time they interact with the app. There is no toggle to turn it off.
+  useAutoEnablePush(user?.roleId === 'tenant');
 
   const handleSignOut = () => {
     logout();
