@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   Users, TrendingUp,
-  TrendingDown, AlertCircle, Wallet, Building2, Percent, ArrowRight, DoorOpen, Home, CalendarClock
+  TrendingDown, AlertCircle, Wallet, Building2, Percent, ArrowRight, DoorOpen, Home, CalendarClock,
+  ChevronDown, ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -10,7 +11,7 @@ import { formatCurrency, formatDate, formatMonthYear, getMonthName, yearOf, mont
 import { useApp } from '../context/AppContext';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
-import type { DashboardStats, Property, Tenant } from '../types';
+import type { DashboardStats, Property, Tenant, Unit } from '../types';
 import {
   BarChart,
   Bar,
@@ -260,13 +261,34 @@ export function Dashboard() {
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
   // never disagree (maintenance is the one status still set by hand).
-  // Every vacant unit (no lease, not under maintenance). The count shown must be
-  // the real total, so this is NOT sliced here; the render caps how many tiles
-  // it draws and adds a "+N more" tile for the rest.
+  // Every vacant unit (no lease, not under maintenance).
   const vacantUnits = useMemo(() => {
     return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id));
   }, [units, getUnitLease]);
-  const VACANT_TILES = 8;
+
+  // Vacant units grouped by their address (property), one entry per property,
+  // sorted by name. The dashboard shows one collapsible row per address.
+  const vacantByProperty = useMemo(() => {
+    const groups = new Map<string, { key: string; name: string; units: Unit[] }>();
+    for (const u of vacantUnits) {
+      const key = u.propertyId ?? 'unassigned';
+      const name = properties.find(p => p.id === u.propertyId)?.name ?? 'Unassigned';
+      if (!groups.has(key)) groups.set(key, { key, name, units: [] });
+      groups.get(key)!.units.push(u);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [vacantUnits, properties]);
+
+  // Which address rows are expanded to show their open units. Collapsed by
+  // default so the section stays a tidy one-line-per-address list.
+  const [expandedVacant, setExpandedVacant] = useState<Set<string>>(new Set());
+  const toggleVacant = (key: string) =>
+    setExpandedVacant(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const upcomingRenewals = useMemo(() => {
     const now = new Date();
@@ -613,57 +635,70 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Vacant Units Quick View */}
+      {/* Vacant Units, one collapsible row per address */}
       {vacantUnits.length > 0 && (
-        <ClickableCard onClick={() => navigate('/properties')} className="border-dashed border-2 border-line-strong">
+        <Card className="border-dashed border-2 border-line-strong">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-muted">
               <div className="p-2 bg-primary-soft rounded-lg">
                 <DoorOpen className="h-5 w-5 text-primary" />
               </div>
               Vacant Units ({vacantUnits.length})
-              <ArrowRight className="h-4 w-4 ml-auto" />
+              <button
+                type="button"
+                onClick={() => navigate('/properties')}
+                title="Open Properties"
+                className="ml-auto text-faint hover:text-ink transition-colors"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {vacantUnits.slice(0, VACANT_TILES).map(unit => {
-                const property = properties.find(p => p.id === unit.propertyId);
+          <CardContent className="p-0">
+            <div className="border-t border-line">
+              {vacantByProperty.map(group => {
+                const isOpen = expandedVacant.has(group.key);
                 return (
-                  <div
-                    key={unit.id}
-                    className="flex-shrink-0 p-4 bg-canvas rounded-xl min-w-[200px] cursor-pointer hover:bg-black/[0.05] transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate('/properties');
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Home className="h-4 w-4 text-faint" />
-                      <span className="font-semibold text-ink">Unit {unit.unitNumber}</span>
-                    </div>
-                    <p className="text-sm text-muted mb-1">{property?.name}</p>
-                    <p className="text-lg font-semibold text-primary tnum">{formatCurrency(unit.monthlyRent)}<span className="text-sm text-faint font-normal">/mo</span></p>
-                    <div className="flex gap-2 mt-2 text-xs text-muted">
-                      <span>{unit.bedrooms} bd</span>
-                      <span>•</span>
-                      <span>{unit.bathrooms} ba</span>
-                    </div>
+                  <div key={group.key} className="border-b border-line last:border-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleVacant(group.key)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02] text-left"
+                    >
+                      {isOpen
+                        ? <ChevronDown className="h-4 w-4 text-faint flex-shrink-0" />
+                        : <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />}
+                      <span className="text-sm font-medium text-ink flex-1 truncate">{group.name}</span>
+                      <Badge variant="warning" className="whitespace-nowrap">
+                        {group.units.length} {group.units.length === 1 ? 'unit' : 'units'} vacant
+                      </Badge>
+                    </button>
+
+                    {isOpen && (
+                      <div className="bg-canvas px-4 sm:px-6 pb-2">
+                        {group.units.map(unit => (
+                          <div
+                            key={unit.id}
+                            className="flex items-center gap-3 py-2.5 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.03]"
+                            onClick={() => navigate('/properties')}
+                          >
+                            <Home className="h-4 w-4 text-faint flex-shrink-0" />
+                            <span className="text-sm text-ink w-24 sm:w-32 flex-shrink-0 truncate">Unit {unit.unitNumber}</span>
+                            <span className="text-sm text-muted flex-1">{unit.bedrooms} bd · {unit.bathrooms} ba</span>
+                            <span className="text-sm font-semibold text-primary tnum">
+                              {formatCurrency(unit.monthlyRent)}<span className="text-xs text-faint font-normal">/mo</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
-              {vacantUnits.length > VACANT_TILES && (
-                <div
-                  className="flex-shrink-0 flex flex-col items-center justify-center p-4 bg-canvas rounded-xl min-w-[140px] cursor-pointer hover:bg-black/[0.05] transition-colors text-center"
-                  onClick={(e) => { e.stopPropagation(); navigate('/properties'); }}
-                >
-                  <span className="font-display text-2xl text-ink tnum">+{vacantUnits.length - VACANT_TILES}</span>
-                  <span className="text-sm text-muted mt-1">more vacant</span>
-                </div>
-              )}
             </div>
           </CardContent>
-        </ClickableCard>
+        </Card>
       )}
 
       {/* Overdue Payments Table - Clickable */}
