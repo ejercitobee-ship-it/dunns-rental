@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
-import { Download, ClipboardList, AlertTriangle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Download, ClipboardList, AlertTriangle, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, yearOf } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
 import type { Lease, Tenant } from '../types';
@@ -21,7 +21,7 @@ interface RentRollRow {
 }
 
 export function Reports() {
-  const { properties, units, leases, rentPayments, getLeaseTenants } = useApp();
+  const { properties, units, leases, rentPayments, expenses, incomes, getLeaseTenants } = useApp();
 
   const propertyName = (id?: string) => properties.find(p => p.id === id)?.name || '—';
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber || '—';
@@ -60,9 +60,7 @@ export function Reports() {
     const outstanding = rentRoll.reduce((s, r) => s + (r.settlement?.balance || 0), 0);
     return { scheduled, collected, outstanding };
     // Depends on rentRoll, a manual memo that intentionally excludes unstable
-    // context helpers; the compiler cannot preserve it without an upstream
-    // refactor of those helpers.
-    // eslint-disable-next-line react-hooks/preserve-manual-memoization
+    // context helpers.
   }, [leases, rentPayments, rentRoll, currentMonth, currentYear]);
 
   // Outstanding balances: every active lease whose current month settled as
@@ -72,6 +70,68 @@ export function Reports() {
       .filter(r => r.settlement && r.settlement.status !== 'paid')
       .sort((a, b) => (b.settlement?.balance || 0) - (a.settlement?.balance || 0));
   }, [rentRoll]);
+
+  // Per-property profit and loss: income (rent collected + other income) minus
+  // expenses, for a chosen year or all time. Rent is counted by the month it is
+  // for (the payment's own year); manual income and expenses by their date.
+  const reportYears = useMemo(() => {
+    const s = new Set<number>();
+    rentPayments.forEach(p => { if (p.year) s.add(p.year); });
+    incomes.forEach(i => { const y = yearOf(i.date); if (y) s.add(y); });
+    expenses.forEach(e => { const y = yearOf(e.date); if (y) s.add(y); });
+    s.add(currentYear);
+    return Array.from(s).sort((a, b) => b - a);
+  }, [rentPayments, incomes, expenses, currentYear]);
+
+  const [reportYear, setReportYear] = useState<number | 'all'>(currentYear);
+
+  const leasePropertyId = useMemo(() => {
+    const m = new Map<string, string | undefined>();
+    leases.forEach(l => m.set(l.id, l.propertyId));
+    return m;
+  }, [leases]);
+
+  const propertyPnl = useMemo(() => {
+    const inYear = (y: number | undefined) => reportYear === 'all' || (!!y && y === reportYear);
+    return properties
+      .map(p => {
+        const rent = rentPayments
+          .filter(pm => pm.status === 'paid' && leasePropertyId.get(pm.leaseId) === p.id && inYear(pm.year))
+          .reduce((s, pm) => s + (pm.amount || 0), 0);
+        const other = incomes
+          .filter(i => i.propertyId === p.id && inYear(yearOf(i.date)))
+          .reduce((s, i) => s + i.amount, 0);
+        const expenseTotal = expenses
+          .filter(e => e.propertyId === p.id && inYear(yearOf(e.date)))
+          .reduce((s, e) => s + e.amount, 0);
+        const income = rent + other;
+        return { id: p.id, name: p.name, income, expenses: expenseTotal, net: income - expenseTotal };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [properties, rentPayments, incomes, expenses, leasePropertyId, reportYear]);
+
+  const pnlTotals = useMemo(
+    () =>
+      propertyPnl.reduce(
+        (t, r) => ({ income: t.income + r.income, expenses: t.expenses + r.expenses, net: t.net + r.net }),
+        { income: 0, expenses: 0, net: 0 }
+      ),
+    [propertyPnl]
+  );
+
+  const exportPropertyPnl = () => {
+    const headers = ['Property', 'Income', 'Expenses', 'Net'];
+    const rows = propertyPnl.map(r => [r.name, r.income, r.expenses, r.net]);
+    rows.push(['Total', pnlTotals.income, pnlTotals.expenses, pnlTotals.net]);
+    const csv = [headers, ...rows].map(row => row.map(c => `"${String(c ?? '')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `property-pnl-${reportYear === 'all' ? 'all-time' : reportYear}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const statusView = (status: MonthSettlement['status'] | null) => {
     switch (status) {
@@ -107,7 +167,7 @@ export function Reports() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Reports</h1>
-          <p className="text-muted mt-1 text-sm">Rent roll and outstanding balances for {now.toLocaleString('en-US', { month: 'long', year: 'numeric' })}.</p>
+          <p className="text-muted mt-1 text-sm">Per-property income and expenses, rent roll, and outstanding balances.</p>
         </div>
         <Button variant="outline" onClick={exportRentRoll}>
           <Download className="h-4 w-4 mr-2" />
@@ -131,6 +191,77 @@ export function Reports() {
           </Card>
         ))}
       </div>
+
+      {/* Income and Expenses by Property */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+              Income &amp; Expenses by Property
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <select
+                value={String(reportYear)}
+                onChange={(e) => setReportYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                className="px-3 py-2 border border-line rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="all">All time</option>
+                {reportYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <Button variant="outline" size="sm" onClick={exportPropertyPnl}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto sm:overflow-visible">
+            <table className="w-full min-w-[560px] sm:min-w-0">
+              <thead>
+                <tr className="border-b border-line bg-canvas">
+                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property</th>
+                  <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Income</th>
+                  <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Expenses</th>
+                  <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {propertyPnl.map((r) => (
+                  <tr key={r.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
+                    <td className="py-3 px-4 text-sm text-ink">{r.name}</td>
+                    <td className="py-3 px-4 text-right text-sm text-positive tnum">{formatCurrency(r.income)}</td>
+                    <td className="py-3 px-4 text-right text-sm text-danger tnum">{formatCurrency(r.expenses)}</td>
+                    <td className={`py-3 px-4 text-right text-sm font-medium tnum ${r.net >= 0 ? 'text-ink' : 'text-danger'}`}>
+                      {formatCurrency(r.net)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {propertyPnl.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-line bg-canvas font-semibold">
+                    <td className="py-3 px-4 text-sm text-ink">Total</td>
+                    <td className="py-3 px-4 text-right text-sm text-positive tnum">{formatCurrency(pnlTotals.income)}</td>
+                    <td className="py-3 px-4 text-right text-sm text-danger tnum">{formatCurrency(pnlTotals.expenses)}</td>
+                    <td className={`py-3 px-4 text-right text-sm tnum ${pnlTotals.net >= 0 ? 'text-ink' : 'text-danger'}`}>
+                      {formatCurrency(pnlTotals.net)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+          {propertyPnl.length === 0 && (
+            <div className="text-center py-14 text-sm text-muted">No properties to report yet.</div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Rent Roll */}
       <Card>
