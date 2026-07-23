@@ -15,7 +15,7 @@ import { rentSheetApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, type MonthSettlement } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -138,6 +138,15 @@ export function Rents() {
   // Same synchronous guard as the import loop above, for the same reason:
   // a double-click on "Record Payment" must not create two payments.
   const isRecordingRef = useRef(false);
+
+  // "Mark rent paid through …": settles a backdated tenant's owed history in
+  // one action. Holds the lease being settled, the household on it (so a
+  // payer can be credited), and the last month to mark paid (YYYY-MM).
+  const [settleTarget, setSettleTarget] = useState<{ lease: Lease; names: string; occupants: Tenant[] } | null>(null);
+  const [settleThrough, setSettleThrough] = useState('');
+  const [settlePayer, setSettlePayer] = useState('');
+  const [isSettling, setIsSettling] = useState(false);
+  const isSettlingRef = useRef(false);
 
   // Which tenant rows are expanded to show their month-by-month detail.
   // Everything starts collapsed; the row summary carries this month's status
@@ -419,6 +428,79 @@ export function Rents() {
     } finally {
       isRecordingRef.current = false;
       setIsRecording(false);
+    }
+  };
+
+  // The most recently completed month (last month) as YYYY-MM, the sensible
+  // default "paid through" so the current month is left for normal collection.
+  const lastMonthValue = () => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const openSettleModal = (lease: Lease, names: string, occupants: Tenant[]) => {
+    setSettleTarget({ lease, names, occupants });
+    setSettleThrough(lastMonthValue());
+    setSettlePayer('');
+  };
+
+  const closeSettleModal = () => {
+    setSettleTarget(null);
+    setSettleThrough('');
+    setSettlePayer('');
+  };
+
+  // Parse the YYYY-MM picker into month/year, then the owed-but-unpaid months
+  // for this lease from its start through that month.
+  const settlePreview = (() => {
+    if (!settleTarget || !settleThrough) return [] as { month: number; year: number; amount: number }[];
+    const [y, m] = settleThrough.split('-').map(Number);
+    if (!y || !m) return [];
+    return unsettledMonths(settleTarget.lease, rentPayments, m, y);
+  })();
+  const settleTotal = settlePreview.reduce((sum, r) => sum + r.amount, 0);
+
+  const handleSettleBackRent = async () => {
+    if (isSettlingRef.current || !settleTarget) return;
+    if (settlePreview.length === 0) {
+      showToast('Nothing to settle for that period.', 'error');
+      return;
+    }
+    isSettlingRef.current = true;
+    setIsSettling(true);
+    try {
+      // Record each owed month as paid for exactly its remaining balance, so a
+      // month with a partial payment is topped up, not doubled. Defer the Google
+      // Sheet mirror until the final row so it syncs once, not once per month.
+      const rows = settlePreview;
+      for (let i = 0; i < rows.length; i++) {
+        const { month, year, amount } = rows[i];
+        const dueDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        await addRentPayment(
+          {
+            leaseId: settleTarget.lease.id,
+            paidByTenantId: settlePayer || undefined,
+            amount,
+            month,
+            year,
+            status: 'paid',
+            receivedDate: dueDate,
+            paidDate: dueDate,
+            paymentMethod: 'check',
+            dueDate,
+          },
+          { deferSheetSync: i < rows.length - 1 }
+        );
+      }
+      showToast(`Marked ${rows.length} month${rows.length === 1 ? '' : 's'} paid (${formatCurrency(settleTotal)}).`, 'success');
+      closeSettleModal();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not settle the back rent', 'error');
+    } finally {
+      isSettlingRef.current = false;
+      setIsSettling(false);
     }
   };
 
@@ -842,6 +924,19 @@ export function Rents() {
                             </div>
                           );
                         })}
+
+                        {isSuperAdmin() && (
+                          <div className="flex justify-end pt-2 pb-1">
+                            <button
+                              type="button"
+                              onClick={() => openSettleModal(group.lease, names, occupants)}
+                              className="text-xs text-muted hover:text-ink underline underline-offset-2"
+                              title="For a tenant who started earlier and is already paid up: record every owed month up to a date as paid, in one step."
+                            >
+                              Mark rent paid through…
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1280,6 +1375,78 @@ export function Rents() {
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 {isRecording ? 'Saving...' : 'Record Payment'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Mark rent paid through … (backdated-tenant onboarding) */}
+      <Modal
+        isOpen={!!settleTarget}
+        onClose={isSettling ? () => {} : closeSettleModal}
+        title="Mark rent paid"
+        size="md"
+      >
+        {settleTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Record every owed month for <span className="font-medium text-ink">{settleTarget.names}</span> as paid, from the
+              lease start through the month you choose. Use this when a tenant who started earlier is already paid up. Months
+              already paid are left alone.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-ink">Paid through *</label>
+              <input
+                type="month"
+                value={settleThrough}
+                onChange={(e) => setSettleThrough(e.target.value)}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+
+            {settleTarget.occupants.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-ink">Who paid (optional)</label>
+                <select
+                  value={settlePayer}
+                  onChange={(e) => setSettlePayer(e.target.value)}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                >
+                  <option value="">Not specified</option>
+                  {settleTarget.occupants.map((t) => (
+                    <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="bg-primary-soft border border-primary-line rounded-lg p-4 text-sm">
+              {settlePreview.length === 0 ? (
+                <p className="text-muted">Nothing owed to settle for that period. Everything up to then is already paid.</p>
+              ) : (
+                <p className="text-ink">
+                  This records{' '}
+                  <span className="font-semibold">{settlePreview.length} month{settlePreview.length === 1 ? '' : 's'}</span>{' '}
+                  ({formatMonthYear(settlePreview[0].month, settlePreview[0].year)} through{' '}
+                  {formatMonthYear(settlePreview[settlePreview.length - 1].month, settlePreview[settlePreview.length - 1].year)}){' '}
+                  as paid, totaling <span className="font-semibold">{formatCurrency(settleTotal)}</span>.
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={closeSettleModal} disabled={isSettling}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSettleBackRent}
+                disabled={isSettling || settlePreview.length === 0}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {isSettling ? 'Recording…' : `Mark ${settlePreview.length} paid`}
               </Button>
             </div>
           </div>

@@ -248,6 +248,34 @@ export function monthsBehind(
   return { months, balance };
 }
 
+/**
+ * Every owed-but-unpaid month for a lease from its start through a target
+ * month, with the exact remaining balance for each. Powers the one-click
+ * "mark rent paid through …" action used when a tenant is entered with a
+ * backdated start date and is already paid up. Skips months the lease does not
+ * owe (out of term, or paused) and months already settled, so running it is
+ * idempotent. Returns them oldest first.
+ */
+export function unsettledMonths(
+  lease: Lease,
+  payments: RentPayment[],
+  throughMonth: number,
+  throughYear: number
+): Array<{ month: number; year: number; amount: number }> {
+  if (!lease.startDate || lease.needsReview) return [];
+  const from = yearMonthOf(lease.startDate);
+  const through = throughYear * 12 + throughMonth;
+  const out: Array<{ month: number; year: number; amount: number }> = [];
+  for (let t = from; t <= through; t++) {
+    const year = Math.floor((t - 1) / 12);
+    const month = t - year * 12;
+    if (leasesOwingMonth([lease], month, year).length === 0) continue;
+    const s = settleMonth(lease, payments, month, year);
+    if (s.balance > EPSILON) out.push({ month, year, amount: round2(s.balance) });
+  }
+  return out;
+}
+
 /** The minimum a per-lease-per-month row must carry to be grouped. */
 export interface LeaseMonthLike {
   lease: Lease;

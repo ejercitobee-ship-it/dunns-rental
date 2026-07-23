@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind, unsettledMonths } from './rent';
 import type { Lease, RentPayment, MonthSettlement } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -24,6 +24,31 @@ const payment = (over: Partial<RentPayment> = {}): RentPayment => ({
   year: 2026,
   status: 'paid',
   ...over,
+});
+
+describe('unsettledMonths', () => {
+  it('lists every owed month from the start through the target, oldest first', () => {
+    // Lease starts Jan 2026, no payments; settle through March 2026 = 3 months.
+    const rows = unsettledMonths(lease({ startDate: '2026-01-01' }), [], 3, 2026);
+    expect(rows.map(r => `${r.year}-${r.month}`)).toEqual(['2026-1', '2026-2', '2026-3']);
+    expect(rows.every(r => r.amount === 1325)).toBe(true);
+  });
+
+  it('skips months already paid and returns only the remaining balance on a partial', () => {
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 1325 }), // Jan fully paid
+      payment({ id: 'b', month: 2, year: 2026, amount: 300 }),  // Feb partial
+    ];
+    const rows = unsettledMonths(lease({ startDate: '2026-01-01' }), payments, 3, 2026);
+    expect(rows).toEqual([
+      { month: 2, year: 2026, amount: 1025 },
+      { month: 3, year: 2026, amount: 1325 },
+    ]);
+  });
+
+  it('returns nothing when the lease has no start date', () => {
+    expect(unsettledMonths(lease({ startDate: undefined }), [], 3, 2026)).toEqual([]);
+  });
 });
 
 describe('monthlyRevenue', () => {
