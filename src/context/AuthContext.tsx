@@ -186,6 +186,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) refreshTeam(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [user?.id, refreshTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Permission changes an admin makes in Settings should reach a signed-in user
+  // without a full re-login. refreshTeam re-pulls the roles and re-resolves this
+  // user's permissions from the database, so run it whenever the tab regains
+  // focus. A user with a role that was just edited then picks up their new
+  // access on their next tab switch, matching what the server already enforces.
+  useEffect(() => {
+    if (!user?.id) return;
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') refreshTeam();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [user?.id, refreshTeam]);
+
   const login = async (email: string, password: string) => {
     try {
       const result = await authApi.signIn(email, password);
@@ -233,18 +251,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Super admin always has every permission, no matter what the super_admin
+  // role's stored permissions say. This mirrors the server and makes it
+  // impossible to lock the owner out by editing the super_admin role.
   const hasPermission = (permissionId: string): boolean => {
     if (!user) return false;
+    if (user.roleId === 'super_admin') return true;
     return user.role.permissions.includes(permissionId);
   };
 
   const hasAnyPermission = (permissionIds: string[]): boolean => {
     if (!user) return false;
+    if (user.roleId === 'super_admin') return true;
     return permissionIds.some(id => user.role.permissions.includes(id));
   };
 
   const hasModuleAccess = (module: string): boolean => {
     if (!user) return false;
+    if (user.roleId === 'super_admin') return true;
     return SYSTEM_PERMISSIONS.some(
       p => p.module === module && user.role.permissions.includes(p.id)
     );

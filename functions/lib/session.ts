@@ -164,11 +164,13 @@ export async function requirePermission(
 ): Promise<SessionUser | Response> {
   const user = await getSessionUser(env, request);
   if (!user) return unauthorized();
-  // Prefer the role's live permissions from the DB; fall back to the built-in
-  // map if the role predates the roles table (e.g. before migration 0004).
-  const allowed = user.permissions
-    ? user.permissions.includes(permission)
-    : roleCan(user.role, permission);
+  // Super admin always passes, even if the super_admin role's stored
+  // permissions were edited down, so the owner can never be locked out.
+  // Otherwise prefer the role's live permissions from the DB; fall back to the
+  // built-in map if the role predates the roles table (e.g. before migration 0004).
+  const allowed =
+    user.role === 'super_admin' ||
+    (user.permissions ? user.permissions.includes(permission) : roleCan(user.role, permission));
   if (!allowed) return forbidden();
   return user;
 }

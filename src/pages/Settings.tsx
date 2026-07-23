@@ -212,6 +212,8 @@ export function Settings() {
   };
 
   const handleTogglePermission = async (roleId: string, permissionId: string) => {
+    // Super admin always has every permission; its list is not editable.
+    if (roleId === 'super_admin') return;
     const role = roles.find(r => r.id === roleId);
     if (!role) return;
 
@@ -749,14 +751,21 @@ export function Settings() {
                   {expandedRole === role.id && (
                     <div className="border-t px-4 py-4">
                       <h4 className="text-sm font-medium mb-3">Permissions</h4>
+                      {role.id === 'super_admin' && (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Super Admin always has full access. These cannot be changed, so you can never lock yourself out.
+                        </p>
+                      )}
                       <div className="space-y-2">
                         {SYSTEM_PERMISSIONS.map((permission) => {
-                          const isChecked = role.permissions.includes(permission.id);
+                          const locked = role.id === 'super_admin';
+                          const isChecked = locked || role.permissions.includes(permission.id);
                           return (
                             <div
                               key={permission.id}
-                              className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                              className={`flex items-center justify-between p-2 rounded-lg ${locked ? 'opacity-60' : 'hover:bg-muted/50 cursor-pointer'}`}
                               onClick={() => {
+                                if (locked) return;
                                 handleTogglePermission(role.id, permission.id);
                               }}
                             >
