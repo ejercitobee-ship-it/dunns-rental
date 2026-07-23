@@ -1,0 +1,20 @@
+# Scheduled worker that fires the monthly rent reminder.
+#
+# Cloudflare Pages cannot run cron triggers, so this tiny standalone Worker
+# does the scheduling: once a day it POSTs to the app's /api/cron/rent-due
+# endpoint, presenting the shared CRON_SECRET. The endpoint itself decides
+# whether today is the rent due day and whether the reminder already went out
+# this month, so running daily is safe and idempotent.
+#
+# Deploy (from this folder):
+#   npx wrangler deploy
+# Set the shared secret (must match the Pages project's CRON_SECRET):
+#   npx wrangler secret put CRON_SECRET
+name = "mhdunn-rent-reminder"
+main = "index.js"
+compatibility_date = "2025-05-20"
+
+# 13:00 UTC daily. Chicago is 6-7 hours behind, so this lands at 7-8am local,
+# on the same calendar day the endpoint checks against the rent due day.
+[triggers]
+crons = ["0 13 * * *"]

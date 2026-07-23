@@ -14,6 +14,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   /** Base64 of the VAPID private key JWK, for signing web push. When unset, push is off. */
   VAPID_PRIVATE_JWK?: string;
+  /** Shared secret the scheduled rent-reminder worker presents to /api/cron/rent-due. */
+  CRON_SECRET?: string;
 }
 
 export interface SessionUser {

@@ -8,22 +8,26 @@ const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to 7739917112.';
 
 /** The rent settings the portal needs: payment instructions and the past-due
  * threshold. Reads app_settings 'rent' once, falling back to defaults. */
-async function rentPortalSettings(env: Env): Promise<{ paymentInstructions: string; pastDueMonths: number }> {
+async function rentPortalSettings(env: Env): Promise<{ paymentInstructions: string; pastDueMonths: number; rentDueDay: number }> {
   const raw = await getSetting(env, 'rent');
   let paymentInstructions = DEFAULT_PAYMENT_INSTRUCTIONS;
   let pastDueMonths = 2;
+  let rentDueDay = 1;
   if (raw) {
     try {
-      const r = JSON.parse(raw) as { paymentInstructions?: unknown; pastDueMonths?: unknown };
+      const r = JSON.parse(raw) as { paymentInstructions?: unknown; pastDueMonths?: unknown; rentDueDay?: unknown };
       if (typeof r.paymentInstructions === 'string' && r.paymentInstructions.trim()) {
         paymentInstructions = r.paymentInstructions;
       }
       if (typeof r.pastDueMonths === 'number' && r.pastDueMonths >= 1) {
         pastDueMonths = Math.floor(r.pastDueMonths);
       }
+      if (typeof r.rentDueDay === 'number' && r.rentDueDay >= 1 && r.rentDueDay <= 31) {
+        rentDueDay = Math.floor(r.rentDueDay);
+      }
     } catch { /* fall through to defaults */ }
   }
-  return { paymentInstructions, pastDueMonths };
+  return { paymentInstructions, pastDueMonths, rentDueDay };
 }
 
 /** GET /api/portal/me — the caller's own person record, lease, unit, property. */

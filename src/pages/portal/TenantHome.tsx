@@ -24,6 +24,13 @@ const settlementLabel = {
   unpaid: 'Not yet paid',
 } as const;
 
+// "1st", "2nd", "3rd", "21st"... for the rent due day.
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+}
+
 // The rent-math functions expect a full Lease. The portal serializer carries
 // pauses (so paused months read correctly) but not tenantIds, which the math
 // does not use, so an empty default is safe.
@@ -193,6 +200,7 @@ export function TenantHome() {
                 <span className="font-display text-2xl text-ink tnum">{formatCurrency(lease.monthlyRent)}</span>
                 <span className="text-sm text-muted">per month</span>
               </div>
+              <p className="text-sm text-muted">Due on the {ordinal(me.rentDueDay ?? 1)} of each month.</p>
               {thisMonth ? (
                 <div className="pt-2 border-t border-line flex items-center justify-between">
                   <span className="eyebrow">This month</span>

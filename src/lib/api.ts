@@ -135,7 +135,7 @@ export interface AppSettings {
   rent: {
     lateFeeAmount: number; lateFeeDay: number; gracePeriod: number;
     defaultLeaseTerm: number; securityDepositMultiplier: number;
-    paymentInstructions: string; pastDueMonths: number;
+    paymentInstructions: string; pastDueMonths: number; rentDueDay: number;
   };
   notifications: {
     emailNotifications: boolean; smsNotifications: boolean; rentReminders: boolean;
@@ -410,6 +410,8 @@ export interface PortalMeResponse {
   paymentInstructions?: string;
   // The past-due threshold (months) from Settings; defaults to 2.
   pastDueMonths?: number;
+  // The day of the month rent is due, from Settings; defaults to 1.
+  rentDueDay?: number;
 }
 
 export interface PortalPaymentsResponse {

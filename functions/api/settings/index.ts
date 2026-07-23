@@ -23,6 +23,9 @@ const DEFAULTS = {
     // Flag a tenancy as past due once it owes this many months of rent. Used by
     // the dashboard, the tenant profile, and the tenant portal.
     pastDueMonths: 2,
+    // The day of the month rent is due. Shown to tenants and used by the
+    // monthly rent reminder.
+    rentDueDay: 1,
     // Shown to tenants on their portal under "How to pay". The portal adds each
     // tenant's own memo (street, unit, month, name) beneath this.
     paymentInstructions: 'Pay your rent by Zelle to 7739917112.',

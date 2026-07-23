@@ -90,6 +90,53 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
   return { subject: 'Reset your MH Dunn Property password', html, text };
 }
 
+/** Monthly "your rent is due" reminder, sent on the rent due day. */
+export function rentReminderEmail(opts: {
+  monthLabel: string;
+  portalUrl: string;
+  paymentInstructions?: string;
+  name?: string;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+  const instructions = (opts.paymentInstructions || '').trim();
+
+  const text = [
+    greeting,
+    '',
+    `This is a friendly reminder that your rent for ${opts.monthLabel} is due today.`,
+    instructions ? `\n${instructions}` : '',
+    '',
+    `You can view your balance and payment details in your portal:`,
+    opts.portalUrl,
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].filter((line) => line !== '').join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${greeting}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        This is a friendly reminder that your rent for <strong>${opts.monthLabel}</strong> is due today.
+      </p>
+      ${instructions ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:14px 16px;">${instructions}</p>` : ''}
+      <p style="margin:0 0 24px;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          View your portal
+        </a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Your rent for ${opts.monthLabel} is due`, html, text };
+}
+
 /** Portal invite email, sent when Belle invites a tenant to their own login. */
 export function portalInviteEmail(
   inviteUrl: string,

@@ -61,6 +61,7 @@ export function Settings() {
     securityDepositMultiplier: 2,
     paymentInstructions: '',
     pastDueMonths: 2,
+    rentDueDay: 1,
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -564,6 +565,19 @@ export function Settings() {
                   onChange={(e) => setRentSettings({...rentSettings, defaultLeaseTerm: parseInt(e.target.value)})}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Rent due day (Day of month)</label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                value={rentSettings.rentDueDay}
+                onChange={(e) => setRentSettings({...rentSettings, rentDueDay: Math.min(31, Math.max(1, parseInt(e.target.value) || 1))})}
+              />
+              <p className="text-xs text-muted">Rent is shown to tenants as due on this day each month, and the automatic reminder is sent that morning. Set to 1 for the 1st of the month.</p>
             </div>
 
             <div className="space-y-2">
