@@ -11,6 +11,7 @@ import {
   serverError,
 } from '../../../lib/session';
 import { roleCan } from '../../../lib/permissions';
+import { sendInviteLink } from '../../../lib/invite';
 
 interface UserRow {
   id: string;
@@ -150,12 +151,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(crypto.randomUUID(), userId, 'force_password_reset', 'true', now, now)
       .run();
 
+    // Email the new team member a branded invite with a set-password link, the
+    // same experience tenants get. If the email cannot be sent (Resend not
+    // configured, or the address bounced), fall back to returning the temporary
+    // password so the admin can still hand over access manually. Either way the
+    // forced-reset flag stands, so a shared temp password must be changed on
+    // first sign-in, and setting a password through the invite link clears it.
+    const invite = await sendInviteLink(env, userId, firstName, email, false, { kind: 'account' });
+
     return jsonOk(
       {
         success: true,
         user: { id: userId, email, name, role: roleId },
-        tempPassword,
-        message: 'User created. Share the temporary password with them securely.',
+        emailed: invite.sent,
+        ...(invite.sent ? {} : { tempPassword }),
+        message: invite.sent
+          ? `Invite email sent to ${email}.`
+          : 'Could not email the invite. Share this temporary password with them securely instead.',
       },
       201
     );

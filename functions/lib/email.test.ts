@@ -21,6 +21,14 @@ describe('portalInviteEmail', () => {
     expect(again.html).toContain('fresh link');
     expect(again.subject.toLowerCase()).toContain('set your password');
   });
+
+  it('uses account wording for an internal team member (kind: account)', () => {
+    const mail = portalInviteEmail(url, 'Pat', { companyName: 'MH Dunn Property', kind: 'account' });
+    expect(mail.subject).toBe('Your MH Dunn Property account');
+    expect(mail.html).toContain('account for the management app');
+    expect(mail.html).not.toContain('online portal');
+    expect(mail.html).toContain(url); // still a set-password link
+  });
 });
 
 describe('rentReminderEmail', () => {

@@ -172,13 +172,18 @@ export function Users() {
     e.preventDefault();
     try {
       const result = await addUser(userForm);
-      if (result?.tempPassword) {
-        showToast(`User created. Temporary password: ${result.tempPassword} — share it securely.`, 'success');
+      setIsAddUserOpen(false);
+      resetForm();
+      if (result?.emailed) {
+        showToast(`Invite email sent to ${userForm.email}. They set their own password from the link.`, 'success');
+      } else if (result?.tempPassword) {
+        // Email could not be sent: surface the temp password so it can be shared
+        // manually (shown in a modal, not a toast, so it is not missed).
+        showToast('User created, but the invite email could not be sent. Share the temporary password below instead.', 'error');
+        setTempPasswordInfo({ name: `${userForm.firstName} ${userForm.lastName}`.trim(), password: result.tempPassword });
       } else {
         showToast('User added successfully!', 'success');
       }
-      setIsAddUserOpen(false);
-      resetForm();
     } catch (err) {
       showToast((err as Error).message || 'Failed to add user', 'error');
     }

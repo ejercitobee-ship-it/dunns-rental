@@ -17,7 +17,8 @@ export async function sendInviteLink(
   userId: string,
   firstName: string,
   toEmail: string,
-  resend: boolean
+  resend: boolean,
+  opts?: { kind?: 'portal' | 'account' }
 ): Promise<{ sent: boolean; inviteUrl: string }> {
   const now = Math.floor(Date.now() / 1000);
   const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -30,7 +31,7 @@ export async function sendInviteLink(
   const cityStateZip = [[c.city, c.state].filter(Boolean).join(', '), c.zipCode].filter(Boolean).join(' ');
   const contact = [c.address, cityStateZip, [c.phone, c.email].filter(Boolean).join(' · ')]
     .filter(s => s && s.trim()).join(' · ');
-  const mail = portalInviteEmail(inviteUrl, firstName, { companyName: c.companyName, contact, resend });
+  const mail = portalInviteEmail(inviteUrl, firstName, { companyName: c.companyName, contact, resend, kind: opts?.kind });
   const sent = await sendEmail(env, { to: toEmail, ...mail });
   return { sent, inviteUrl };
 }

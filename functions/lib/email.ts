@@ -137,17 +137,27 @@ export function rentReminderEmail(opts: {
   return { subject: `Your rent for ${opts.monthLabel} is due`, html, text };
 }
 
-/** Portal invite email, sent when Belle invites a tenant to their own login. */
+/**
+ * Invite email with a set-password link. Used for tenant/realtor/handyman portal
+ * logins and, with kind 'account', for internal team members. The wording is the
+ * only difference: portal invitees "sign in to their portal", team members get
+ * "an account for the management app".
+ */
 export function portalInviteEmail(
   inviteUrl: string,
   name?: string,
-  opts?: { companyName?: string; contact?: string; resend?: boolean }
+  opts?: { companyName?: string; contact?: string; resend?: boolean; kind?: 'portal' | 'account' }
 ) {
   const companyName = opts?.companyName || 'MH Dunn Property';
   const contact = opts?.contact || '';
   const greeting = name ? `Hi ${name},` : 'Hi,';
+  const account = opts?.kind === 'account';
+  const noun = account ? 'account' : 'portal';
+  const heading = opts?.resend ? 'Set your password' : `Your ${companyName} ${noun} is ready`;
   const intro = opts?.resend
-    ? `Here is a fresh link to set your password for your ${companyName} portal.`
+    ? `Here is a fresh link to set your password for your ${companyName} ${noun}.`
+    : account
+    ? `${companyName} has created your account for the management app. Set your password below to sign in.`
     : `${companyName} has set up your online portal. Sign in to see your information and keep your own details up to date.`;
 
   const text = `${greeting}
@@ -171,7 +181,7 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
         ${contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${contact}</div>` : ''}
       </td></tr>
       <tr><td style="padding:26px 32px 6px;">
-        <div style="font-size:17px;font-weight:bold;color:#1c1a17;">${opts?.resend ? 'Set your password' : `Your ${companyName} portal is ready`}</div>
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;">${heading}</div>
         <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:14px 0 6px;">${greeting}</p>
         <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 20px;">${intro}</p>
         <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#24503f;border-radius:8px;">
@@ -188,7 +198,7 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
 </div>`.trim();
 
   return {
-    subject: opts?.resend ? `Set your password — ${companyName}` : `Your ${companyName} portal`,
+    subject: opts?.resend ? `Set your password — ${companyName}` : `Your ${companyName} ${noun}`,
     text,
     html,
   };

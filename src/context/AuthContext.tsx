@@ -38,7 +38,7 @@ interface AuthContextType {
   addRole: (role: Omit<Role, 'id'>) => Promise<void>;
   updateRole: (role: Role) => Promise<void>;
   deleteRole: (id: string) => Promise<void>;
-  addUser: (user: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => Promise<{ tempPassword?: string }>;
+  addUser: (user: Omit<User, 'id' | 'createdAt' | 'role'> & { roleId: string }) => Promise<{ tempPassword?: string; emailed?: boolean }>;
   updateUser: (user: User) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   refreshTeam: () => Promise<void>;
@@ -294,7 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       department: userData.department,
     });
     await refreshTeam();
-    return { tempPassword: (result as { tempPassword?: string })?.tempPassword };
+    return { tempPassword: result?.tempPassword, emailed: result?.emailed };
   };
 
   const updateUser = async (updatedUser: User) => {

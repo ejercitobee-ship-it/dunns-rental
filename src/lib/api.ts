@@ -95,7 +95,8 @@ export const adminApi = {
   createUser: (data: {
     firstName: string; lastName: string; email: string; roleId: string;
     phone?: string; department?: string;
-  }) => apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  }): Promise<{ success: boolean; user: unknown; emailed?: boolean; tempPassword?: string; message?: string }> =>
+    apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: {
     firstName: string; lastName: string; phone?: string; department?: string;
     isActive: boolean; roleId: string;
