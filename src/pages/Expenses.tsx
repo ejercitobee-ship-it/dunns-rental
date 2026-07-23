@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { 
-  DollarSign, TrendingDown, TrendingUp, Search, 
-  Plus, Download, Home, Wrench, Zap, Shield, Receipt, 
-  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen 
+import {
+  DollarSign, TrendingDown, TrendingUp, Search,
+  Plus, Download, Home, Wrench, Zap, Shield, Receipt,
+  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -11,6 +11,8 @@ import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, formatMonthYear, yearOf, monthOf } from '../lib/utils';
 import { rentIncomeForMonths } from '../lib/rent';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import type { ExpenseCategory } from '../types';
 import {
   BarChart,
@@ -60,12 +62,46 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, addExpense, addIncome } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, addExpense, addIncome, deleteExpense, deleteIncome } = useApp();
+  const { isSuperAdmin } = useAuth();
+  const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
   const [propertyFilter, setPropertyFilter] = useState('all');
   const [view, setView] = useState<'expenses' | 'income'>('expenses');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const canDelete = isSuperAdmin();
+
+  // Super admins can remove a mistaken manual entry. Derived rows are not
+  // deleted here: rent income belongs to a recorded payment (delete it in Rent
+  // Management) and a maintenance expense belongs to a job (delete the report on
+  // the Maintenance page), so removing them at the source keeps the two in step.
+  const handleDeleteExpense = async (id: string, label: string) => {
+    if (!confirm(`Delete this expense?\n\n${label}\n\nThis removes it from Finances and cannot be undone.`)) return;
+    setDeletingId(id);
+    try {
+      await deleteExpense(id);
+      showToast('Expense deleted.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete the expense', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteIncome = async (id: string, label: string) => {
+    if (!confirm(`Delete this income?\n\n${label}\n\nThis removes it from Finances and cannot be undone.`)) return;
+    setDeletingId(id);
+    try {
+      await deleteIncome(id);
+      showToast('Income deleted.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete the income', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -422,6 +458,7 @@ export function Expenses() {
                   <th className="text-left py-3 px-4 font-medium">Description</th>
                   {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Vendor</th>}
                   <th className="text-right py-3 px-4 font-medium">Amount</th>
+                  {canDelete && <th className="text-right py-3 px-4 font-medium">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -464,6 +501,27 @@ export function Expenses() {
                         <td className="py-4 px-4 text-right font-semibold text-danger">
                           -{formatCurrency(expense.amount)}
                         </td>
+                        {canDelete && (
+                          <td className="py-4 px-4 text-right">
+                            {expense.id.startsWith('maint-') ? (
+                              <span
+                                className="text-xs text-muted-foreground"
+                                title="This came from a maintenance job. Delete it from the Maintenance page."
+                              >
+                                Maintenance
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteExpense(expense.id, `${categoryLabels[expense.category]} — ${formatCurrency(expense.amount)}`)}
+                                disabled={deletingId === expense.id}
+                                title="Delete this expense"
+                                className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })
@@ -496,6 +554,27 @@ export function Expenses() {
                         <td className="py-4 px-4 text-right font-semibold text-positive">
                           +{formatCurrency(income.amount)}
                         </td>
+                        {canDelete && (
+                          <td className="py-4 px-4 text-right">
+                            {income.id.startsWith('rent-') ? (
+                              <span
+                                className="text-xs text-muted-foreground"
+                                title="This rent came from a recorded payment. Delete it in Rent Management."
+                              >
+                                Rent Mgmt
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteIncome(income.id, `${income.description} — ${formatCurrency(income.amount)}`)}
+                                disabled={deletingId === income.id}
+                                title="Delete this income"
+                                className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })
