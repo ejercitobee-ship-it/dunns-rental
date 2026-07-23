@@ -260,9 +260,13 @@ export function Dashboard() {
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
   // never disagree (maintenance is the one status still set by hand).
+  // Every vacant unit (no lease, not under maintenance). The count shown must be
+  // the real total, so this is NOT sliced here; the render caps how many tiles
+  // it draws and adds a "+N more" tile for the rest.
   const vacantUnits = useMemo(() => {
-    return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id)).slice(0, 5);
+    return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id));
   }, [units, getUnitLease]);
+  const VACANT_TILES = 8;
 
   const upcomingRenewals = useMemo(() => {
     const now = new Date();
@@ -353,7 +357,6 @@ export function Dashboard() {
           value={stats.totalProperties}
           subtitle={`${stats.totalUnits} total units`}
           icon={<Building2 className="h-6 w-6" />}
-          trend={{ value: "12%", positive: true }}
           onClick={() => navigate('/properties')}
         />
 
@@ -362,7 +365,6 @@ export function Dashboard() {
           value={`${stats.occupancyRate.toFixed(0)}%`}
           subtitle={`${stats.occupiedUnits} of ${stats.totalUnits} units occupied`}
           icon={<Percent className="h-6 w-6" />}
-          trend={{ value: "5%", positive: true }}
           onClick={() => navigate('/properties')}
         />
 
@@ -625,11 +627,11 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {vacantUnits.map(unit => {
+              {vacantUnits.slice(0, VACANT_TILES).map(unit => {
                 const property = properties.find(p => p.id === unit.propertyId);
                 return (
-                  <div 
-                    key={unit.id} 
+                  <div
+                    key={unit.id}
                     className="flex-shrink-0 p-4 bg-canvas rounded-xl min-w-[200px] cursor-pointer hover:bg-black/[0.05] transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -650,6 +652,15 @@ export function Dashboard() {
                   </div>
                 );
               })}
+              {vacantUnits.length > VACANT_TILES && (
+                <div
+                  className="flex-shrink-0 flex flex-col items-center justify-center p-4 bg-canvas rounded-xl min-w-[140px] cursor-pointer hover:bg-black/[0.05] transition-colors text-center"
+                  onClick={(e) => { e.stopPropagation(); navigate('/properties'); }}
+                >
+                  <span className="font-display text-2xl text-ink tnum">+{vacantUnits.length - VACANT_TILES}</span>
+                  <span className="text-sm text-muted mt-1">more vacant</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </ClickableCard>

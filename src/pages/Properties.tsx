@@ -318,7 +318,7 @@ export function Properties() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-positive">{occupiedUnits}</div>
-            <p className="text-xs text-muted">{((occupiedUnits / totalUnits) * 100).toFixed(0)}% occupancy</p>
+            <p className="text-xs text-muted">{totalUnits > 0 ? ((occupiedUnits / totalUnits) * 100).toFixed(0) : 0}% occupancy</p>
           </CardContent>
         </Card>
 
