@@ -231,7 +231,7 @@ export function TenantDetail() {
   // billing and shows Active). The unit was already occupied while pending.
   const [approveOpen, setApproveOpen] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '' });
+  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true });
 
   const openApprove = () => {
     if (!lease) return;
@@ -239,6 +239,8 @@ export function TenantDetail() {
       monthlyRent: lease.monthlyRent ? String(lease.monthlyRent) : '',
       startDate: lease.startDate || '',
       endDate: lease.endDate || '',
+      moveInFee: lease.securityDeposit ? String(lease.securityDeposit) : '',
+      moveInFeePaid: lease.moveInFeePaid !== false,
     });
     setApproveOpen(true);
   };
@@ -261,6 +263,8 @@ export function TenantDetail() {
         monthlyRent: rent,
         startDate: approveForm.startDate,
         endDate: approveForm.endDate || undefined,
+        securityDeposit: approveForm.moveInFee ? Number(approveForm.moveInFee) : 0,
+        moveInFeePaid: approveForm.moveInFeePaid,
         needsReview: false,
       });
       showToast('Tenancy approved. It is now active.', 'success');
@@ -1118,6 +1122,33 @@ export function TenantDetail() {
                 onChange={(e) => setApproveForm({ ...approveForm, endDate: e.target.value })}
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Move-In Fee</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={approveForm.moveInFee}
+                onChange={(e) => setApproveForm({ ...approveForm, moveInFee: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line-strong"
+                checked={approveForm.moveInFeePaid}
+                onChange={(e) => setApproveForm({ ...approveForm, moveInFeePaid: e.target.checked })}
+              />
+              Move-in fee already paid
+            </label>
+            {!approveForm.moveInFeePaid && approveForm.moveInFee && (
+              <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
+            )}
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setApproveOpen(false)} disabled={approving}>

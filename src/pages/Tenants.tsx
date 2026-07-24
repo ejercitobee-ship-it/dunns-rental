@@ -469,7 +469,11 @@ export function Tenants() {
 
                     <td className="py-4 px-4 text-center">
                       {lease ? (
-                        <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                        lease.needsReview ? (
+                          <Badge variant="warning">Pending review</Badge>
+                        ) : (
+                          <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                        )
                       ) : (
                         <Badge variant="outline">No tenancy</Badge>
                       )}
