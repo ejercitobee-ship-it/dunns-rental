@@ -574,19 +574,25 @@ export function TenantDetail() {
             <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
               {tenant.firstName} {tenant.lastName}
             </h1>
-            {lease ? (
-              <div className="flex items-center gap-1.5 mt-1">
-                {/* While a realtor's placement is under review it is not yet a
-                    live tenancy, so it shows "Pending review", not "Active". */}
-                {lease.needsReview ? (
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {lease ? (
+                /* While a realtor's placement is under review it is not yet a
+                   live tenancy, so it shows "Pending review", not "Active". */
+                lease.needsReview ? (
                   <Badge variant="warning">Pending review</Badge>
                 ) : (
                   <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
-                )}
-              </div>
-            ) : (
-              <Badge variant="outline" className="mt-1">No tenancy</Badge>
-            )}
+                )
+              ) : (
+                <Badge variant="outline">No tenancy</Badge>
+              )}
+              {/* Confirms the tenant has actually signed in to their portal. */}
+              {tenant.verified && (
+                <Badge variant="success" className="flex items-center gap-1">
+                  <Check className="h-3 w-3" /> Verified
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">

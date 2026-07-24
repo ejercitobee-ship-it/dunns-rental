@@ -17,7 +17,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?')
+    const row = await env.DB.prepare('SELECT t.*, u.last_login_at AS last_login_at FROM tenants t LEFT JOIN user u ON u.id = t.user_id WHERE t.id = ?')
       .bind(params.id as string)
       .first();
     if (!row) return jsonError('Tenant not found', 404);
@@ -74,7 +74,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         .bind(newEmail, Math.floor(Date.now() / 1000), linked.user_id).run();
     }
 
-    const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
+    const row = await env.DB.prepare('SELECT t.*, u.last_login_at AS last_login_at FROM tenants t LEFT JOIN user u ON u.id = t.user_id WHERE t.id = ?').bind(id).first();
     if (!row) return jsonError('Tenant not found', 404);
     syncRentSheet(context);
     return jsonOk({ success: true, data: serializeTenant(row as Record<string, unknown>) });

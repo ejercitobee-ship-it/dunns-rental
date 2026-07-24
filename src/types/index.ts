@@ -73,6 +73,8 @@ export interface Tenant {
   };
   photoUrl?: string | null;
   hasLogin?: boolean;
+  /** True once the tenant has successfully signed in to their portal at least once. */
+  verified?: boolean;
 }
 
 export interface RentPayment {

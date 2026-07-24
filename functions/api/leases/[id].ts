@@ -83,6 +83,18 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       ),
     ];
 
+    // Make the lease's rent effective on the unit itself, so an approved
+    // (possibly realtor-raised) rent becomes the unit's current rent going
+    // forward, not just this lease's figure. Only when there is a unit and a
+    // real amount.
+    const leaseRent = Number(body.monthlyRent);
+    if (body.unitId && Number.isFinite(leaseRent) && leaseRent > 0) {
+      statements.push(
+        env.DB.prepare('UPDATE units SET monthly_rent = ?, updated_at = unixepoch() WHERE id = ?')
+          .bind(leaseRent, body.unitId)
+      );
+    }
+
     // Replace the occupant list when the caller sends one.
     if (tenantIds) {
       statements.push(env.DB.prepare('DELETE FROM lease_tenants WHERE lease_id = ?').bind(id));

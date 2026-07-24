@@ -354,8 +354,14 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
               <ProfileField label="Relationship" value={emergency?.relationship} />
             </div>
           ) : (
-            <div className="space-y-2.5">
-              <p className="text-sm text-muted">None on file yet — you can add one here.</p>
+            <div className="space-y-2.5 rounded-xl border border-warning/40 bg-warning-soft p-4">
+              <p className="text-sm font-medium text-ink flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-warning flex-shrink-0" />
+                Please add an emergency contact
+              </p>
+              <p className="text-sm text-muted">
+                We do not have one on file yet. Please add someone we can reach in an emergency.
+              </p>
               <div className="grid gap-2 sm:grid-cols-3">
                 <input
                   className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"

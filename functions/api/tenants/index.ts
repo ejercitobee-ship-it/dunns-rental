@@ -20,9 +20,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // on this collection route (rather than a /tenants/unlinked file) so it can
     // never be shadowed by the dynamic /tenants/[id] route.
     const withoutRealtor = new URL(request.url).searchParams.get('withoutRealtor') === '1';
+    // Join the linked login's last_login_at so serializeTenant can flag whoever
+    // has actually signed in (the "Verified" badge).
     const sql = withoutRealtor
-      ? `SELECT * FROM tenants WHERE id NOT IN (SELECT tenant_id FROM tenant_realtors) ORDER BY last_name, first_name`
-      : 'SELECT * FROM tenants ORDER BY created_at DESC';
+      ? `SELECT t.*, u.last_login_at AS last_login_at FROM tenants t LEFT JOIN user u ON u.id = t.user_id
+         WHERE t.id NOT IN (SELECT tenant_id FROM tenant_realtors) ORDER BY t.last_name, t.first_name`
+      : `SELECT t.*, u.last_login_at AS last_login_at FROM tenants t LEFT JOIN user u ON u.id = t.user_id
+         ORDER BY t.created_at DESC`;
     const { results } = await env.DB.prepare(sql).all();
     return jsonOk({ success: true, data: (results || []).map(serializeTenant) });
   } catch {

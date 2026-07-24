@@ -78,11 +78,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + 7 * 24 * 60 * 60;
 
-    await env.DB.prepare(
-      'INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    )
-      .bind(crypto.randomUUID(), user.id, sessionToken, expiresAt, now, now)
-      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        'INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), user.id, sessionToken, expiresAt, now, now),
+      // Stamp the successful login so the office can see a tenant has actually
+      // accessed their portal (the "Verified" badge).
+      env.DB.prepare('UPDATE user SET last_login_at = ? WHERE id = ?').bind(now, user.id),
+    ]);
 
     return jsonOk(
       {

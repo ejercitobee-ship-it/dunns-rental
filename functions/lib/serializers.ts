@@ -53,6 +53,8 @@ export function serializeTenant(r: Row) {
     photoUrl: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : null,
     // Whether this tenant already has a portal login (drives Invite vs Resend).
     hasLogin: !!r.user_id,
+    // Whether they have actually signed in at least once (the "Verified" badge).
+    verified: !!r.last_login_at,
   };
 }
 

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
-  Plus, MoreVertical, Trash2, UserPlus,
+  Plus, MoreVertical, Trash2, UserPlus, Check,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -397,14 +397,17 @@ export function Tenants() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap gap-x-1.5">
                             {occupants.map((t, i) => (
-                              <span key={t.id} className="whitespace-nowrap">
+                              <span key={t.id} className="whitespace-nowrap inline-flex items-center gap-0.5">
                                 <Link
                                   to={`/tenants/${t.id}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="font-medium text-ink hover:text-primary"
                                 >
                                   {t.firstName} {t.lastName}
-                                </Link>{i < occupants.length - 1 ? ',' : ''}
+                                </Link>
+                                {t.verified && (
+                                  <Check className="h-3.5 w-3.5 text-positive" aria-label="Verified: has logged in" />
+                                )}{i < occupants.length - 1 ? ',' : ''}
                               </span>
                             ))}
                           </div>
