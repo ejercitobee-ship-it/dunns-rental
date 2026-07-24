@@ -681,19 +681,3 @@ export const handymenApi = {
   invite: (id: string): Promise<HandymanInviteResult> =>
     apiRequest(`/handymen/${id}/invite`, { method: 'POST' }),
 };
-
-// Tenant self sign-up (PUBLIC, no auth). A tenant claims their own portal login
-// for a unit the office already placed them in.
-export interface SignupUnit {
-  unitId: string;
-  unitNumber: string;
-  propertyId: string;
-  propertyName: string;
-  address: string;
-  firstName: string;
-}
-export const signupApi = {
-  units: (): Promise<SignupUnit[]> => apiRequest('/signup/units'),
-  claim: (data: { unitId: string; lastName: string; email: string; password: string }): Promise<{ email: string }> =>
-    apiRequest('/signup/claim', { method: 'POST', body: JSON.stringify(data) }),
-};
