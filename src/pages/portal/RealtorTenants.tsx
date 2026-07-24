@@ -19,7 +19,7 @@ import { formatCurrency } from '../../lib/utils';
 const emptyForm = {
   firstName: '', lastName: '', email: '', phone: '',
   emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
-  unitId: '',
+  unitId: '', monthlyRent: '',
 };
 
 export function RealtorTenants() {
@@ -34,9 +34,16 @@ export function RealtorTenants() {
   // Set when the office needs to link an existing record (email already used).
   const [emailFlag, setEmailFlag] = useState(false);
 
+  const selectedUnit = units.find((u) => u.id === form.unitId);
+  const rentFloor = selectedUnit?.monthlyRent ?? 0;
+  const rentValue = Number(form.monthlyRent);
+  const rentValid = !!form.unitId && Number.isFinite(rentValue) && rentValue > 0 && rentValue >= rentFloor;
+
+  // Name, email, phone, a unit, and a valid rent are required; the emergency
+  // contact is optional.
   const allFieldsFilled =
     !!form.firstName.trim() && !!form.lastName.trim() && !!form.email.trim() && !!form.phone.trim() &&
-    !!form.emergencyName.trim() && !!form.emergencyPhone.trim() && !!form.emergencyRelationship.trim() && !!form.unitId;
+    !!form.unitId && rentValid;
 
   const loadTenants = () => portalApi.realtorTenants().then(setTenants);
   const loadUnits = () => portalApi.availableUnits().then(setUnits);
@@ -79,10 +86,11 @@ export function RealtorTenants() {
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
-        emergencyName: form.emergencyName.trim(),
-        emergencyPhone: form.emergencyPhone.trim(),
-        emergencyRelationship: form.emergencyRelationship.trim(),
+        emergencyName: form.emergencyName.trim() || undefined,
+        emergencyPhone: form.emergencyPhone.trim() || undefined,
+        emergencyRelationship: form.emergencyRelationship.trim() || undefined,
         unitId: form.unitId,
+        monthlyRent: rentValue,
       });
       await Promise.all([loadTenants(), loadUnits()]);
       setForm(emptyForm);
@@ -135,7 +143,7 @@ export function RealtorTenants() {
         <Card>
           <CardContent className="p-5 space-y-4">
             <h2 className="font-display text-lg font-medium text-ink">New tenant</h2>
-            <p className="text-xs text-muted">All fields are required.</p>
+            <p className="text-xs text-muted">Name, email, phone, unit, and rent are required.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
@@ -170,25 +178,28 @@ export function RealtorTenants() {
               </div>
             )}
 
-            <div className="grid gap-2 sm:grid-cols-3">
-              <input
-                className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Emergency contact name *"
-                value={form.emergencyName}
-                onChange={(e) => setForm({ ...form, emergencyName: e.target.value })}
-              />
-              <input
-                className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Emergency contact phone *"
-                value={form.emergencyPhone}
-                onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })}
-              />
-              <input
-                className="rounded-lg border border-line px-3 py-2 text-sm"
-                placeholder="Emergency contact relationship *"
-                value={form.emergencyRelationship}
-                onChange={(e) => setForm({ ...form, emergencyRelationship: e.target.value })}
-              />
+            <div className="rounded-lg border border-line p-3 space-y-2">
+              <p className="text-xs font-medium text-muted">Emergency contact (optional)</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <input
+                  className="rounded-lg border border-line px-3 py-2 text-sm"
+                  placeholder="Name"
+                  value={form.emergencyName}
+                  onChange={(e) => setForm({ ...form, emergencyName: e.target.value })}
+                />
+                <input
+                  className="rounded-lg border border-line px-3 py-2 text-sm"
+                  placeholder="Phone"
+                  value={form.emergencyPhone}
+                  onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })}
+                />
+                <input
+                  className="rounded-lg border border-line px-3 py-2 text-sm"
+                  placeholder="Relationship"
+                  value={form.emergencyRelationship}
+                  onChange={(e) => setForm({ ...form, emergencyRelationship: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <select
@@ -204,6 +215,25 @@ export function RealtorTenants() {
                 ))}
               </select>
             </div>
+            <div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
+                <input
+                  type="number"
+                  min={rentFloor}
+                  step="0.01"
+                  className={`w-full rounded-lg border pl-7 pr-3 py-2 text-sm ${form.unitId && form.monthlyRent && !rentValid ? 'border-danger' : 'border-line'}`}
+                  placeholder="Monthly rent *"
+                  value={form.monthlyRent}
+                  onChange={(e) => setForm({ ...form, monthlyRent: e.target.value })}
+                />
+              </div>
+              {form.unitId && (
+                <p className={`text-xs mt-1 ${form.monthlyRent && !rentValid ? 'text-danger' : 'text-muted'}`}>
+                  You can set the rent, but not below the unit's current rent of {formatCurrency(rentFloor)}.
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
@@ -217,7 +247,7 @@ export function RealtorTenants() {
               This creates a new tenant in your list and in the system. If they are already in the system, ask the office to link them instead.
             </p>
             <p className="text-xs text-muted">
-              Choosing a unit places this tenant there as a draft. The office sets the rent and dates.
+              Choosing a unit places this tenant there as a draft for the office to approve. The office confirms the rent and sets the dates.
             </p>
           </CardContent>
         </Card>

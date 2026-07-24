@@ -550,7 +550,7 @@ export const portalApi = {
   addRealtorTenant: (data: {
     firstName: string; lastName: string; email?: string; phone?: string;
     emergencyName?: string; emergencyPhone?: string; emergencyRelationship?: string;
-    unitId?: string;
+    unitId?: string; monthlyRent?: number;
   }): Promise<PortalPerson> =>
     apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
   // Vacant units the realtor may market, asking rent included on purpose.
@@ -680,4 +680,20 @@ export const handymenApi = {
     apiRequest(`/handymen/${id}`, { method: 'DELETE' }),
   invite: (id: string): Promise<HandymanInviteResult> =>
     apiRequest(`/handymen/${id}/invite`, { method: 'POST' }),
+};
+
+// Tenant self sign-up (PUBLIC, no auth). A tenant claims their own portal login
+// for a unit the office already placed them in.
+export interface SignupUnit {
+  unitId: string;
+  unitNumber: string;
+  propertyId: string;
+  propertyName: string;
+  address: string;
+  firstName: string;
+}
+export const signupApi = {
+  units: (): Promise<SignupUnit[]> => apiRequest('/signup/units'),
+  claim: (data: { unitId: string; lastName: string; email: string; password: string }): Promise<{ email: string }> =>
+    apiRequest('/signup/claim', { method: 'POST', body: JSON.stringify(data) }),
 };

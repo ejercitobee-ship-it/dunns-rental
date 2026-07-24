@@ -164,8 +164,14 @@ export function Login() {
           </form>
         </div>
 
+        {/* Tenant self sign-up */}
+        <p className="text-center text-sm text-muted mt-6">
+          New tenant?{' '}
+          <Link to="/signup" className="text-primary hover:text-primary-hover font-medium">Set up your account</Link>
+        </p>
+
         {/* Footer */}
-        <p className="text-center text-sm text-faint mt-8">
+        <p className="text-center text-sm text-faint mt-6">
           © 2026 MH Dunn Property. All rights reserved.
         </p>
       </div>

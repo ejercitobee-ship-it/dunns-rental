@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
@@ -137,8 +138,16 @@ function AppRoutes() {
         </PublicRoute>
       } />
 
-      {/* Self sign-up is disabled: access is invite only. Old links land on login. */}
+      {/* Staff self-registration stays disabled (invite only). */}
       <Route path="/register" element={<Navigate to="/login" replace />} />
+
+      {/* Tenant self sign-up: a tenant the office already added claims their
+          own portal login. Public, but only surfaces units with no login yet. */}
+      <Route path="/signup" element={
+        <PublicRoute>
+          <Signup />
+        </PublicRoute>
+      } />
 
       <Route path="/forgot-password" element={
         <PublicRoute>

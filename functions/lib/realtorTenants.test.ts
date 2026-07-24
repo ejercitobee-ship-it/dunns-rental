@@ -31,11 +31,15 @@ describe('validateTenantContact', () => {
     expect(validateTenantContact({ ...full, phone: '' })).toEqual({ ok: false, error: 'Phone is required' });
   });
 
-  it('requires all three emergency contact fields', () => {
-    const err = { ok: false, error: 'Emergency contact name, phone, and relationship are required' };
-    expect(validateTenantContact({ ...full, emergencyName: '' })).toEqual(err);
-    expect(validateTenantContact({ ...full, emergencyPhone: '' })).toEqual(err);
-    expect(validateTenantContact({ ...full, emergencyRelationship: '' })).toEqual(err);
+  it('allows a blank emergency contact (optional), nulling the empty fields', () => {
+    const r = validateTenantContact({
+      firstName: 'Jane', lastName: 'Doe', email: 'jane@example.com', phone: '555',
+    });
+    expect(r).toEqual({
+      ok: true,
+      value: { firstName: 'Jane', lastName: 'Doe', email: 'jane@example.com', phone: '555',
+        emergencyName: null, emergencyPhone: null, emergencyRelationship: null },
+    });
   });
 
   it('rejects an over-long field', () => {

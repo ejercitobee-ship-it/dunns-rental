@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../lib/session';
 import { realtorTenantIds, serverToday } from '../../../../lib/portal';
 import { serializePortalTenant } from '../../../../lib/serializers';
-import { validateTenantContact, createTenantForRealtor, UnitUnavailable } from '../../../../lib/realtorTenants';
+import { validateTenantContact, createTenantForRealtor, UnitUnavailable, RentBelowFloor } from '../../../../lib/realtorTenants';
 
 /** GET /api/portal/realtor/tenants — the realtor's tenants, inside the window. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -85,11 +85,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('A tenant with this email is already in the system. Please call the office to link them instead.', 409);
     }
 
+    const monthlyRent = typeof body.monthlyRent === 'number' ? body.monthlyRent : Number(body.monthlyRent);
     try {
-      const row = await createTenantForRealtor(env, auth.id, valid.value, unitId);
+      const row = await createTenantForRealtor(env, auth.id, valid.value, unitId, Number.isFinite(monthlyRent) ? monthlyRent : undefined);
       return jsonOk({ success: true, data: serializePortalTenant(row) }, 201);
     } catch (err) {
       if (err instanceof UnitUnavailable) return jsonError('That unit is no longer available', 409);
+      if (err instanceof RentBelowFloor) return jsonError(err.message, 400);
       throw err;
     }
   } catch {

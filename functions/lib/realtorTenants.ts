@@ -12,6 +12,14 @@ export class UnitUnavailable extends Error {
   }
 }
 
+/** Thrown when a realtor prices the rent below the unit's current rent. */
+export class RentBelowFloor extends Error {
+  constructor(public floor: number) {
+    super(`Rent cannot be below the unit's current rent of $${floor}`);
+    this.name = 'RentBelowFloor';
+  }
+}
+
 export interface TenantContactInput {
   firstName: string;
   lastName: string;
@@ -44,13 +52,10 @@ export function validateTenantContact(body: {
   const emergencyPhone = str(body.emergencyPhone);
   const emergencyRelationship = str(body.emergencyRelationship);
 
-  // Realtors must give the office a complete record: every field is required.
+  // Name, email, and phone are required; the emergency contact is optional.
   if (!firstName || !lastName) return { ok: false, error: 'First and last name are required' };
   if (!email) return { ok: false, error: 'Email is required' };
   if (!phone) return { ok: false, error: 'Phone is required' };
-  if (!emergencyName || !emergencyPhone || !emergencyRelationship) {
-    return { ok: false, error: 'Emergency contact name, phone, and relationship are required' };
-  }
 
   for (const v of [firstName, lastName, email, phone, emergencyName, emergencyPhone, emergencyRelationship]) {
     if (v.length > MAX_CONTACT_FIELD) return { ok: false, error: 'A field is too long' };
@@ -80,7 +85,8 @@ export async function createTenantForRealtor(
   env: Env,
   realtorUserId: string,
   value: TenantContactInput,
-  unitId?: string
+  unitId?: string,
+  monthlyRent?: number
 ): Promise<Record<string, unknown>> {
   const tenantId = crypto.randomUUID();
 
@@ -100,16 +106,23 @@ export async function createTenantForRealtor(
 
   if (unitId) {
     if (!(await isUnitAvailable(env, unitId))) throw new UnitUnavailable();
-    // Copy the unit's rent and property server side; the realtor never sets money.
     const unit = await env.DB.prepare('SELECT property_id, monthly_rent FROM units WHERE id = ?')
       .bind(unitId).first<{ property_id: string | null; monthly_rent: number | null }>();
+    const unitRent = unit?.monthly_rent ?? 0;
+    // The realtor may price the rent, but never below the unit's current rent.
+    // No price given falls back to the unit's rent.
+    let leaseRent = unitRent;
+    if (typeof monthlyRent === 'number' && monthlyRent > 0) {
+      if (monthlyRent < unitRent) throw new RentBelowFloor(unitRent);
+      leaseRent = monthlyRent;
+    }
     const leaseId = crypto.randomUUID();
     statements.push(
       env.DB.prepare(
         `INSERT INTO leases (id, unit_id, property_id, monthly_rent, security_deposit,
            status, start_date, needs_review)
          VALUES (?, ?, ?, ?, NULL, 'active', NULL, 1)`
-      ).bind(leaseId, unitId, unit?.property_id ?? null, unit?.monthly_rent ?? 0),
+      ).bind(leaseId, unitId, unit?.property_id ?? null, leaseRent),
       env.DB.prepare(
         'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
       ).bind(crypto.randomUUID(), leaseId, tenantId)
