@@ -276,6 +276,49 @@ export function TenantDetail() {
     }
   };
 
+  // Edit an existing tenancy's rent, dates, and move-in fee (the Tenancy card).
+  const [tenancyOpen, setTenancyOpen] = useState(false);
+  const [savingTenancy, setSavingTenancy] = useState(false);
+  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true });
+
+  const openEditTenancy = () => {
+    if (!lease) return;
+    setTenancyForm({
+      monthlyRent: lease.monthlyRent ? String(lease.monthlyRent) : '',
+      startDate: lease.startDate || '',
+      endDate: lease.endDate || '',
+      moveInFee: lease.securityDeposit ? String(lease.securityDeposit) : '',
+      moveInFeePaid: lease.moveInFeePaid !== false,
+    });
+    setTenancyOpen(true);
+  };
+
+  const handleSaveTenancy = async () => {
+    if (!lease || savingTenancy) return;
+    const rent = Number(tenancyForm.monthlyRent);
+    if (!Number.isFinite(rent) || rent <= 0) {
+      showToast('Enter the monthly rent.', 'error');
+      return;
+    }
+    setSavingTenancy(true);
+    try {
+      await updateLease({
+        ...lease,
+        monthlyRent: rent,
+        startDate: tenancyForm.startDate || undefined,
+        endDate: tenancyForm.endDate || undefined,
+        securityDeposit: tenancyForm.moveInFee ? Number(tenancyForm.moveInFee) : 0,
+        moveInFeePaid: tenancyForm.moveInFeePaid,
+      });
+      showToast('Tenancy updated.', 'success');
+      setTenancyOpen(false);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the tenancy.', 'error');
+    } finally {
+      setSavingTenancy(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenant) return;
@@ -605,7 +648,7 @@ export function TenantDetail() {
           {canManagePortal && (
             <Button variant="outline" onClick={openEdit} className="flex-1 sm:flex-none">
               <Edit2 className="h-4 w-4 mr-2" />
-              Edit Person
+              Edit Tenant
             </Button>
           )}
           {hasPermission('tenants_delete') && (
@@ -666,9 +709,20 @@ export function TenantDetail() {
         {/* Tenancy summary */}
         <Card>
           <CardContent className="p-5 space-y-4">
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <Home className="h-4 w-4 text-faint" /> Tenancy
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-ink flex items-center gap-2">
+                <Home className="h-4 w-4 text-faint" /> Tenancy
+              </h3>
+              {lease && canManagePortal && (
+                <button
+                  type="button"
+                  onClick={openEditTenancy}
+                  className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
+                >
+                  <Edit2 className="h-3.5 w-3.5" /> Edit
+                </button>
+              )}
+            </div>
             {lease ? (
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2 text-ink">
@@ -1088,6 +1142,79 @@ export function TenantDetail() {
       </Card>
 
       {/* Edit modal */}
+      <Modal isOpen={tenancyOpen} onClose={() => (savingTenancy ? undefined : setTenancyOpen(false))} title="Edit tenancy" size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Monthly Rent *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.monthlyRent}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, monthlyRent: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <p className="text-xs text-muted mt-1">Saving this also sets the unit's current rent to match.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Start Date</label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.startDate}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.endDate}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Move-In Fee</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.moveInFee}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFee: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line-strong"
+                checked={tenancyForm.moveInFeePaid}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaid: e.target.checked })}
+              />
+              Move-in fee already paid
+            </label>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setTenancyOpen(false)} disabled={savingTenancy}>
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleSaveTenancy} disabled={savingTenancy}>
+              {savingTenancy ? 'Saving…' : 'Save tenancy'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={approveOpen} onClose={() => (approving ? undefined : setApproveOpen(false))} title="Approve tenancy" size="md">
         <div className="space-y-4">
           <p className="text-sm text-muted">
@@ -1168,7 +1295,7 @@ export function TenantDetail() {
         </div>
       </Modal>
 
-      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Person" size="lg">
+      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Tenant" size="lg">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
