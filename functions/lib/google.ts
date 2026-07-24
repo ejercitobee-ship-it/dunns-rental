@@ -240,26 +240,55 @@ export async function ensureRootFolder(env: Env): Promise<string> {
 }
 
 /**
- * A tenant's folder, created on first use and remembered on the tenant row.
- * Named for the person so the folder is meaningful when Belle opens Drive.
+ * The folder a tenant's documents go into, organized by UNIT so housemates on
+ * the same lease share ONE folder (named by address + unit). Falls back to a
+ * per-person folder only when the tenant has no current unit, so an upload
+ * always has somewhere to land. Reused across uploads/receipts/proofs.
  */
 export async function ensureTenantFolder(env: Env, tenantId: string): Promise<string> {
+  const unit = await env.DB.prepare(
+    `SELECT u.id AS unit_id, u.unit_number AS unit_number, u.drive_folder_id AS unit_folder_id,
+            p.name AS property_name, p.address AS property_address
+       FROM tenants t
+       JOIN lease_tenants lt ON lt.tenant_id = t.id
+       JOIN leases l ON l.id = lt.lease_id AND l.status != 'ended'
+       JOIN units u ON u.id = l.unit_id
+       LEFT JOIN properties p ON p.id = u.property_id
+      WHERE t.id = ?
+      ORDER BY l.start_date DESC LIMIT 1`
+  )
+    .bind(tenantId)
+    .first<{
+      unit_id: string; unit_number: string | null; unit_folder_id: string | null;
+      property_name: string | null; property_address: string | null;
+    }>();
+
+  if (unit?.unit_id) {
+    if (unit.unit_folder_id) {
+      const status = await folderStatus(env, unit.unit_folder_id);
+      if (status !== 'gone') return unit.unit_folder_id;
+    }
+    const root = await ensureRootFolder(env);
+    const place = (unit.property_address || unit.property_name || 'Property').trim();
+    const name = `${place} - Unit ${unit.unit_number || '?'}`;
+    const id = await createFolder(env, name, root);
+    await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
+      .bind(id, unit.unit_id)
+      .run();
+    return id;
+  }
+
+  // No current unit (unplaced tenant): a per-person folder, so uploads work.
   const tenant = await env.DB.prepare(
     'SELECT id, first_name, last_name, drive_folder_id FROM tenants WHERE id = ?'
   )
     .bind(tenantId)
     .first<{ id: string; first_name: string; last_name: string; drive_folder_id: string | null }>();
   if (!tenant) throw new Error('Tenant not found');
-
-  // Same rule as the root: reuse unless the folder is definitely gone, so a
-  // transient check failure never makes a second folder for the same person.
-  // No adopt-by-name here — two tenants can share a name, and adopting would
-  // merge their documents.
   if (tenant.drive_folder_id) {
     const status = await folderStatus(env, tenant.drive_folder_id);
     if (status !== 'gone') return tenant.drive_folder_id;
   }
-
   const root = await ensureRootFolder(env);
   const name = `${tenant.first_name} ${tenant.last_name}`.trim() || tenant.id;
   const id = await createFolder(env, name, root);
@@ -267,6 +296,68 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
     .bind(id, tenantId)
     .run();
   return id;
+}
+
+/** Move a Drive file into a new parent, removing its current parents. Best-effort. */
+async function moveDriveFile(env: Env, fileId: string, newParentId: string): Promise<void> {
+  const token = await getAccessToken(env);
+  const meta = await fetch(`${DRIVE_API}/files/${fileId}?fields=parents`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!meta.ok) return;
+  const { parents } = (await meta.json()) as { parents?: string[] };
+  const current = parents || [];
+  if (current.length === 1 && current[0] === newParentId) return; // already there
+  const removeParents = current.filter(p => p !== newParentId);
+  const params = new URLSearchParams({ addParents: newParentId, fields: 'id' });
+  if (removeParents.length) params.set('removeParents', removeParents.join(','));
+  await fetch(`${DRIVE_API}/files/${fileId}?${params.toString()}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+}
+
+/**
+ * One-time reorg: move every existing document into its tenant's UNIT folder,
+ * then delete now-empty per-person folders and clear their legacy ids. Idempotent
+ * and best-effort per file, so it is safe to run more than once.
+ */
+export async function migrateDocumentFoldersToUnits(env: Env): Promise<{ moved: number; foldersRemoved: number }> {
+  const { results: docs } = await env.DB.prepare(
+    'SELECT id, drive_file_id, tenant_id FROM documents WHERE tenant_id IS NOT NULL AND drive_file_id IS NOT NULL'
+  ).all<{ id: string; drive_file_id: string; tenant_id: string }>();
+
+  let moved = 0;
+  for (const doc of docs || []) {
+    try {
+      const unitFolder = await ensureTenantFolder(env, doc.tenant_id); // resolves the unit folder now
+      await moveDriveFile(env, doc.drive_file_id, unitFolder);
+      moved++;
+    } catch { /* skip this file, keep going */ }
+  }
+
+  // Retire per-person folders: delete the empty ones, clear the (now legacy) id.
+  const { results: folders } = await env.DB.prepare(
+    'SELECT id, drive_folder_id FROM tenants WHERE drive_folder_id IS NOT NULL'
+  ).all<{ id: string; drive_folder_id: string }>();
+  const token = await getAccessToken(env);
+  let foldersRemoved = 0;
+  for (const t of folders || []) {
+    try {
+      const q = encodeURIComponent(`'${t.drive_folder_id}' in parents and trashed = false`);
+      const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)&pageSize=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const empty = res.ok && (((await res.json()) as { files?: unknown[] }).files || []).length === 0;
+      if (empty) {
+        try { await deleteDriveFile(env, t.drive_folder_id); foldersRemoved++; } catch { /* already gone */ }
+      }
+      await env.DB.prepare('UPDATE tenants SET drive_folder_id = NULL WHERE id = ?').bind(t.id).run();
+    } catch { /* skip */ }
+  }
+
+  return { moved, foldersRemoved };
 }
 
 /** The Profile Photos folder, a subfolder of the app root, created on first use. */

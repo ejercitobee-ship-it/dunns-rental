@@ -26,13 +26,13 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { settingsApi, googleApi, rentSheetApi } from '../lib/api';
+import { settingsApi, googleApi, rentSheetApi, adminApi } from '../lib/api';
 import { SYSTEM_PERMISSIONS } from '../types/auth';
 import type { Role } from '../types/auth';
 
 export function Settings() {
   const { showToast } = useToast();
-  const { roles, updateRole, addRole, deleteRole, hasPermission } = useAuth();
+  const { roles, updateRole, addRole, deleteRole, hasPermission, isSuperAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('company');
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
@@ -179,6 +179,20 @@ export function Settings() {
       showToast((err as Error).message || 'Failed to disconnect Google Drive', 'error');
     } finally {
       setIsDriveWorking(false);
+    }
+  };
+
+  const [isMigratingDocs, setIsMigratingDocs] = useState(false);
+  const handleMigrateDocFolders = async () => {
+    if (!confirm('Move all existing tenant documents into one folder per unit, and remove the old per-person folders? This is safe to run once.')) return;
+    setIsMigratingDocs(true);
+    try {
+      const { moved, foldersRemoved } = await adminApi.migrateDocFolders();
+      showToast(`Done. Moved ${moved} document${moved === 1 ? '' : 's'} into unit folders; removed ${foldersRemoved} empty folder${foldersRemoved === 1 ? '' : 's'}.`, 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not reorganize document folders.', 'error');
+    } finally {
+      setIsMigratingDocs(false);
     }
   };
 
@@ -446,7 +460,7 @@ export function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted">
-              Tenant documents are stored in your Google Drive, in a folder for each tenant. Only files this app creates are visible to it. It cannot see the rest of your Drive.
+              Tenant documents are stored in your Google Drive, in one folder per unit (housemates on the same lease share it). Only files this app creates are visible to it. It cannot see the rest of your Drive.
             </p>
 
             {driveConnected === null ? (
@@ -469,6 +483,23 @@ export function Settings() {
                   </Button>
                 )}
               </div>
+
+              {isSuperAdmin() && (
+                <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
+                      <Cloud className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-ink">Organize documents by unit</p>
+                      <p className="text-sm text-muted">Move any documents still in old per-person folders into one folder per unit, and remove the empty folders. Safe to run once.</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" onClick={handleMigrateDocFolders} disabled={isMigratingDocs} className="flex-shrink-0">
+                    {isMigratingDocs ? 'Organizing…' : 'Organize now'}
+                  </Button>
+                </div>
+              )}
 
               {hasPermission('finances_view') && (
                 <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">

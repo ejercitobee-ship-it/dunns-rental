@@ -106,6 +106,9 @@ export const adminApi = {
     apiRequest(`/admin/users/${id}`, { method: 'DELETE' }),
   resetUserPassword: (userId: string): Promise<{ tempPassword: string; message: string }> =>
     apiRequest('/admin/reset-user-password', { method: 'POST', body: JSON.stringify({ userId }) }),
+  // One-time: move existing documents into their unit folders (super admin).
+  migrateDocFolders: (): Promise<{ moved: number; foldersRemoved: number }> =>
+    apiRequest('/admin/migrate-doc-folders', { method: 'POST' }),
 };
 
 // Roles API
