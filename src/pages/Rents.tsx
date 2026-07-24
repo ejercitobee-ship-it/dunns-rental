@@ -11,7 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi } from '../lib/api';
+import { rentSheetApi, documentsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -133,7 +133,10 @@ export function Rents() {
     paidByTenantId: '',
     receivedDate: todayLocalDate(),
     paymentMethod: 'check' as PaymentMethod,
+    notes: '',
   });
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   // Same synchronous guard as the import loop above, for the same reason:
   // a double-click on "Record Payment" must not create two payments.
@@ -371,21 +374,27 @@ export function Rents() {
 
   const openRecordModal = (row: LeaseMonthRow) => {
     setRecordRow(row);
+    setProofFile(null);
+    if (proofInputRef.current) proofInputRef.current.value = '';
     setRecordForm({
       amount: row.settlement.balance > 0 ? String(row.settlement.balance) : '',
       paidByTenantId: '',
       receivedDate: todayLocalDate(),
       paymentMethod: 'check',
+      notes: '',
     });
   };
 
   const closeRecordModal = () => {
     setRecordRow(null);
+    setProofFile(null);
+    if (proofInputRef.current) proofInputRef.current.value = '';
     setRecordForm({
       amount: '',
       paidByTenantId: '',
       receivedDate: todayLocalDate(),
       paymentMethod: 'check',
+      notes: '',
     });
   };
 
@@ -420,8 +429,31 @@ export function Rents() {
         paidDate: recordForm.receivedDate,
         paymentMethod: recordForm.paymentMethod,
         dueDate,
+        notes: recordForm.notes.trim() || undefined,
       });
-      showToast('Payment recorded.', 'success');
+
+      // Save the proof of payment to the tenant's Drive folder. Best-effort:
+      // a Drive hiccup must never lose the recorded payment.
+      let proofNote = '';
+      if (proofFile) {
+        const tenantId = recordForm.paidByTenantId || recordRow.occupants[0]?.id;
+        if (tenantId) {
+          try {
+            const dot = proofFile.name.lastIndexOf('.');
+            const ext = dot >= 0 ? proofFile.name.slice(dot) : '';
+            const named = new File(
+              [proofFile],
+              `Proof of payment - ${formatMonthYear(recordRow.month, recordRow.year)}${ext}`,
+              { type: proofFile.type || 'application/octet-stream' }
+            );
+            await documentsApi.upload(named, { tenantId });
+            proofNote = ' Proof uploaded.';
+          } catch {
+            proofNote = ' The payment saved, but the proof upload failed (add it from the tenant\'s Documents).';
+          }
+        }
+      }
+      showToast(`Payment recorded.${proofNote}`, proofNote.includes('failed') ? 'error' : 'success');
       closeRecordModal();
     } catch (err) {
       showToast((err as Error).message, 'error');
@@ -1356,6 +1388,33 @@ export function Rents() {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-ink">Notes</label>
+              <textarea
+                rows={2}
+                value={recordForm.notes}
+                onChange={(e) => setRecordForm({ ...recordForm, notes: e.target.value })}
+                placeholder="Optional note about this payment (e.g. partial, paid in cash to office)"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-ink">Proof of payment</label>
+              <input
+                ref={proofInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:border-primary/50"
+              />
+              <p className="text-xs text-muted">
+                {proofFile
+                  ? `Selected: ${proofFile.name}. Saved to the tenant's Documents folder.`
+                  : "Optional. A receipt or screenshot, saved to the tenant's Documents folder."}
+              </p>
             </div>
 
             <div className="flex gap-3 pt-2">
