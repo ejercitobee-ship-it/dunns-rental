@@ -658,7 +658,7 @@ export function TenantDetail() {
               onClick={() => setTenantToDelete(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Delete tenant
+              Delete
             </Button>
           )}
         </div>
