@@ -525,10 +525,22 @@ export interface MessageThread {
   tenantId: string;
   firstName: string;
   lastName: string;
+  propertyName: string | null;
+  propertyAddress: string | null;
+  unitNumber: string | null;
   lastBody: string | null;
   lastSender: 'tenant' | 'office' | null;
   lastAt: number;
   unread: number;
+}
+
+/** "Maple Court, Unit 2" style label from a property/unit, or '' when unknown. */
+export function placeLabel(
+  p: { propertyName?: string | null; propertyAddress?: string | null; unitNumber?: string | null }
+): string {
+  const prop = p.propertyName || p.propertyAddress || '';
+  const unit = p.unitNumber ? `Unit ${p.unitNumber}` : '';
+  return [prop, unit].filter(Boolean).join(', ');
 }
 
 export const portalApi = {
@@ -573,7 +585,7 @@ export const portalApi = {
   addRealtorTenant: (data: {
     firstName: string; lastName: string; email?: string; phone?: string;
     emergencyName?: string; emergencyPhone?: string; emergencyRelationship?: string;
-    unitId?: string; monthlyRent?: number;
+    unitId?: string; monthlyRent?: number; startDate?: string; endDate?: string;
   }): Promise<PortalPerson> =>
     apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
   // Vacant units the realtor may market, asking rent included on purpose.
@@ -715,7 +727,11 @@ export const handymenApi = {
 export const messagesApi = {
   threads: (): Promise<{ threads: MessageThread[] }> => apiRequest('/messages'),
   unreadCount: (): Promise<{ count: number }> => apiRequest('/messages?count=1'),
-  thread: (tenantId: string): Promise<{ tenantId: string; tenantName: string; messages: Message[] }> =>
+  thread: (tenantId: string): Promise<{
+    tenantId: string; tenantName: string;
+    propertyName: string | null; propertyAddress: string | null; unitNumber: string | null;
+    messages: Message[];
+  }> =>
     apiRequest(`/messages/${tenantId}`),
   reply: (tenantId: string, body: string): Promise<Message> =>
     apiRequest(`/messages/${tenantId}`, { method: 'POST', body: JSON.stringify({ body }) }),

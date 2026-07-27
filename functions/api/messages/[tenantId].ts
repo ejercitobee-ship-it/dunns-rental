@@ -18,6 +18,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const who = await tenantContact(env, tenantId);
     if (!who) return jsonError('Tenant not found', 404);
 
+    // Where the tenant lives, for the conversation header.
+    const place = await env.DB.prepare(
+      `SELECT p.name AS propertyName, p.address AS propertyAddress, u.unit_number AS unitNumber
+         FROM leases l
+         JOIN lease_tenants lt ON lt.lease_id = l.id
+         LEFT JOIN units u ON u.id = l.unit_id
+         LEFT JOIN properties p ON p.id = l.property_id
+        WHERE lt.tenant_id = ? AND l.status != 'ended'
+        ORDER BY l.start_date DESC LIMIT 1`
+    ).bind(tenantId).first<{ propertyName: string | null; propertyAddress: string | null; unitNumber: string | null }>();
+
     const { results } = await env.DB.prepare(
       'SELECT * FROM messages WHERE tenant_id = ? ORDER BY created_at ASC'
     ).bind(tenantId).all();
@@ -29,7 +40,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     return jsonOk({
       success: true,
-      data: { tenantId, tenantName: who.name, messages: (results || []).map(serializeMessage) },
+      data: {
+        tenantId,
+        tenantName: who.name,
+        propertyName: place?.propertyName ?? null,
+        propertyAddress: place?.propertyAddress ?? null,
+        unitNumber: place?.unitNumber ?? null,
+        messages: (results || []).map(serializeMessage),
+      },
     });
   } catch {
     return serverError();

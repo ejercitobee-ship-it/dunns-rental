@@ -20,6 +20,40 @@ export class RentBelowFloor extends Error {
   }
 }
 
+/** Strict YYYY-MM-DD (no Date parsing), same rule as the leases endpoints. */
+function isDateString(v: unknown): v is string {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+export interface LeaseDates {
+  startDate: string | null;
+  endDate: string | null;
+}
+export type LeaseDatesValidation = { ok: true; value: LeaseDates } | { ok: false; error: string };
+
+/**
+ * Validate the realtor's lease start and expiration. Start is required; end
+ * defaults to one year after start when left blank, and can never fall on or
+ * before the start. Pure.
+ */
+export function validateLeaseDates(startRaw: unknown, endRaw: unknown): LeaseDatesValidation {
+  const start = typeof startRaw === 'string' ? startRaw.trim() : '';
+  const end = typeof endRaw === 'string' ? endRaw.trim() : '';
+  if (!start) return { ok: false, error: 'A lease start date is required' };
+  if (!isDateString(start)) return { ok: false, error: 'Lease start date must be a valid date' };
+
+  let endDate: string;
+  if (end) {
+    if (!isDateString(end)) return { ok: false, error: 'Lease expiration must be a valid date' };
+    if (end <= start) return { ok: false, error: 'Lease expiration must be after the start date' };
+    endDate = end;
+  } else {
+    const [y, m, d] = start.split('-');
+    endDate = `${Number(y) + 1}-${m}-${d}`;
+  }
+  return { ok: true, value: { startDate: start, endDate } };
+}
+
 export interface TenantContactInput {
   firstName: string;
   lastName: string;
@@ -86,7 +120,8 @@ export async function createTenantForRealtor(
   realtorUserId: string,
   value: TenantContactInput,
   unitId?: string,
-  monthlyRent?: number
+  monthlyRent?: number,
+  dates?: LeaseDates
 ): Promise<Record<string, unknown>> {
   const tenantId = crypto.randomUUID();
 
@@ -120,9 +155,9 @@ export async function createTenantForRealtor(
     statements.push(
       env.DB.prepare(
         `INSERT INTO leases (id, unit_id, property_id, monthly_rent, security_deposit,
-           status, start_date, needs_review)
-         VALUES (?, ?, ?, ?, NULL, 'active', NULL, 1)`
-      ).bind(leaseId, unitId, unit?.property_id ?? null, leaseRent),
+           status, start_date, end_date, needs_review)
+         VALUES (?, ?, ?, ?, NULL, 'active', ?, ?, 1)`
+      ).bind(leaseId, unitId, unit?.property_id ?? null, leaseRent, dates?.startDate ?? null, dates?.endDate ?? null),
       env.DB.prepare(
         'INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)'
       ).bind(crypto.randomUUID(), leaseId, tenantId)

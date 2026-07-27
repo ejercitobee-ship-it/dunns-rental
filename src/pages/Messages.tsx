@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { messagesApi, type Message, type MessageThread } from '../lib/api';
+import { messagesApi, placeLabel, type Message, type MessageThread } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 
@@ -24,6 +24,7 @@ export function Messages() {
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [openName, setOpenName] = useState('');
+  const [openPlace, setOpenPlace] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
   const [draft, setDraft] = useState('');
@@ -114,6 +115,7 @@ export function Messages() {
     try {
       const res = await messagesApi.thread(tenantId);
       setOpenName(res.tenantName);
+      setOpenPlace(placeLabel(res));
       setMessages(res.messages);
       // Opening cleared the unread flag server-side; reflect it in the list.
       setThreads((prev) => prev.map((t) => (t.tenantId === tenantId ? { ...t, unread: 0 } : t)));
@@ -186,6 +188,9 @@ export function Messages() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-ink truncate">
                         {t.firstName} {t.lastName}
+                        {placeLabel(t) && (
+                          <span className="font-normal text-muted"> · {placeLabel(t)}</span>
+                        )}
                       </span>
                       {t.unread > 0 && (
                         <span className="flex-shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold flex items-center justify-center">
@@ -222,7 +227,10 @@ export function Messages() {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>
-                  <h3 className="font-semibold text-ink">{openName}</h3>
+                  <h3 className="font-semibold text-ink">
+                    {openName}
+                    {openPlace && <span className="font-normal text-muted"> · {openPlace}</span>}
+                  </h3>
                 </div>
 
                 <div className="space-y-3 max-h-[52vh] overflow-y-auto pr-1">

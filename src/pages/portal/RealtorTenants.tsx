@@ -19,7 +19,7 @@ import { formatCurrency } from '../../lib/utils';
 const emptyForm = {
   firstName: '', lastName: '', email: '', phone: '',
   emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
-  unitId: '', monthlyRent: '',
+  unitId: '', monthlyRent: '', startDate: '', endDate: '',
 };
 
 export function RealtorTenants() {
@@ -39,11 +39,28 @@ export function RealtorTenants() {
   const rentValue = Number(form.monthlyRent);
   const rentValid = !!form.unitId && Number.isFinite(rentValue) && rentValue > 0 && rentValue >= rentFloor;
 
-  // Name, email, phone, a unit, and a valid rent are required; the emergency
-  // contact is optional.
+  // Expiration must be after the start; it auto-fills to a year out when a start
+  // is picked, but the realtor can change it.
+  const datesValid = !!form.startDate && (!form.endDate || form.endDate > form.startDate);
+
+  // Name, email, phone, a unit, a valid rent, and a start date are required; the
+  // emergency contact is optional.
   const allFieldsFilled =
     !!form.firstName.trim() && !!form.lastName.trim() && !!form.email.trim() && !!form.phone.trim() &&
-    !!form.unitId && rentValid;
+    !!form.unitId && rentValid && datesValid;
+
+  // When the realtor picks a start date, default the expiration to one year
+  // later (only if they have not set one), so every lease has a yearly term.
+  const handleStartDate = (startDate: string) => {
+    setForm((f) => {
+      let endDate = f.endDate;
+      if (startDate && (!endDate || endDate <= startDate)) {
+        const [y, m, d] = startDate.split('-');
+        endDate = `${Number(y) + 1}-${m}-${d}`;
+      }
+      return { ...f, startDate, endDate };
+    });
+  };
 
   const loadTenants = () => portalApi.realtorTenants().then(setTenants);
   const loadUnits = () => portalApi.availableUnits().then(setUnits);
@@ -91,6 +108,8 @@ export function RealtorTenants() {
         emergencyRelationship: form.emergencyRelationship.trim() || undefined,
         unitId: form.unitId,
         monthlyRent: rentValue,
+        startDate: form.startDate,
+        endDate: form.endDate || undefined,
       });
       await Promise.all([loadTenants(), loadUnits()]);
       setForm(emptyForm);
@@ -234,6 +253,30 @@ export function RealtorTenants() {
                 </p>
               )}
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-muted mb-1">Lease start *</label>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+                  value={form.startDate}
+                  onChange={(e) => handleStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted mb-1">Lease expires *</label>
+                <input
+                  type="date"
+                  min={form.startDate || undefined}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm ${form.endDate && !datesValid ? 'border-danger' : 'border-line'}`}
+                  value={form.endDate}
+                  onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                />
+              </div>
+              <p className="text-xs text-muted sm:col-span-2">
+                Expiration fills in one year after the start; change it if the term is different.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
@@ -247,7 +290,7 @@ export function RealtorTenants() {
               This creates a new tenant in your list and in the system. If they are already in the system, ask the office to link them instead.
             </p>
             <p className="text-xs text-muted">
-              Choosing a unit places this tenant there as a draft for the office to approve. The office confirms the rent and sets the dates.
+              Choosing a unit places this tenant there as a draft for the office to approve. The office reviews the rent and lease dates before it goes active.
             </p>
           </CardContent>
         </Card>

@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../lib/session';
 import { realtorTenantIds, serverToday } from '../../../../lib/portal';
 import { serializePortalTenant } from '../../../../lib/serializers';
-import { validateTenantContact, createTenantForRealtor, UnitUnavailable, RentBelowFloor } from '../../../../lib/realtorTenants';
+import { validateTenantContact, validateLeaseDates, createTenantForRealtor, UnitUnavailable, RentBelowFloor } from '../../../../lib/realtorTenants';
 
 /** GET /api/portal/realtor/tenants — the realtor's tenants, inside the window. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -76,6 +76,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const unitId = typeof body.unitId === 'string' && body.unitId ? body.unitId : undefined;
     if (!unitId) return jsonError('Please choose a unit for this tenant', 400);
 
+    // The realtor now sets when the lease starts and expires (end defaults to a
+    // year after start). These travel onto the draft lease for the office to
+    // confirm at approval.
+    const dates = validateLeaseDates(body.startDate, body.endDate);
+    if (!dates.ok) return jsonError(dates.error, 400);
+
     // If this email already belongs to someone in the system, do not create a
     // duplicate. Send the realtor to the office to link the existing record.
     const existing = await env.DB.prepare(
@@ -87,7 +93,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const monthlyRent = typeof body.monthlyRent === 'number' ? body.monthlyRent : Number(body.monthlyRent);
     try {
-      const row = await createTenantForRealtor(env, auth.id, valid.value, unitId, Number.isFinite(monthlyRent) ? monthlyRent : undefined);
+      const row = await createTenantForRealtor(env, auth.id, valid.value, unitId, Number.isFinite(monthlyRent) ? monthlyRent : undefined, dates.value);
       return jsonOk({ success: true, data: serializePortalTenant(row) }, 201);
     } catch (err) {
       if (err instanceof UnitUnavailable) return jsonError('That unit is no longer available', 409);
