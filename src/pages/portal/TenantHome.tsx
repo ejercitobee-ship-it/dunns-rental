@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Home, DoorOpen, Calendar, DollarSign, User, ShieldAlert } from 'lucide-react';
+import { Home, DoorOpen, Calendar, DollarSign, User, ShieldAlert, CalendarClock } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -102,6 +102,20 @@ export function TenantHome() {
     return pd.months >= threshold ? pd : null;
   }, [me, payments]);
 
+  // Nudge the tenant when their lease is within a month of expiring (or has
+  // expired), so they know to reach out about renewing.
+  const leaseExpiry = useMemo(() => {
+    const end = me?.lease?.endDate;
+    if (!end) return null;
+    const [y, m, d] = end.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    const endMs = new Date(y, m - 1, d).getTime();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.round((endMs - today.getTime()) / 86400000);
+    return days <= 30 ? { end, days } : null;
+  }, [me]);
+
   if (loading) {
     return <p className="text-sm text-muted">Loading your account.</p>;
   }
@@ -146,6 +160,24 @@ export function TenantHome() {
             <p className="font-semibold text-ink">Your rent is {pastDue.months} months past due</p>
             <p className="text-sm text-muted mt-1">
               You have an outstanding balance of {formatCurrency(pastDue.balance)}. Please bring your account current as soon as you can. See the payment instructions below, and reach out to us with any questions.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {leaseExpiry && (
+        <div className="rounded-xl border border-warning/30 bg-warning-soft p-5 flex items-start gap-3">
+          <CalendarClock className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-ink">
+              {leaseExpiry.days > 0
+                ? `Your lease expires ${leaseExpiry.days === 1 ? 'tomorrow' : `in ${leaseExpiry.days} days`}`
+                : leaseExpiry.days === 0
+                  ? 'Your lease expires today'
+                  : 'Your lease has expired'}
+            </p>
+            <p className="text-sm text-muted mt-1">
+              Your current lease runs through {formatDate(leaseExpiry.end)}. Please reach out to us to renew so there is no gap in your tenancy.
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { withLeaseDetails, findMissingTenantIds, readLeaseStatus, isValidDateString } from './index';
+import { withLeaseDetails, findMissingTenantIds, readLeaseStatus, isValidDateString, leaseEndDate } from './index';
 import { syncRentSheet } from '../../lib/sheets';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -73,7 +73,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.unitId ?? null,
         body.propertyId ?? null,
         body.startDate ?? null,
-        body.endDate ?? null,
+        leaseEndDate(body.startDate, body.endDate),
         body.monthlyRent ?? 0,
         body.securityDeposit ?? 0,
         body.moveInFeePaid === false ? 0 : 1,

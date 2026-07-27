@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -507,15 +508,21 @@ export function Properties() {
                             <p className="text-xs text-muted">Rent</p>
                             <p className="font-semibold text-positive">{formatCurrency(unit.monthlyRent)}</p>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right max-w-[170px]">
                             {lease ? (
-                              <div className="flex items-center gap-1 text-xs text-muted justify-end">
-                                <Users className="h-3 w-3 flex-shrink-0" />
-                                <span className="truncate max-w-[160px]">
-                                  {occupants.length > 0
-                                    ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
-                                    : 'Occupant unknown'}
-                                </span>
+                              <div className="flex items-center gap-1 text-xs justify-end flex-wrap">
+                                <Users className="h-3 w-3 flex-shrink-0 text-muted" />
+                                {occupants.length > 0 ? (
+                                  occupants.map((t, i) => (
+                                    <span key={t.id} className="whitespace-nowrap">
+                                      <Link to={`/tenants/${t.id}`} className="text-primary hover:underline">
+                                        {t.firstName} {t.lastName}
+                                      </Link>{i < occupants.length - 1 ? ',' : ''}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-muted">Occupant unknown</span>
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-faint">Vacant</span>

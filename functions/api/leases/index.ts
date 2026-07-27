@@ -85,6 +85,20 @@ export function readLeaseStatus(value: unknown): string | null {
 }
 
 /**
+ * The lease's end date: the caller's value when given, otherwise ONE YEAR after
+ * the start date so every lease has a yearly expiration. Null only when there is
+ * no start date yet (a realtor draft awaiting approval).
+ */
+export function leaseEndDate(startDate: unknown, endDate: unknown): string | null {
+  if (isValidDateString(endDate)) return endDate;
+  if (isValidDateString(startDate)) {
+    const [y, m, d] = startDate.split('-');
+    return `${Number(y) + 1}-${m}-${d}`;
+  }
+  return null;
+}
+
+/**
  * Confirm every id in tenantIds exists in tenants, in one query. Returns the
  * ids that could NOT be found (empty when all are valid).
  */
@@ -145,7 +159,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.unitId,
         body.propertyId ?? unit.property_id ?? null,
         body.startDate ?? null,
-        body.endDate ?? null,
+        leaseEndDate(body.startDate, body.endDate),
         body.monthlyRent,
         body.securityDeposit ?? 0,
         body.moveInFeePaid === false ? 0 : 1,
