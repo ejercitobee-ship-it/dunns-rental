@@ -323,11 +323,15 @@ export function Dashboard() {
     return out;
   }, [leases, rentPayments, properties, units, getLeaseTenants]);
 
-  const overdueUnitCount = useMemo(() => overdueTree.reduce((n, p) => n + p.units.length, 0), [overdueTree]);
+  // A flat summary list for the dashboard: one row per overdue tenancy, most
+  // owed first. Just the tenant, months missed, and total, no property/unit
+  // grouping, since the dashboard is only a summary.
+  const overdueList = useMemo(
+    () => overdueTree.flatMap(p => p.units).sort((a, b) => b.total - a.total),
+    [overdueTree]
+  );
 
   const [expandedPastDue, setExpandedPastDue] = useState<Set<string>>(new Set());
-  const [expandedOverdue, setExpandedOverdue] = useState<Set<string>>(new Set());
-  const [expandedOverdueUnit, setExpandedOverdueUnit] = useState<Set<string>>(new Set());
   const toggleIn = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
     setter(prev => {
       const next = new Set(prev);
@@ -816,77 +820,26 @@ export function Dashboard() {
               <div className="p-2 bg-danger-soft rounded-lg">
                 <AlertCircle className="h-5 w-5 text-danger" />
               </div>
-              Overdue Payments ({overdueUnitCount})
+              Overdue Payments ({overdueList.length})
               <ArrowRight className="h-4 w-4 ml-auto" />
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="border-t border-line">
-              {overdueTree.map(prop => {
-                const propOpen = expandedOverdue.has(prop.key);
-                return (
-                  <div key={prop.key} className="border-b border-line last:border-0">
-                    {/* Level 1: property */}
-                    <button
-                      type="button"
-                      onClick={() => toggleIn(setExpandedOverdue, prop.key)}
-                      aria-expanded={propOpen}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-danger-soft/40 text-left transition-colors"
-                    >
-                      {propOpen
-                        ? <ChevronDown className="h-4 w-4 text-faint flex-shrink-0" />
-                        : <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />}
-                      <span className="text-sm font-medium text-ink flex-1 truncate">{prop.name}</span>
-                      <span className="text-xs text-muted whitespace-nowrap">
-                        {prop.units.length} {prop.units.length === 1 ? 'unit' : 'units'}
-                      </span>
-                      <span className="text-sm font-semibold text-danger tnum whitespace-nowrap ml-2">{formatCurrency(prop.total)}</span>
-                    </button>
-
-                    {propOpen && (
-                      <div className="bg-danger-soft/20">
-                        {prop.units.map(unit => {
-                          const unitOpen = expandedOverdueUnit.has(unit.key);
-                          return (
-                            <div key={unit.key} className="border-t border-line/70">
-                              {/* Level 2: unit */}
-                              <button
-                                type="button"
-                                onClick={() => toggleIn(setExpandedOverdueUnit, unit.key)}
-                                aria-expanded={unitOpen}
-                                className="w-full flex items-center gap-3 pl-9 pr-4 py-2.5 hover:bg-danger-soft/40 text-left transition-colors"
-                              >
-                                {unitOpen
-                                  ? <ChevronDown className="h-3.5 w-3.5 text-faint flex-shrink-0" />
-                                  : <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />}
-                                <span className="text-sm text-ink flex-1 truncate">Unit {unit.unitNumber}</span>
-                                <span className="text-xs text-muted whitespace-nowrap">
-                                  {unit.months} {unit.months === 1 ? 'mo' : 'mos'} behind
-                                </span>
-                                <span className="text-sm font-semibold text-danger tnum whitespace-nowrap ml-2 w-24 text-right">{formatCurrency(unit.total)}</span>
-                              </button>
-
-                              {/* Level 3: the tenant summary, columns */}
-                              {unitOpen && (
-                                <button
-                                  type="button"
-                                  onClick={() => unit.firstTenantId && navigate(`/tenants/${unit.firstTenantId}`)}
-                                  className="w-full flex items-center gap-3 pl-16 pr-4 py-2.5 border-t border-line/60 bg-surface text-left hover:opacity-80 transition-opacity"
-                                >
-                                  <span className="text-sm font-medium text-ink flex-1 min-w-0 truncate">{unit.tenantNames}</span>
-                                  <span className="text-sm text-muted tnum whitespace-nowrap w-28 text-right hidden sm:inline">{formatCurrency(unit.monthlyRent)}/mo</span>
-                                  <span className="text-sm text-muted whitespace-nowrap w-24 text-right">{unit.months} {unit.months === 1 ? 'month' : 'months'}</span>
-                                  <span className="text-sm font-semibold text-danger tnum whitespace-nowrap w-24 text-right">{formatCurrency(unit.total)}</span>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {overdueList.map(row => (
+                <button
+                  key={row.key}
+                  type="button"
+                  onClick={() => row.firstTenantId && navigate(`/tenants/${row.firstTenantId}`)}
+                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-danger-soft/40 text-left transition-colors"
+                >
+                  <span className="text-sm font-medium text-ink flex-1 min-w-0 truncate">{row.tenantNames}</span>
+                  <span className="text-xs text-muted whitespace-nowrap w-24 text-right">
+                    {row.months} {row.months === 1 ? 'month' : 'months'}
+                  </span>
+                  <span className="text-sm font-semibold text-danger tnum whitespace-nowrap w-24 text-right">{formatCurrency(row.total)}</span>
+                </button>
+              ))}
             </div>
           </CardContent>
         </Card>

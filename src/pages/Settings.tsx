@@ -184,11 +184,11 @@ export function Settings() {
 
   const [isMigratingDocs, setIsMigratingDocs] = useState(false);
   const handleMigrateDocFolders = async () => {
-    if (!confirm('Move all existing tenant documents into one folder per unit, and remove the old per-person folders? This is safe to run once.')) return;
+    if (!confirm('Reorganize existing documents into Property/Unit → Tenant folders? This is safe to run once.')) return;
     setIsMigratingDocs(true);
     try {
-      const { moved, foldersRemoved } = await adminApi.migrateDocFolders();
-      showToast(`Done. Moved ${moved} document${moved === 1 ? '' : 's'} into unit folders; removed ${foldersRemoved} empty folder${foldersRemoved === 1 ? '' : 's'}.`, 'success');
+      const { moved, foldersNested } = await adminApi.migrateDocFolders();
+      showToast(`Done. Organized ${moved} document${moved === 1 ? '' : 's'} into ${foldersNested} tenant folder${foldersNested === 1 ? '' : 's'} under their units.`, 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not reorganize document folders.', 'error');
     } finally {
@@ -460,7 +460,7 @@ export function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted">
-              Tenant documents are stored in your Google Drive, in one folder per unit (housemates on the same lease share it). Only files this app creates are visible to it. It cannot see the rest of your Drive.
+              Tenant documents are stored in your Google Drive, organized as Property &amp; Unit → Tenant name, so each tenant's files stay separate even as tenants come and go. Only files this app creates are visible to it. It cannot see the rest of your Drive.
             </p>
 
             {driveConnected === null ? (
@@ -491,8 +491,8 @@ export function Settings() {
                       <Cloud className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-ink">Organize documents by unit</p>
-                      <p className="text-sm text-muted">Move any documents still in old per-person folders into one folder per unit, and remove the empty folders. Safe to run once.</p>
+                      <p className="font-medium text-ink">Organize documents by unit and tenant</p>
+                      <p className="text-sm text-muted">Reorganize existing documents into Property/Unit → Tenant folders. Safe to run once.</p>
                     </div>
                   </div>
                   <Button variant="outline" onClick={handleMigrateDocFolders} disabled={isMigratingDocs} className="flex-shrink-0">

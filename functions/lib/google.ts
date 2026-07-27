@@ -240,12 +240,11 @@ export async function ensureRootFolder(env: Env): Promise<string> {
 }
 
 /**
- * The folder a tenant's documents go into, organized by UNIT so housemates on
- * the same lease share ONE folder (named by address + unit). Falls back to a
- * per-person folder only when the tenant has no current unit, so an upload
- * always has somewhere to land. Reused across uploads/receipts/proofs.
+ * The unit folder (under the root) for a tenant's CURRENT unit, created and
+ * remembered on units.drive_folder_id. Named "<address> - Unit <n>". Returns
+ * null when the tenant has no current unit.
  */
-export async function ensureTenantFolder(env: Env, tenantId: string): Promise<string> {
+async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<string | null> {
   const unit = await env.DB.prepare(
     `SELECT u.id AS unit_id, u.unit_number AS unit_number, u.drive_folder_id AS unit_folder_id,
             p.name AS property_name, p.address AS property_address
@@ -262,36 +261,45 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
       unit_id: string; unit_number: string | null; unit_folder_id: string | null;
       property_name: string | null; property_address: string | null;
     }>();
-
-  if (unit?.unit_id) {
-    if (unit.unit_folder_id) {
-      const status = await folderStatus(env, unit.unit_folder_id);
-      if (status !== 'gone') return unit.unit_folder_id;
-    }
-    const root = await ensureRootFolder(env);
-    const place = (unit.property_address || unit.property_name || 'Property').trim();
-    const name = `${place} - Unit ${unit.unit_number || '?'}`;
-    const id = await createFolder(env, name, root);
-    await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
-      .bind(id, unit.unit_id)
-      .run();
-    return id;
+  if (!unit?.unit_id) return null;
+  if (unit.unit_folder_id) {
+    const status = await folderStatus(env, unit.unit_folder_id);
+    if (status !== 'gone') return unit.unit_folder_id;
   }
+  const root = await ensureRootFolder(env);
+  const place = (unit.property_address || unit.property_name || 'Property').trim();
+  const name = `${place} - Unit ${unit.unit_number || '?'}`;
+  const id = await createFolder(env, name, root);
+  await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
+    .bind(id, unit.unit_id)
+    .run();
+  return id;
+}
 
-  // No current unit (unplaced tenant): a per-person folder, so uploads work.
+/**
+ * The folder a tenant's documents go into. Nested so turnover and housemates
+ * stay separated and organized:
+ *   root ("MH Dunn Property Documents") → "<address> - Unit <n>" → "<First Last>"
+ * A tenant with no current unit gets their own folder directly under the root.
+ * Reused across uploads / receipts / payment proofs.
+ */
+export async function ensureTenantFolder(env: Env, tenantId: string): Promise<string> {
   const tenant = await env.DB.prepare(
     'SELECT id, first_name, last_name, drive_folder_id FROM tenants WHERE id = ?'
   )
     .bind(tenantId)
     .first<{ id: string; first_name: string; last_name: string; drive_folder_id: string | null }>();
   if (!tenant) throw new Error('Tenant not found');
+
+  // The tenant's folder lives inside their unit folder (or the root if unplaced).
+  const parent = (await ensureUnitFolderForTenant(env, tenantId)) ?? (await ensureRootFolder(env));
+
   if (tenant.drive_folder_id) {
     const status = await folderStatus(env, tenant.drive_folder_id);
     if (status !== 'gone') return tenant.drive_folder_id;
   }
-  const root = await ensureRootFolder(env);
   const name = `${tenant.first_name} ${tenant.last_name}`.trim() || tenant.id;
-  const id = await createFolder(env, name, root);
+  const id = await createFolder(env, name, parent);
   await env.DB.prepare('UPDATE tenants SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
     .bind(id, tenantId)
     .run();
@@ -319,45 +327,40 @@ async function moveDriveFile(env: Env, fileId: string, newParentId: string): Pro
 }
 
 /**
- * One-time reorg: move every existing document into its tenant's UNIT folder,
- * then delete now-empty per-person folders and clear their legacy ids. Idempotent
- * and best-effort per file, so it is safe to run more than once.
+ * One-time reorg into the nested structure (Property/Unit → Tenant name → docs).
+ * For each tenant with documents: nest their folder under their unit folder,
+ * then move each of their documents into that tenant folder. Idempotent and
+ * best-effort per file/folder, so it is safe to run more than once.
  */
-export async function migrateDocumentFoldersToUnits(env: Env): Promise<{ moved: number; foldersRemoved: number }> {
+export async function migrateDocumentFoldersToUnits(env: Env): Promise<{ moved: number; foldersNested: number }> {
   const { results: docs } = await env.DB.prepare(
     'SELECT id, drive_file_id, tenant_id FROM documents WHERE tenant_id IS NOT NULL AND drive_file_id IS NOT NULL'
   ).all<{ id: string; drive_file_id: string; tenant_id: string }>();
 
   let moved = 0;
+  let foldersNested = 0;
+  const handled = new Set<string>();
   for (const doc of docs || []) {
     try {
-      const unitFolder = await ensureTenantFolder(env, doc.tenant_id); // resolves the unit folder now
-      await moveDriveFile(env, doc.drive_file_id, unitFolder);
+      // Nest the tenant's own folder under their unit folder (once per tenant).
+      if (!handled.has(doc.tenant_id)) {
+        handled.add(doc.tenant_id);
+        const unitFolder = await ensureUnitFolderForTenant(env, doc.tenant_id);
+        const tf = await env.DB.prepare('SELECT drive_folder_id FROM tenants WHERE id = ?')
+          .bind(doc.tenant_id)
+          .first<{ drive_folder_id: string | null }>();
+        if (unitFolder && tf?.drive_folder_id) {
+          await moveDriveFile(env, tf.drive_folder_id, unitFolder);
+          foldersNested++;
+        }
+      }
+      const tenantFolder = await ensureTenantFolder(env, doc.tenant_id);
+      await moveDriveFile(env, doc.drive_file_id, tenantFolder);
       moved++;
     } catch { /* skip this file, keep going */ }
   }
 
-  // Retire per-person folders: delete the empty ones, clear the (now legacy) id.
-  const { results: folders } = await env.DB.prepare(
-    'SELECT id, drive_folder_id FROM tenants WHERE drive_folder_id IS NOT NULL'
-  ).all<{ id: string; drive_folder_id: string }>();
-  const token = await getAccessToken(env);
-  let foldersRemoved = 0;
-  for (const t of folders || []) {
-    try {
-      const q = encodeURIComponent(`'${t.drive_folder_id}' in parents and trashed = false`);
-      const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)&pageSize=1`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const empty = res.ok && (((await res.json()) as { files?: unknown[] }).files || []).length === 0;
-      if (empty) {
-        try { await deleteDriveFile(env, t.drive_folder_id); foldersRemoved++; } catch { /* already gone */ }
-      }
-      await env.DB.prepare('UPDATE tenants SET drive_folder_id = NULL WHERE id = ?').bind(t.id).run();
-    } catch { /* skip */ }
-  }
-
-  return { moved, foldersRemoved };
+  return { moved, foldersNested };
 }
 
 /** The Profile Photos folder, a subfolder of the app root, created on first use. */
