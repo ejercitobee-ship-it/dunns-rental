@@ -447,6 +447,9 @@ export interface PortalPerson {
   emergencyContact?: { name: string; phone: string; relationship: string };
   unit?: TenantUnit;
   photoUrl?: string | null;
+  // Approval state of this tenant's placement, for the realtor's view:
+  // 'under_review' (draft with the office), 'approved' (active), or 'none'.
+  approval?: 'under_review' | 'approved' | 'none';
 }
 
 /** A tenant as a realtor's list sees them: the allowlisted person plus their

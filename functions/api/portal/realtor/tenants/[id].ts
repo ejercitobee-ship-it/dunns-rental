@@ -25,15 +25,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // The tenant's unit and the property's exact address, from their most recent
     // lease. The realtor placed this tenant, so the address is theirs to see.
+    // needs_review tells the realtor whether the office has approved the placement.
     const place = await env.DB.prepare(
-      `SELECT u.unit_number, p.address, p.city, p.state, p.zip_code
+      `SELECT l.id AS lease_id, l.needs_review, u.unit_number, p.address, p.city, p.state, p.zip_code
          FROM leases l
          JOIN lease_tenants lt ON lt.lease_id = l.id
          LEFT JOIN units u ON u.id = l.unit_id
          LEFT JOIN properties p ON p.id = l.property_id
         WHERE lt.tenant_id = ?
         ORDER BY l.start_date DESC LIMIT 1`
-    ).bind(id).first<{ unit_number: string | null; address: string | null; city: string | null; state: string | null; zip_code: string | null }>();
+    ).bind(id).first<{ lease_id: string | null; needs_review: number | null; unit_number: string | null; address: string | null; city: string | null; state: string | null; zip_code: string | null }>();
 
     const unit = place
       ? {
@@ -45,7 +46,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         }
       : undefined;
 
-    return jsonOk({ success: true, data: { ...serializePortalTenant(row as Record<string, unknown>), unit } });
+    const approval = !place?.lease_id
+      ? 'none'
+      : Number(place.needs_review) === 1
+        ? 'under_review'
+        : 'approved';
+
+    return jsonOk({ success: true, data: { ...serializePortalTenant(row as Record<string, unknown>), unit, approval } });
   } catch {
     return serverError();
   }

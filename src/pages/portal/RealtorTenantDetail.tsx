@@ -107,10 +107,26 @@ export function RealtorTenantDetail() {
           initialsClassName="text-lg"
         />
         <div>
-          <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
-            {tenant.firstName} {tenant.lastName}
-          </h1>
-          <p className="text-sm text-muted mt-0.5">View only. Contact the property manager to change any details.</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
+              {tenant.firstName} {tenant.lastName}
+            </h1>
+            {tenant.approval === 'under_review' && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-warning-soft text-warning">
+                Under review
+              </span>
+            )}
+            {tenant.approval === 'approved' && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-soft text-primary">
+                Approved
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted mt-0.5">
+            {tenant.approval === 'under_review'
+              ? 'This placement is with the office for approval. You will see it change to Approved once confirmed.'
+              : 'View only. Contact the property manager to change any details.'}
+          </p>
         </div>
       </div>
 

@@ -24,7 +24,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
               p.address AS prop_address,
               p.city AS prop_city,
               p.state AS prop_state,
-              p.zip_code AS prop_zip
+              p.zip_code AS prop_zip,
+              l.id AS lease_id,
+              l.needs_review AS needs_review
          FROM tenants t
          LEFT JOIN leases l ON l.id = (
            SELECT l2.id FROM leases l2
@@ -41,8 +43,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       success: true,
       data: (results || []).map(r => {
         const row = r as Record<string, unknown>;
+        // Approval status the realtor can see: a draft lease (needs_review = 1)
+        // is still with the office; once approved it clears to active.
+        const approval = !row.lease_id
+          ? 'none'
+          : Number(row.needs_review) === 1
+            ? 'under_review'
+            : 'approved';
         return {
           ...serializePortalTenant(row),
+          approval,
           unit: {
             unitNumber: (row.unit_number as string) ?? undefined,
             address: (row.prop_address as string) ?? undefined,

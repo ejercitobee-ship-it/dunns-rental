@@ -322,9 +322,21 @@ export function RealtorTenants() {
                       className="w-9 h-9 flex-shrink-0"
                     />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink truncate">
-                        {t.firstName} {t.lastName}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-ink truncate">
+                          {t.firstName} {t.lastName}
+                        </p>
+                        {t.approval === 'under_review' && (
+                          <span className="flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full bg-warning-soft text-warning">
+                            Under review
+                          </span>
+                        )}
+                        {t.approval === 'approved' && (
+                          <span className="flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary-soft text-primary">
+                            Approved
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted flex items-center gap-1 mt-0.5">
                         <DoorOpen className="h-3 w-3 text-faint" />
                         {t.unit?.unitNumber ? `Unit ${t.unit.unitNumber}` : 'Unit not on file'}
