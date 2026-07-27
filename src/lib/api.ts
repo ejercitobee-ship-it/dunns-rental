@@ -511,6 +511,26 @@ export interface HandymanJobsResponse {
   mine: PortalMaintenanceRequest[];
 }
 
+/** One message in a tenant/office thread. createdAt is unix seconds. */
+export interface Message {
+  id: string;
+  tenantId: string;
+  senderRole: 'tenant' | 'office';
+  body: string;
+  createdAt: number;
+}
+
+/** A row in the office inbox: one tenant's thread summary. */
+export interface MessageThread {
+  tenantId: string;
+  firstName: string;
+  lastName: string;
+  lastBody: string | null;
+  lastSender: 'tenant' | 'office' | null;
+  lastAt: number;
+  unread: number;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   // The tenant's linked realtor(s), contact info only, always visible.
@@ -595,6 +615,12 @@ export const portalApi = {
     add: (data: HouseholdInput): Promise<HouseholdMember> =>
       apiRequest('/portal/household', { method: 'POST', body: JSON.stringify(data) }),
   },
+  // The tenant's own thread with the office. Fetching it marks office replies
+  // read; count is the cheap unread lookup for the nav badge.
+  messages: (): Promise<{ messages: Message[] }> => apiRequest('/portal/messages'),
+  messagesUnread: (): Promise<{ count: number }> => apiRequest('/portal/messages?count=1'),
+  sendMessage: (body: string): Promise<Message> =>
+    apiRequest('/portal/messages', { method: 'POST', body: JSON.stringify({ body }) }),
 };
 
 export const photoApi = {
@@ -683,4 +709,14 @@ export const handymenApi = {
     apiRequest(`/handymen/${id}`, { method: 'DELETE' }),
   invite: (id: string): Promise<HandymanInviteResult> =>
     apiRequest(`/handymen/${id}/invite`, { method: 'POST' }),
+};
+
+// Office side of tenant messaging: the inbox, one tenant's thread, and replies.
+export const messagesApi = {
+  threads: (): Promise<{ threads: MessageThread[] }> => apiRequest('/messages'),
+  unreadCount: (): Promise<{ count: number }> => apiRequest('/messages?count=1'),
+  thread: (tenantId: string): Promise<{ tenantId: string; tenantName: string; messages: Message[] }> =>
+    apiRequest(`/messages/${tenantId}`),
+  reply: (tenantId: string, body: string): Promise<Message> =>
+    apiRequest(`/messages/${tenantId}`, { method: 'POST', body: JSON.stringify({ body }) }),
 };

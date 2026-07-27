@@ -24,6 +24,8 @@ import { PortalLayout } from './components/PortalLayout';
 import { TenantHome } from './pages/portal/TenantHome';
 import { TenantPayments } from './pages/portal/TenantPayments';
 import { TenantMaintenance } from './pages/portal/TenantMaintenance';
+import { TenantMessages } from './pages/portal/TenantMessages';
+import { Messages } from './pages/Messages';
 import { HandymanJobs } from './pages/portal/HandymanJobs';
 import { TenantDocuments } from './pages/portal/TenantDocuments';
 import { RealtorTenants } from './pages/portal/RealtorTenants';
@@ -182,6 +184,12 @@ function AppRoutes() {
         </PortalRoute>
       } />
 
+      <Route path="/portal/messages" element={
+        <PortalRoute>
+          <PortalLayout><TenantMessages /></PortalLayout>
+        </PortalRoute>
+      } />
+
       <Route path="/portal/tenants" element={
         <PortalRoute>
           <PortalLayout><RealtorTenants /></PortalLayout>
@@ -215,6 +223,12 @@ function AppRoutes() {
       <Route path="/tenants/:id" element={
         <ProtectedRoute requiredPermission="tenants_view">
           <Layout><TenantDetail /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/messages" element={
+        <ProtectedRoute requiredPermission="tenants_view">
+          <Layout><Messages /></Layout>
         </ProtectedRoute>
       } />
 

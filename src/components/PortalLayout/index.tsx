@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/mh-dunn-logo.png';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useAutoEnablePush } from '../../lib/useAutoPush';
+import { portalApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 // The portal shell for tenants and realtors. This is a separate world from
@@ -17,6 +19,7 @@ const TENANT_TABS = [
   { name: 'Home', path: '/portal' },
   { name: 'Payments', path: '/portal/payments' },
   { name: 'Maintenance', path: '/portal/maintenance' },
+  { name: 'Messages', path: '/portal/messages' },
   { name: 'Documents', path: '/portal/documents' },
 ];
 
@@ -38,6 +41,28 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   // Tenants get push notifications on by default, enabled automatically the
   // first time they interact with the app. There is no toggle to turn it off.
   useAutoEnablePush(user?.roleId === 'tenant');
+
+  // Unread office replies drive the badge on the Messages tab. Refresh on load,
+  // on navigation (opening the thread clears it server-side), and on focus.
+  const isTenant = user?.roleId === 'tenant';
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!isTenant) return;
+    let cancelled = false;
+    const load = () =>
+      portalApi
+        .messagesUnread()
+        .then((r) => {
+          if (!cancelled) setUnread(r.count);
+        })
+        .catch(() => {});
+    load();
+    window.addEventListener('focus', load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', load);
+    };
+  }, [isTenant, location.pathname]);
 
   const handleSignOut = () => {
     logout();
@@ -76,13 +101,18 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                 key={tab.path}
                 to={tab.path}
                 className={cn(
-                  'px-3 py-3 text-sm border-b-2 whitespace-nowrap transition-colors',
+                  'px-3 py-3 text-sm border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5',
                   isActive
                     ? 'border-primary text-ink font-medium'
                     : 'border-transparent text-muted hover:text-ink'
                 )}
               >
                 {tab.name}
+                {tab.path === '/portal/messages' && unread > 0 && (
+                  <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold flex items-center justify-center">
+                    {unread}
+                  </span>
+                )}
               </Link>
             );
           })}

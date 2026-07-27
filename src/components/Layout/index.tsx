@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/mh-dunn-logo.png';
 import {
@@ -18,8 +18,10 @@ import {
   Wrench,
   ClipboardList,
   ScrollText,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { messagesApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../ui/Avatar';
 import { ProfileModal } from '../ProfileModal';
@@ -34,26 +36,50 @@ export function Layout({ children }: LayoutProps) {
   const { user, logout, hasModuleAccess } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
+  // Badge for unread tenant messages. Refresh on load, on navigation (opening a
+  // thread clears it), and when the window regains focus. Guarded to staff who
+  // can see tenants.
+  const canSeeMessages = hasModuleAccess('tenants');
+  useEffect(() => {
+    if (!canSeeMessages) return;
+    let cancelled = false;
+    const load = () =>
+      messagesApi
+        .unreadCount()
+        .then((r) => {
+          if (!cancelled) setUnreadMessages(r.count);
+        })
+        .catch(() => {});
+    load();
+    window.addEventListener('focus', load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', load);
+    };
+  }, [canSeeMessages, location.pathname]);
+
   // Build navigation based on permissions
   const navigation = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true },
-    { name: 'Properties', path: '/properties', icon: Building2, show: hasModuleAccess('properties') },
-    { name: 'Tenants', path: '/tenants', icon: Users, show: hasModuleAccess('tenants') },
-    { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents') },
-    { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties') },
-    { name: 'Finances', path: '/finances', icon: Receipt, show: hasModuleAccess('finances') },
-    { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances') },
-    { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances') },
-    { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings') },
-    { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings') },
-    { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users') },
-    { name: 'Activity', path: '/activity', icon: ScrollText, show: user?.roleId === 'super_admin' || user?.roleId === 'admin' },
+    { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true, badge: 0 },
+    { name: 'Properties', path: '/properties', icon: Building2, show: hasModuleAccess('properties'), badge: 0 },
+    { name: 'Tenants', path: '/tenants', icon: Users, show: hasModuleAccess('tenants'), badge: 0 },
+    { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },
+    { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
+    { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
+    { name: 'Finances', path: '/finances', icon: Receipt, show: hasModuleAccess('finances'), badge: 0 },
+    { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances'), badge: 0 },
+    { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
+    { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },
+    { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings'), badge: 0 },
+    { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users'), badge: 0 },
+    { name: 'Activity', path: '/activity', icon: ScrollText, show: user?.roleId === 'super_admin' || user?.roleId === 'admin', badge: 0 },
   ].filter(item => item.show);
 
   return (
@@ -115,6 +141,11 @@ export function Layout({ children }: LayoutProps) {
                   isActive ? 'text-[#8fbba8]' : 'text-sidebar-muted group-hover:text-white'
                 )} />
                 <span className="flex-1 text-left truncate">{item.name}</span>
+                {item.badge > 0 && (
+                  <span className="flex-shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#8fbba8] text-sidebar text-xs font-semibold flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                )}
                 {isActive && <ChevronRight className="h-4 w-4 flex-shrink-0 text-white/40" />}
               </Link>
             );
