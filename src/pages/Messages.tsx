@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -29,21 +29,83 @@ export function Messages() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
+  const threadsPollRef = useRef(false);
+  const openPollRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const loadThreads = () => {
-    return messagesApi.threads()
-      .then((res) => setThreads(res.threads))
-      .catch((err) => setError((err as Error).message || 'Could not load messages.'));
-  };
+  // Poll-safe inbox refresh: ignores transient errors and never overlaps, so it
+  // is safe to call on a timer. The initial load below owns the error state.
+  const refreshThreads = useCallback(async () => {
+    if (threadsPollRef.current) return;
+    threadsPollRef.current = true;
+    try {
+      const res = await messagesApi.threads();
+      setThreads(res.threads);
+    } catch {
+      // Ignore during polling.
+    } finally {
+      threadsPollRef.current = false;
+    }
+  }, []);
+
+  // Poll-safe refresh of the open conversation: swaps the list only when it
+  // actually changed, so the panel does not flicker or re-scroll on every tick.
+  const refreshOpenThread = useCallback(async (tenantId: string) => {
+    if (openPollRef.current) return;
+    openPollRef.current = true;
+    try {
+      const res = await messagesApi.thread(tenantId);
+      setMessages((prev) => {
+        const next = res.messages;
+        const same =
+          next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
+        return same ? prev : next;
+      });
+    } catch {
+      // Ignore during polling.
+    } finally {
+      openPollRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
-    loadThreads().finally(() => setLoading(false));
+    messagesApi.threads()
+      .then((res) => setThreads(res.threads))
+      .catch((err) => setError((err as Error).message || 'Could not load messages.'))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages]);
+
+  // Live inbox: refresh the thread list every 5s while the tab is visible.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') refreshThreads();
+    };
+    const id = window.setInterval(tick, 5000);
+    window.addEventListener('focus', refreshThreads);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', refreshThreads);
+    };
+  }, [refreshThreads]);
+
+  // Live conversation: refresh the open thread every 5s while the tab is visible.
+  useEffect(() => {
+    if (!openId) return;
+    const tick = () => {
+      if (document.visibilityState === 'visible') refreshOpenThread(openId);
+    };
+    const id = window.setInterval(tick, 5000);
+    const onFocus = () => refreshOpenThread(openId);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [openId, refreshOpenThread]);
 
   const openThread = async (tenantId: string) => {
     setOpenId(tenantId);
@@ -73,7 +135,7 @@ export function Messages() {
       const sent = await messagesApi.reply(openId, body);
       setMessages((prev) => [...prev, sent]);
       setDraft('');
-      loadThreads();
+      refreshThreads();
     } catch (err) {
       showToast((err as Error).message || 'Could not send your reply.', 'error');
     } finally {

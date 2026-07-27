@@ -58,9 +58,16 @@ export function Layout({ children }: LayoutProps) {
         })
         .catch(() => {});
     load();
+    // Keep the badge live without navigation: poll every 15s while visible, and
+    // refresh immediately on focus.
+    const tick = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    const id = window.setInterval(tick, 15000);
     window.addEventListener('focus', load);
     return () => {
       cancelled = true;
+      window.clearInterval(id);
       window.removeEventListener('focus', load);
     };
   }, [canSeeMessages, location.pathname]);

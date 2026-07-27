@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -23,7 +23,29 @@ export function TenantMessages() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
+  const pollingRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // A poll-safe refresh: swaps the list only when it actually changed (so the
+  // view does not flicker or re-scroll when nothing is new), ignores transient
+  // errors, and never overlaps itself.
+  const refresh = useCallback(async () => {
+    if (pollingRef.current) return;
+    pollingRef.current = true;
+    try {
+      const res = await portalApi.messages();
+      setMessages((prev) => {
+        const next = res.messages;
+        const same =
+          next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
+        return same ? prev : next;
+      });
+    } catch {
+      // Ignore poll errors; the initial load below surfaces real failures.
+    } finally {
+      pollingRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +63,20 @@ export function TenantMessages() {
       cancelled = true;
     };
   }, []);
+
+  // Live updates: check for new messages every 5s while the tab is visible, and
+  // immediately when the window regains focus.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    const id = window.setInterval(tick, 5000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [refresh]);
 
   // Keep the newest message in view as the thread grows.
   useEffect(() => {
