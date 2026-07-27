@@ -221,6 +221,36 @@ export function settleMonth(
 /** A lease is flagged past due once it owes this many months or more. */
 export const PAST_DUE_MONTHS = 2;
 
+/** A lease counts as "expiring soon" once its end date is within this many days. */
+export const LEASE_EXPIRING_SOON_DAYS = 60;
+
+/**
+ * Whole calendar days from `today` (a local YYYY-MM-DD) to the lease's end date.
+ * null when the lease has no end date; negative once the end date has passed.
+ * Local calendar days only, via Date.UTC on the parts (never new Date(dateOnly),
+ * which would read the string as midnight UTC and shift a day in some zones).
+ */
+export function daysUntilLeaseEnd(lease: Lease, today: string): number | null {
+  if (!lease.endDate) return null;
+  const toUTC = (d: string) => {
+    const [y, m, day] = d.split('-').map(Number);
+    return Date.UTC(y, m - 1, day);
+  };
+  return Math.round((toUTC(lease.endDate) - toUTC(today)) / 86400000);
+}
+
+/**
+ * An active lease whose contract ends within the next LEASE_EXPIRING_SOON_DAYS
+ * days and has not already lapsed. This is the office's renewal heads-up, shared
+ * by the Dashboard section and the Tenants "Expiring Soon" filter so the two
+ * always agree.
+ */
+export function isLeaseExpiringSoon(lease: Lease, today: string): boolean {
+  if (lease.status !== 'active') return false;
+  const d = daysUntilLeaseEnd(lease, today);
+  return d !== null && d >= 0 && d <= LEASE_EXPIRING_SOON_DAYS;
+}
+
 export interface PastDue {
   /** How many owed months (up to and including now) are unpaid or partial. */
   months: number;

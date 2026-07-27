@@ -1,19 +1,19 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
-  Plus, MoreVertical, Trash2, UserPlus, Check,
+  Plus, MoreVertical, Trash2, UserPlus, Check, X,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate, todayLocalDate, parseLocalDate } from '../lib/utils';
+import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { monthlyRevenue } from '../lib/rent';
+import { monthlyRevenue, isLeaseExpiringSoon } from '../lib/rent';
 import type { Lease, LeaseStatus, Property, Unit, Tenant } from '../types';
 
 interface PersonRow {
@@ -55,8 +55,6 @@ const leaseStatusLabel: Record<LeaseStatus, string> = {
   ended: 'Ended',
 };
 
-const DAY_MS = 1000 * 60 * 60 * 24;
-
 export function Tenants() {
   const {
     tenants, properties, units, leases,
@@ -68,7 +66,12 @@ export function Tenants() {
   const canCreateTenant = hasPermission('tenants_create');
   const canEditTenant = hasPermission('tenants_edit');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
+  // Filter the list to households whose lease is expiring soon. Opens on when
+  // the page is reached with ?expiring=1 (from the Dashboard section).
+  const [expiringOnly, setExpiringOnly] = useState(searchParams.get('expiring') === '1');
+  const today = todayLocalDate();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -132,9 +135,13 @@ export function Tenants() {
   }, [rows]);
 
   const filteredGroups = useMemo(() => {
+    let list = households;
+    if (expiringOnly) {
+      list = list.filter(g => g.lease && isLeaseExpiringSoon(g.lease, today));
+    }
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return households;
-    return households.filter(g =>
+    if (!q) return list;
+    return list.filter(g =>
       g.occupants.some(t =>
         `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
         (t.email || '').toLowerCase().includes(q) ||
@@ -143,30 +150,41 @@ export function Tenants() {
       (g.property?.name || '').toLowerCase().includes(q) ||
       (g.unit ? `unit ${g.unit.unitNumber}`.toLowerCase().includes(q) : false)
     );
-  }, [households, searchTerm]);
+  }, [households, searchTerm, expiringOnly, today]);
+
+  // Toggle the expiring-soon filter and keep it in the URL so the view is
+  // shareable and survives a refresh.
+  const toggleExpiring = () => {
+    setExpiringOnly(prev => {
+      const next = !prev;
+      const params = new URLSearchParams(searchParams);
+      if (next) params.set('expiring', '1');
+      else params.delete('expiring');
+      setSearchParams(params, { replace: true });
+      return next;
+    });
+  };
 
   const stats = useMemo(() => {
     const totalPeople = tenants.length;
     const housed = rows.filter(r => r.lease?.status === 'active').length;
-    const today = new Date();
-    const expiringSoon = leases.filter(l => {
-      if (l.status !== 'active' || !l.endDate) return false;
-      const daysUntilEnd = Math.ceil((parseLocalDate(l.endDate).getTime() - today.getTime()) / DAY_MS);
-      return daysUntilEnd > 0 && daysUntilEnd <= 60;
-    }).length;
+    const expiringSoon = leases.filter(l => isLeaseExpiringSoon(l, today)).length;
     return {
       totalPeople,
       housed,
       expiringSoon,
       revenue: monthlyRevenue(leases),
     };
-  }, [tenants, rows, leases]);
+  }, [tenants, rows, leases, today]);
 
+  // The "Expiring Soon" card doubles as a filter: clicking it narrows the list
+  // to households whose lease is expiring soon. `?expiring=1` opens it that way
+  // (the Dashboard section links here).
   const statCards = [
-    { label: 'Total People', value: stats.totalPeople, icon: <Users /> },
-    { label: 'Housed', value: stats.housed, icon: <UserCheck /> },
-    { label: 'Expiring Soon', value: stats.expiringSoon, icon: <Calendar /> },
-    { label: 'Monthly Revenue', value: formatCurrency(stats.revenue), icon: <DollarSign /> },
+    { key: 'total', label: 'Total People', value: stats.totalPeople, icon: <Users />, filter: false },
+    { key: 'housed', label: 'Housed', value: stats.housed, icon: <UserCheck />, filter: false },
+    { key: 'expiring', label: 'Expiring Soon', value: stats.expiringSoon, icon: <Calendar />, filter: true },
+    { key: 'revenue', label: 'Monthly Revenue', value: formatCurrency(stats.revenue), icon: <DollarSign />, filter: false },
   ];
 
   // A unit is only free for a brand new tenancy once its current lease has
@@ -333,22 +351,36 @@ export function Tenants() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <div className="p-5">
+        {statCards.map(s => {
+          const active = s.filter && expiringOnly;
+          const clickable = s.filter && (stats.expiringSoon > 0 || expiringOnly);
+          const inner = (
+            <div className="p-5 text-left w-full">
               <div className="flex items-center justify-between">
                 <span className="eyebrow">{s.label}</span>
-                <span className="text-faint [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
+                <span className={active ? 'text-primary [&_svg]:h-[18px] [&_svg]:w-[18px]' : 'text-faint [&_svg]:h-[18px] [&_svg]:w-[18px]'}>{s.icon}</span>
               </div>
               <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{s.value}</div>
+              {s.filter && (
+                <span className="mt-2 block text-[11px] text-muted">
+                  {active ? 'Filtering · click to clear' : clickable ? 'Click to filter' : 'None expiring'}
+                </span>
+              )}
             </div>
-          </Card>
-        ))}
+          );
+          return clickable ? (
+            <Card key={s.key} className={active ? 'ring-2 ring-primary' : 'hover:border-primary/40 transition-colors'}>
+              <button type="button" onClick={toggleExpiring} className="w-full">{inner}</button>
+            </Card>
+          ) : (
+            <Card key={s.key}>{inner}</Card>
+          );
+        })}
       </div>
 
       {/* Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 items-center">
+        <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
           <input
             type="text"
@@ -358,6 +390,17 @@ export function Tenants() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        {expiringOnly && (
+          <button
+            type="button"
+            onClick={toggleExpiring}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 text-sm text-primary border border-primary/30 bg-primary-soft rounded-lg px-3 py-2"
+          >
+            <Calendar className="h-4 w-4" />
+            Showing leases expiring soon
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* People table */}
@@ -553,7 +596,9 @@ export function Tenants() {
             <div className="text-center py-16">
               <Users className="h-10 w-10 mx-auto text-faint mb-3" />
               <h3 className="font-medium text-ink">No people found</h3>
-              <p className="text-sm text-muted mt-1">Try adjusting your search.</p>
+              <p className="text-sm text-muted mt-1">
+                {expiringOnly ? 'No leases are expiring in the next 60 days.' : 'Try adjusting your search.'}
+              </p>
             </div>
           )}
         </CardContent>

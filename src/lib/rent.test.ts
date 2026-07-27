@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind, unsettledMonths } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind, unsettledMonths, daysUntilLeaseEnd, isLeaseExpiringSoon } from './rent';
 import type { Lease, RentPayment, MonthSettlement } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -533,5 +533,39 @@ describe('rentMonthsToShow', () => {
     const payments = [payment({ month: 8, year: 2026 }), payment({ month: 10, year: 2026 })];
     const res = rentMonthsToShow(lease(), payments, 2026, 7);
     expect(res.map(r => r.month)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10]);
+  });
+});
+
+describe('daysUntilLeaseEnd', () => {
+  it('counts whole local days to the end date', () => {
+    expect(daysUntilLeaseEnd(lease({ endDate: '2026-07-31' }), '2026-07-27')).toBe(4);
+  });
+  it('is negative once the end date has passed', () => {
+    expect(daysUntilLeaseEnd(lease({ endDate: '2026-07-20' }), '2026-07-27')).toBe(-7);
+  });
+  it('is null when there is no end date', () => {
+    expect(daysUntilLeaseEnd(lease({ endDate: undefined }), '2026-07-27')).toBeNull();
+  });
+});
+
+describe('isLeaseExpiringSoon', () => {
+  it('flags an active lease ending within 60 days', () => {
+    expect(isLeaseExpiringSoon(lease({ endDate: '2026-09-01' }), '2026-07-27')).toBe(true);
+  });
+  it('includes a lease ending today', () => {
+    expect(isLeaseExpiringSoon(lease({ endDate: '2026-07-27' }), '2026-07-27')).toBe(true);
+  });
+  it('excludes a lease more than 60 days out', () => {
+    expect(isLeaseExpiringSoon(lease({ endDate: '2026-11-01' }), '2026-07-27')).toBe(false);
+  });
+  it('excludes a lease that already expired', () => {
+    expect(isLeaseExpiringSoon(lease({ endDate: '2026-07-01' }), '2026-07-27')).toBe(false);
+  });
+  it('excludes non-active leases even if the date is near', () => {
+    expect(isLeaseExpiringSoon(lease({ endDate: '2026-08-01', status: 'ended' }), '2026-07-27')).toBe(false);
+    expect(isLeaseExpiringSoon(lease({ endDate: '2026-08-01', status: 'paused' }), '2026-07-27')).toBe(false);
+  });
+  it('is false when there is no end date', () => {
+    expect(isLeaseExpiringSoon(lease({ endDate: undefined }), '2026-07-27')).toBe(false);
   });
 });

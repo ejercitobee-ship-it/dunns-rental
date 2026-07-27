@@ -7,9 +7,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, parseLocalDate } from '../lib/utils';
+import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, parseLocalDate, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { DashboardStats, Property, Tenant, Unit } from '../types';
 import {
@@ -257,6 +257,22 @@ export function Dashboard() {
       }))
       .sort((a, b) => b.months - a.months || b.balance - a.balance);
   }, [leases, rentPayments, properties, units, getLeaseTenants, pastDueMonths]);
+
+  // Leases coming up for renewal: end date within the next 60 days. Soonest
+  // first, so the most urgent renewal sits at the top.
+  const expiringSoon = useMemo(() => {
+    const today = todayLocalDate();
+    return activeLeases(leases)
+      .filter(lease => isLeaseExpiringSoon(lease, today))
+      .map(lease => ({
+        lease,
+        days: daysUntilLeaseEnd(lease, today) ?? 0,
+        property: lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined,
+        unit: lease.unitId ? units.find(u => u.id === lease.unitId) : undefined,
+        occupants: getLeaseTenants(lease.id),
+      }))
+      .sort((a, b) => a.days - b.days);
+  }, [leases, properties, units, getLeaseTenants]);
 
   // Both danger lists are grouped by property so they stay tidy across a large
   // portfolio: one collapsible row per address, expanding to the detail.
@@ -735,6 +751,58 @@ export function Dashboard() {
                     <Badge variant={tone}>
                       {days === 0 ? 'Ends today' : days === 1 ? '1 day left' : `${days} days left`}
                     </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Leases expiring soon, soonest first */}
+      {expiringSoon.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-warning-soft rounded-lg">
+                <CalendarClock className="h-5 w-5 text-warning" />
+              </div>
+              Leases Expiring Soon ({expiringSoon.length})
+              <button
+                type="button"
+                onClick={() => navigate('/tenants?expiring=1')}
+                title="View in Tenants"
+                className="ml-auto text-faint hover:text-ink transition-colors"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="border-t border-line">
+              {expiringSoon.map(row => {
+                const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
+                const where = [row.property?.name ?? row.property?.address, row.unit ? `Unit ${row.unit.unitNumber}` : null]
+                  .filter(Boolean).join(' · ');
+                return (
+                  <div
+                    key={row.lease.id}
+                    className="flex items-center gap-3 px-4 py-3.5 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.02]"
+                    onClick={() => row.occupants[0] && navigate(`/tenants/${row.occupants[0].id}`)}
+                  >
+                    <CalendarClock className="h-4 w-4 text-faint flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink truncate">{names}</p>
+                      {where && <p className="text-xs text-muted truncate">{where}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <Badge variant="warning" className="whitespace-nowrap">
+                        {row.days === 0 ? 'Expires today' : `Expires in ${row.days} ${row.days === 1 ? 'day' : 'days'}`}
+                      </Badge>
+                      {row.lease.endDate && (
+                        <p className="text-xs text-faint mt-1">{formatDate(row.lease.endDate)}</p>
+                      )}
+                    </div>
                   </div>
                 );
               })}
