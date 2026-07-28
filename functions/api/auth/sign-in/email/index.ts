@@ -8,9 +8,12 @@ import {
   serverError,
   sessionCookie,
 } from '../../../../lib/session';
+import { throttleLockedUntil, recordLoginFailure, clearLoginThrottle } from '../../../../lib/throttle';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
+  // Cloudflare gives us the real client IP; brute-force protection is keyed on it.
+  const ip = request.headers.get('CF-Connecting-IP');
 
   try {
     const body = (await request.json()) as { email?: string; password?: string };
@@ -21,11 +24,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('Missing email or password', 400);
     }
 
+    // Refuse early if this IP has failed too many times recently.
+    const locked = await throttleLockedUntil(env, ip);
+    if (locked) {
+      const mins = Math.max(1, Math.ceil((locked - Math.floor(Date.now() / 1000)) / 60));
+      return jsonError(`Too many sign in attempts. Please try again in ${mins} minute${mins === 1 ? '' : 's'}.`, 429);
+    }
+
     const user = await env.DB.prepare('SELECT id, name, email, is_active FROM user WHERE email = ?')
       .bind(email)
       .first<{ id: string; name: string; email: string; is_active: number | null }>();
 
     if (!user) {
+      await recordLoginFailure(env, ip);
       return jsonError('Invalid email or password', 401);
     }
 
@@ -40,11 +51,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .first<{ password: string }>();
 
     if (!account?.password) {
+      await recordLoginFailure(env, ip);
       return jsonError('Invalid email or password', 401);
     }
 
     const { valid, needsUpgrade } = await verifyPassword(password, account.password);
     if (!valid) {
+      await recordLoginFailure(env, ip);
       return jsonError('Invalid email or password', 401);
     }
 
@@ -86,6 +99,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // accessed their portal (the "Verified" badge).
       env.DB.prepare('UPDATE user SET last_login_at = ? WHERE id = ?').bind(now, user.id),
     ]);
+
+    // A good sign in clears this IP's failure streak.
+    context.waitUntil(clearLoginThrottle(env, ip));
 
     return jsonOk(
       {
