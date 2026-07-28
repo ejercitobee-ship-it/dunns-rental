@@ -1,38 +1,43 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
-import { Login } from './pages/Login';
-import { ForgotPassword } from './pages/ForgotPassword';
-import { ResetPassword } from './pages/ResetPassword';
-import { Dashboard } from './pages/Dashboard';
-import { Home } from './pages/Home';
-import { Properties } from './pages/Properties';
-import { Tenants } from './pages/Tenants';
-import { TenantDetail } from './pages/TenantDetail';
-import { Rents } from './pages/Rents';
-import { Maintenance } from './pages/Maintenance';
-import { Reports } from './pages/Reports';
-import { Expenses } from './pages/Expenses';
-import { TaxReport } from './pages/TaxReport';
-import { DataMigration } from './pages/DataMigration';
-import { Settings } from './pages/Settings';
-import { Users } from './pages/Users';
-import { Activity } from './pages/Activity';
 import { PortalLayout } from './components/PortalLayout';
-import { TenantHome } from './pages/portal/TenantHome';
-import { TenantPayments } from './pages/portal/TenantPayments';
-import { TenantMaintenance } from './pages/portal/TenantMaintenance';
-import { TenantMessages } from './pages/portal/TenantMessages';
-import { Messages } from './pages/Messages';
-import { HandymanJobs } from './pages/portal/HandymanJobs';
-import { TenantDocuments } from './pages/portal/TenantDocuments';
-import { RealtorTenants } from './pages/portal/RealtorTenants';
-import { RealtorTenantDetail } from './pages/portal/RealtorTenantDetail';
-import { RealtorDashboard } from './pages/portal/RealtorDashboard';
-import { RealtorAvailableUnits } from './pages/portal/RealtorAvailableUnits';
+import { Login } from './pages/Login';
 import { isPortalRole } from './types';
+
+// Route pages are loaded on demand so the first screen (and each tenant's phone)
+// only downloads what it needs, not the whole app including the admin charts.
+// Named exports, so each import is remapped to a default for React.lazy.
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
+const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const Properties = lazy(() => import('./pages/Properties').then(m => ({ default: m.Properties })));
+const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
+const TenantDetail = lazy(() => import('./pages/TenantDetail').then(m => ({ default: m.TenantDetail })));
+const Rents = lazy(() => import('./pages/Rents').then(m => ({ default: m.Rents })));
+const Maintenance = lazy(() => import('./pages/Maintenance').then(m => ({ default: m.Maintenance })));
+const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
+const Expenses = lazy(() => import('./pages/Expenses').then(m => ({ default: m.Expenses })));
+const TaxReport = lazy(() => import('./pages/TaxReport').then(m => ({ default: m.TaxReport })));
+const DataMigration = lazy(() => import('./pages/DataMigration').then(m => ({ default: m.DataMigration })));
+const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
+const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
+const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
+const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
+const TenantHome = lazy(() => import('./pages/portal/TenantHome').then(m => ({ default: m.TenantHome })));
+const TenantPayments = lazy(() => import('./pages/portal/TenantPayments').then(m => ({ default: m.TenantPayments })));
+const TenantMaintenance = lazy(() => import('./pages/portal/TenantMaintenance').then(m => ({ default: m.TenantMaintenance })));
+const TenantMessages = lazy(() => import('./pages/portal/TenantMessages').then(m => ({ default: m.TenantMessages })));
+const TenantDocuments = lazy(() => import('./pages/portal/TenantDocuments').then(m => ({ default: m.TenantDocuments })));
+const HandymanJobs = lazy(() => import('./pages/portal/HandymanJobs').then(m => ({ default: m.HandymanJobs })));
+const RealtorTenants = lazy(() => import('./pages/portal/RealtorTenants').then(m => ({ default: m.RealtorTenants })));
+const RealtorTenantDetail = lazy(() => import('./pages/portal/RealtorTenantDetail').then(m => ({ default: m.RealtorTenantDetail })));
+const RealtorDashboard = lazy(() => import('./pages/portal/RealtorDashboard').then(m => ({ default: m.RealtorDashboard })));
+const RealtorAvailableUnits = lazy(() => import('./pages/portal/RealtorAvailableUnits').then(m => ({ default: m.RealtorAvailableUnits })));
 
 // Protected Route component
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: string }) {
@@ -117,6 +122,16 @@ function RootRoute() {
   );
 }
 
+// A calm, on-brand loader shown while a route's chunk (or the initial session
+// check) is loading.
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-canvas">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+    </div>
+  );
+}
+
 function AppRoutes() {
   const { isLoading } = useAuth();
 
@@ -124,14 +139,11 @@ function AppRoutes() {
   // routing. Otherwise a hard refresh or deep link briefly reads as
   // "logged out" and bounces the user to /login and then to the dashboard.
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-      </div>
-    );
+    return <RouteFallback />;
   }
 
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/login" element={
         <PublicRoute>
@@ -290,6 +302,7 @@ function AppRoutes() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 
