@@ -57,6 +57,10 @@ export interface Lease {
   notes?: string;
   /** Why the tenancy ended, recorded when the office terminates it. */
   endReason?: string;
+  /** Property and unit snapshot captured at termination, so the rental history
+   * survives even if the unit is later renamed, reassigned, or deleted. */
+  endedPropertyLabel?: string;
+  endedUnitLabel?: string;
   tenantIds: string[];
 }
 

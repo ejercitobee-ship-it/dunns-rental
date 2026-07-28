@@ -108,6 +108,10 @@ export function serializeLease(r: Row) {
     notes: r.notes ?? undefined,
     // Why the tenancy ended (recorded when the office terminates it).
     endReason: r.end_reason ?? undefined,
+    // Where they lived, snapshotted at termination so history survives even if
+    // the unit is later renamed or deleted.
+    endedPropertyLabel: r.ended_property_label ?? undefined,
+    endedUnitLabel: r.ended_unit_label ?? undefined,
     // Filled in by the leases endpoints, which join lease_tenants.
     tenantIds: (r.tenantIds as string[]) ?? [],
     // Filled in by the leases endpoints, which join lease_pauses.

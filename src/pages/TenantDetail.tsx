@@ -176,6 +176,13 @@ export function TenantDetail() {
   const property = lease?.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
   const unit = lease?.unitId ? units.find(u => u.id === lease.unitId) : undefined;
 
+  // Former-tenancy place: prefer the snapshot taken at termination, falling back
+  // to a live lookup (for tenancies ended before the snapshot existed).
+  const endedProp = endedLease?.propertyId ? properties.find(p => p.id === endedLease.propertyId) : undefined;
+  const endedUnitRow = endedLease?.unitId ? units.find(u => u.id === endedLease.unitId) : undefined;
+  const endedPropLabel = endedLease?.endedPropertyLabel || endedProp?.name || endedProp?.address;
+  const endedUnitLabel = endedLease?.endedUnitLabel || (endedUnitRow ? `Unit ${endedUnitRow.unitNumber}` : undefined);
+
   const thisMonth = useMemo(() => {
     if (!lease) return undefined;
     const now = new Date();
@@ -269,6 +276,10 @@ export function TenantDetail() {
         status: 'ended',
         endDate: termForm.date,
         endReason: termForm.reason.trim() || undefined,
+        // Snapshot where they lived so the history is kept even if the unit is
+        // later reassigned, renamed, or removed.
+        endedPropertyLabel: property?.name || property?.address || undefined,
+        endedUnitLabel: unit ? `Unit ${unit.unitNumber}` : undefined,
         statusChangedOn: termForm.date,
       });
       showToast('Tenancy terminated.', 'success');
@@ -849,13 +860,34 @@ export function TenantDetail() {
                 )}
               </div>
             ) : endedLease ? (
-              <div className="space-y-2 text-sm">
+              <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">Ended</Badge>
-                  {endedLease.endDate && <span className="text-muted">{formatDate(endedLease.endDate)}</span>}
+                  {endedLease.endDate && <span className="text-muted">Moved out {formatDate(endedLease.endDate)}</span>}
                 </div>
-                {endedLease.endReason && <p className="text-muted">Reason: {endedLease.endReason}</p>}
-                <p className="text-xs text-faint">The unit is freed up. Payment history is kept.</p>
+                <div className="space-y-2 pt-2 border-t border-line">
+                  <p className="eyebrow">Former tenancy</p>
+                  <div className="flex items-center gap-2 text-ink">
+                    <Home className="h-3.5 w-3.5 text-faint" />
+                    <span>{endedPropLabel || 'Property not recorded'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted">
+                    <DoorOpen className="h-3.5 w-3.5 text-faint" />
+                    <span>{endedUnitLabel || 'Unit not recorded'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted">
+                    <Calendar className="h-3.5 w-3.5 text-faint" />
+                    <span>
+                      {endedLease.startDate ? formatDate(endedLease.startDate) : '—'} to {endedLease.endDate ? formatDate(endedLease.endDate) : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted">
+                    <DollarSign className="h-3.5 w-3.5 text-faint" />
+                    <span>{formatCurrency(endedLease.monthlyRent)}<span className="text-faint">/month</span></span>
+                  </div>
+                </div>
+                {endedLease.endReason && <p className="text-muted">Reason for leaving: {endedLease.endReason}</p>}
+                <p className="text-xs text-faint">The unit is freed up. This record and payment history are kept.</p>
               </div>
             ) : (
               <p className="text-sm text-faint">No active or paused lease on file.</p>

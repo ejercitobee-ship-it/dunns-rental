@@ -68,7 +68,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         `UPDATE leases SET
           unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
           security_deposit = ?, move_in_fee_paid = ?, status = ?, needs_review = 0, notes = ?,
-          end_reason = ?, updated_at = unixepoch()
+          end_reason = ?, ended_property_label = ?, ended_unit_label = ?, updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
         body.unitId ?? null,
@@ -80,8 +80,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.moveInFeePaid === false ? 0 : 1,
         status,
         body.notes ?? null,
-        // Only an ended tenancy keeps a reason; clear it if the lease is not ended.
+        // Only an ended tenancy keeps a reason and place snapshot; clear them if
+        // the lease is not ended.
         status === 'ended' ? (body.endReason ?? null) : null,
+        status === 'ended' ? (body.endedPropertyLabel ?? null) : null,
+        status === 'ended' ? (body.endedUnitLabel ?? null) : null,
         id
       ),
     ];
