@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
@@ -304,46 +304,46 @@ export function Properties() {
       {/* Summary Cards */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Properties</CardTitle>
-            <Building2 className="h-4 w-4 text-faint" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{properties.length}</div>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Total Properties</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Building2 /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{properties.length}</div>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Units</CardTitle>
-            <DoorOpen className="h-4 w-4 text-faint" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalUnits}</div>
-            <p className="text-xs text-muted">Across all properties</p>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Total Units</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DoorOpen /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{totalUnits}</div>
+            <p className="mt-1.5 text-[13px] text-muted">Across all properties</p>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Occupied Units</CardTitle>
-            <Badge variant="success" className="h-2 w-2 p-0" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-positive">{occupiedUnits}</div>
-            <p className="text-xs text-muted">{totalUnits > 0 ? ((occupiedUnits / totalUnits) * 100).toFixed(0) : 0}% occupancy</p>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Occupied Units</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Home /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-primary tnum">{occupiedUnits}</div>
+            <p className="mt-1.5 text-[13px] text-muted">{totalUnits > 0 ? ((occupiedUnits / totalUnits) * 100).toFixed(0) : 0}% occupancy</p>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Potential Rent</CardTitle>
-            <DollarSign className="h-4 w-4 text-faint" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalMonthlyRent)}</div>
-            <p className="text-xs text-muted">Per month</p>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Total Potential Rent</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{formatCurrency(totalMonthlyRent)}</div>
+            <p className="mt-1.5 text-[13px] text-muted">Per month</p>
+          </div>
         </Card>
       </div>
 

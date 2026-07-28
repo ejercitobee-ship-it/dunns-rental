@@ -228,7 +228,7 @@ export function Maintenance() {
             <div className="p-5">
               <div className="flex items-center justify-between">
                 <span className="eyebrow">{s.label}</span>
-                <span className="text-faint [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
+                <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
               </div>
               <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{s.value}</div>
             </div>
