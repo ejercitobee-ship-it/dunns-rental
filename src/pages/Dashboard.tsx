@@ -51,7 +51,7 @@ function StatCard({ title, value, subtitle, icon, onClick, trend }: StatCardProp
       <div className="p-5">
         <div className="flex items-center justify-between">
           <span className="eyebrow">{title}</span>
-          <span className="text-faint [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
+          <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
         </div>
         <div className="mt-3.5 flex items-end gap-2">
           <span className="font-display text-[27px] leading-none font-medium text-ink tnum">{value}</span>
