@@ -163,10 +163,11 @@ export function TenantPayments() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <p className="eyebrow">Rent</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Payment history</h1>
+        <h1 className="font-display text-[26px] text-ink mt-1">Payments</h1>
+        <p className="text-sm text-muted mt-1">Your month-by-month rent history and receipts.</p>
       </div>
 
       {!lease ? (
@@ -177,79 +178,73 @@ export function TenantPayments() {
             </p>
           </CardContent>
         </Card>
+      ) : rows.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <DollarSign className="h-8 w-8 mx-auto text-faint mb-2" />
+            <p className="text-sm text-muted">No months on record yet.</p>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px]">
-                <thead>
-                  <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Month</th>
-                    <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Amount</th>
-                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
-                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Paid on</th>
-                    <th className="text-center py-3 px-5 font-semibold text-ink text-sm">Status</th>
-                    <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const status = statusConfig[row.status];
-                    const StatusIcon = status.icon;
-                    return (
-                      <tr key={row.key} className="border-b border-line last:border-0">
-                        <td className="py-3 px-5 text-sm text-ink">{row.label}</td>
-                        <td className={`py-3 px-5 text-right tnum text-sm ${row.status === 'unpaid' ? 'font-semibold text-danger' : 'text-ink'}`}>
-                          {formatCurrency(row.amount)}
-                        </td>
-                        <td className="py-3 px-5 text-sm text-muted">{row.method || '—'}</td>
-                        <td className="py-3 px-5 text-sm text-muted whitespace-nowrap">
-                          {row.paidOn ? formatDate(row.paidOn) : '—'}
-                        </td>
-                        <td className="py-3 px-5 text-center">
-                          <Badge variant={status.variant} className="flex items-center gap-1 w-fit mx-auto">
-                            <StatusIcon className="h-3 w-3" />
-                            {status.label}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-5 text-sm">
-                          {row.receiptDocId ? (
-                            <a
-                              href={`/api/portal/documents/${row.receiptDocId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium text-primary hover:text-primary-hover whitespace-nowrap"
-                            >
-                              Download
-                            </a>
-                          ) : row.generatePaymentId ? (
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateReceipt(row.generatePaymentId!)}
-                              disabled={generating === row.generatePaymentId}
-                              className="font-medium text-muted hover:text-ink disabled:opacity-50 whitespace-nowrap"
-                            >
-                              {generating === row.generatePaymentId ? 'Getting...' : 'Get receipt'}
-                            </button>
-                          ) : (
-                            <span className="text-faint">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <CardContent className="p-2 sm:p-3">
+            <div className="divide-y divide-line">
+              {rows.map((row) => {
+                const status = statusConfig[row.status];
+                const StatusIcon = status.icon;
+                const sub = row.status === 'unpaid'
+                  ? 'Not yet paid'
+                  : [row.method, row.paidOn ? formatDate(row.paidOn) : ''].filter(Boolean).join(' · ');
+                return (
+                  <div key={row.key} className="flex items-center gap-3 px-2.5 py-3.5">
+                    <span className={`w-10 h-10 rounded-xl grid place-items-center flex-shrink-0 ${statusChip[row.status]}`}>
+                      <StatusIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-ink">{row.label}</p>
+                        <Badge variant={status.variant}>{status.label}</Badge>
+                      </div>
+                      {sub && <p className="text-xs text-muted mt-0.5 truncate">{sub}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`tnum font-semibold ${row.status === 'unpaid' ? 'text-danger' : 'text-ink'}`}>
+                        {formatCurrency(row.amount)}
+                      </p>
+                      {row.receiptDocId ? (
+                        <a
+                          href={`/api/portal/documents/${row.receiptDocId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-medium text-primary hover:text-primary-hover"
+                        >
+                          Download
+                        </a>
+                      ) : row.generatePaymentId ? (
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateReceipt(row.generatePaymentId!)}
+                          disabled={generating === row.generatePaymentId}
+                          className="text-xs font-medium text-muted hover:text-ink disabled:opacity-50"
+                        >
+                          {generating === row.generatePaymentId ? 'Getting...' : 'Get receipt'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {rows.length === 0 && (
-              <div className="text-center py-12">
-                <DollarSign className="h-8 w-8 mx-auto text-faint mb-2" />
-                <p className="text-sm text-muted">No months on record yet.</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
+
+// Soft icon-chip background per payment status.
+const statusChip = {
+  paid: 'bg-primary-soft text-primary',
+  partial: 'bg-warning-soft text-warning',
+  unpaid: 'bg-danger-soft text-danger',
+} as const;

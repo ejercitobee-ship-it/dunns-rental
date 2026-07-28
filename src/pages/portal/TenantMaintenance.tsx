@@ -111,15 +111,16 @@ export function TenantMaintenance() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="eyebrow">Maintenance</p>
-          <h1 className="font-display text-2xl text-ink mt-1">Repairs and requests</h1>
+          <h1 className="font-display text-[26px] text-ink mt-1">Repairs</h1>
           <p className="text-sm text-muted mt-1">Report an issue and tell us when you are home. We will schedule a visit.</p>
         </div>
-        <Button onClick={openForm}>
+        <Button onClick={openForm} className="flex-shrink-0">
           <Plus className="h-4 w-4 mr-1.5" />
-          Report an issue
+          <span className="hidden sm:inline">Report an issue</span>
+          <span className="sm:hidden">Report</span>
         </Button>
       </div>
 
@@ -144,10 +145,13 @@ export function TenantMaintenance() {
           {requests.map((r) => (
             <Card key={r.id}>
               <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
+                <div className="flex items-start gap-3">
+                  <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+                    <Wrench className="h-5 w-5" strokeWidth={1.8} />
+                  </span>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-ink">{r.title}</span>
+                      <span className="font-semibold text-ink">{r.title}</span>
                       <Badge variant={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
                     </div>
                     <p className="text-xs text-muted mt-1">

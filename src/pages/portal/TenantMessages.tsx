@@ -119,7 +119,7 @@ export function TenantMessages() {
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Get in touch</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Messages</h1>
+        <h1 className="font-display text-[26px] text-ink mt-1">Messages</h1>
         <p className="text-sm text-muted mt-1">
           Send us a message and we will reply here. You will get a notification when we do.
         </p>

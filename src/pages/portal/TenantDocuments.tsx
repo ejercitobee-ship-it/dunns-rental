@@ -80,7 +80,7 @@ export function TenantDocuments() {
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Your files</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Documents</h1>
+        <h1 className="font-display text-[26px] text-ink mt-1">Documents</h1>
         <p className="text-sm text-muted mt-1">
           Documents you upload can be seen by the realtor who placed you, for the first 30 days of your tenancy.
         </p>
@@ -108,16 +108,16 @@ export function TenantDocuments() {
           {docs.length === 0 ? (
             <p className="text-sm text-muted">No documents yet. Upload a lease, ID, or receipt.</p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {docs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between px-3 py-2 border border-line rounded-lg">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText className="h-4 w-4 text-faint flex-shrink-0" />
-                    <span className="text-sm text-ink truncate">{doc.name}</span>
-                  </div>
+                <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl">
+                  <span className="w-9 h-9 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+                    <FileText className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                  </span>
+                  <span className="text-sm text-ink truncate flex-1 min-w-0">{doc.name}</span>
                   <a
                     href={portalApi.downloadUrl(doc.id)}
-                    className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors flex-shrink-0"
+                    className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0"
                     title="Download"
                   >
                     <Download className="h-4 w-4" />
