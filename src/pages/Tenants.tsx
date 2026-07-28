@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
-  Plus, MoreVertical, Trash2, UserPlus, Check, X,
+  Plus, Trash2, UserPlus, Check, X,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -59,12 +59,11 @@ export function Tenants() {
   const {
     tenants, properties, units, leases,
     getLeaseTenants, getTenantLeases, getUnitLease,
-    addTenant, addLease, updateLease,
+    addTenant, addLease,
   } = useApp();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const canCreateTenant = hasPermission('tenants_create');
-  const canEditTenant = hasPermission('tenants_edit');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
@@ -86,7 +85,6 @@ export function Tenants() {
   // Invite people with an email to the portal as soon as the tenancy is created,
   // so it's never a forgotten second step. Only those with an email are invited.
   const [inviteOnCreate, setInviteOnCreate] = useState(true);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     return tenants.map(tenant => {
@@ -316,26 +314,6 @@ export function Tenants() {
     }
   };
 
-  const handleLeaseStatusChange = async (lease: Lease, status: LeaseStatus, confirmMessage: string, successMessage: string) => {
-    setOpenMenuId(null);
-    if (!confirm(confirmMessage)) return;
-    try {
-      // Neither action prompts for a date, so today is the only date the
-      // owner could mean. Ending stamps endDate (so leasesOwingMonth stops
-      // billing this lease from next month on, instead of it being billed
-      // forever on a blank or future endDate). Pause and resume intervals
-      // are no longer stamped here at all: the server records them itself
-      // off statusChangedOn, so the client can't forget to or disagree with
-      // the database. The PUT still overwrites every column rather than
-      // merging, so the full lease object goes along regardless.
-      const today = todayLocalDate();
-      const dateFields: Partial<Lease> = status === 'ended' ? { endDate: today } : {};
-      await updateLease({ ...lease, ...dateFields, status, statusChangedOn: today });
-      showToast(successMessage, 'success');
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -419,7 +397,6 @@ export function Tenants() {
                   <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Lease Term</th>
                   <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Rent</th>
                   <th className="text-center py-3 px-4 font-semibold text-ink text-sm">Status</th>
-                  <th className="w-12 py-3 px-4"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -528,67 +505,6 @@ export function Tenants() {
                       )}
                     </td>
 
-                    <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      {lease && canEditTenant ? (
-                        <div className="relative inline-block">
-                          <button
-                            type="button"
-                            onClick={() => setOpenMenuId(openMenuId === key ? null : key)}
-                            className="p-1.5 hover:bg-black/[0.05] rounded-lg transition-colors"
-                          >
-                            <MoreVertical className="h-4 w-4 text-faint" />
-                          </button>
-                          {openMenuId === key && (
-                            <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-line bg-surface shadow-[0_12px_28px_-8px_rgba(27,26,23,0.28)] py-1">
-                              {lease.status === 'active' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleLeaseStatusChange(
-                                    lease,
-                                    'paused',
-                                    'Pause rent for this tenancy? You can resume it later.',
-                                    'Rent paused.'
-                                  )}
-                                  className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-black/[0.04]"
-                                >
-                                  Pause rent
-                                </button>
-                              )}
-                              {lease.status === 'paused' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleLeaseStatusChange(
-                                    lease,
-                                    'active',
-                                    'Resume this tenancy?',
-                                    'Tenancy resumed.'
-                                  )}
-                                  className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-black/[0.04]"
-                                >
-                                  Resume
-                                </button>
-                              )}
-                              {lease.status !== 'ended' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleLeaseStatusChange(
-                                    lease,
-                                    'ended',
-                                    'End this tenancy? This cannot be undone.',
-                                    'Tenancy ended.'
-                                  )}
-                                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-danger-soft"
-                                >
-                                  End tenancy
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-faint">—</span>
-                      )}
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -606,11 +522,6 @@ export function Tenants() {
           )}
         </CardContent>
       </Card>
-
-      {/* Click anywhere outside an open row menu to close it. */}
-      {openMenuId && (
-        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-      )}
 
       {/* Add Tenancy modal: pick a unit, set the rent once, add one or more people.
           The backdrop click and header X both call onClose directly and aren't

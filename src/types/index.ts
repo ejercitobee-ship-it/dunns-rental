@@ -55,6 +55,8 @@ export interface Lease {
    */
   pauses: { pausedAt: string; resumedAt?: string }[];
   notes?: string;
+  /** Why the tenancy ended, recorded when the office terminates it. */
+  endReason?: string;
   tenantIds: string[];
 }
 

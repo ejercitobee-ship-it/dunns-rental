@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
+  Pause, Play, LogOut,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -10,7 +11,7 @@ import { Badge } from '../components/ui/Badge';
 import { Avatar } from '../components/ui/Avatar';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { formatCurrency, formatDate, formatMonthYear } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -158,6 +159,15 @@ export function TenantDetail() {
     return getTenantLeases(id).find(l => l.status !== 'ended');
   }, [id, getTenantLeases]);
 
+  // The most recent ENDED tenancy, shown only when there is no current one, so a
+  // terminated tenant still displays when and why they left.
+  const endedLease = useMemo(() => {
+    if (!id) return null;
+    return getTenantLeases(id)
+      .filter(l => l.status === 'ended')
+      .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || ''))[0] ?? null;
+  }, [id, getTenantLeases]);
+
   const housemates = useMemo(() => {
     if (!lease || !id) return [];
     return getLeaseTenants(lease.id).filter(h => h.id !== id);
@@ -223,6 +233,50 @@ export function TenantDetail() {
       showToast('Move-in fee marked as paid.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not update the move-in fee.', 'error');
+    }
+  };
+
+  // Pause or resume rent collection on the current tenancy. The server stamps
+  // the pause/resume interval from statusChangedOn, so today is the day sent.
+  const handlePauseResume = async () => {
+    if (!lease) return;
+    const resuming = lease.status === 'paused';
+    if (!confirm(resuming ? 'Resume rent for this tenancy?' : 'Pause rent for this tenancy? You can resume it later.')) return;
+    try {
+      await updateLease({ ...lease, status: resuming ? 'active' : 'paused', statusChangedOn: todayLocalDate() });
+      showToast(resuming ? 'Rent resumed.' : 'Rent paused.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the tenancy.', 'error');
+    }
+  };
+
+  // Terminate the tenancy: records the move-out date and the reason, ends the
+  // lease (so it stops billing from the following month), and frees the unit.
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminating, setTerminating] = useState(false);
+  const [termForm, setTermForm] = useState({ date: todayLocalDate(), reason: '' });
+
+  const handleTerminate = async () => {
+    if (!lease || terminating) return;
+    if (!termForm.date) {
+      showToast('Enter the move-out date.', 'error');
+      return;
+    }
+    setTerminating(true);
+    try {
+      await updateLease({
+        ...lease,
+        status: 'ended',
+        endDate: termForm.date,
+        endReason: termForm.reason.trim() || undefined,
+        statusChangedOn: termForm.date,
+      });
+      showToast('Tenancy terminated.', 'success');
+      setTerminateOpen(false);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not terminate the tenancy.', 'error');
+    } finally {
+      setTerminating(false);
     }
   };
 
@@ -638,7 +692,7 @@ export function TenantDetail() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {lease?.needsReview && canManagePortal && (
             <Button onClick={openApprove} className="flex-1 sm:flex-none">
               <Check className="h-4 w-4 mr-2" />
@@ -649,6 +703,21 @@ export function TenantDetail() {
             <Button variant="outline" onClick={openEdit} className="flex-1 sm:flex-none">
               <Edit2 className="h-4 w-4 mr-2" />
               Edit Tenant
+            </Button>
+          )}
+          {canManagePortal && lease && lease.status !== 'ended' && (
+            <Button variant="outline" onClick={handlePauseResume} className="flex-1 sm:flex-none">
+              {lease.status === 'paused' ? (
+                <><Play className="h-4 w-4 mr-2" /> Resume rent</>
+              ) : (
+                <><Pause className="h-4 w-4 mr-2" /> Pause rent</>
+              )}
+            </Button>
+          )}
+          {canManagePortal && lease && lease.status !== 'ended' && (
+            <Button variant="outline" onClick={() => { setTermForm({ date: todayLocalDate(), reason: '' }); setTerminateOpen(true); }} className="flex-1 sm:flex-none">
+              <LogOut className="h-4 w-4 mr-2" />
+              Terminate
             </Button>
           )}
           {hasPermission('tenants_delete') && (
@@ -759,12 +828,34 @@ export function TenantDetail() {
                     )}
                   </div>
                 )}
-                {thisMonth && (
+                {lease.status !== 'active' && (
+                  <div className="pt-2 border-t border-line flex items-start justify-between gap-2">
+                    <span className="eyebrow">Status</span>
+                    <div className="text-right">
+                      <Badge variant={lease.status === 'ended' ? 'secondary' : 'warning'}>
+                        {leaseStatusLabel[lease.status]}
+                      </Badge>
+                      {lease.status === 'ended' && lease.endReason && (
+                        <p className="text-xs text-muted mt-1 max-w-[190px]">{lease.endReason}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {thisMonth && lease.status === 'active' && (
                   <div className="pt-2 border-t border-line flex items-center justify-between">
                     <span className="eyebrow">This Month</span>
                     <Badge variant={settlementBadge[thisMonth.status]} className="capitalize">{thisMonth.status}</Badge>
                   </div>
                 )}
+              </div>
+            ) : endedLease ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">Ended</Badge>
+                  {endedLease.endDate && <span className="text-muted">{formatDate(endedLease.endDate)}</span>}
+                </div>
+                {endedLease.endReason && <p className="text-muted">Reason: {endedLease.endReason}</p>}
+                <p className="text-xs text-faint">The unit is freed up. Payment history is kept.</p>
               </div>
             ) : (
               <p className="text-sm text-faint">No active or paused lease on file.</p>
@@ -1416,6 +1507,40 @@ export function TenantDetail() {
         }
         confirmText="Delete"
       />
+
+      {/* Terminate tenancy: capture the move-out date and reason. */}
+      <Modal isOpen={terminateOpen} onClose={() => setTerminateOpen(false)} title="Terminate tenancy" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            This ends the tenancy and frees up the unit. Rent stops from the month after the move-out date. The lease and payment history are kept.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Move-out date *</label>
+            <input
+              type="date"
+              value={termForm.date}
+              onChange={(e) => setTermForm({ ...termForm, date: e.target.value })}
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Reason for leaving</label>
+            <textarea
+              rows={3}
+              value={termForm.reason}
+              onChange={(e) => setTermForm({ ...termForm, reason: e.target.value })}
+              placeholder="e.g. Lease ended, moving out of state, non-renewal, eviction."
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setTerminateOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleTerminate} disabled={terminating}>
+              {terminating ? 'Terminating...' : 'Terminate tenancy'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

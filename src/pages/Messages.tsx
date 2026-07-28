@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Send, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Send, MessageSquare, ArrowLeft, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { messagesApi, placeLabel, type Message, type MessageThread } from '../lib/api';
@@ -231,6 +232,13 @@ export function Messages() {
                     {openName}
                     {openPlace && <span className="font-normal text-muted"> · {openPlace}</span>}
                   </h3>
+                  <Link
+                    to={`/tenants/${openId}`}
+                    className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover whitespace-nowrap"
+                  >
+                    View profile
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
 
                 <div className="space-y-3 max-h-[52vh] overflow-y-auto pr-1">
