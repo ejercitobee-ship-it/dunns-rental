@@ -1344,12 +1344,15 @@ export function TenantDetail() {
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
             <textarea
-              rows={2}
+              rows={3}
               className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Any additional notes..."
+              placeholder="Private notes, for example who pays the rent, their phone number, or any payment arrangement."
             />
+            <p className="text-xs text-muted mt-1">
+              Private to the office, never shown to the tenant. Searchable from the Tenants page.
+            </p>
           </div>
 
           <hr className="border-line" />

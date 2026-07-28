@@ -145,7 +145,10 @@ export function Tenants() {
       g.occupants.some(t =>
         `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
         (t.email || '').toLowerCase().includes(q) ||
-        (t.phone || '').toLowerCase().includes(q)
+        (t.phone || '').toLowerCase().includes(q) ||
+        // Search the private notes too, so a rent payer (or anyone) recorded
+        // in a tenant's notes turns up when you search their name.
+        (t.notes || '').toLowerCase().includes(q)
       ) ||
       (g.property?.name || '').toLowerCase().includes(q) ||
       (g.unit ? `unit ${g.unit.unitNumber}`.toLowerCase().includes(q) : false)
