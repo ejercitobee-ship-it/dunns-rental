@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut,
+  Pause, Play, LogOut, MessageSquare, Send,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -16,8 +16,8 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi,
-  type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember,
+  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi,
+  type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth, monthsBehind } from '../lib/rent';
@@ -1196,6 +1196,9 @@ export function TenantDetail() {
         </Card>
       )}
 
+      {/* Conversation history with this tenant, from the portal messaging. */}
+      {id && <MessagesCard tenantId={id} canReply={canManagePortal} />}
+
       {/* Payment history */}
       <Card>
         <CardContent className="p-0">
@@ -1574,5 +1577,125 @@ export function TenantDetail() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+/** A real instant (unix seconds), so toLocaleString is correct here. */
+function messageWhen(createdAt: number): string {
+  return new Date(createdAt * 1000).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+}
+
+// The office's conversation history with this tenant, folded into the profile so
+// past messages are trackable in one place. Reading it marks the tenant's
+// messages read (same as opening the inbox thread); the office can reply inline.
+function MessagesCard({ tenantId, canReply }: { tenantId: string; canReply: boolean }) {
+  const { showToast } = useToast();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const pollRef = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const refresh = useCallback(async () => {
+    if (pollRef.current) return;
+    pollRef.current = true;
+    try {
+      const res = await messagesApi.thread(tenantId);
+      setMessages((prev) => {
+        const next = res.messages;
+        const same = next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
+        return same ? prev : next;
+      });
+    } catch {
+      // Ignore; the card keeps showing what it already has.
+    } finally {
+      pollRef.current = false;
+    }
+  }, [tenantId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    messagesApi.thread(tenantId)
+      .then((res) => { if (!cancelled) setMessages(res.messages); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    const tick = () => { if (document.visibilityState === 'visible') refresh(); };
+    const iv = window.setInterval(tick, 8000);
+    window.addEventListener('focus', refresh);
+    return () => { cancelled = true; window.clearInterval(iv); window.removeEventListener('focus', refresh); };
+  }, [tenantId, refresh]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ block: 'end' }); }, [messages]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const body = draft.trim();
+    if (!body || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      const sent = await messagesApi.reply(tenantId, body);
+      setMessages((prev) => [...prev, sent]);
+      setDraft('');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not send your reply.', 'error');
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <h3 className="font-semibold text-ink flex items-center gap-2 mb-4">
+          <MessageSquare className="h-4 w-4 text-faint" /> Messages
+        </h3>
+        {loading ? (
+          <p className="text-sm text-muted">Loading conversation.</p>
+        ) : messages.length === 0 ? (
+          <p className="text-sm text-muted">No messages with this tenant yet.</p>
+        ) : (
+          <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+            {messages.map((m) => {
+              const office = m.senderRole === 'office';
+              return (
+                <div key={m.id} className={office ? 'flex justify-end' : 'flex justify-start'}>
+                  <div className={`max-w-[80%] ${office ? 'items-end' : 'items-start'} flex flex-col`}>
+                    <div className={`rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap break-words ${office ? 'bg-primary text-white rounded-br-sm' : 'bg-canvas border border-line text-ink rounded-bl-sm'}`}>
+                      {m.body}
+                    </div>
+                    <span className="text-[11px] text-faint mt-1 px-1">{office ? 'You' : 'Tenant'} · {messageWhen(m.createdAt)}</span>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+        )}
+
+        {canReply && (
+          <form onSubmit={send} className="mt-4 flex items-end gap-2 border-t border-line pt-4">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }}
+              rows={2}
+              maxLength={4000}
+              placeholder="Reply to this tenant..."
+              className="flex-1 resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <Button type="submit" disabled={sending || !draft.trim()}>
+              <Send className="h-4 w-4 mr-2" />
+              {sending ? 'Sending...' : 'Send'}
+            </Button>
+          </form>
+        )}
+      </CardContent>
+    </Card>
   );
 }
