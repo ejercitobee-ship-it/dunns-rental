@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, parseLocalDate, todayLocalDate } from '../lib/utils';
+import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
@@ -76,8 +76,8 @@ interface ClickableCardProps {
 
 function ClickableCard({ children, onClick, className = '' }: ClickableCardProps) {
   return (
-    <Card 
-      className={`shadow-lg cursor-pointer transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl ${className}`}
+    <Card
+      className={`cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[0_10px_28px_-12px_rgba(27,26,23,0.18)] ${className}`}
       onClick={onClick}
     >
       {children}
@@ -388,21 +388,6 @@ export function Dashboard() {
       return next;
     });
 
-  const upcomingRenewals = useMemo(() => {
-    const now = new Date();
-    return activeLeases(leases)
-      .filter(l => l.endDate)
-      .map(l => {
-        const end = parseLocalDate(l.endDate!);
-        const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const unit = l.unitId ? units.find(u => u.id === l.unitId) : undefined;
-        const occupants = getLeaseTenants(l.id);
-        return { lease: l, unit, occupants, days, end };
-      })
-      .filter(r => r.days >= 0 && r.days <= 90)
-      .sort((a, b) => a.days - b.days);
-  }, [leases, units, getLeaseTenants]);
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -438,8 +423,10 @@ export function Dashboard() {
       {/* Past due: tenancies 2+ months behind on rent */}
       {pastDue.length > 0 && (
         <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="h-5 w-5 text-danger flex-shrink-0" />
+          <div className="flex items-center gap-2.5 mb-3">
+            <span className="w-9 h-9 rounded-xl bg-danger/10 text-danger grid place-items-center flex-shrink-0">
+              <AlertCircle className="h-5 w-5" />
+            </span>
             <h2 className="font-semibold text-ink">
               {pastDue.length} {pastDue.length === 1 ? 'tenancy is' : 'tenancies are'} {pastDueMonths} or more months past due
             </h2>
@@ -714,50 +701,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Upcoming Lease Renewals */}
-      {upcomingRenewals.length > 0 && (
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <CalendarClock className="h-5 w-5 text-primary" />
-              </div>
-              Upcoming Lease Renewals ({upcomingRenewals.length})
-              <ArrowRight
-                className="h-4 w-4 text-faint ml-auto cursor-pointer"
-                onClick={() => navigate('/tenants')}
-              />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {upcomingRenewals.slice(0, 6).map(({ lease, unit, occupants, days }) => {
-                const tone = days <= 30 ? 'destructive' : days <= 60 ? 'warning' : 'secondary';
-                const occupantNames = occupants.length > 0
-                  ? occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ')
-                  : 'Occupant unknown';
-                return (
-                  <div
-                    key={lease.id}
-                    className="flex items-center justify-between py-2.5 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
-                    onClick={() => navigate('/tenants')}
-                  >
-                    <div>
-                      <p className="font-medium text-ink">{unit ? `Unit ${unit.unitNumber}` : 'Unit unknown'}</p>
-                      <p className="text-sm text-muted">{occupantNames}</p>
-                      <p className="text-sm text-muted">Lease ends {lease.endDate ? formatDate(lease.endDate) : '—'}</p>
-                    </div>
-                    <Badge variant={tone}>
-                      {days === 0 ? 'Ends today' : days === 1 ? '1 day left' : `${days} days left`}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Leases expiring soon, soonest first */}
       {expiringSoon.length > 0 && (
