@@ -361,7 +361,7 @@ export function Tenants() {
             <div className="p-5 text-left w-full">
               <div className="flex items-center justify-between">
                 <span className="eyebrow">{s.label}</span>
-                <span className={active ? 'text-primary [&_svg]:h-[18px] [&_svg]:w-[18px]' : 'text-faint [&_svg]:h-[18px] [&_svg]:w-[18px]'}>{s.icon}</span>
+                <span className={`w-9 h-9 rounded-xl grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${active ? 'bg-primary text-white' : 'bg-primary-soft text-primary'}`}>{s.icon}</span>
               </div>
               <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{s.value}</div>
               {s.filter && (
