@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Home, DoorOpen, Calendar, DollarSign, User, ShieldAlert, CalendarClock } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { useToast } from '../../context/ToastContext';
@@ -12,17 +12,13 @@ import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '..
 import { NotificationsCard } from '../../components/NotificationsCard';
 import type { Lease, RentPayment, Tenant } from '../../types';
 
-const settlementBadge = {
-  paid: 'success',
-  partial: 'warning',
-  unpaid: 'destructive',
-} as const;
-
-const settlementLabel = {
-  paid: 'Paid',
-  partial: 'Partially paid',
-  unpaid: 'Not yet paid',
-} as const;
+// Time-of-day greeting for the home header.
+function greetingFor(d = new Date()): string {
+  const h = d.getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
 // "1st", "2nd", "3rd", "21st"... for the rent due day.
 function ordinal(n: number): string {
@@ -144,17 +140,33 @@ export function TenantHome() {
     `${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim(),
   ].filter(Boolean).join(', ');
 
+  // Whole days until this month's rent due date (negative once it has passed),
+  // for the hero card's "due in N days" line.
+  const dueDay = me.rentDueDay ?? 1;
+  const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  const daysToDue = Math.round(
+    (startOfDay(new Date(nowD.getFullYear(), nowD.getMonth(), dueDay)) - startOfDay(nowD)) / 86400000
+  );
+
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="eyebrow">Welcome</p>
-        <h1 className="font-display text-2xl text-ink mt-1">
-          Hello, {tenant.firstName}. Here is where things stand.
-        </h1>
+    <div className="space-y-5">
+      {/* Greeting */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-muted">{greetingFor()},</p>
+          <h1 className="font-display text-[26px] leading-tight text-ink truncate">
+            {tenant.firstName || 'Welcome'}
+          </h1>
+        </div>
+        <Avatar
+          photoUrl={tenant.photoUrl}
+          initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
+          className="w-11 h-11 flex-shrink-0"
+        />
       </div>
 
       {pastDue && (
-        <div className="rounded-xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
+        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-ink">Your rent is {pastDue.months} months past due</p>
@@ -166,7 +178,7 @@ export function TenantHome() {
       )}
 
       {leaseExpiry && (
-        <div className="rounded-xl border border-warning/30 bg-warning-soft p-5 flex items-start gap-3">
+        <div className="rounded-2xl border border-warning/30 bg-warning-soft p-5 flex items-start gap-3">
           <CalendarClock className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-ink">
@@ -183,9 +195,20 @@ export function TenantHome() {
         </div>
       )}
 
-      <NotificationsCard />
+      {lease && (
+        <RentHero
+          monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
+          amount={lease.monthlyRent}
+          status={thisMonth?.status ?? null}
+          balance={thisMonth?.balance ?? 0}
+          dueDay={dueDay}
+          daysToDue={daysToDue}
+        />
+      )}
 
-      <ProfileCard tenant={tenant} />
+      <QuickActions />
+
+      <NotificationsCard />
 
       {!lease ? (
         <Card>
@@ -197,62 +220,150 @@ export function TenantHome() {
         </Card>
       ) : (
         <>
-        <div className="grid gap-6 sm:grid-cols-2">
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <h3 className="font-semibold text-ink flex items-center gap-2">
-                <Home className="h-4 w-4 text-faint" /> Your home
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-ink">
-                  <Home className="h-3.5 w-3.5 text-faint" />
-                  <span>{property?.name || 'Property not on file'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted">
-                  <DoorOpen className="h-3.5 w-3.5 text-faint" />
-                  <span>{unit ? `Unit ${unit.unitNumber}` : 'Unit not on file'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted">
-                  <Calendar className="h-3.5 w-3.5 text-faint" />
-                  <span>
-                    {lease.startDate ? formatDate(lease.startDate) : 'Start date unknown'}
-                    {lease.endDate ? ` to ${formatDate(lease.endDate)}` : ', ongoing'}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <h3 className="font-semibold text-ink flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-faint" /> Rent
-              </h3>
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-display text-2xl text-ink tnum">{formatCurrency(lease.monthlyRent)}</span>
-                <span className="text-sm text-muted">per month</span>
-              </div>
-              <p className="text-sm text-muted">Due on the {ordinal(me.rentDueDay ?? 1)} of each month.</p>
-              {thisMonth ? (
-                <div className="pt-2 border-t border-line flex items-center justify-between">
-                  <span className="eyebrow">This month</span>
-                  <Badge variant={settlementBadge[thisMonth.status]}>{settlementLabel[thisMonth.status]}</Badge>
-                </div>
-              ) : (
-                <p className="text-sm text-faint pt-2 border-t border-line">Nothing due this month yet.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
+          <HomeCard property={property} unit={unit} lease={lease} />
+          <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
         </>
       )}
+
+      <ProfileCard tenant={tenant} />
 
       <HouseholdCard hasLease={!!me?.lease} />
 
       <RealtorCard realtors={realtors} />
     </div>
+  );
+}
+
+// The signature surface of the tenant app: this month's rent, its status, and
+// how close the due date is, on a rich evergreen card.
+function RentHero({
+  monthLabel, amount, status, balance, dueDay, daysToDue,
+}: {
+  monthLabel: string;
+  amount: number;
+  status: 'paid' | 'partial' | 'unpaid' | null;
+  balance: number;
+  dueDay: number;
+  daysToDue: number;
+}) {
+  const scrollToPay = () => {
+    document.getElementById('how-to-pay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const dueText =
+    daysToDue > 0 ? `in ${daysToDue} ${daysToDue === 1 ? 'day' : 'days'}`
+    : daysToDue === 0 ? 'today'
+    : `${-daysToDue} ${-daysToDue === 1 ? 'day' : 'days'} ago`;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-3xl p-6 text-white shadow-[0_14px_30px_-14px_rgba(20,45,34,0.7)]"
+      style={{ background: 'radial-gradient(120% 140% at 100% 0%, #2f6350 0%, transparent 55%), linear-gradient(158deg, #24503f 0%, #16332a 100%)' }}
+    >
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 40% at 12% 8%, rgba(255,255,255,0.14), transparent 60%)' }} />
+      <div className="relative">
+        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/65">{monthLabel} rent</p>
+        <p className="font-display text-[42px] leading-none mt-2 tnum">{formatCurrency(amount)}</p>
+
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          {status === null && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-white/12 text-white/85 border border-white/15">
+              Nothing due yet
+            </span>
+          )}
+          {status === 'paid' && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-white/15 text-white border border-white/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#a9e0c3]" /> Paid, you are all set
+            </span>
+          )}
+          {status === 'partial' && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full text-[#f0d199] border border-[#f3d699]/30 bg-[#f3d699]/12">
+              Balance {formatCurrency(balance)}
+            </span>
+          )}
+          {status === 'unpaid' && (
+            <>
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full text-[#f0d199] border border-[#f3d699]/30 bg-[#f3d699]/12">
+                <span className="w-1.5 h-1.5 rounded-full bg-current" /> Due {dueText}
+              </span>
+              <span className="text-xs text-white/60">the {ordinal(dueDay)}</span>
+            </>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={scrollToPay}
+          className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#f1ecdf] text-[#1c3e30] text-sm font-semibold py-3 transition-transform hover:-translate-y-0.5"
+        >
+          <DollarSign className="h-4 w-4" /> How to pay
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Four large, thumb-friendly shortcuts to the rest of the app.
+function QuickActions() {
+  const actions = [
+    { label: 'Request a repair', to: '/portal/maintenance', Icon: Wrench },
+    { label: 'Message office', to: '/portal/messages', Icon: MessageSquare },
+    { label: 'My documents', to: '/portal/documents', Icon: FileText },
+    { label: 'Payment history', to: '/portal/payments', Icon: Clock },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {actions.map((a) => (
+        <Link
+          key={a.to}
+          to={a.to}
+          className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-line-strong"
+        >
+          <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+            <a.Icon className="h-5 w-5" strokeWidth={1.8} />
+          </span>
+          <span className="text-sm font-semibold text-ink leading-tight">{a.label}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// Where the tenant lives, with the lease term and an at-a-glance status.
+function HomeCard({
+  property, unit, lease,
+}: {
+  property?: { name?: string; address?: string } | null;
+  unit?: { unitNumber?: string } | null;
+  lease: PortalLease;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <p className="eyebrow mb-2.5">Your home</p>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-display text-xl text-ink truncate">
+            {property?.name || property?.address || 'Property not on file'}
+          </p>
+          {unit?.unitNumber && <span className="text-sm text-muted flex-shrink-0">Unit {unit.unitNumber}</span>}
+        </div>
+        {property?.name && property?.address && (
+          <p className="text-sm text-muted mt-0.5 truncate">{property.address}</p>
+        )}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line text-sm text-muted">
+          <Calendar className="h-4 w-4 text-faint flex-shrink-0" />
+          <span className="truncate">
+            {lease.startDate ? formatDate(lease.startDate) : 'Start date unknown'}
+            {lease.endDate ? ` to ${formatDate(lease.endDate)}` : ', ongoing'}
+          </span>
+          {lease.status === 'active' && (
+            <span className="ml-auto flex-shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary-soft text-primary">
+              Active
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -446,7 +557,7 @@ function HowToPayCard({ instructions, memo }: { instructions?: string; memo: str
     } catch { /* clipboard unavailable; the memo is shown to copy by hand */ }
   };
   return (
-    <Card>
+    <Card id="how-to-pay">
       <CardContent className="p-5 space-y-3">
         <h3 className="font-semibold text-ink flex items-center gap-2">
           <DollarSign className="h-4 w-4 text-faint" /> How to pay
