@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FileText, Upload, CheckCircle2, ExternalLink } from 'lucide-react';
+import { FileText, Upload, CheckCircle2, ExternalLink, Check } from 'lucide-react';
 import logo from '../assets/mh-dunn-logo.png';
 import { Button } from '../components/ui/Button';
 import { useToast } from '../context/ToastContext';
@@ -99,7 +99,7 @@ export function SigningPage() {
       </div>
 
       <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm space-y-3">
-        <h2 className="font-semibold text-ink text-sm">Your documents</h2>
+        <h2 className="font-semibold text-ink text-sm">Documents to sign</h2>
         {info && info.documents.length > 0 ? (
           <div className="space-y-2">
             {info.documents.map((d) => (
@@ -125,11 +125,27 @@ export function SigningPage() {
 
       <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm space-y-3">
         <h2 className="font-semibold text-ink text-sm">Upload your signed copies</h2>
-        <p className="text-xs text-muted">Sign the documents, then upload a photo or PDF of each signed copy. You can upload more than one.</p>
+        <p className="text-xs text-muted">Sign the documents above, then upload a photo or PDF of each signed copy. You can upload more than one.</p>
         <input ref={fileRef} type="file" className="hidden" onChange={handleUpload} />
         <Button variant="outline" className="w-full" disabled={uploading} onClick={() => fileRef.current?.click()}>
           <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Upload a signed document'}
         </Button>
+
+        {info && info.uploaded.length > 0 && (
+          <div className="pt-2 border-t border-line space-y-2">
+            <p className="text-xs font-medium text-ink">You have uploaded {info.uploaded.length} {info.uploaded.length === 1 ? 'document' : 'documents'}</p>
+            {info.uploaded.map((d) => (
+              <div key={d.id} className="flex items-center gap-2.5 text-sm text-muted">
+                <span className="w-6 h-6 rounded-full bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                <a href={signingApi.documentUrl(token!, d.id)} target="_blank" rel="noopener noreferrer" className="truncate hover:text-ink">
+                  {d.name.replace(/^Signed - /, '')}
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <Button className="w-full py-3" disabled={submitting} onClick={submit}>

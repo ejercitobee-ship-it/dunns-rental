@@ -790,7 +790,10 @@ export const prospectiveApi = {
 export interface SigningInfo {
   firstName: string;
   status: ProspectiveStatus;
+  /** Documents the office sent for the applicant to sign. */
   documents: { id: string; name: string }[];
+  /** Signed copies the applicant has already uploaded. */
+  uploaded: { id: string; name: string }[];
 }
 export const signingApi = {
   info: (token: string): Promise<SigningInfo> => apiRequest(`/sign/${token}`),
