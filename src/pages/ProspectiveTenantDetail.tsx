@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User, Link2, Copy } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User, Link2, Copy, Pencil } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -42,6 +42,9 @@ export function ProspectiveTenantDetail() {
   const [convertOpen, setConvertOpen] = useState(false);
   const [converting, setConverting] = useState(false);
   const [conv, setConv] = useState({ unitId: '', monthlyRent: '', moveInFee: '', moveInFeePaid: true, startDate: '', endDate: '' });
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [edit, setEdit] = useState({ firstName: '', lastName: '', email: '', phone: '', notes: '' });
 
   useEffect(() => {
     if (!id) return;
@@ -162,6 +165,45 @@ export function ProspectiveTenantDetail() {
     }
   };
 
+  const openEdit = () => {
+    if (!applicant) return;
+    setEdit({
+      firstName: applicant.firstName,
+      lastName: applicant.lastName,
+      email: applicant.email || '',
+      phone: applicant.phone || '',
+      notes: applicant.notes || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleEdit = async () => {
+    if (!applicant || !id || editBusy) return;
+    if (!edit.firstName.trim() || !edit.lastName.trim()) {
+      showToast('First and last name are required.', 'error');
+      return;
+    }
+    setEditBusy(true);
+    try {
+      // Preserve the current stage; this modal only edits their details.
+      const updated = await prospectiveApi.update(id, {
+        firstName: edit.firstName.trim(),
+        lastName: edit.lastName.trim(),
+        email: edit.email.trim() || undefined,
+        phone: edit.phone.trim() || undefined,
+        notes: edit.notes.trim() || undefined,
+        status: applicant.status,
+      });
+      setApplicant(updated);
+      setEditOpen(false);
+      showToast('Applicant details updated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not save the changes.', 'error');
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   if (loading) return <p className="text-sm text-muted">Loading applicant.</p>;
   if (error || !applicant) {
     return (
@@ -193,6 +235,9 @@ export function ProspectiveTenantDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canEdit && !isConverted && (
+            <Button variant="outline" onClick={openEdit}><Pencil className="h-4 w-4 mr-2" /> Edit</Button>
+          )}
           {canConvert && !isConverted && (
             <Button onClick={openConvert}><UserCheck className="h-4 w-4 mr-2" /> Convert to Tenant</Button>
           )}
@@ -314,6 +359,38 @@ export function ProspectiveTenantDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit details modal */}
+      <Modal isOpen={editOpen} onClose={() => setEditOpen(false)} title="Edit applicant" size="md">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">First name *</label>
+              <input className={inputClass} value={edit.firstName} onChange={e => setEdit({ ...edit, firstName: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Last name *</label>
+              <input className={inputClass} value={edit.lastName} onChange={e => setEdit({ ...edit, lastName: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
+            <input type="email" className={inputClass} value={edit.email} onChange={e => setEdit({ ...edit, email: e.target.value })} placeholder="name@example.com" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
+            <input type="tel" className={inputClass} value={edit.phone} onChange={e => setEdit({ ...edit, phone: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
+            <textarea rows={3} className={inputClass} value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={handleEdit} disabled={editBusy}>{editBusy ? 'Saving...' : 'Save changes'}</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Convert modal */}
       <Modal isOpen={convertOpen} onClose={() => setConvertOpen(false)} title="Convert to Tenant" size="md">
