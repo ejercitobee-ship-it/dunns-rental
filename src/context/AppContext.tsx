@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
-import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest } from '../types';
+import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest, UtilityAccount } from '../types';
 import {
   propertiesApi,
   unitsApi,
@@ -9,6 +9,7 @@ import {
   expensesApi,
   incomesApi,
   maintenanceApi,
+  utilityAccountsApi,
 } from '../lib/api';
 import { useAuth } from './AuthContext';
 import { todayLocalDate } from '../lib/utils';
@@ -22,6 +23,7 @@ interface AppState {
   expenses: Expense[];
   incomes: Income[];
   maintenance: MaintenanceRequest[];
+  utilityAccounts: UtilityAccount[];
   isLoading: boolean;
   error: string | null;
 }
@@ -52,7 +54,10 @@ type Action =
   | { type: 'DELETE_RENT_PAYMENT'; payload: string }
   | { type: 'ADD_MAINTENANCE'; payload: MaintenanceRequest }
   | { type: 'UPDATE_MAINTENANCE'; payload: MaintenanceRequest }
-  | { type: 'DELETE_MAINTENANCE'; payload: string };
+  | { type: 'DELETE_MAINTENANCE'; payload: string }
+  | { type: 'ADD_UTILITY'; payload: UtilityAccount }
+  | { type: 'UPDATE_UTILITY'; payload: UtilityAccount }
+  | { type: 'DELETE_UTILITY'; payload: string };
 
 const initialState: AppState = {
   properties: [],
@@ -63,6 +68,7 @@ const initialState: AppState = {
   expenses: [],
   incomes: [],
   maintenance: [],
+  utilityAccounts: [],
   isLoading: false,
   error: null,
 };
@@ -164,6 +170,15 @@ function reducer(state: AppState, action: Action): AppState {
         maintenance: state.maintenance.filter(m => m.id !== action.payload),
         expenses: state.expenses.filter(e => e.id !== `maint-${action.payload}`),
       };
+    case 'ADD_UTILITY':
+      return { ...state, utilityAccounts: [action.payload, ...state.utilityAccounts] };
+    case 'UPDATE_UTILITY':
+      return {
+        ...state,
+        utilityAccounts: state.utilityAccounts.map(u => u.id === action.payload.id ? action.payload : u),
+      };
+    case 'DELETE_UTILITY':
+      return { ...state, utilityAccounts: state.utilityAccounts.filter(u => u.id !== action.payload) };
     default:
       return state;
   }
@@ -191,6 +206,9 @@ interface AppContextType extends AppState {
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
   updateExpense: (expense: Expense) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  addUtilityAccount: (account: Omit<UtilityAccount, 'id'>) => Promise<void>;
+  updateUtilityAccount: (account: UtilityAccount) => Promise<void>;
+  deleteUtilityAccount: (id: string) => Promise<void>;
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
   deleteIncome: (id: string) => Promise<void>;
   addRentPayment: (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => Promise<void>;
@@ -212,7 +230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const [properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance] = await Promise.all([
+      const [properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, utilityAccounts] = await Promise.all([
         propertiesApi.getAll(),
         unitsApi.getAll(),
         tenantsApi.getAll(),
@@ -221,10 +239,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         expensesApi.getAll(),
         incomesApi.getAll(),
         maintenanceApi.getAll(),
+        utilityAccountsApi.getAll(),
       ]);
       dispatch({
         type: 'SET_STATE',
-        payload: { properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, isLoading: false },
+        payload: { properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, utilityAccounts, isLoading: false },
       });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
@@ -241,7 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({
         type: 'SET_STATE',
         payload: {
-          properties: [], units: [], tenants: [], leases: [], rentPayments: [], expenses: [], incomes: [], maintenance: [],
+          properties: [], units: [], tenants: [], leases: [], rentPayments: [], expenses: [], incomes: [], maintenance: [], utilityAccounts: [],
           isLoading: false, error: null,
         },
       });
@@ -354,6 +373,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_EXPENSE', payload: id });
   };
 
+  const addUtilityAccount = async (data: Omit<UtilityAccount, 'id'>) => {
+    const created = await utilityAccountsApi.create(data);
+    dispatch({ type: 'ADD_UTILITY', payload: created });
+  };
+
+  const updateUtilityAccount = async (account: UtilityAccount) => {
+    const updated = await utilityAccountsApi.update(account.id, account);
+    dispatch({ type: 'UPDATE_UTILITY', payload: updated });
+  };
+
+  const deleteUtilityAccount = async (id: string) => {
+    await utilityAccountsApi.delete(id);
+    dispatch({ type: 'DELETE_UTILITY', payload: id });
+  };
+
   const deleteIncome = async (id: string) => {
     await incomesApi.delete(id);
     dispatch({ type: 'DELETE_INCOME', payload: id });
@@ -432,6 +466,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addExpense,
         updateExpense,
         deleteExpense,
+        addUtilityAccount,
+        updateUtilityAccount,
+        deleteUtilityAccount,
         addIncome,
         deleteIncome,
         addRentPayment,

@@ -15,6 +15,22 @@ export interface Property {
   landValue?: number;
 }
 
+export type UtilityType = 'water' | 'gas' | 'electric';
+
+/** A utility account the landlord pays on a property (reference details so the
+ * monthly bill is quick to encode as a Utilities expense). */
+export interface UtilityAccount {
+  id: string;
+  propertyId: string;
+  /** Optional: set when the meter serves one specific unit (separately metered). */
+  unitId?: string;
+  type: UtilityType;
+  provider?: string;
+  accountNumber?: string;
+  loginUrl?: string;
+  notes?: string;
+}
+
 export interface Unit {
   id: string;
   propertyId: string;

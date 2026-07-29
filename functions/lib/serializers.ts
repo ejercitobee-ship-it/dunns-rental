@@ -20,6 +20,19 @@ export function serializeProperty(r: Row) {
   };
 }
 
+export function serializeUtilityAccount(r: Row) {
+  return {
+    id: r.id,
+    propertyId: r.property_id,
+    unitId: r.unit_id ?? undefined,
+    type: r.type,
+    provider: r.provider ?? undefined,
+    accountNumber: r.account_number ?? undefined,
+    loginUrl: r.login_url ?? undefined,
+    notes: r.notes ?? undefined,
+  };
+}
+
 export function serializeUnit(r: Row) {
   return {
     id: r.id,

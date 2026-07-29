@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount } from '../types';
 
 const API_BASE = '/api';
 
@@ -163,6 +163,17 @@ export const propertiesApi = {
     apiRequest(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/properties/${id}`, { method: 'DELETE' }),
+};
+
+// Utility accounts API (water/gas/electric the landlord pays, per property)
+export const utilityAccountsApi = {
+  getAll: (): Promise<UtilityAccount[]> => apiRequest('/utility-accounts'),
+  create: (data: Omit<UtilityAccount, 'id'>): Promise<UtilityAccount> =>
+    apiRequest('/utility-accounts', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: UtilityAccount): Promise<UtilityAccount> =>
+    apiRequest(`/utility-accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/utility-accounts/${id}`, { method: 'DELETE' }),
 };
 
 // Units API

@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
   Plus, Download, Home, Wrench, Zap, Shield, Receipt,
-  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload, Pencil
+  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -63,7 +63,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome } = useApp();
   const { isSuperAdmin, hasPermission } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
@@ -78,6 +78,9 @@ export function Expenses() {
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | ''>('');
   // The expense currently being edited (null = the modal is adding a new one).
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  // Tracks the property picked in the expense modal, so a Utilities expense can
+  // show that property's utility accounts (numbers) to encode quickly.
+  const [expensePropertyId, setExpensePropertyId] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canDelete = isSuperAdmin();
   // Editing a recorded expense is reserved to the workspace owner (super admin).
@@ -86,12 +89,14 @@ export function Expenses() {
   const openExpenseModal = () => {
     setEditingExpense(null);
     setExpenseCategory('');
+    setExpensePropertyId('');
     setIsModalOpen(true);
   };
 
   const openEditExpense = (expense: Expense) => {
     setEditingExpense(expense);
     setExpenseCategory(expense.category);
+    setExpensePropertyId(expense.propertyId || '');
     setIsModalOpen(true);
   };
 
@@ -667,6 +672,7 @@ export function Expenses() {
                 name="propertyId"
                 required
                 defaultValue={editingExpense?.propertyId || ''}
+                onChange={(e) => setExpensePropertyId(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select Property</option>
@@ -723,6 +729,33 @@ export function Expenses() {
                   />
                 </div>
               </div>
+
+              {expenseCategory === 'utilities' && expensePropertyId && (() => {
+                const accts = utilityAccounts.filter(u => u.propertyId === expensePropertyId);
+                if (accts.length === 0) return null;
+                return (
+                  <div className="rounded-lg border border-line bg-canvas p-3 space-y-2">
+                    <p className="text-xs font-medium text-ink">Utility accounts on this property</p>
+                    <div className="space-y-1.5">
+                      {accts.map(a => (
+                        <div key={a.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="text-muted">
+                            <span className="font-medium text-ink capitalize">{a.type}</span>
+                            {a.provider ? ` · ${a.provider}` : ''}
+                          </span>
+                          {a.accountNumber && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="tnum text-ink">{a.accountNumber}</span>
+                              <button type="button" onClick={() => navigator.clipboard?.writeText(a.accountNumber || '')} className="p-1 text-faint hover:text-primary hover:bg-primary-soft rounded" title="Copy account number"><Copy className="h-3.5 w-3.5" /></button>
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted">Copy the account number into the vendor or description so the bill is easy to trace.</p>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2">

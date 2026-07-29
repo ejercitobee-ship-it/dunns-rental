@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check, ChevronDown, ChevronRight, Droplet, Flame, Zap, Copy, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -10,7 +10,13 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import type { Property, Unit, LeaseStatus } from '../types';
+import type { Property, Unit, LeaseStatus, UtilityAccount, UtilityType } from '../types';
+
+const UTILITY_META: Record<UtilityType, { label: string; icon: typeof Droplet }> = {
+  water: { label: 'Water', icon: Droplet },
+  gas: { label: 'Gas', icon: Flame },
+  electric: { label: 'Electric', icon: Zap },
+};
 
 const statusColors = {
   occupied: 'success',
@@ -36,6 +42,7 @@ export function Properties() {
     addProperty, updateProperty, deleteProperty,
     addUnit, updateUnit, deleteUnit,
     getPropertyUnits, getUnitLease, getLeaseTenants,
+    utilityAccounts, addUtilityAccount, updateUtilityAccount, deleteUtilityAccount,
     refreshData,
   } = useApp();
   const { showToast } = useToast();
@@ -68,6 +75,88 @@ export function Properties() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [propertyForUnit, setPropertyForUnit] = useState<Property | null>(null);
+
+  // Utility accounts (water/gas/electric per property).
+  const [utilityModalOpen, setUtilityModalOpen] = useState(false);
+  const [utilityProperty, setUtilityProperty] = useState<Property | null>(null);
+  const [editingUtility, setEditingUtility] = useState<UtilityAccount | null>(null);
+  const [utilityToDelete, setUtilityToDelete] = useState<UtilityAccount | null>(null);
+  const [utilityForm, setUtilityForm] = useState({
+    type: 'electric' as UtilityType,
+    provider: '',
+    accountNumber: '',
+    unitId: '',
+    loginUrl: '',
+    notes: '',
+  });
+  const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
+
+  const openAddUtility = (property: Property) => {
+    setUtilityProperty(property);
+    setEditingUtility(null);
+    setUtilityForm({ type: 'electric', provider: '', accountNumber: '', unitId: '', loginUrl: '', notes: '' });
+    setUtilityModalOpen(true);
+  };
+
+  const openEditUtility = (property: Property, account: UtilityAccount) => {
+    setUtilityProperty(property);
+    setEditingUtility(account);
+    setUtilityForm({
+      type: account.type,
+      provider: account.provider || '',
+      accountNumber: account.accountNumber || '',
+      unitId: account.unitId || '',
+      loginUrl: account.loginUrl || '',
+      notes: account.notes || '',
+    });
+    setUtilityModalOpen(true);
+  };
+
+  const handleSaveUtility = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!utilityProperty) return;
+    const payload = {
+      propertyId: utilityProperty.id,
+      type: utilityForm.type,
+      provider: utilityForm.provider.trim() || undefined,
+      accountNumber: utilityForm.accountNumber.trim() || undefined,
+      unitId: utilityForm.unitId || undefined,
+      loginUrl: utilityForm.loginUrl.trim() || undefined,
+      notes: utilityForm.notes.trim() || undefined,
+    };
+    try {
+      if (editingUtility) {
+        await updateUtilityAccount({ ...editingUtility, ...payload });
+        showToast('Utility account updated.', 'success');
+      } else {
+        await addUtilityAccount(payload);
+        showToast('Utility account added.', 'success');
+      }
+      setUtilityModalOpen(false);
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+    }
+  };
+
+  const handleDeleteUtility = async () => {
+    if (!utilityToDelete) return;
+    try {
+      await deleteUtilityAccount(utilityToDelete.id);
+      showToast('Utility account removed.', 'success');
+      setUtilityToDelete(null);
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+    }
+  };
+
+  const copyAccountNumber = async (account: UtilityAccount) => {
+    if (!account.accountNumber) return;
+    try {
+      await navigator.clipboard.writeText(account.accountNumber);
+      setCopiedAccount(account.id);
+      setTimeout(() => setCopiedAccount(null), 1800);
+    } catch { /* clipboard blocked; the number is visible to copy by hand */ }
+  };
 
   // Synchronous re-entry guards for the two submits that create a new record
   // (a property, a unit). A useState-based "isSubmitting" flag only takes
@@ -596,6 +685,77 @@ export function Properties() {
                     );
                   })}
                 </div>
+
+                {/* Utility accounts the landlord pays on this property */}
+                <div className="mt-6 pt-6 border-t border-line">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold flex items-center gap-2 text-ink">
+                      <Zap className="h-5 w-5" />
+                      Utilities
+                    </h3>
+                    {canEditProperty && (
+                      <Button variant="outline" size="sm" onClick={() => openAddUtility(property)}>
+                        <Plus className="h-4 w-4 mr-1.5" /> Add utility
+                      </Button>
+                    )}
+                  </div>
+                  {(() => {
+                    const accts = utilityAccounts.filter(u => u.propertyId === property.id);
+                    if (accts.length === 0) {
+                      return <p className="text-sm text-muted">No utility accounts yet. Add the water, gas, and electric accounts you pay so the bills are quick to encode as expenses.</p>;
+                    }
+                    return (
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                        {accts.map(acct => {
+                          const meta = UTILITY_META[acct.type];
+                          const Icon = meta.icon;
+                          const unit = acct.unitId ? propertyUnits.find(u => u.id === acct.unitId) : undefined;
+                          return (
+                            <div key={acct.id} className="border border-line rounded-xl p-3.5 bg-white">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0"><Icon className="h-4 w-4" /></span>
+                                  <div>
+                                    <p className="text-sm font-medium text-ink leading-tight">{meta.label}</p>
+                                    {acct.provider && <p className="text-xs text-muted">{acct.provider}</p>}
+                                  </div>
+                                </div>
+                                {canEditProperty && (
+                                  <div className="flex gap-1">
+                                    <button onClick={() => openEditUtility(property, acct)} className="p-1 hover:bg-black/[0.05] rounded" title="Edit"><Edit2 className="h-3.5 w-3.5 text-muted" /></button>
+                                    <button onClick={() => setUtilityToDelete(acct)} className="p-1 hover:bg-danger-soft rounded" title="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>
+                                  </div>
+                                )}
+                              </div>
+                              {acct.accountNumber && (
+                                <div className="mt-2.5 flex items-center justify-between gap-2 bg-canvas rounded-lg px-2.5 py-1.5">
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] uppercase tracking-wide text-faint">Account #</p>
+                                    <p className="text-sm text-ink truncate tnum">{acct.accountNumber}</p>
+                                  </div>
+                                  <button onClick={() => copyAccountNumber(acct)} className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md flex-shrink-0" title="Copy account number">
+                                    {copiedAccount === acct.id ? <Check className="h-3.5 w-3.5 text-positive" /> : <Copy className="h-3.5 w-3.5" />}
+                                  </button>
+                                </div>
+                              )}
+                              {(unit || acct.loginUrl || acct.notes) && (
+                                <div className="mt-2 space-y-1 text-xs text-muted">
+                                  {unit && <p>Serves Unit {unit.unitNumber}</p>}
+                                  {acct.notes && <p className="whitespace-pre-wrap">{acct.notes}</p>}
+                                  {acct.loginUrl && (
+                                    <a href={acct.loginUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                      <ExternalLink className="h-3 w-3" /> Pay online
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
               </CardContent>
               )}
             </Card>
@@ -918,6 +1078,73 @@ export function Properties() {
             : `Are you sure you want to delete Unit ${unitToDelete?.unitNumber}? This action cannot be undone.`
         }
         confirmText="Delete"
+        variant="danger"
+      />
+
+      {/* Add/Edit Utility Account Modal */}
+      <Modal
+        isOpen={utilityModalOpen}
+        onClose={() => setUtilityModalOpen(false)}
+        title={editingUtility ? 'Edit Utility Account' : `Add Utility${utilityProperty ? ` to ${utilityProperty.name}` : ''}`}
+      >
+        <form onSubmit={handleSaveUtility} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Type *</label>
+              <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={utilityForm.type} onChange={(e) => setUtilityForm({ ...utilityForm, type: e.target.value as UtilityType })}>
+                <option value="electric">Electric</option>
+                <option value="water">Water</option>
+                <option value="gas">Gas</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Serves unit (optional)</label>
+              <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={utilityForm.unitId} onChange={(e) => setUtilityForm({ ...utilityForm, unitId: e.target.value })}>
+                <option value="">Whole property</option>
+                {utilityProperty && getPropertyUnits(utilityProperty.id).map(u => (
+                  <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Provider</label>
+              <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={utilityForm.provider} onChange={(e) => setUtilityForm({ ...utilityForm, provider: e.target.value })} placeholder="e.g., ComEd, Nicor Gas" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Account number</label>
+              <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={utilityForm.accountNumber} onChange={(e) => setUtilityForm({ ...utilityForm, accountNumber: e.target.value })} placeholder="Account #" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Pay-online URL (optional)</label>
+            <input type="url" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={utilityForm.loginUrl} onChange={(e) => setUtilityForm({ ...utilityForm, loginUrl: e.target.value })} placeholder="https://" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+            <textarea rows={2} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={utilityForm.notes} onChange={(e) => setUtilityForm({ ...utilityForm, notes: e.target.value })} placeholder="Meter number, autopay, etc." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setUtilityModalOpen(false)}>Cancel</Button>
+            <Button type="submit" className="flex-1">{editingUtility ? 'Save Changes' : 'Add Utility'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!utilityToDelete}
+        onClose={() => setUtilityToDelete(null)}
+        onConfirm={handleDeleteUtility}
+        title="Remove utility account"
+        message={`Remove the ${utilityToDelete ? UTILITY_META[utilityToDelete.type].label.toLowerCase() : ''} account${utilityToDelete?.provider ? ` (${utilityToDelete.provider})` : ''}? This only removes the reference details, not any expenses.`}
+        confirmText="Remove"
         variant="danger"
       />
     </div>
