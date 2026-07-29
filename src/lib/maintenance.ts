@@ -43,3 +43,17 @@ export function tradeLabel(slug?: string): string {
 export function isActiveStatus(status: MaintenanceStatus): boolean {
   return status !== 'paid' && status !== 'cancelled';
 }
+
+/**
+ * The approval-oriented badge for a job that is in the report → approve → pay
+ * flow: Pending approval, Approved, or Paid. Returns null for jobs outside that
+ * flow, where the normal STATUS badge should be shown instead.
+ */
+export function approvalBadge(
+  m: { needsApproval?: boolean; approvedAt?: string; status: MaintenanceStatus }
+): { label: string; variant: BadgeVariant } | null {
+  if (m.status === 'paid') return { label: 'Paid', variant: 'success' };
+  if (m.needsApproval) return { label: 'Pending approval', variant: 'warning' };
+  if (m.approvedAt) return { label: 'Approved', variant: 'default' };
+  return null;
+}

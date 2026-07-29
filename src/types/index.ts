@@ -241,8 +241,14 @@ export interface MaintenanceRequest {
   scheduledFor?: string;
   availability?: AvailabilityWindow[];
   paidAt?: string;
-  createdBy?: 'tenant' | 'admin';
+  createdBy?: 'tenant' | 'admin' | 'handyman';
   photoUrl?: string | null;
+  /** True when a handyman self-reported this work and it awaits admin approval. */
+  needsApproval?: boolean;
+  /** The day an admin approved the job and its cost (expense written then). */
+  approvedAt?: string;
+  /** The cost the handyman proposed when reporting the work. */
+  reportedCost?: number;
 }
 
 export interface Handyman {

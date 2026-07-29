@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
-import { STATUS_BADGE, STATUS_LABEL } from '../lib/maintenance';
+import { STATUS_BADGE, STATUS_LABEL, approvalBadge } from '../lib/maintenance';
 import { handymenApi, maintenanceApi } from '../lib/api';
 
 /** Which active handymen may take a job in this category (general sees all). */
@@ -44,20 +44,22 @@ const emptyForm = {
 };
 
 export function Maintenance() {
-  const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance, dispatch } = useApp();
+  const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance, dispatch, refreshData } = useApp();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   // Maintenance create/edit map to properties_edit; delete to properties_delete.
   const canEditMaintenance = hasPermission('properties_edit');
   const canDeleteMaintenance = hasPermission('properties_delete');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<MaintenanceStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<MaintenanceStatus | 'all' | 'pending_approval'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [handymen, setHandymen] = useState<Handyman[]>([]);
   const [payTarget, setPayTarget] = useState<MaintenanceRequest | null>(null);
   const [payCost, setPayCost] = useState('');
+  const [approveTarget, setApproveTarget] = useState<MaintenanceRequest | null>(null);
+  const [approveCost, setApproveCost] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,20 +106,51 @@ export function Maintenance() {
     }
   };
 
+  const openApprove = (m: MaintenanceRequest) => {
+    setApproveTarget(m);
+    setApproveCost(m.reportedCost != null ? String(m.reportedCost) : (m.cost ? String(m.cost) : ''));
+  };
+
+  const confirmApprove = async () => {
+    if (!approveTarget) return;
+    const cost = Number(approveCost);
+    if (!Number.isFinite(cost) || cost < 0) {
+      showToast('Enter a valid amount', 'error');
+      return;
+    }
+    setBusyId(approveTarget.id);
+    try {
+      const updated = await maintenanceApi.approve(approveTarget.id, cost);
+      dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      // The approval writes the expense server-side; refresh so it appears in
+      // Finances and the Dashboard right away.
+      await refreshData();
+      showToast('Approved. It now counts as an expense on the property.', 'success');
+      setApproveTarget(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not approve', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const propertyName = (id?: string) => properties.find(p => p.id === id)?.name || '—';
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber;
 
   const stats = useMemo(() => {
-    const open = maintenance.filter(m => m.status === 'submitted').length;
+    const pendingApproval = maintenance.filter(m => m.needsApproval && m.status !== 'cancelled').length;
     const inProgress = maintenance.filter(m => m.status === 'in_progress').length;
     const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'cancelled').length;
     const spend = maintenance.filter(m => m.status === 'paid').reduce((s, m) => s + (m.cost || 0), 0);
-    return { open, inProgress, urgent, spend };
+    return { pendingApproval, inProgress, urgent, spend };
   }, [maintenance]);
 
   const filtered = useMemo(() => {
     return maintenance.filter(m => {
-      const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
+      const matchesStatus =
+        statusFilter === 'all' ? true
+        : statusFilter === 'pending_approval' ? !!m.needsApproval
+        : m.status === statusFilter;
       const q = search.toLowerCase();
       const matchesSearch =
         !q ||
@@ -200,7 +233,7 @@ export function Maintenance() {
   };
 
   const statCards = [
-    { label: 'New', value: stats.open, icon: <Clock /> },
+    { label: 'Pending approval', value: stats.pendingApproval, icon: <Clock /> },
     { label: 'In progress', value: stats.inProgress, icon: <Wrench /> },
     { label: 'Urgent', value: stats.urgent, icon: <AlertTriangle /> },
     { label: 'Paid spend', value: formatCurrency(stats.spend), icon: <CheckCircle2 /> },
@@ -251,9 +284,10 @@ export function Maintenance() {
         <select
           className="px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as MaintenanceStatus | 'all')}
+          onChange={e => setStatusFilter(e.target.value as MaintenanceStatus | 'all' | 'pending_approval')}
         >
           <option value="all">All Statuses</option>
+          <option value="pending_approval">Pending approval</option>
           <option value="submitted">Submitted</option>
           <option value="assigned">Assigned</option>
           <option value="scheduled">Scheduled</option>
@@ -305,7 +339,15 @@ export function Maintenance() {
                       <Badge variant={priorityBadge[m.priority]} className="capitalize">{m.priority}</Badge>
                     </td>
                     <td className="py-3 px-4">
-                      <Badge variant={STATUS_BADGE[m.status]}>{STATUS_LABEL[m.status]}</Badge>
+                      {(() => {
+                        const ab = approvalBadge(m);
+                        return ab
+                          ? <Badge variant={ab.variant}>{ab.label}</Badge>
+                          : <Badge variant={STATUS_BADGE[m.status]}>{STATUS_LABEL[m.status]}</Badge>;
+                      })()}
+                      {m.createdBy === 'handyman' && (
+                        <span className="block text-[11px] text-muted mt-0.5">Reported by handyman</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       {m.status === 'paid' || m.status === 'cancelled' ? (
@@ -336,7 +378,15 @@ export function Maintenance() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-1">
-                        {m.status !== 'paid' && m.status !== 'cancelled' && (
+                        {canEditMaintenance && m.needsApproval && m.status !== 'cancelled' && (
+                          <button
+                            onClick={() => openApprove(m)}
+                            className="text-xs font-semibold text-white bg-primary hover:bg-primary-hover px-2.5 py-1 rounded-md transition-colors"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {!m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
                           <button
                             onClick={() => quickStatus(m, m.status === 'in_progress' ? 'completed' : 'in_progress')}
                             className="text-xs font-medium text-primary hover:text-primary-hover px-2 py-1 rounded-md hover:bg-primary-soft transition-colors"
@@ -344,7 +394,7 @@ export function Maintenance() {
                             {m.status === 'in_progress' ? 'Complete' : 'Start'}
                           </button>
                         )}
-                        {canEditMaintenance && m.status !== 'paid' && m.status !== 'cancelled' && (
+                        {canEditMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
                           <button
                             onClick={() => openPay(m)}
                             className="text-xs font-medium text-positive hover:opacity-80 px-2 py-1 rounded-md hover:bg-positive-soft transition-colors"
@@ -409,6 +459,37 @@ export function Maintenance() {
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setPayTarget(null)}>Cancel</Button>
             <Button onClick={confirmPay} disabled={busyId === payTarget?.id}>Mark paid</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Approve reported work */}
+      <Modal isOpen={!!approveTarget} onClose={() => setApproveTarget(null)} title="Approve reported work" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Approve <span className="font-medium text-ink">{approveTarget?.title}</span>
+            {approveTarget?.assignedHandymanId && <> by <span className="font-medium text-ink">{handymanName(approveTarget.assignedHandymanId)}</span></>}.
+            This records it as an expense on {propertyName(approveTarget?.propertyId)}
+            {unitNumber(approveTarget?.unitId) && <> · {unitNumber(approveTarget?.unitId)}</>}. It does not mark it paid.
+          </p>
+          {approveTarget?.reportedCost != null && (
+            <p className="text-xs text-muted">Handyman proposed {formatCurrency(approveTarget.reportedCost)}. Adjust below if needed.</p>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Approved cost</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={approveCost}
+              onChange={(e) => setApproveCost(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setApproveTarget(null)}>Cancel</Button>
+            <Button onClick={confirmApprove} disabled={busyId === approveTarget?.id}>Approve</Button>
           </div>
         </div>
       </Modal>

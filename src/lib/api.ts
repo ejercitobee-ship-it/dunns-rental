@@ -645,6 +645,12 @@ export const portalApi = {
     apiRequest(`/portal/handyman/jobs/${id}/schedule`, { method: 'POST', body: JSON.stringify({ scheduledFor }) }),
   jobStatus: (id: string, status: 'in_progress' | 'completed'): Promise<PortalMaintenanceRequest> =>
     apiRequest(`/portal/handyman/jobs/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  // The property + unit list a handyman needs to self-report where they worked.
+  handymanPlaces: (): Promise<{ properties: { id: string; name: string; address: string }[]; units: { id: string; propertyId: string; unitNumber: string }[] }> =>
+    apiRequest('/portal/handyman/places'),
+  // A handyman logs work they did; created as completed + pending admin approval.
+  reportWork: (data: { propertyId: string; unitId?: string; title: string; description?: string; category: string; cost: number; date: string }): Promise<PortalMaintenanceRequest> =>
+    apiRequest('/portal/handyman/report', { method: 'POST', body: JSON.stringify(data) }),
   // Web push: register/unregister this device, and send a test to yourself.
   pushSubscribe: (sub: { endpoint?: string | null; keys?: { p256dh?: string; auth?: string } }): Promise<{ success: boolean }> =>
     apiRequest('/portal/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
@@ -701,6 +707,10 @@ export const maintenanceApi = {
   // Record paying the handyman: sets the cost, stamps paid, counts in Finances.
   pay: (id: string, cost: number): Promise<MaintenanceRequest> =>
     apiRequest(`/maintenance/${id}/pay`, { method: 'POST', body: JSON.stringify({ cost }) }),
+  // Approve a handyman-reported job (and its cost): writes the expense, does not
+  // mark it paid.
+  approve: (id: string, cost: number): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}/approve`, { method: 'POST', body: JSON.stringify({ cost }) }),
 };
 
 // Handymen roster API (admin side).
