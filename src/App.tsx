@@ -28,6 +28,7 @@ const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.S
 const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
 const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
 const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
+const ProspectiveTenantDetail = lazy(() => import('./pages/ProspectiveTenantDetail').then(m => ({ default: m.ProspectiveTenantDetail })));
 const TenantHome = lazy(() => import('./pages/portal/TenantHome').then(m => ({ default: m.TenantHome })));
 const TenantPayments = lazy(() => import('./pages/portal/TenantPayments').then(m => ({ default: m.TenantPayments })));
 const TenantMaintenance = lazy(() => import('./pages/portal/TenantMaintenance').then(m => ({ default: m.TenantMaintenance })));
@@ -241,6 +242,12 @@ function AppRoutes() {
       <Route path="/messages" element={
         <ProtectedRoute requiredPermission="tenants_view">
           <Layout><Messages /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/prospective/:id" element={
+        <ProtectedRoute requiredPermission="tenants_view">
+          <Layout><ProspectiveTenantDetail /></Layout>
         </ProtectedRoute>
       } />
 

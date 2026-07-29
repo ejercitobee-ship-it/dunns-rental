@@ -726,6 +726,50 @@ export const handymenApi = {
     apiRequest(`/handymen/${id}/invite`, { method: 'POST' }),
 };
 
+export type ProspectiveStatus = 'applied' | 'docs_sent' | 'signed' | 'converted' | 'rejected';
+
+/** An applicant, before they become an active tenant. No portal login. */
+export interface ProspectiveTenant {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  status: ProspectiveStatus;
+  convertedTenantId?: string;
+  createdAt: number;
+}
+
+export interface ProspectiveInput {
+  firstName: string; lastName: string; email?: string; phone?: string; notes?: string;
+}
+
+// Prospective tenants (applicants): records, their files, and conversion.
+export const prospectiveApi = {
+  list: (): Promise<ProspectiveTenant[]> => apiRequest('/prospective-tenants'),
+  get: (id: string): Promise<ProspectiveTenant> => apiRequest(`/prospective-tenants/${id}`),
+  create: (data: ProspectiveInput): Promise<ProspectiveTenant> =>
+    apiRequest('/prospective-tenants', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: ProspectiveInput & { status?: ProspectiveStatus }): Promise<ProspectiveTenant> =>
+    apiRequest(`/prospective-tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string) => apiRequest(`/prospective-tenants/${id}`, { method: 'DELETE' }),
+  documents: (id: string): Promise<AppDocument[]> => apiRequest(`/prospective-tenants/${id}/documents`),
+  uploadDocument: async (id: string, file: File): Promise<AppDocument> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/prospective-tenants/${id}/documents`, { method: 'POST', credentials: 'include', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.data !== undefined ? data.data : data;
+  },
+  convert: (id: string, data: { unitId: string; monthlyRent: number; moveInFee?: number; moveInFeePaid?: boolean; startDate?: string; endDate?: string }): Promise<{ tenantId: string }> =>
+    apiRequest(`/prospective-tenants/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // Office side of tenant messaging: the inbox, one tenant's thread, and replies.
 export const messagesApi = {
   threads: (): Promise<{ threads: MessageThread[] }> => apiRequest('/messages'),

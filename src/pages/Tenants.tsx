@@ -8,7 +8,8 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
+import { formatCurrency, formatDate, todayLocalDate, cn } from '../lib/utils';
+import { ProspectiveTenantsPanel } from '../components/ProspectiveTenantsPanel';
 import { tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -73,6 +74,8 @@ export function Tenants() {
   const today = todayLocalDate();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
+  // Which list we are looking at: current tenants or prospective applicants.
+  const [view, setView] = useState<'active' | 'prospective'>('active');
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Synchronous re-entry guard for handleAddTenancy. isSubmitting (state)
   // only flips the disabled prop after a re-render, so a fast double-click
@@ -322,7 +325,7 @@ export function Tenants() {
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tenants</h1>
           <p className="text-muted mt-1 text-sm">People, their households and where they live.</p>
         </div>
-        {canCreateTenant && (
+        {canCreateTenant && view === 'active' && (
           <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add Tenancy
@@ -330,6 +333,27 @@ export function Tenants() {
         )}
       </div>
 
+      {/* Active tenants vs prospective applicants */}
+      <div className="flex gap-1 border-b border-line -mt-2">
+        {([['active', 'Current tenants'], ['prospective', 'Prospective']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setView(key)}
+            className={cn(
+              'px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors',
+              view === key ? 'border-primary text-ink font-medium' : 'border-transparent text-muted hover:text-ink'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'prospective' ? (
+        <ProspectiveTenantsPanel canCreate={canCreateTenant} />
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         {statCards.map(s => {
@@ -522,6 +546,8 @@ export function Tenants() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Add Tenancy modal: pick a unit, set the rent once, add one or more people.
           The backdrop click and header X both call onClose directly and aren't
