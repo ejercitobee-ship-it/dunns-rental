@@ -148,7 +148,7 @@ export function RealtorTenants() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="eyebrow">Your tenants</p>
-          <h1 className="font-display text-2xl text-ink mt-1">My tenants</h1>
+          <h1 className="font-display text-[26px] text-ink mt-1">My tenants</h1>
           <p className="text-sm text-muted mt-1">
             People you placed, for the first 30 days after they move in.
           </p>

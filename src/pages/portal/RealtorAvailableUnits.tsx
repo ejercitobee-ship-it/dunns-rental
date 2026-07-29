@@ -71,7 +71,7 @@ export function RealtorAvailableUnits() {
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Marketing</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Available Units</h1>
+        <h1 className="font-display text-[26px] text-ink mt-1">Available Units</h1>
         <p className="text-sm text-muted mt-1">Vacant units you can market, by address. Place a tenant from the New Tenant form.</p>
       </div>
 

@@ -193,7 +193,7 @@ export function HandymanJobs() {
     <div className="space-y-8">
       <div>
         <p className="eyebrow">Maintenance</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Jobs</h1>
+        <h1 className="font-display text-[26px] text-ink mt-1">Jobs</h1>
         <p className="text-sm text-muted mt-1">Claim available jobs in your trades, confirm a time, and update progress.</p>
       </div>
 

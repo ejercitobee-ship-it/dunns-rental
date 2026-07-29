@@ -74,7 +74,7 @@ export function RealtorDashboard() {
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Realtor</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Dashboard</h1>
+        <h1 className="font-display text-[26px] text-ink mt-1">Dashboard</h1>
       </div>
 
       <Card>
