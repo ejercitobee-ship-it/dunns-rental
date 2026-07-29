@@ -349,6 +349,9 @@ export interface AppDocument {
   propertyId?: string;
   tenantId?: string;
   createdAt: number;
+  /** Office user who uploaded it, or null when the applicant uploaded a signed
+   * copy themselves through the public signing link. */
+  uploadedBy?: string | null;
 }
 
 export const documentsApi = {

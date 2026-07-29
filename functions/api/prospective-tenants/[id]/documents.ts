@@ -15,7 +15,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const { results } = await env.DB.prepare(
       'SELECT * FROM documents WHERE prospective_tenant_id = ? ORDER BY created_at DESC'
     ).bind(params.id as string).all();
-    return jsonOk({ success: true, data: (results || []).map(serializeDocument) });
+    // Expose uploadedBy on THIS office-only endpoint (not the shared serializer,
+    // which also feeds the tenant portal) so the office can tell a document it
+    // sent (has an uploader) from a signed copy the applicant sent back (null).
+    return jsonOk({
+      success: true,
+      data: (results || []).map(r => ({
+        ...serializeDocument(r as Record<string, unknown>),
+        uploadedBy: (r as Record<string, unknown>).uploaded_by ?? null,
+      })),
+    });
   } catch {
     return serverError();
   }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User, Link2, Copy, Pencil } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User, Link2, Copy, Pencil, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -217,6 +217,15 @@ export function ProspectiveTenantDetail() {
   const s = PROSPECTIVE_STATUS[applicant.status];
   const isConverted = applicant.status === 'converted';
 
+  // Documents we sent them to sign (office uploads carry an uploader) vs. the
+  // signed copies the applicant uploaded back through the signing link (no
+  // uploader). Splitting them makes it obvious when they've returned a signed doc.
+  const sentDocs = docs.filter(d => d.uploadedBy);
+  const signedDocs = docs.filter(d => !d.uploadedBy);
+  // Signed copies are stored named "Signed - <file>"; drop the prefix for display
+  // since a badge already marks them as signed.
+  const cleanName = (name: string) => name.replace(/^Signed - /, '');
+
   return (
     <div className="space-y-6">
       <Link to="/tenants" className="text-sm text-primary hover:underline inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to Tenants</Link>
@@ -301,12 +310,17 @@ export function ProspectiveTenantDetail() {
       <Card>
         <CardContent className="p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-ink flex items-center gap-2"><FileText className="h-4 w-4 text-faint" /> Files to sign</h3>
+            <h3 className="font-semibold text-ink flex items-center gap-2">
+              <FileText className="h-4 w-4 text-faint" /> Documents
+              {signedDocs.length > 0 && (
+                <Badge variant="success" className="ml-1">{signedDocs.length} signed</Badge>
+              )}
+            </h3>
             {canEdit && (
               <>
                 <input ref={fileRef} type="file" className="hidden" onChange={handleUpload} />
                 <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Upload'}
+                  <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Upload to sign'}
                 </Button>
               </>
             )}
@@ -347,14 +361,41 @@ export function ProspectiveTenantDetail() {
           {docs.length === 0 ? (
             <p className="text-sm text-muted">No files yet. Upload their application or lease.</p>
           ) : (
-            <div className="space-y-2">
-              {docs.map(doc => (
-                <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl">
-                  <span className="w-9 h-9 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
-                  <span className="text-sm text-ink truncate flex-1 min-w-0">{doc.name}</span>
-                  <a href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0" title="Download"><Download className="h-4 w-4" /></a>
-                </div>
-              ))}
+            <div className="space-y-5">
+              {/* Documents we sent them to sign */}
+              <div className="space-y-2">
+                <p className="eyebrow">Sent to sign</p>
+                {sentDocs.length === 0 ? (
+                  <p className="text-sm text-muted">Nothing sent yet. Upload the application or lease for them to sign.</p>
+                ) : (
+                  sentDocs.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl">
+                      <span className="w-9 h-9 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
+                      <span className="text-sm text-ink truncate flex-1 min-w-0">{doc.name}</span>
+                      <a href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0" title="Download"><Download className="h-4 w-4" /></a>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Signed copies the applicant uploaded back */}
+              <div className="space-y-2">
+                <p className="eyebrow">Signed &amp; returned by applicant</p>
+                {signedDocs.length === 0 ? (
+                  <p className="text-sm text-muted">No signed documents returned yet.</p>
+                ) : (
+                  signedDocs.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-positive/30 bg-positive-soft/40 rounded-xl">
+                      <span className="w-9 h-9 rounded-lg bg-positive-soft text-positive grid place-items-center flex-shrink-0"><CheckCircle2 className="h-[18px] w-[18px]" /></span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-ink truncate block">{cleanName(doc.name)}</span>
+                        <span className="text-xs text-positive font-medium">Signed by applicant</span>
+                      </div>
+                      <a href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0" title="Download"><Download className="h-4 w-4" /></a>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </CardContent>
