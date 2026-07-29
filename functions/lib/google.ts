@@ -277,6 +277,36 @@ async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<st
 }
 
 /**
+ * The Drive folder for a unit, addressed by unit id (not via a tenant). Creates
+ * and remembers it on units.drive_folder_id, named "<address> - Unit <n>" under
+ * the root, the SAME folder that unit's tenant documents use. Returns null when
+ * the unit does not exist. Used to file expense receipts under the unit.
+ */
+export async function ensureUnitFolder(env: Env, unitId: string): Promise<string | null> {
+  const unit = await env.DB.prepare(
+    `SELECT u.id AS unit_id, u.unit_number AS unit_number, u.drive_folder_id AS unit_folder_id,
+            p.name AS property_name, p.address AS property_address
+       FROM units u LEFT JOIN properties p ON p.id = u.property_id
+      WHERE u.id = ?`
+  ).bind(unitId).first<{
+    unit_id: string; unit_number: string | null; unit_folder_id: string | null;
+    property_name: string | null; property_address: string | null;
+  }>();
+  if (!unit?.unit_id) return null;
+  if (unit.unit_folder_id) {
+    const status = await folderStatus(env, unit.unit_folder_id);
+    if (status !== 'gone') return unit.unit_folder_id;
+  }
+  const root = await ensureRootFolder(env);
+  const place = (unit.property_address || unit.property_name || 'Property').trim();
+  const name = `${place} - Unit ${unit.unit_number || '?'}`;
+  const id = await createFolder(env, name, root);
+  await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
+    .bind(id, unit.unit_id).run();
+  return id;
+}
+
+/**
  * The folder a tenant's documents go into. Nested so turnover and housemates
  * stay separated and organized:
  *   root ("MH Dunn Property Documents") → "<address> - Unit <n>" → "<First Last>"

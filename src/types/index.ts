@@ -118,6 +118,8 @@ export interface Expense {
   date: string;
   description: string;
   receipt?: string;
+  /** Receipt image URL (served from Drive), null/undefined when none uploaded. */
+  receiptUrl?: string | null;
   vendor?: string;
   isRecurring: boolean;
   recurringFrequency?: 'monthly' | 'quarterly' | 'yearly';

@@ -314,6 +314,18 @@ export const expensesApi = {
     apiRequest(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/expenses/${id}`, { method: 'DELETE' }),
+  // Upload a receipt image for an expense; stored in the unit's Drive folder.
+  uploadReceipt: async (id: string, file: File): Promise<Expense> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/expenses/${id}/receipt`, { method: 'POST', credentials: 'include', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.data !== undefined ? data.data : data;
+  },
 };
 
 // Incomes API

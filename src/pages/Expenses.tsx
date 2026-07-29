@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
   Plus, Download, Home, Wrench, Zap, Shield, Receipt,
-  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2
+  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -13,7 +13,8 @@ import { rentIncomeForMonths } from '../lib/rent';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import type { ExpenseCategory } from '../types';
+import type { ExpenseCategory, Expense } from '../types';
+import { expensesApi } from '../lib/api';
 import {
   BarChart,
   Bar,
@@ -471,7 +472,7 @@ export function Expenses() {
                   <th className="text-left py-3 px-4 font-medium">Description</th>
                   {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Vendor</th>}
                   <th className="text-right py-3 px-4 font-medium">Amount</th>
-                  {canDelete && <th className="text-right py-3 px-4 font-medium">Actions</th>}
+                  {(canDelete || canAddExpense) && <th className="text-right py-3 px-4 font-medium">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -514,25 +515,28 @@ export function Expenses() {
                         <td className="py-4 px-4 text-right font-semibold text-danger">
                           -{formatCurrency(expense.amount)}
                         </td>
-                        {canDelete && (
+                        {(canDelete || canAddExpense) && (
                           <td className="py-4 px-4 text-right">
-                            {linkedMaintenanceExpenseIds.has(expense.id) ? (
-                              <span
-                                className="text-xs text-muted-foreground"
-                                title="This came from a maintenance job. Delete it from the Maintenance page."
-                              >
-                                Maintenance
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => handleDeleteExpense(expense.id, `${categoryLabels[expense.category]} — ${formatCurrency(expense.amount)}`)}
-                                disabled={deletingId === expense.id}
-                                title="Delete this expense"
-                                className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
+                            <div className="inline-flex items-center gap-1 justify-end">
+                              {canAddExpense && <ExpenseReceiptButton expense={expense} />}
+                              {canDelete && (linkedMaintenanceExpenseIds.has(expense.id) ? (
+                                <span
+                                  className="text-xs text-muted-foreground"
+                                  title="This came from a maintenance job. Delete it from the Maintenance page."
+                                >
+                                  Maintenance
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleDeleteExpense(expense.id, `${categoryLabels[expense.category]} — ${formatCurrency(expense.amount)}`)}
+                                  disabled={deletingId === expense.id}
+                                  title="Delete this expense"
+                                  className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              ))}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -567,9 +571,9 @@ export function Expenses() {
                         <td className="py-4 px-4 text-right font-semibold text-positive">
                           +{formatCurrency(income.amount)}
                         </td>
-                        {canDelete && (
+                        {(canDelete || canAddExpense) && (
                           <td className="py-4 px-4 text-right">
-                            {income.id.startsWith('rent-') ? (
+                            {!canDelete ? null : income.id.startsWith('rent-') ? (
                               <span
                                 className="text-xs text-muted-foreground"
                                 title="This rent came from a recorded payment. Delete it in Rent Management."
@@ -766,5 +770,56 @@ export function Expenses() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+// Per-expense receipt control: view the uploaded receipt image and upload or
+// replace it. The file is stored in the unit's Drive folder server-side.
+function ExpenseReceiptButton({ expense }: { expense: Expense }) {
+  const { showToast } = useToast();
+  const [receiptUrl, setReceiptUrl] = useState<string | null | undefined>(expense.receiptUrl);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+
+  const pick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || busy) return;
+    setBusy(true);
+    try {
+      const updated = await expensesApi.uploadReceipt(expense.id, file);
+      setReceiptUrl(updated.receiptUrl ?? null);
+      showToast('Receipt uploaded.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not upload the receipt.', 'error');
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = '';
+    }
+  };
+
+  return (
+    <>
+      {receiptUrl && (
+        <a
+          href={receiptUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="View receipt"
+          className="p-1.5 text-primary hover:bg-primary-soft rounded-md transition-colors"
+        >
+          <Receipt className="h-4 w-4" />
+        </a>
+      )}
+      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={pick} />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => ref.current?.click()}
+        title={receiptUrl ? 'Replace receipt' : 'Upload receipt'}
+        className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors disabled:opacity-50"
+      >
+        <Upload className="h-4 w-4" />
+      </button>
+    </>
   );
 }

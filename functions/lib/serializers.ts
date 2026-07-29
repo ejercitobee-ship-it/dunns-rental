@@ -175,6 +175,8 @@ export function serializeExpense(r: Row) {
     vendor: r.vendor ?? undefined,
     isRecurring: !!r.is_recurring,
     recurringFrequency: r.recurring_frequency ?? undefined,
+    // Receipt image (served from Drive via the photo route), null when none.
+    receiptUrl: r.receipt_drive_id ? `/api/photo/${r.receipt_drive_id}` : null,
   };
 }
 
