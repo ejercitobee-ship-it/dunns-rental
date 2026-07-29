@@ -157,6 +157,18 @@ export async function requireUser(env: Env, request: Request): Promise<SessionUs
   return user ?? unauthorized();
 }
 
+/**
+ * Guard for actions reserved to the workspace owner. Only the super_admin role
+ * passes; every other role (even admin) gets a 403. Use for the few operations
+ * that should never be delegated, e.g. editing a recorded expense.
+ */
+export async function requireSuperAdmin(env: Env, request: Request): Promise<SessionUser | Response> {
+  const user = await getSessionUser(env, request);
+  if (!user) return unauthorized();
+  if (user.role !== 'super_admin') return forbidden();
+  return user;
+}
+
 export async function requirePermission(
   env: Env,
   request: Request,

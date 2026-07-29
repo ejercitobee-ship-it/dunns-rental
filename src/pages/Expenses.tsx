@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
   Plus, Download, Home, Wrench, Zap, Shield, Receipt,
-  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload
+  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload, Pencil
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -63,7 +63,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, addExpense, addIncome, deleteExpense, deleteIncome } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome } = useApp();
   const { isSuperAdmin, hasPermission } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
@@ -76,13 +76,29 @@ export function Expenses() {
   // Tracked so the mortgage "interest portion" field can appear only for a
   // mortgage expense. The rest of the form stays uncontrolled (FormData).
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | ''>('');
+  // The expense currently being edited (null = the modal is adding a new one).
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const canDelete = isSuperAdmin();
+  // Editing a recorded expense is reserved to the workspace owner (super admin).
+  const canEditExpense = isSuperAdmin();
 
   const openExpenseModal = () => {
+    setEditingExpense(null);
     setExpenseCategory('');
     setIsModalOpen(true);
   };
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const canDelete = isSuperAdmin();
+
+  const openEditExpense = (expense: Expense) => {
+    setEditingExpense(expense);
+    setExpenseCategory(expense.category);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingExpense(null);
+  };
 
   // Super admins can remove a mistaken manual entry. Derived rows are not
   // deleted here: rent income belongs to a recorded payment (delete it in Rent
@@ -261,7 +277,7 @@ export function Expenses() {
     
     try {
       if (view === 'expenses') {
-        await addExpense({
+        const fields = {
           propertyId: formData.get('propertyId') as string,
           unitId: (formData.get('unitId') as string) || undefined,
           category: formData.get('category') as ExpenseCategory,
@@ -275,7 +291,12 @@ export function Expenses() {
           interestAmount: formData.get('category') === 'mortgage' && formData.get('interestAmount')
             ? Number(formData.get('interestAmount'))
             : undefined,
-        });
+        };
+        if (editingExpense) {
+          await updateExpense({ ...editingExpense, ...fields });
+        } else {
+          await addExpense(fields);
+        }
       } else {
         await addIncome({
           propertyId: formData.get('propertyId') as string,
@@ -286,7 +307,7 @@ export function Expenses() {
           description: formData.get('description') as string,
         });
       }
-      setIsModalOpen(false);
+      closeModal();
     } catch (error) {
       alert((error as Error).message);
     }
@@ -528,6 +549,15 @@ export function Expenses() {
                         {(canDelete || canAddExpense) && (
                           <td className="py-4 px-4 text-right">
                             <div className="inline-flex items-center gap-1 justify-end">
+                              {canEditExpense && (
+                                <button
+                                  onClick={() => openEditExpense(expense)}
+                                  title="Edit this expense"
+                                  className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                              )}
                               {canAddExpense && <ExpenseReceiptButton expense={expense} />}
                               {canDelete && (linkedMaintenanceExpenseIds.has(expense.id) ? (
                                 <span
@@ -620,20 +650,23 @@ export function Expenses() {
         </div>
       )}
 
-      {/* Add Expense/Income Modal */}
+      {/* Add/Edit Expense or Add Income Modal. `key` re-mounts the form when
+          switching between adding and editing so the uncontrolled defaultValues
+          reset to the right record. */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={`Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
+        onClose={closeModal}
+        title={editingExpense ? 'Edit Expense' : `Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form key={editingExpense?.id || 'new'} onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Property *</label>
               <select
                 name="propertyId"
                 required
+                defaultValue={editingExpense?.propertyId || ''}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select Property</option>
@@ -647,6 +680,7 @@ export function Expenses() {
               <label className="text-sm font-medium">Unit (Optional)</label>
               <select
                 name="unitId"
+                defaultValue={editingExpense?.unitId || ''}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select Unit</option>
@@ -684,6 +718,7 @@ export function Expenses() {
                     type="text"
                     name="vendor"
                     placeholder="e.g., Home Depot, Electric Company"
+                    defaultValue={editingExpense?.vendor || ''}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -694,12 +729,14 @@ export function Expenses() {
                   <input
                     type="checkbox"
                     name="isRecurring"
+                    defaultChecked={editingExpense?.isRecurring}
                     className="w-4 h-4 rounded border-line-strong"
                   />
                   <span className="text-sm">Recurring Expense</span>
                 </label>
                 <select
                   name="recurringFrequency"
+                  defaultValue={editingExpense?.recurringFrequency || ''}
                   className="px-3 py-1 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select Frequency</option>
@@ -720,6 +757,7 @@ export function Expenses() {
                       step="0.01"
                       min="0"
                       placeholder="0.00"
+                      defaultValue={editingExpense?.interestAmount ?? ''}
                       className="w-full pl-8 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -760,6 +798,7 @@ export function Expenses() {
                   min="0"
                   required
                   placeholder="0.00"
+                  defaultValue={editingExpense?.amount ?? ''}
                   className="w-full pl-8 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -771,7 +810,7 @@ export function Expenses() {
                 type="date"
                 name="date"
                 required
-                defaultValue={new Date().toISOString().split('T')[0]}
+                defaultValue={editingExpense?.date || new Date().toISOString().split('T')[0]}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -784,6 +823,7 @@ export function Expenses() {
               required
               rows={3}
               placeholder={`Enter ${view} description...`}
+              defaultValue={editingExpense?.description || ''}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             />
           </div>
@@ -793,12 +833,12 @@ export function Expenses() {
               type="button"
               variant="outline"
               className="flex-1"
-              onClick={() => setIsModalOpen(false)}
+              onClick={closeModal}
             >
               Cancel
             </Button>
             <Button type="submit" className="flex-1">
-              Add {view === 'expenses' ? 'Expense' : 'Income'}
+              {editingExpense ? 'Save Changes' : `Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
             </Button>
           </div>
         </form>
