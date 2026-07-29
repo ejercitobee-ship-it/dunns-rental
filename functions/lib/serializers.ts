@@ -16,6 +16,7 @@ export function serializeProperty(r: Row) {
     description: r.description ?? undefined,
     purchaseDate: r.purchase_date ?? undefined,
     purchasePrice: r.purchase_price ?? undefined,
+    landValue: r.land_value ?? undefined,
   };
 }
 
@@ -175,6 +176,8 @@ export function serializeExpense(r: Row) {
     vendor: r.vendor ?? undefined,
     isRecurring: !!r.is_recurring,
     recurringFrequency: r.recurring_frequency ?? undefined,
+    // Deductible interest portion of a mortgage payment (principal is not).
+    interestAmount: r.interest_amount ?? undefined,
     // Receipt image (served from Drive via the photo route), null when none.
     receiptUrl: r.receipt_drive_id ? `/api/photo/${r.receipt_drive_id}` : null,
   };

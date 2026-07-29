@@ -30,8 +30,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, purchase_date, purchase_price, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, purchase_date, purchase_price, land_value, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -44,6 +44,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.description ?? null,
         body.purchaseDate ?? null,
         body.purchasePrice ?? null,
+        body.landValue ?? null,
         auth.id
       )
       .run();

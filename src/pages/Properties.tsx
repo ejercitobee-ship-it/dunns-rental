@@ -87,6 +87,10 @@ export function Properties() {
     zipCode: '',
     type: 'apartment' as Property['type'],
     description: '',
+    // Purchase + tax details (drive the Tax Report's depreciation schedule).
+    purchasePrice: '',
+    purchaseDate: '',
+    landValue: '',
   });
 
   const [unitForm, setUnitForm] = useState({
@@ -116,8 +120,25 @@ export function Properties() {
       zipCode: '',
       type: 'apartment',
       description: '',
+      purchasePrice: '',
+      purchaseDate: '',
+      landValue: '',
     });
   };
+
+  // Convert the string-based form into the numeric payload the API expects.
+  const propertyPayload = () => ({
+    name: propertyForm.name,
+    address: propertyForm.address,
+    city: propertyForm.city,
+    state: propertyForm.state,
+    zipCode: propertyForm.zipCode,
+    type: propertyForm.type,
+    description: propertyForm.description,
+    purchasePrice: propertyForm.purchasePrice ? Number(propertyForm.purchasePrice) : undefined,
+    purchaseDate: propertyForm.purchaseDate || undefined,
+    landValue: propertyForm.landValue ? Number(propertyForm.landValue) : undefined,
+  });
 
   const resetUnitForm = () => {
     setUnitForm({
@@ -136,7 +157,7 @@ export function Properties() {
     if (isAddingPropertyRef.current) return;
     isAddingPropertyRef.current = true;
     try {
-      await addProperty(propertyForm);
+      await addProperty(propertyPayload());
       showToast('Property added successfully!', 'success');
       setIsAddPropertyOpen(false);
       resetPropertyForm();
@@ -157,6 +178,9 @@ export function Properties() {
       zipCode: property.zipCode,
       type: property.type,
       description: property.description || '',
+      purchasePrice: property.purchasePrice != null ? String(property.purchasePrice) : '',
+      purchaseDate: property.purchaseDate || '',
+      landValue: property.landValue != null ? String(property.landValue) : '',
     });
     setIsEditPropertyOpen(true);
   };
@@ -165,7 +189,7 @@ export function Properties() {
     e.preventDefault();
     if (selectedProperty) {
       try {
-        await updateProperty({ ...selectedProperty, ...propertyForm });
+        await updateProperty({ ...selectedProperty, ...propertyPayload() });
         showToast('Property updated successfully!', 'success');
         setIsEditPropertyOpen(false);
         setSelectedProperty(null);
@@ -631,7 +655,38 @@ export function Properties() {
             <textarea className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30" rows={3}
               value={propertyForm.description} onChange={(e) => setPropertyForm({...propertyForm, description: e.target.value})} placeholder="Brief description..." />
           </div>
-          
+
+          <div className="pt-2 border-t border-line space-y-4">
+            <div>
+              <p className="text-sm font-medium text-ink">Purchase &amp; tax details</p>
+              <p className="text-xs text-muted mt-0.5">Used to calculate depreciation on the Tax Report.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Purchase price</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                    value={propertyForm.purchasePrice} onChange={(e) => setPropertyForm({...propertyForm, purchasePrice: e.target.value})} placeholder="0.00" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Purchase date</label>
+                <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={propertyForm.purchaseDate} onChange={(e) => setPropertyForm({...propertyForm, purchaseDate: e.target.value})} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Land value (not depreciable)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={propertyForm.landValue} onChange={(e) => setPropertyForm({...propertyForm, landValue: e.target.value})} placeholder="Leave blank to estimate 20% of price" />
+              </div>
+              <p className="text-xs text-muted mt-1">Land does not depreciate. Enter its assessed value from your county tax bill so only the building is depreciated. Blank assumes 20% of the price.</p>
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddPropertyOpen(false)}>Cancel</Button>
             <Button type="submit" className="flex-1">Add Property</Button>
@@ -692,7 +747,38 @@ export function Properties() {
             <textarea className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30" rows={3}
               value={propertyForm.description} onChange={(e) => setPropertyForm({...propertyForm, description: e.target.value})} />
           </div>
-          
+
+          <div className="pt-2 border-t border-line space-y-4">
+            <div>
+              <p className="text-sm font-medium text-ink">Purchase &amp; tax details</p>
+              <p className="text-xs text-muted mt-0.5">Used to calculate depreciation on the Tax Report.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Purchase price</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                    value={propertyForm.purchasePrice} onChange={(e) => setPropertyForm({...propertyForm, purchasePrice: e.target.value})} placeholder="0.00" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Purchase date</label>
+                <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={propertyForm.purchaseDate} onChange={(e) => setPropertyForm({...propertyForm, purchaseDate: e.target.value})} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Land value (not depreciable)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  value={propertyForm.landValue} onChange={(e) => setPropertyForm({...propertyForm, landValue: e.target.value})} placeholder="Leave blank to estimate 20% of price" />
+              </div>
+              <p className="text-xs text-muted mt-1">Land does not depreciate. Enter its assessed value from your county tax bill so only the building is depreciated. Blank assumes 20% of the price.</p>
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setIsEditPropertyOpen(false)}>Cancel</Button>
             <Button type="submit" className="flex-1">Update Property</Button>

@@ -10,6 +10,9 @@ export interface Property {
   image?: string;
   purchaseDate?: string;
   purchasePrice?: number;
+  /** Non-depreciable land portion of the cost basis. Only the building
+   * depreciates, so this is subtracted from purchasePrice for depreciation. */
+  landValue?: number;
 }
 
 export interface Unit {
@@ -125,6 +128,9 @@ export interface Expense {
   recurringFrequency?: 'monthly' | 'quarterly' | 'yearly';
   taxDeductible?: boolean;
   taxCategory?: string;
+  /** For a mortgage expense: the deductible interest portion of the payment.
+   * The remainder (principal) is not tax-deductible. */
+  interestAmount?: number;
 }
 
 export type TaxDeductibleCategory =

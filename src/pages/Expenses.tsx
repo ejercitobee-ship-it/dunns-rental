@@ -73,6 +73,14 @@ export function Expenses() {
   const [propertyFilter, setPropertyFilter] = useState('all');
   const [view, setView] = useState<'expenses' | 'income'>('expenses');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Tracked so the mortgage "interest portion" field can appear only for a
+  // mortgage expense. The rest of the form stays uncontrolled (FormData).
+  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | ''>('');
+
+  const openExpenseModal = () => {
+    setExpenseCategory('');
+    setIsModalOpen(true);
+  };
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canDelete = isSuperAdmin();
 
@@ -263,6 +271,10 @@ export function Expenses() {
           vendor: (formData.get('vendor') as string) || undefined,
           isRecurring: formData.get('isRecurring') === 'on',
           recurringFrequency: (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined,
+          // Only a mortgage carries a deductible interest split.
+          interestAmount: formData.get('category') === 'mortgage' && formData.get('interestAmount')
+            ? Number(formData.get('interestAmount'))
+            : undefined,
         });
       } else {
         await addIncome({
@@ -295,7 +307,7 @@ export function Expenses() {
             Export
           </Button>
           {(view === 'expenses' ? canAddExpense : canAddIncome) && (
-            <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
+            <Button onClick={openExpenseModal} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add {view === 'expenses' ? 'Expense' : 'Income'}
             </Button>
@@ -655,6 +667,8 @@ export function Expenses() {
                   <select
                     name="category"
                     required
+                    value={expenseCategory}
+                    onChange={(e) => setExpenseCategory(e.target.value as ExpenseCategory | '')}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Select Category</option>
@@ -694,6 +708,28 @@ export function Expenses() {
                   <option value="yearly">Yearly</option>
                 </select>
               </div>
+
+              {expenseCategory === 'mortgage' && (
+                <div className="space-y-2 rounded-lg border border-line bg-canvas p-3">
+                  <label className="text-sm font-medium">Deductible interest portion</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                    <input
+                      type="number"
+                      name="interestAmount"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <p className="text-xs text-muted">
+                    Only mortgage <strong>interest</strong> is tax-deductible, not the principal. Enter the interest
+                    portion of this payment (from your statement or Form 1098). The remainder is treated as
+                    non-deductible principal on the Tax Report.
+                  </p>
+                </div>
+              )}
             </>
           ) : (
             <div className="space-y-2">

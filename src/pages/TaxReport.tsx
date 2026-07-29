@@ -10,6 +10,13 @@ import { formatCurrency, formatDate, yearOf, monthOf, getMonthName } from '../li
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
 import {
+  depreciationForYear,
+  accumulatedDepreciation,
+  depreciableBasis,
+  landValueFor,
+  canDepreciate,
+} from '../lib/depreciation';
+import {
   BarChart,
   Bar,
   XAxis,
@@ -39,6 +46,19 @@ interface CapitalItem {
   description?: string;
   propertyName?: string;
 }
+
+interface DepreciationRow {
+  name: string;
+  placedInService?: string;
+  purchasePrice: number;
+  landValue: number;
+  depreciableBasis: number;
+  currentYear: number;
+  accumulated: number;
+  ready: boolean;
+}
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   advertising: { label: 'Advertising', description: 'Marketing and advertising costs' },
@@ -110,7 +130,12 @@ export function TaxReport() {
     // this matches Rent Management's Tax tab for the same months.
     const rentIncome = rentIncomeForMonths(rentPayments, months, y);
     const lateFeeIncome = pIncome.filter(i => i.source === 'late_fee').reduce((s, i) => s + i.amount, 0);
-    const otherIncome = pIncome.filter(i => i.source === 'other' || i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
+    const otherIncome = pIncome.filter(i => i.source === 'other').reduce((s, i) => s + i.amount, 0);
+    // A refundable security deposit you are holding is a liability you owe back,
+    // NOT taxable income. It becomes income only in the year you keep it (record
+    // that as "Other" income). So deposits are tracked separately and excluded
+    // from the taxable total.
+    const depositsReceived = pIncome.filter(i => i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
     const totalIncome = rentIncome + lateFeeIncome + otherIncome;
 
     const propertyNameById = new Map(properties.map(p => [p.id, p.name]));
@@ -120,11 +145,41 @@ export function TaxReport() {
     let operatingExpenses = 0;
     let capitalExpenses = 0;
     const capitalItems: CapitalItem[] = [];
+    // Mortgage payments: only the interest is deductible, principal is not.
+    let mortgageInterestDeducted = 0;
+    let mortgagePrincipalExcluded = 0;
+    let mortgageNeedsSplit = 0;
+    // The deductible amount of one expense: for a mortgage that's the interest
+    // portion (principal is never deductible); everything else is the full
+    // amount unless flagged non-deductible.
+    const deductibleAmount = (e: typeof pExpenses[number]): number => {
+      if (e.taxDeductible === false) return 0;
+      if (e.category === 'mortgage') return e.interestAmount != null ? e.interestAmount : e.amount;
+      return e.amount;
+    };
     pExpenses.forEach(e => {
       const taxCat = e.taxCategory || mapToTaxCategory(e.category);
-      expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + e.amount;
-      if (e.taxDeductible !== false) {
-        totalDeductibleExpenses += e.amount;
+      const deductible = deductibleAmount(e);
+
+      if (e.category === 'mortgage') {
+        // Interest is an operating deduction; principal is set aside.
+        if (e.interestAmount != null) {
+          mortgagePrincipalExcluded += Math.max(0, e.amount - e.interestAmount);
+        } else if (e.taxDeductible !== false) {
+          // No split entered: we can't tell interest from principal, so flag it.
+          mortgageNeedsSplit += 1;
+        }
+        mortgageInterestDeducted += deductible;
+        expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + deductible;
+        totalDeductibleExpenses += deductible;
+        operatingExpenses += deductible;
+        return;
+      }
+
+      expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + deductible;
+      if (deductible > 0) {
+        totalDeductibleExpenses += deductible;
+        // A capital improvement (over the $2,500 line) vs. a current-year expense.
         if (e.amount > CAPITAL_THRESHOLD) {
           capitalExpenses += e.amount;
           capitalItems.push({
@@ -141,13 +196,44 @@ export function TaxReport() {
       }
     });
     capitalItems.sort((a, b) => b.amount - a.amount);
+
+    // Depreciation: a non-cash deduction, spread over 27.5 years. It's an annual
+    // figure, so for a sub-year period we prorate it by the share of months
+    // shown. The full-year schedule below stays un-prorated for reference.
+    const periodFactor = months.length / 12;
+    const depreciationByProperty = new Map(
+      properties.map(p => [p.id, depreciationForYear(p, y)])
+    );
+    const depreciationSchedule: DepreciationRow[] = properties
+      .filter(p => p.purchasePrice && p.purchasePrice > 0)
+      .map(p => ({
+        name: p.name,
+        placedInService: p.purchaseDate,
+        purchasePrice: p.purchasePrice || 0,
+        landValue: landValueFor(p),
+        depreciableBasis: depreciableBasis(p),
+        currentYear: depreciationByProperty.get(p.id) || 0,
+        accumulated: accumulatedDepreciation(p, y),
+        ready: canDepreciate(p),
+      }));
+    const depreciation = round2(
+      properties.reduce((s, p) => s + (depreciationByProperty.get(p.id) || 0), 0) * periodFactor
+    );
+    if (depreciation > 0) {
+      expensesByCategory['depreciation'] = (expensesByCategory['depreciation'] || 0) + depreciation;
+      totalDeductibleExpenses += depreciation;
+    }
+
     const netIncome = totalIncome - totalDeductibleExpenses;
 
     const leasePropertyId = new Map(leases.map(l => [l.id, l.propertyId]));
     const propertyBreakdown = properties.map(p => {
-      const propertyExpenses = pExpenses.filter(e => e.propertyId === p.id).reduce((s, e) => s + (e.taxDeductible !== false ? e.amount : 0), 0);
+      const cashExpenses = pExpenses.filter(e => e.propertyId === p.id).reduce((s, e) => s + deductibleAmount(e), 0);
+      const propDepreciation = round2((depreciationByProperty.get(p.id) || 0) * periodFactor);
+      const propertyExpenses = cashExpenses + propDepreciation;
       const propertyRent = pPaidRent.filter(pmt => leasePropertyId.get(pmt.leaseId) === p.id).reduce((s, pmt) => s + pmt.amount, 0);
-      const propertyOther = pIncome.filter(i => i.propertyId === p.id && i.source !== 'rent').reduce((s, i) => s + i.amount, 0);
+      // Property income excludes deposits (not taxable) and rent (counted above).
+      const propertyOther = pIncome.filter(i => i.propertyId === p.id && i.source === 'other').reduce((s, i) => s + i.amount, 0);
       const propertyIncome = propertyRent + propertyOther;
       return { name: p.name, income: propertyIncome, expenses: propertyExpenses, netIncome: propertyIncome - propertyExpenses };
     });
@@ -161,7 +247,7 @@ export function TaxReport() {
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, netIncome, expensesByCategory, propertyBreakdown, breakdown };
+    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown };
   }, [expenses, incomes, properties, rentPayments, leases]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
@@ -180,11 +266,19 @@ export function TaxReport() {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
       income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, other: main.otherIncome },
+      securityDepositsReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
       operatingExpenses: main.operatingExpenses,
       capitalExpenses: main.capitalExpenses,
       capitalItems: main.capitalItems,
+      depreciation: main.depreciation,
+      depreciationSchedule: main.depreciationSchedule,
+      mortgage: {
+        interestDeducted: main.mortgageInterestDeducted,
+        principalExcluded: main.mortgagePrincipalExcluded,
+        entriesNeedingSplit: main.mortgageNeedsSplit,
+      },
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
@@ -313,6 +407,7 @@ export function TaxReport() {
                     ['Deductible expenses', main.totalDeductibleExpenses, comp.totalDeductibleExpenses, false],
                     ['— Operating (≤ $2,500)', main.operatingExpenses, comp.operatingExpenses, false],
                     ['— Capital (> $2,500)', main.capitalExpenses, comp.capitalExpenses, false],
+                    ['— Depreciation', main.depreciation, comp.depreciation, false],
                     ['Net income', main.netIncome, comp.netIncome, true],
                   ] as [string, number, number, boolean][]).map(([label, a, b, higherIsGood]) => {
                     const diff = Math.round((a - b) * 100) / 100;
@@ -356,7 +451,7 @@ export function TaxReport() {
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
             </div>
             <div className="mt-3 font-display text-[27px] leading-none font-medium text-danger tnum">{formatCurrency(main.totalDeductibleExpenses)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Total deductions</p>
+            <p className="mt-1.5 text-[13px] text-muted">Includes depreciation</p>
           </div>
         </Card>
 
@@ -455,9 +550,18 @@ export function TaxReport() {
               <span className="font-bold">{formatCurrency(main.otherIncome)}</span>
             </div>
             <div className="flex justify-between items-center py-2 text-lg">
-              <span className="font-bold">Total Income</span>
+              <span className="font-bold">Taxable Income</span>
               <span className="font-bold text-positive">{formatCurrency(main.totalIncome)}</span>
             </div>
+            {main.depositsReceived > 0 && (
+              <div className="flex justify-between items-center py-2 border-t border-line">
+                <span className="text-sm text-muted">
+                  Security deposits received
+                  <span className="block text-xs text-muted">Not taxable while held. Record a kept deposit as Other income.</span>
+                </span>
+                <span className="text-sm text-muted tnum">{formatCurrency(main.depositsReceived)}</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -584,6 +688,119 @@ export function TaxReport() {
           )}
         </CardContent>
       </Card>
+
+      {/* Depreciation schedule */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Home className="h-5 w-5" />
+            Depreciation ({year})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted mb-4">
+            Residential buildings depreciate over 27.5 years (straight line, mid-month convention). Land does not
+            depreciate. This is a non-cash deduction that lowers your taxable income.
+            {scope !== 'year' && ' The figures below are full-year amounts; the period totals above use the share for the selected months.'}
+          </p>
+          {main.depreciationSchedule.length === 0 ? (
+            <p className="text-sm text-muted">
+              Add a purchase price and purchase date to your properties (Properties page) to calculate depreciation.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-canvas">
+                    <th className="text-left py-2.5 px-4 font-medium">Property</th>
+                    <th className="text-left py-2.5 px-4 font-medium">Placed in service</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Cost basis</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Land</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Depreciable</th>
+                    <th className="text-right py-2.5 px-4 font-medium">This year</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Accumulated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {main.depreciationSchedule.map(d => (
+                    <tr key={d.name} className="border-b border-line last:border-0">
+                      <td className="py-2.5 px-4 font-medium text-ink">{d.name}</td>
+                      <td className="py-2.5 px-4">
+                        {d.ready
+                          ? (d.placedInService ? formatDate(d.placedInService) : '—')
+                          : <span className="text-warning">Add purchase date</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-right tnum">{formatCurrency(d.purchasePrice)}</td>
+                      <td className="py-2.5 px-4 text-right tnum text-muted">{formatCurrency(d.landValue)}</td>
+                      <td className="py-2.5 px-4 text-right tnum">{formatCurrency(d.depreciableBasis)}</td>
+                      <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(d.currentYear)}</td>
+                      <td className="py-2.5 px-4 text-right tnum text-muted">{formatCurrency(d.accumulated)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-line-strong">
+                    <td className="py-2.5 px-4 font-bold" colSpan={5}>Total annual depreciation</td>
+                    <td className="py-2.5 px-4 text-right font-bold tnum">
+                      {formatCurrency(main.depreciationSchedule.reduce((s, d) => s + d.currentYear, 0))}
+                    </td>
+                    <td className="py-2.5 px-4 text-right font-bold tnum text-muted">
+                      {formatCurrency(main.depreciationSchedule.reduce((s, d) => s + d.accumulated, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          <p className="text-xs text-muted mt-3">
+            Land value defaults to 20% of the purchase price when left blank on a property. Set the assessed land
+            value on each property (from your county tax bill) for accuracy, and confirm the basis with your accountant.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Mortgage interest vs principal */}
+      {(main.mortgageInterestDeducted > 0 || main.mortgagePrincipalExcluded > 0 || main.mortgageNeedsSplit > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Mortgage Interest
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted">
+              Only mortgage interest is deductible, not principal. The report deducts the interest portion you enter
+              on each mortgage expense.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-line p-4">
+                <span className="eyebrow">Deductible interest</span>
+                <div className="mt-2 font-display text-[22px] leading-none font-medium text-ink tnum">
+                  {formatCurrency(main.mortgageInterestDeducted)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-line p-4">
+                <span className="eyebrow">Principal (not deductible)</span>
+                <div className="mt-2 font-display text-[22px] leading-none font-medium text-muted tnum">
+                  {formatCurrency(main.mortgagePrincipalExcluded)}
+                </div>
+              </div>
+            </div>
+            {main.mortgageNeedsSplit > 0 && (
+              <div className="flex items-start gap-2 rounded-lg bg-warning-soft text-warning p-3 text-sm">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  {main.mortgageNeedsSplit} mortgage {main.mortgageNeedsSplit === 1 ? 'entry has' : 'entries have'} no
+                  interest portion entered, so the full amount is being treated as deductible. If any of that is
+                  principal, it is not deductible. When you log a mortgage payment, enter the interest portion (from
+                  your Form 1098) so this stays accurate.
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Property Breakdown */}
       <Card>

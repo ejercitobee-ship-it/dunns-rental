@@ -30,7 +30,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     await env.DB.prepare(
       `UPDATE properties SET
         name = ?, address = ?, city = ?, state = ?, zip_code = ?, type = ?, description = ?,
-        purchase_date = ?, purchase_price = ?, updated_at = unixepoch()
+        purchase_date = ?, purchase_price = ?, land_value = ?, updated_at = unixepoch()
        WHERE id = ?`
     )
       .bind(
@@ -43,6 +43,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.description ?? null,
         body.purchaseDate ?? null,
         body.purchasePrice ?? null,
+        body.landValue ?? null,
         id
       )
       .run();
