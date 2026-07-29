@@ -6,7 +6,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, yearOf, monthOf, getMonthName } from '../lib/utils';
+import { formatCurrency, formatDate, yearOf, monthOf, getMonthName } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
 import {
@@ -23,6 +23,22 @@ import {
 } from 'recharts';
 
 const COLORS = ['#24503f', '#2c7a58', '#97671c', '#b98a5e', '#7e8b83', '#5a7d6c', '#a23429', '#c2a878'];
+
+// IRS de minimis safe-harbor line: a single item at or under this can be
+// expensed (deducted this year); anything above it is generally a capital
+// improvement to be capitalized and depreciated. We split the deductible
+// expenses on this threshold so the two are easy to see and hand to an
+// accountant.
+const CAPITAL_THRESHOLD = 2500;
+
+interface CapitalItem {
+  id: string;
+  date: string;
+  amount: number;
+  categoryLabel: string;
+  description?: string;
+  propertyName?: string;
+}
 
 const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   advertising: { label: 'Advertising', description: 'Marketing and advertising costs' },
@@ -97,13 +113,34 @@ export function TaxReport() {
     const otherIncome = pIncome.filter(i => i.source === 'other' || i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
     const totalIncome = rentIncome + lateFeeIncome + otherIncome;
 
+    const propertyNameById = new Map(properties.map(p => [p.id, p.name]));
     const expensesByCategory: Record<string, number> = {};
     let totalDeductibleExpenses = 0;
+    // Split deductible expenses on the $2,500 de minimis line.
+    let operatingExpenses = 0;
+    let capitalExpenses = 0;
+    const capitalItems: CapitalItem[] = [];
     pExpenses.forEach(e => {
       const taxCat = e.taxCategory || mapToTaxCategory(e.category);
       expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + e.amount;
-      if (e.taxDeductible !== false) totalDeductibleExpenses += e.amount;
+      if (e.taxDeductible !== false) {
+        totalDeductibleExpenses += e.amount;
+        if (e.amount > CAPITAL_THRESHOLD) {
+          capitalExpenses += e.amount;
+          capitalItems.push({
+            id: e.id,
+            date: e.date,
+            amount: e.amount,
+            categoryLabel: TAX_CATEGORIES[taxCat]?.label || taxCat,
+            description: e.description,
+            propertyName: e.propertyId ? propertyNameById.get(e.propertyId) : undefined,
+          });
+        } else {
+          operatingExpenses += e.amount;
+        }
+      }
     });
+    capitalItems.sort((a, b) => b.amount - a.amount);
     const netIncome = totalIncome - totalDeductibleExpenses;
 
     const leasePropertyId = new Map(leases.map(l => [l.id, l.propertyId]));
@@ -124,7 +161,7 @@ export function TaxReport() {
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, totalDeductibleExpenses, netIncome, expensesByCategory, propertyBreakdown, breakdown };
+    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, netIncome, expensesByCategory, propertyBreakdown, breakdown };
   }, [expenses, incomes, properties, rentPayments, leases]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
@@ -145,12 +182,17 @@ export function TaxReport() {
       income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, other: main.otherIncome },
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
+      operatingExpenses: main.operatingExpenses,
+      capitalExpenses: main.capitalExpenses,
+      capitalItems: main.capitalItems,
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
         income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, other: comp.otherIncome },
         deductibleExpenses: comp.expensesByCategory,
         totalDeductibleExpenses: comp.totalDeductibleExpenses,
+        operatingExpenses: comp.operatingExpenses,
+        capitalExpenses: comp.capitalExpenses,
         netIncome: comp.netIncome,
       } : undefined,
     };
@@ -269,6 +311,8 @@ export function TaxReport() {
                   {([
                     ['Total income', main.totalIncome, comp.totalIncome, true],
                     ['Deductible expenses', main.totalDeductibleExpenses, comp.totalDeductibleExpenses, false],
+                    ['— Operating (≤ $2,500)', main.operatingExpenses, comp.operatingExpenses, false],
+                    ['— Capital (> $2,500)', main.capitalExpenses, comp.capitalExpenses, false],
                     ['Net income', main.netIncome, comp.netIncome, true],
                   ] as [string, number, number, boolean][]).map(([label, a, b, higherIsGood]) => {
                     const diff = Math.round((a - b) * 100) / 100;
@@ -463,6 +507,81 @@ export function TaxReport() {
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Operating vs Capital Expenses (IRS $2,500 de minimis safe harbor) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calculator className="h-5 w-5" />
+            Operating vs Capital Expenses
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted mb-4">
+            Anything over {formatCurrency(CAPITAL_THRESHOLD)} per item is generally a
+            capital improvement (capitalize and depreciate), not a same year deduction.
+            At or under it can be expensed this year under the IRS de minimis safe harbor.
+            Confirm the treatment of larger items with your accountant.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-line p-4">
+              <div className="flex items-center justify-between">
+                <span className="eyebrow">Operating (≤ {formatCurrency(CAPITAL_THRESHOLD)})</span>
+                <Badge variant="secondary">Deduct this year</Badge>
+              </div>
+              <div className="mt-2 font-display text-[24px] leading-none font-medium text-ink tnum">
+                {formatCurrency(main.operatingExpenses)}
+              </div>
+              <p className="mt-1.5 text-[13px] text-muted">
+                {main.totalDeductibleExpenses > 0
+                  ? `${((main.operatingExpenses / main.totalDeductibleExpenses) * 100).toFixed(0)}% of deductible expenses`
+                  : 'No deductible expenses'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-line p-4">
+              <div className="flex items-center justify-between">
+                <span className="eyebrow">Capital (&gt; {formatCurrency(CAPITAL_THRESHOLD)})</span>
+                <Badge variant="warning">Capitalize / depreciate</Badge>
+              </div>
+              <div className="mt-2 font-display text-[24px] leading-none font-medium text-ink tnum">
+                {formatCurrency(main.capitalExpenses)}
+              </div>
+              <p className="mt-1.5 text-[13px] text-muted">
+                {main.capitalItems.length > 0
+                  ? `${main.capitalItems.length} item${main.capitalItems.length === 1 ? '' : 's'} above the threshold`
+                  : 'No items above the threshold'}
+              </p>
+            </div>
+          </div>
+
+          {main.capitalItems.length > 0 && (
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-canvas">
+                    <th className="text-left py-2.5 px-4 font-medium">Date</th>
+                    <th className="text-left py-2.5 px-4 font-medium">Category</th>
+                    <th className="text-left py-2.5 px-4 font-medium">Item</th>
+                    <th className="text-left py-2.5 px-4 font-medium">Property</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {main.capitalItems.map(item => (
+                    <tr key={item.id} className="border-b border-line last:border-0">
+                      <td className="py-2.5 px-4 whitespace-nowrap">{formatDate(item.date)}</td>
+                      <td className="py-2.5 px-4">{item.categoryLabel}</td>
+                      <td className="py-2.5 px-4 text-muted">{item.description || '—'}</td>
+                      <td className="py-2.5 px-4 text-muted">{item.propertyName || '—'}</td>
+                      <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -74,8 +74,9 @@ export function Tenants() {
   const today = todayLocalDate();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
-  // Which list we are looking at: current tenants or prospective applicants.
-  const [view, setView] = useState<'active' | 'prospective'>('active');
+  // Which list we are looking at: current tenants, terminated tenancies, or
+  // prospective applicants.
+  const [view, setView] = useState<'active' | 'terminated' | 'prospective'>('active');
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Synchronous re-entry guard for handleAddTenancy. isSubmitting (state)
   // only flips the disabled prop after a re-render, so a fast double-click
@@ -91,7 +92,15 @@ export function Tenants() {
 
   const rows = useMemo(() => {
     return tenants.map(tenant => {
-      const lease: Lease | undefined = getTenantLeases(tenant.id).find(l => l.status !== 'ended');
+      const all = getTenantLeases(tenant.id);
+      // The lease to display: the current (active/paused) one, or, for a
+      // terminated tenant with no current tenancy, their most recent ended one.
+      const current = all.find(l => l.status !== 'ended');
+      const ended = current
+        ? undefined
+        : all.filter(l => l.status === 'ended')
+             .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || ''))[0];
+      const lease: Lease | undefined = current || ended;
       const property = lease?.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
       const unit = lease?.unitId ? units.find(u => u.id === lease.unitId) : undefined;
       const housemates = lease ? getLeaseTenants(lease.id).filter(h => h.id !== tenant.id) : [];
@@ -135,9 +144,20 @@ export function Tenants() {
     });
   }, [rows]);
 
+  // A household is 'terminated' when the lease it shows has ended, 'active' when
+  // it has a current lease, or 'unplaced' (no lease) — which sits with active so
+  // the terminated tab stays purely former tenants.
+  const categoryOf = (g: HouseholdRow): 'active' | 'terminated' | 'unplaced' =>
+    g.lease ? (g.lease.status === 'ended' ? 'terminated' : 'active') : 'unplaced';
+
   const filteredGroups = useMemo(() => {
-    let list = households;
-    if (expiringOnly) {
+    // Terminated tab shows only ended tenancies; the current-tenants tab shows
+    // everything else (active leases plus not-yet-placed people).
+    let list = households.filter(g => {
+      const isTerminated = categoryOf(g) === 'terminated';
+      return view === 'terminated' ? isTerminated : !isTerminated;
+    });
+    if (expiringOnly && view === 'active') {
       list = list.filter(g => g.lease && isLeaseExpiringSoon(g.lease, today));
     }
     const q = searchTerm.trim().toLowerCase();
@@ -154,7 +174,8 @@ export function Tenants() {
       (g.property?.name || '').toLowerCase().includes(q) ||
       (g.unit ? `unit ${g.unit.unitNumber}`.toLowerCase().includes(q) : false)
     );
-  }, [households, searchTerm, expiringOnly, today]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [households, searchTerm, expiringOnly, today, view]);
 
   // Toggle the expiring-soon filter and keep it in the URL so the view is
   // shareable and survives a refresh.
@@ -333,9 +354,9 @@ export function Tenants() {
         )}
       </div>
 
-      {/* Active tenants vs prospective applicants */}
+      {/* Current tenants vs terminated tenancies vs prospective applicants */}
       <div className="flex gap-1 border-b border-line -mt-2">
-        {([['active', 'Current tenants'], ['prospective', 'Prospective']] as const).map(([key, label]) => (
+        {([['active', 'Current tenants'], ['terminated', 'Terminated'], ['prospective', 'Prospective']] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -354,7 +375,8 @@ export function Tenants() {
         <ProspectiveTenantsPanel canCreate={canCreateTenant} />
       ) : (
       <>
-      {/* Stats */}
+      {/* Stats (current tenants only — expiry/revenue don't apply to former tenants) */}
+      {view === 'active' && (
       <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         {statCards.map(s => {
           const active = s.filter && expiringOnly;
@@ -382,6 +404,7 @@ export function Tenants() {
           );
         })}
       </div>
+      )}
 
       {/* Search */}
       <div className="flex flex-col sm:flex-row gap-3 items-center">
@@ -466,20 +489,27 @@ export function Tenants() {
                     </td>
 
                     <td className="py-4 px-4">
-                      {property || unit ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-sm text-ink">
-                            <Home className="h-3.5 w-3.5 text-faint" />
-                            <span>{property?.name || '—'}</span>
+                      {(() => {
+                        // For terminated tenancies the unit may since have been
+                        // deleted, so fall back to the labels snapshotted at
+                        // termination time.
+                        const propLabel = property?.name || lease?.endedPropertyLabel;
+                        const unitLabel = unit ? `Unit ${unit.unitNumber}` : lease?.endedUnitLabel;
+                        return propLabel || unitLabel ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-ink">
+                              <Home className="h-3.5 w-3.5 text-faint" />
+                              <span>{propLabel || '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted">
+                              <DoorOpen className="h-3.5 w-3.5 text-faint" />
+                              <span>{unitLabel || '—'}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-muted">
-                            <DoorOpen className="h-3.5 w-3.5 text-faint" />
-                            <span>{unit ? `Unit ${unit.unitNumber}` : '—'}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-faint">—</span>
-                      )}
+                        ) : (
+                          <span className="text-sm text-faint">—</span>
+                        );
+                      })()}
                     </td>
 
                     <td className="py-4 px-4">
@@ -522,7 +552,14 @@ export function Tenants() {
                         lease.needsReview ? (
                           <Badge variant="warning">Pending review</Badge>
                         ) : (
-                          <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                            {lease.status === 'ended' && lease.endReason && (
+                              <span className="text-[11px] text-muted max-w-[160px] truncate" title={lease.endReason}>
+                                {lease.endReason}
+                              </span>
+                            )}
+                          </div>
                         )
                       ) : (
                         <Badge variant="outline">No tenancy</Badge>
@@ -538,9 +575,17 @@ export function Tenants() {
           {filteredGroups.length === 0 && (
             <div className="text-center py-16">
               <Users className="h-10 w-10 mx-auto text-faint mb-3" />
-              <h3 className="font-medium text-ink">No people found</h3>
+              <h3 className="font-medium text-ink">
+                {view === 'terminated' ? 'No terminated tenancies' : 'No people found'}
+              </h3>
               <p className="text-sm text-muted mt-1">
-                {expiringOnly ? 'No leases are expiring in the next 60 days.' : 'Try adjusting your search.'}
+                {view === 'terminated'
+                  ? searchTerm
+                    ? 'Try adjusting your search.'
+                    : 'Tenancies you terminate will appear here.'
+                  : expiringOnly
+                    ? 'No leases are expiring in the next 60 days.'
+                    : 'Try adjusting your search.'}
               </p>
             </div>
           )}
