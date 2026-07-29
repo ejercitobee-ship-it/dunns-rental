@@ -91,6 +91,48 @@ export function passwordResetEmail(resetUrl: string, name?: string) {
 }
 
 /** Monthly "your rent is due" reminder, sent on the rent due day. */
+/** Email sent to a prospective tenant with their secure, no-login signing link. */
+export function signingLinkEmail(url: string, name?: string) {
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+  const text = [
+    greeting,
+    '',
+    'Your documents from MH Dunn Property are ready to review and sign.',
+    'Open this secure link to view them and upload your signed copies. No account or password is needed:',
+    url,
+    '',
+    'If you have any questions, just reply to this email or call the office.',
+    '',
+    'The MH Dunn Property Team',
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${greeting}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Your documents are ready to review and sign. Open the secure link below to view them and upload your signed copies. No account or password is needed.
+      </p>
+      <p style="margin:0 0 24px;">
+        <a href="${url}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          Review and sign your documents
+        </a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#75726a;line-height:1.55;">
+        If the button does not work, paste this into your browser:
+      </p>
+      <p style="margin:0 0 24px;font-size:12px;color:#75726a;word-break:break-all;">${url}</p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Questions? Just reply to this email or call the office.<br>The MH Dunn Property Team
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: 'Your MH Dunn Property documents are ready to sign', html, text };
+}
+
 export function rentReminderEmail(opts: {
   monthLabel: string;
   portalUrl: string;

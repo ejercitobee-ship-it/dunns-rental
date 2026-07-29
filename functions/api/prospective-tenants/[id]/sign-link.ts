@@ -1,6 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { getProspective } from '../../../lib/prospective';
+import { sendEmail, signingLinkEmail } from '../../../lib/email';
+import { SITE_URL } from '../../../lib/site';
 
 /**
  * POST /api/prospective-tenants/:id/sign-link — mint (or reuse) a secure, no-
@@ -30,7 +32,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'UPDATE prospective_tenants SET sign_token = ?, status = ?, updated_at = unixepoch() WHERE id = ?'
     ).bind(token, status, id).run();
 
-    return jsonOk({ success: true, data: { token } });
+    // Email the applicant the link automatically when they have an email on
+    // file. Best-effort: a mail failure never blocks the link being usable.
+    const email = (applicant.email as string) || '';
+    const url = `${SITE_URL}/sign/${token}`;
+    if (email) {
+      context.waitUntil(
+        sendEmail(env, { to: email, ...signingLinkEmail(url, applicant.first_name as string) })
+          .catch((e) => console.error('signing link email failed', e))
+      );
+    }
+
+    return jsonOk({ success: true, data: { token, emailedTo: email || null } });
   } catch {
     return serverError();
   }

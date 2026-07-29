@@ -36,6 +36,7 @@ export function ProspectiveTenantDetail() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [toDelete, setToDelete] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
+  const [emailedTo, setEmailedTo] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
@@ -73,8 +74,10 @@ export function ProspectiveTenantDetail() {
     if (!id || linkBusy) return;
     setLinkBusy(true);
     try {
-      const { token } = await prospectiveApi.signLink(id);
+      const { token, emailedTo: sentTo } = await prospectiveApi.signLink(id);
       setSignLink(`${window.location.origin}/sign/${token}`);
+      setEmailedTo(sentTo ?? null);
+      if (sentTo) showToast(`Signing link emailed to ${sentTo}.`, 'success');
       // Sending the link moves an untouched applicant to "docs sent".
       setApplicant(prev => (prev && prev.status === 'applied' ? { ...prev, status: 'docs_sent' } : prev));
     } catch (err) {
@@ -275,14 +278,23 @@ export function ProspectiveTenantDetail() {
                   {linkBusy ? 'Creating...' : signLink ? 'New link' : 'Get link'}
                 </Button>
               </div>
-              <p className="text-xs text-muted">Send this to the applicant. They can view and upload their signed documents with no login.</p>
+              <p className="text-xs text-muted">
+                Getting the link emails it to the applicant automatically (when they have an email on file). They can view and upload their signed documents with no login. You can also copy it to send by text.
+              </p>
               {signLink && (
-                <div className="flex items-center gap-2">
-                  <input readOnly value={signLink} className="flex-1 min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink" onFocus={e => e.currentTarget.select()} />
-                  <Button size="sm" variant="outline" onClick={copyLink} className="flex-shrink-0">
-                    {copied ? <><Copy className="h-4 w-4 mr-1.5" /> Copied</> : <><Copy className="h-4 w-4 mr-1.5" /> Copy</>}
-                  </Button>
-                </div>
+                <>
+                  <p className="text-xs font-medium">
+                    {emailedTo
+                      ? <span className="text-primary">Emailed to {emailedTo}.</span>
+                      : <span className="text-warning">No email on file, copy the link and send it manually.</span>}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={signLink} className="flex-1 min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink" onFocus={e => e.currentTarget.select()} />
+                    <Button size="sm" variant="outline" onClick={copyLink} className="flex-shrink-0">
+                      <Copy className="h-4 w-4 mr-1.5" /> {copied ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
+                </>
               )}
             </div>
           )}

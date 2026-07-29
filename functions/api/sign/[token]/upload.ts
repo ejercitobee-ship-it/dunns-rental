@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { getProspectiveByToken } from '../../../lib/prospective';
-import { ensureRootFolder, uploadToDrive, DriveNotConnected } from '../../../lib/google';
+import { ensureProspectiveFolder, uploadToDrive, DriveNotConnected } from '../../../lib/google';
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
 
@@ -23,7 +23,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (file.size > MAX_BYTES) return jsonError('File is too large (max 15 MB)', 413);
 
     const who = `${applicant.first_name} ${applicant.last_name}`.trim();
-    const folderId = await ensureRootFolder(env);
+    const folderId = await ensureProspectiveFolder(env);
     const uploaded = await uploadToDrive(
       env, folderId, `${who} - SIGNED - ${file.name}`, file.type || 'application/octet-stream', file
     );

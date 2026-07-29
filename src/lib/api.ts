@@ -780,8 +780,9 @@ export const prospectiveApi = {
   },
   convert: (id: string, data: { unitId: string; monthlyRent: number; moveInFee?: number; moveInFeePaid?: boolean; startDate?: string; endDate?: string }): Promise<{ tenantId: string }> =>
     apiRequest(`/prospective-tenants/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
-  // Mint (or reuse) the applicant's secure, no-login signing token.
-  signLink: (id: string): Promise<{ token: string }> =>
+  // Mint (or reuse) the applicant's secure, no-login signing token; emails it to
+  // the applicant automatically when they have an email on file.
+  signLink: (id: string): Promise<{ token: string; emailedTo?: string | null }> =>
     apiRequest(`/prospective-tenants/${id}/sign-link`, { method: 'POST' }),
 };
 

@@ -14,11 +14,13 @@ const KEY_ACCESS_EXPIRES = 'google_access_expires_at';
 const KEY_ROOT_FOLDER = 'google_root_folder_id';
 const KEY_PHOTO_FOLDER = 'google_photo_folder_id';
 const KEY_MAINTENANCE_FOLDER = 'google_maintenance_folder_id';
+const KEY_PROSPECTIVE_FOLDER = 'google_prospective_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
 const PHOTO_FOLDER_NAME = 'Profile Photos';
 const MAINTENANCE_FOLDER_NAME = 'Maintenance Photos';
+const PROSPECTIVE_FOLDER_NAME = 'Prospective Tenants';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -273,6 +275,23 @@ async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<st
   await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
     .bind(id, unit.unit_id)
     .run();
+  return id;
+}
+
+/**
+ * The shared "Prospective Tenants" folder under the root, holding applicants'
+ * documents (application, lease, signed copies) so they are kept apart from
+ * active tenants' folders. Created and remembered on first use.
+ */
+export async function ensureProspectiveFolder(env: Env): Promise<string> {
+  const existing = await getSetting(env, KEY_PROSPECTIVE_FOLDER);
+  if (existing) {
+    const status = await folderStatus(env, existing);
+    if (status !== 'gone') return existing;
+  }
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, PROSPECTIVE_FOLDER_NAME, root)) ?? (await createFolder(env, PROSPECTIVE_FOLDER_NAME, root));
+  await putSetting(env, KEY_PROSPECTIVE_FOLDER, id);
   return id;
 }
 
