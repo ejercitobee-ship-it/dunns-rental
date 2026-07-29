@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   FileText, Download, Calculator, TrendingDown, TrendingUp,
   DollarSign, Home, Percent, AlertCircle
@@ -6,9 +6,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, yearOf, monthOf } from '../lib/utils';
+import { formatCurrency, yearOf, monthOf, getMonthName } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { rentIncomeForYear } from '../lib/rent';
+import { rentIncomeForMonths } from '../lib/rent';
 import {
   BarChart,
   Bar,
@@ -42,192 +42,255 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   other: { label: 'Other', description: 'Other deductible expenses' },
 };
 
+/** Map an expense category to its IRS Schedule E tax category. */
+function mapToTaxCategory(expenseCategory: string): string {
+  const mapping: Record<string, string> = {
+    maintenance: 'cleaning_maintenance',
+    utilities: 'utilities',
+    insurance: 'insurance',
+    taxes: 'taxes',
+    mortgage: 'mortgage_interest',
+    repairs: 'repairs',
+    cleaning: 'cleaning_maintenance',
+    landscaping: 'cleaning_maintenance',
+    management: 'management_fees',
+    other: 'other',
+  };
+  return mapping[expenseCategory] || 'other';
+}
+
 export function TaxReport() {
   const { expenses, incomes, properties, rentPayments, leases } = useApp();
-  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
+  const now = new Date();
+  // Main period.
+  const [scope, setScope] = useState<'year' | 'quarter' | 'month'>('year');
+  const [year, setYear] = useState(now.getFullYear());
+  const [quarter, setQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  // Comparison period (same scope), defaulting to the year before.
+  const [compare, setCompare] = useState(false);
+  const [cYear, setCYear] = useState(now.getFullYear() - 1);
+  const [cQuarter, setCQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
+  const [cMonth, setCMonth] = useState(now.getMonth() + 1);
 
-  const taxYearData = useMemo(() => {
-    const year = parseInt(yearFilter);
-    const yearExpenses = expenses.filter(e => yearOf(e.date) === year);
-    const yearIncome = incomes.filter(i => yearOf(i.date) === year);
-    // Rent actually collected lives in rent payments, not the incomes table.
-    const yearPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === year);
+  // 1-12 months covered by a scope selection.
+  const monthsFor = (sc: 'year' | 'quarter' | 'month', q: number, m: number): number[] =>
+    sc === 'year' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    : sc === 'quarter' ? [(q - 1) * 3 + 1, (q - 1) * 3 + 2, (q - 1) * 3 + 3]
+    : [m];
 
-    // Income summary. rentIncomeForYear is the ONE definition of taxable rent
-    // income (money received that year, whatever month it settles against),
-    // shared with Rent Management's Tax tab so the two pages cannot disagree.
-    const rentIncome = rentIncomeForYear(rentPayments, year);
-    const lateFeeIncome = yearIncome
-      .filter(i => i.source === 'late_fee')
-      .reduce((sum, i) => sum + i.amount, 0);
-    const otherIncome = yearIncome
-      .filter(i => i.source === 'other' || i.source === 'deposit')
-      .reduce((sum, i) => sum + i.amount, 0);
+  const periodLabel = (sc: 'year' | 'quarter' | 'month', y: number, q: number, m: number): string =>
+    sc === 'year' ? `${y}` : sc === 'quarter' ? `Q${q} ${y}` : `${getMonthName(m)} ${y}`;
+
+  // All the tax figures for a period (year + set of months). Reused for the main
+  // period and, when comparing, the comparison period, so they cannot disagree.
+  const periodData = useCallback((y: number, months: number[]) => {
+    const inP = (d: string) => yearOf(d) === y && months.includes(monthOf(d));
+    const pExpenses = expenses.filter(e => inP(e.date));
+    const pIncome = incomes.filter(i => inP(i.date));
+    const pPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === y && months.includes(p.month));
+
+    // rentIncomeForMonths is the shared definition of taxable rent income, so
+    // this matches Rent Management's Tax tab for the same months.
+    const rentIncome = rentIncomeForMonths(rentPayments, months, y);
+    const lateFeeIncome = pIncome.filter(i => i.source === 'late_fee').reduce((s, i) => s + i.amount, 0);
+    const otherIncome = pIncome.filter(i => i.source === 'other' || i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
     const totalIncome = rentIncome + lateFeeIncome + otherIncome;
 
-    // Expense summary by tax category
     const expensesByCategory: Record<string, number> = {};
     let totalDeductibleExpenses = 0;
-
-    yearExpenses.forEach(e => {
+    pExpenses.forEach(e => {
       const taxCat = e.taxCategory || mapToTaxCategory(e.category);
       expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + e.amount;
-      if (e.taxDeductible !== false) {
-        totalDeductibleExpenses += e.amount;
-      }
+      if (e.taxDeductible !== false) totalDeductibleExpenses += e.amount;
     });
-
     const netIncome = totalIncome - totalDeductibleExpenses;
 
-    // RentPayment no longer carries its own propertyId: join through the
-    // lease it belongs to instead.
     const leasePropertyId = new Map(leases.map(l => [l.id, l.propertyId]));
-
-    // Property breakdown
     const propertyBreakdown = properties.map(p => {
-      const propertyExpenses = yearExpenses
-        .filter(e => e.propertyId === p.id)
-        .reduce((sum, e) => sum + (e.taxDeductible !== false ? e.amount : 0), 0);
-      const propertyRent = yearPaidRent
-        .filter(pmt => leasePropertyId.get(pmt.leaseId) === p.id)
-        .reduce((sum, pmt) => sum + pmt.amount, 0);
-      const propertyOther = yearIncome
-        .filter(i => i.propertyId === p.id && i.source !== 'rent')
-        .reduce((sum, i) => sum + i.amount, 0);
+      const propertyExpenses = pExpenses.filter(e => e.propertyId === p.id).reduce((s, e) => s + (e.taxDeductible !== false ? e.amount : 0), 0);
+      const propertyRent = pPaidRent.filter(pmt => leasePropertyId.get(pmt.leaseId) === p.id).reduce((s, pmt) => s + pmt.amount, 0);
+      const propertyOther = pIncome.filter(i => i.propertyId === p.id && i.source !== 'rent').reduce((s, i) => s + i.amount, 0);
       const propertyIncome = propertyRent + propertyOther;
-
-      return {
-        name: p.name,
-        income: propertyIncome,
-        expenses: propertyExpenses,
-        netIncome: propertyIncome - propertyExpenses,
-      };
+      return { name: p.name, income: propertyIncome, expenses: propertyExpenses, netIncome: propertyIncome - propertyExpenses };
     });
 
-    // Quarterly breakdown
-    const quarters = [
-      { name: 'Q1', months: [0, 1, 2] },
-      { name: 'Q2', months: [3, 4, 5] },
-      { name: 'Q3', months: [6, 7, 8] },
-      { name: 'Q4', months: [9, 10, 11] },
-    ];
-
-    const quarterlyData = quarters.map(q => {
-      // rentPayments store month as 1-12; quarters here are 0-indexed months.
-      const qMonths = q.months.map(m => m + 1);
-      const qRent = yearPaidRent
-        .filter(p => qMonths.includes(p.month))
-        .reduce((sum, p) => sum + p.amount, 0);
-      const qOther = yearIncome
-        .filter(i => i.source !== 'rent' && qMonths.includes(monthOf(i.date)))
-        .reduce((sum, i) => sum + i.amount, 0);
-      const qIncome = qRent + qOther;
-      const qExpenses = yearExpenses
-        .filter(e => qMonths.includes(monthOf(e.date)))
-        .reduce((sum, e) => sum + (e.taxDeductible !== false ? e.amount : 0), 0);
-
-      return {
-        name: q.name,
-        income: qIncome,
-        expenses: qExpenses,
-        netIncome: qIncome - qExpenses,
-      };
+    // Income/expenses per month across the selected months, for the chart.
+    const breakdown = months.map(m => {
+      const mRent = pPaidRent.filter(p => p.month === m).reduce((s, p) => s + p.amount, 0);
+      const mOther = pIncome.filter(i => i.source !== 'rent' && monthOf(i.date) === m).reduce((s, i) => s + i.amount, 0);
+      const mInc = mRent + mOther;
+      const mExp = pExpenses.filter(e => monthOf(e.date) === m).reduce((s, e) => s + (e.taxDeductible !== false ? e.amount : 0), 0);
+      return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return {
-      totalIncome,
-      rentIncome,
-      lateFeeIncome,
-      otherIncome,
-      totalDeductibleExpenses,
-      netIncome,
-      expensesByCategory,
-      propertyBreakdown,
-      quarterlyData,
-    };
-  }, [expenses, incomes, properties, rentPayments, leases, yearFilter]);
+    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, totalDeductibleExpenses, netIncome, expensesByCategory, propertyBreakdown, breakdown };
+  }, [expenses, incomes, properties, rentPayments, leases]);
+
+  const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
+  const comp = useMemo(() => (compare ? periodData(cYear, monthsFor(scope, cQuarter, cMonth)) : null), [compare, periodData, cYear, scope, cQuarter, cMonth]);
+  const mainLabel = periodLabel(scope, year, quarter, month);
+  const compLabel = periodLabel(scope, cYear, cQuarter, cMonth);
 
   const expenseChartData = useMemo(() => {
-    return Object.entries(taxYearData.expensesByCategory)
-      .map(([key, value]) => ({
-        name: TAX_CATEGORIES[key]?.label || key,
-        value,
-      }))
+    return Object.entries(main.expensesByCategory)
+      .map(([key, value]) => ({ name: TAX_CATEGORIES[key]?.label || key, value }))
       .sort((a, b) => b.value - a.value);
-  }, [taxYearData.expensesByCategory]);
-
-  function mapToTaxCategory(expenseCategory: string): string {
-    const mapping: Record<string, string> = {
-      maintenance: 'cleaning_maintenance',
-      utilities: 'utilities',
-      insurance: 'insurance',
-      taxes: 'taxes',
-      mortgage: 'mortgage_interest',
-      repairs: 'repairs',
-      cleaning: 'cleaning_maintenance',
-      landscaping: 'cleaning_maintenance',
-      management: 'management_fees',
-      other: 'other',
-    };
-    return mapping[expenseCategory] || 'other';
-  }
+  }, [main.expensesByCategory]);
 
   const exportTaxReport = () => {
     const report = {
-      year: yearFilter,
       generatedAt: new Date().toISOString(),
-      income: {
-        total: taxYearData.totalIncome,
-        rent: taxYearData.rentIncome,
-        lateFees: taxYearData.lateFeeIncome,
-        other: taxYearData.otherIncome,
-      },
-      expenses: taxYearData.expensesByCategory,
-      netIncome: taxYearData.netIncome,
+      period: mainLabel,
+      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, other: main.otherIncome },
+      deductibleExpenses: main.expensesByCategory,
+      totalDeductibleExpenses: main.totalDeductibleExpenses,
+      netIncome: main.netIncome,
+      comparison: comp ? {
+        period: compLabel,
+        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, other: comp.otherIncome },
+        deductibleExpenses: comp.expensesByCategory,
+        totalDeductibleExpenses: comp.totalDeductibleExpenses,
+        netIncome: comp.netIncome,
+      } : undefined,
     };
-
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tax-report-${yearFilter}.json`;
+    a.download = `tax-report-${mainLabel.replace(/\s+/g, '-')}.json`;
     a.click();
   };
 
+  const selectCls = 'px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/25';
+  const YEARS = Array.from({ length: 12 }, (_, i) => now.getFullYear() + 1 - i);
+  const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tax Report</h1>
-          <p className="text-muted mt-1">
-            Annual tax summary and deductible expenses
+          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tax Report</h1>
+          <p className="text-muted mt-1 text-sm">
+            Tax summary and deductible expenses for {mainLabel}{comp ? ` vs ${compLabel}` : ''}.
           </p>
         </div>
-        <div className="flex gap-2">
-          <select
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
-          >
-            <option value="2030">2030</option>
-            <option value="2029">2029</option>
-            <option value="2028">2028</option>
-            <option value="2027">2027</option>
-            <option value="2026">2026</option>
-            <option value="2025">2025</option>
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-            <option value="2021">2021</option>
-            <option value="2020">2020</option>
-            <option value="2019">2019</option>
-          </select>
-          <Button variant="outline" onClick={exportTaxReport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
-        </div>
+        <Button variant="outline" onClick={exportTaxReport} className="flex-shrink-0">
+          <Download className="h-4 w-4 mr-2" />
+          Export
+        </Button>
       </div>
+
+      {/* Period + comparison controls */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl border border-line bg-surface p-4">
+        <div>
+          <label className="block text-xs text-muted mb-1">Period</label>
+          <select className={selectCls} value={scope} onChange={(e) => setScope(e.target.value as 'year' | 'quarter' | 'month')}>
+            <option value="year">Year</option>
+            <option value="quarter">Quarter</option>
+            <option value="month">Month</option>
+          </select>
+        </div>
+        {scope === 'quarter' && (
+          <div>
+            <label className="block text-xs text-muted mb-1">Quarter</label>
+            <select className={selectCls} value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
+              {[1, 2, 3, 4].map(q => <option key={q} value={q}>Q{q}</option>)}
+            </select>
+          </div>
+        )}
+        {scope === 'month' && (
+          <div>
+            <label className="block text-xs text-muted mb-1">Month</label>
+            <select className={selectCls} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+              {MONTHS.map(m => <option key={m} value={m}>{getMonthName(m)}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <label className="block text-xs text-muted mb-1">Year</label>
+          <select className={selectCls} value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-ink pb-2 sm:ml-2">
+          <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} className="w-4 h-4 accent-[#24503f]" />
+          Compare
+        </label>
+
+        {compare && (
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-3 pl-0 sm:pl-3 sm:border-l border-line">
+            <span className="text-sm text-muted pb-2 hidden sm:inline">vs</span>
+            {scope === 'quarter' && (
+              <div>
+                <label className="block text-xs text-muted mb-1">Quarter</label>
+                <select className={selectCls} value={cQuarter} onChange={(e) => setCQuarter(Number(e.target.value))}>
+                  {[1, 2, 3, 4].map(q => <option key={q} value={q}>Q{q}</option>)}
+                </select>
+              </div>
+            )}
+            {scope === 'month' && (
+              <div>
+                <label className="block text-xs text-muted mb-1">Month</label>
+                <select className={selectCls} value={cMonth} onChange={(e) => setCMonth(Number(e.target.value))}>
+                  {MONTHS.map(m => <option key={m} value={m}>{getMonthName(m)}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="block text-xs text-muted mb-1">Year</label>
+              <select className={selectCls} value={cYear} onChange={(e) => setCYear(Number(e.target.value))}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Comparison summary (main vs comparison period) */}
+      {comp && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comparison: {mainLabel} vs {compLabel}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-canvas">
+                    <th className="text-left py-2.5 px-4 font-medium">Metric</th>
+                    <th className="text-right py-2.5 px-4 font-medium">{mainLabel}</th>
+                    <th className="text-right py-2.5 px-4 font-medium">{compLabel}</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    ['Total income', main.totalIncome, comp.totalIncome, true],
+                    ['Deductible expenses', main.totalDeductibleExpenses, comp.totalDeductibleExpenses, false],
+                    ['Net income', main.netIncome, comp.netIncome, true],
+                  ] as [string, number, number, boolean][]).map(([label, a, b, higherIsGood]) => {
+                    const diff = Math.round((a - b) * 100) / 100;
+                    const pct = b !== 0 ? (diff / Math.abs(b)) * 100 : (a !== 0 ? 100 : 0);
+                    const good = diff === 0 ? false : (diff > 0) === higherIsGood;
+                    return (
+                      <tr key={label} className="border-b border-line last:border-0">
+                        <td className="py-2.5 px-4 font-medium text-ink">{label}</td>
+                        <td className="py-2.5 px-4 text-right tnum">{formatCurrency(a)}</td>
+                        <td className="py-2.5 px-4 text-right tnum text-muted">{formatCurrency(b)}</td>
+                        <td className={`py-2.5 px-4 text-right tnum font-medium ${diff === 0 ? 'text-muted' : good ? 'text-positive' : 'text-danger'}`}>
+                          {diff >= 0 ? '+' : ''}{formatCurrency(diff)}{b !== 0 ? ` (${diff >= 0 ? '+' : ''}${pct.toFixed(0)}%)` : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -237,7 +300,7 @@ export function TaxReport() {
             <TrendingUp className="h-4 w-4 text-positive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-positive">{formatCurrency(taxYearData.totalIncome)}</div>
+            <div className="text-2xl font-bold text-positive">{formatCurrency(main.totalIncome)}</div>
             <p className="text-xs text-muted">Taxable rental income</p>
           </CardContent>
         </Card>
@@ -248,7 +311,7 @@ export function TaxReport() {
             <TrendingDown className="h-4 w-4 text-danger" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-danger">{formatCurrency(taxYearData.totalDeductibleExpenses)}</div>
+            <div className="text-2xl font-bold text-danger">{formatCurrency(main.totalDeductibleExpenses)}</div>
             <p className="text-xs text-muted">Total deductions</p>
           </CardContent>
         </Card>
@@ -259,8 +322,8 @@ export function TaxReport() {
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${taxYearData.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
-              {formatCurrency(taxYearData.netIncome)}
+            <div className={`text-2xl font-bold ${main.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
+              {formatCurrency(main.netIncome)}
             </div>
             <p className="text-xs text-muted">Income minus deductions</p>
           </CardContent>
@@ -273,8 +336,8 @@ export function TaxReport() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {taxYearData.totalIncome > 0
-                ? ((taxYearData.totalDeductibleExpenses / taxYearData.totalIncome) * 100).toFixed(1)
+              {main.totalIncome > 0
+                ? ((main.totalDeductibleExpenses / main.totalIncome) * 100).toFixed(1)
                 : 0}%
             </div>
             <p className="text-xs text-muted">Expense to income ratio</p>
@@ -286,11 +349,11 @@ export function TaxReport() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Quarterly Performance</CardTitle>
+            <CardTitle>{scope === 'month' ? 'Month total' : 'Monthly performance'}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={taxYearData.quarterlyData}>
+              <BarChart data={main.breakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
@@ -341,19 +404,19 @@ export function TaxReport() {
           <div className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b">
               <span className="font-medium">Rent Income</span>
-              <span className="font-bold">{formatCurrency(taxYearData.rentIncome)}</span>
+              <span className="font-bold">{formatCurrency(main.rentIncome)}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="font-medium">Late Fees</span>
-              <span className="font-bold">{formatCurrency(taxYearData.lateFeeIncome)}</span>
+              <span className="font-bold">{formatCurrency(main.lateFeeIncome)}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="font-medium">Other Income</span>
-              <span className="font-bold">{formatCurrency(taxYearData.otherIncome)}</span>
+              <span className="font-bold">{formatCurrency(main.otherIncome)}</span>
             </div>
             <div className="flex justify-between items-center py-2 text-lg">
               <span className="font-bold">Total Income</span>
-              <span className="font-bold text-positive">{formatCurrency(taxYearData.totalIncome)}</span>
+              <span className="font-bold text-positive">{formatCurrency(main.totalIncome)}</span>
             </div>
           </div>
         </CardContent>
@@ -379,7 +442,7 @@ export function TaxReport() {
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(taxYearData.expensesByCategory)
+                {Object.entries(main.expensesByCategory)
                   .sort(([, a], [, b]) => b - a)
                   .map(([key, value]) => (
                     <tr key={key} className="border-b last:border-0 hover:bg-canvas">
@@ -394,8 +457,8 @@ export function TaxReport() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <Badge variant="secondary">
-                          {taxYearData.totalDeductibleExpenses > 0
-                            ? ((value / taxYearData.totalDeductibleExpenses) * 100).toFixed(1)
+                          {main.totalDeductibleExpenses > 0
+                            ? ((value / main.totalDeductibleExpenses) * 100).toFixed(1)
                             : 0}%
                         </Badge>
                       </td>
@@ -427,7 +490,7 @@ export function TaxReport() {
                 </tr>
               </thead>
               <tbody>
-                {taxYearData.propertyBreakdown.map((p) => (
+                {main.propertyBreakdown.map((p) => (
                   <tr key={p.name} className="border-b last:border-0 hover:bg-canvas">
                     <td className="py-3 px-4 font-medium">{p.name}</td>
                     <td className="py-3 px-4 text-right text-positive">{formatCurrency(p.income)}</td>
