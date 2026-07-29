@@ -36,6 +36,7 @@ const TenantMaintenance = lazy(() => import('./pages/portal/TenantMaintenance').
 const TenantMessages = lazy(() => import('./pages/portal/TenantMessages').then(m => ({ default: m.TenantMessages })));
 const TenantDocuments = lazy(() => import('./pages/portal/TenantDocuments').then(m => ({ default: m.TenantDocuments })));
 const HandymanJobs = lazy(() => import('./pages/portal/HandymanJobs').then(m => ({ default: m.HandymanJobs })));
+const HandymanMessages = lazy(() => import('./pages/portal/HandymanMessages').then(m => ({ default: m.HandymanMessages })));
 const RealtorTenants = lazy(() => import('./pages/portal/RealtorTenants').then(m => ({ default: m.RealtorTenants })));
 const RealtorTenantDetail = lazy(() => import('./pages/portal/RealtorTenantDetail').then(m => ({ default: m.RealtorTenantDetail })));
 const RealtorDashboard = lazy(() => import('./pages/portal/RealtorDashboard').then(m => ({ default: m.RealtorDashboard })));
@@ -100,6 +101,13 @@ function PortalIndex() {
     return <HandymanJobs />;
   }
   return <TenantHome />;
+}
+
+// /portal/messages is shared: a handyman sees their vendor thread with the
+// office, a tenant sees their own thread.
+function PortalMessages() {
+  const { user } = useAuth();
+  return user?.roleId === 'handyman' ? <HandymanMessages /> : <TenantMessages />;
 }
 
 // The site root. A logged-out visitor sees the public homepage; a logged-in
@@ -203,7 +211,7 @@ function AppRoutes() {
 
       <Route path="/portal/messages" element={
         <PortalRoute>
-          <PortalLayout><TenantMessages /></PortalLayout>
+          <PortalLayout><PortalMessages /></PortalLayout>
         </PortalRoute>
       } />
 

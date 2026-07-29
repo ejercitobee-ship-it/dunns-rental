@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { serializeMessage, notifyTenantOfReply, tenantContact } from '../../lib/messages';
+import { serializeMessage, notifyTenantOfReply, tenantContact, readMessageInput, MAX_ATTACHMENT_BYTES } from '../../lib/messages';
+import { ensureTenantFolder, uploadToDrive, DriveNotConnected } from '../../lib/google';
 
 const MAX_BODY = 4000;
 
@@ -65,24 +66,33 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const who = await tenantContact(env, tenantId);
     if (!who) return jsonError('Tenant not found', 404);
 
-    const raw = (await request.json()) as { body?: string };
-    const body = (raw.body || '').trim();
-    if (!body) return jsonError('Please type a message.', 400);
+    const { body, file } = await readMessageInput(request);
+    if (!body && !file) return jsonError('Please type a message or attach a file.', 400);
     if (body.length > MAX_BODY) return jsonError('That message is too long.', 400);
+    if (file && file.size > MAX_ATTACHMENT_BYTES) return jsonError('That file is too large (max 15 MB).', 413);
+
+    // Office attachments to a tenant go into that tenant's Drive folder too.
+    let driveId: string | null = null;
+    if (file) {
+      const folderId = await ensureTenantFolder(env, tenantId);
+      const uploaded = await uploadToDrive(env, folderId, file.name, file.type || 'application/octet-stream', file);
+      driveId = uploaded.id;
+    }
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO messages (id, tenant_id, sender_role, sender_user_id, body, read_by_office, read_by_tenant)
-       VALUES (?, ?, 'office', ?, ?, 1, 0)`
-    ).bind(id, tenantId, auth.id, body).run();
+      `INSERT INTO messages (id, tenant_id, sender_role, sender_user_id, body, attachment_drive_id, attachment_name, attachment_type, read_by_office, read_by_tenant)
+       VALUES (?, ?, 'office', ?, ?, ?, ?, ?, 1, 0)`
+    ).bind(id, tenantId, auth.id, body, driveId, file?.name ?? null, file?.type ?? null).run();
 
     context.waitUntil(
-      notifyTenantOfReply(env, tenantId, body).catch((e) => console.error('notifyTenantOfReply failed', e))
+      notifyTenantOfReply(env, tenantId, body || '(sent an attachment)').catch((e) => console.error('notifyTenantOfReply failed', e))
     );
 
     const row = await env.DB.prepare('SELECT * FROM messages WHERE id = ?').bind(id).first();
     return jsonOk({ success: true, data: serializeMessage(row as Record<string, unknown>) }, 201);
-  } catch {
+  } catch (err) {
+    if (err instanceof DriveNotConnected) return jsonError('Attachments are unavailable right now. Please try again without the file.', 503);
     return serverError();
   }
 };

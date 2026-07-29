@@ -5,6 +5,26 @@ import { SITE_URL } from './site';
 
 type Row = Record<string, unknown>;
 
+export const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 MB
+
+/**
+ * Read a message-send request, which may be JSON (body only) or multipart
+ * (body + an optional file). Kept in one place so the tenant, office, and
+ * handyman send endpoints agree on how they parse input.
+ */
+export async function readMessageInput(request: Request): Promise<{ body: string; file: File | null }> {
+  const ct = request.headers.get('content-type') || '';
+  if (ct.includes('multipart/form-data')) {
+    const form = await request.formData();
+    const body = String(form.get('body') || '').trim();
+    const f = form.get('file') as unknown as File | null;
+    const file = f && typeof f.arrayBuffer === 'function' ? f : null;
+    return { body, file };
+  }
+  const raw = (await request.json().catch(() => ({}))) as { body?: string };
+  return { body: (raw.body || '').trim(), file: null };
+}
+
 /** One message in a tenant/office thread, camelCased for the app. */
 export function serializeMessage(r: Row) {
   return {
@@ -13,6 +33,11 @@ export function serializeMessage(r: Row) {
     senderRole: r.sender_role,
     body: r.body,
     createdAt: r.created_at,
+    // An attachment is served through the generic /api/photo route (any Drive
+    // file, images inline). The drive id only ever reaches thread participants.
+    attachmentUrl: r.attachment_drive_id ? `/api/photo/${r.attachment_drive_id}` : undefined,
+    attachmentName: r.attachment_name ?? undefined,
+    attachmentType: r.attachment_type ?? undefined,
   };
 }
 

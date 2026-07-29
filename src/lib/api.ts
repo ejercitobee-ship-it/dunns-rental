@@ -547,6 +547,32 @@ export interface Message {
   senderRole: 'tenant' | 'office';
   body: string;
   createdAt: number;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: string;
+}
+
+/** One message in an office<->handyman (vendor) thread. */
+export interface VendorMessage {
+  id: string;
+  handymanId: string;
+  senderRole: 'office' | 'handyman';
+  body: string;
+  createdAt: number;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: string;
+}
+
+/** A row in the office's vendor inbox: one handyman's thread summary. */
+export interface VendorThread {
+  handymanId: string;
+  name: string;
+  phone: string | null;
+  lastBody: string | null;
+  lastSender: 'office' | 'handyman' | null;
+  lastAt: number | null;
+  unread: number;
 }
 
 /** A row in the office inbox: one tenant's thread summary. */
@@ -666,8 +692,13 @@ export const portalApi = {
   // read; count is the cheap unread lookup for the nav badge.
   messages: (): Promise<{ messages: Message[] }> => apiRequest('/portal/messages'),
   messagesUnread: (): Promise<{ count: number }> => apiRequest('/portal/messages?count=1'),
-  sendMessage: (body: string): Promise<Message> =>
-    apiRequest('/portal/messages', { method: 'POST', body: JSON.stringify({ body }) }),
+  sendMessage: (body: string, file?: File | null): Promise<Message> =>
+    postMessageForm('/portal/messages', body, file),
+  // A handyman's own thread with the office (vendor messaging).
+  vendorMessages: (): Promise<{ messages: VendorMessage[] }> => apiRequest('/portal/handyman/messages'),
+  vendorMessagesUnread: (): Promise<{ count: number }> => apiRequest('/portal/handyman/messages?count=1'),
+  sendVendorMessage: (body: string, file?: File | null): Promise<VendorMessage> =>
+    postMessageForm('/portal/handyman/messages', body, file),
 };
 
 export const photoApi = {
@@ -689,6 +720,20 @@ async function postPhoto(path: string, file: Blob): Promise<{ photoUrl: string }
   }
   const data = await res.json();
   return data.data !== undefined ? data.data : data;
+}
+
+/** Send a message (text plus an optional attachment) as multipart form-data. */
+async function postMessageForm<T>(path: string, body: string, file?: File | null): Promise<T> {
+  const fd = new FormData();
+  fd.append('body', body);
+  if (file) fd.append('file', file);
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', credentials: 'include', body: fd });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to send' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return (data.data !== undefined ? data.data : data) as T;
 }
 
 // Maintenance API
@@ -847,6 +892,16 @@ export const messagesApi = {
     messages: Message[];
   }> =>
     apiRequest(`/messages/${tenantId}`),
-  reply: (tenantId: string, body: string): Promise<Message> =>
-    apiRequest(`/messages/${tenantId}`, { method: 'POST', body: JSON.stringify({ body }) }),
+  reply: (tenantId: string, body: string, file?: File | null): Promise<Message> =>
+    postMessageForm(`/messages/${tenantId}`, body, file),
+};
+
+// Office side of vendor (handyman) messaging: the inbox, one thread, and replies.
+export const vendorMessagesApi = {
+  threads: (): Promise<{ threads: VendorThread[] }> => apiRequest('/handyman-messages'),
+  unreadCount: (): Promise<{ count: number }> => apiRequest('/handyman-messages?count=1'),
+  thread: (handymanId: string): Promise<{ handymanId: string; handymanName: string; messages: VendorMessage[] }> =>
+    apiRequest(`/handyman-messages/${handymanId}`),
+  reply: (handymanId: string, body: string, file?: File | null): Promise<VendorMessage> =>
+    postMessageForm(`/handyman-messages/${handymanId}`, body, file),
 };

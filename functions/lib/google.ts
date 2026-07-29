@@ -15,12 +15,14 @@ const KEY_ROOT_FOLDER = 'google_root_folder_id';
 const KEY_PHOTO_FOLDER = 'google_photo_folder_id';
 const KEY_MAINTENANCE_FOLDER = 'google_maintenance_folder_id';
 const KEY_PROSPECTIVE_FOLDER = 'google_prospective_folder_id';
+const KEY_VENDORS_FOLDER = 'google_vendors_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
 const PHOTO_FOLDER_NAME = 'Profile Photos';
 const MAINTENANCE_FOLDER_NAME = 'Maintenance Photos';
 const PROSPECTIVE_FOLDER_NAME = 'Prospective Tenants';
+const VENDORS_FOLDER_NAME = 'Vendors';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -292,6 +294,39 @@ export async function ensureProspectiveFolder(env: Env): Promise<string> {
   const root = await ensureRootFolder(env);
   const id = (await findFolder(env, PROSPECTIVE_FOLDER_NAME, root)) ?? (await createFolder(env, PROSPECTIVE_FOLDER_NAME, root));
   await putSetting(env, KEY_PROSPECTIVE_FOLDER, id);
+  return id;
+}
+
+/** The shared "Vendors" folder under the root. */
+async function ensureVendorsRoot(env: Env): Promise<string> {
+  const existing = await getSetting(env, KEY_VENDORS_FOLDER);
+  if (existing) {
+    const status = await folderStatus(env, existing);
+    if (status !== 'gone') return existing;
+  }
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, VENDORS_FOLDER_NAME, root)) ?? (await createFolder(env, VENDORS_FOLDER_NAME, root));
+  await putSetting(env, KEY_VENDORS_FOLDER, id);
+  return id;
+}
+
+/**
+ * A handyman's own Drive folder under "Vendors", for files exchanged with them
+ * in messaging. Created and remembered on handymen.drive_folder_id. Returns null
+ * when the handyman does not exist.
+ */
+export async function ensureVendorFolder(env: Env, handymanId: string): Promise<string | null> {
+  const h = await env.DB.prepare('SELECT id, name, drive_folder_id FROM handymen WHERE id = ?')
+    .bind(handymanId)
+    .first<{ id: string; name: string | null; drive_folder_id: string | null }>();
+  if (!h?.id) return null;
+  if (h.drive_folder_id) {
+    const status = await folderStatus(env, h.drive_folder_id);
+    if (status !== 'gone') return h.drive_folder_id;
+  }
+  const parent = await ensureVendorsRoot(env);
+  const id = await createFolder(env, (h.name || 'Vendor').trim() || 'Vendor', parent);
+  await env.DB.prepare('UPDATE handymen SET drive_folder_id = ? WHERE id = ?').bind(id, h.id).run();
   return id;
 }
 

@@ -1,125 +1,139 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Send, MessageSquare, ArrowLeft, ExternalLink } from 'lucide-react';
+import { MessageSquare, ArrowLeft, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { messagesApi, placeLabel, type Message, type MessageThread } from '../lib/api';
+import { messagesApi, vendorMessagesApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
+import { MessageThread as ThreadView, type ChatItem } from '../components/MessageThread';
 
-/** A real instant (unix seconds), so toLocaleString is correct here. */
-function formatWhen(createdAt: number): string {
-  return new Date(createdAt * 1000).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+type Channel = 'tenant' | 'vendor';
+type AnyMessage = Message | VendorMessage;
+
+/** One inbox row, normalized so the list renders the same for both channels. */
+interface InboxRow {
+  id: string;
+  title: string;
+  subtitle?: string;
+  unread: number;
+  lastBody: string | null;
+  lastSender: 'office' | 'tenant' | 'handyman' | null;
 }
 
 export function Messages() {
   const { showToast } = useToast();
-  const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [channel, setChannel] = useState<Channel>('tenant');
+  const [tenantThreads, setTenantThreads] = useState<MessageThread[]>([]);
+  const [vendorThreads, setVendorThreads] = useState<VendorThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [openName, setOpenName] = useState('');
   const [openPlace, setOpenPlace] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<AnyMessage[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
-  const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   const threadsPollRef = useRef(false);
   const openPollRef = useRef(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Poll-safe inbox refresh: ignores transient errors and never overlaps, so it
-  // is safe to call on a timer. The initial load below owns the error state.
+  const rows: InboxRow[] = channel === 'tenant'
+    ? tenantThreads.map((t) => ({
+        id: t.tenantId,
+        title: `${t.firstName} ${t.lastName}`.trim(),
+        subtitle: placeLabel(t) || undefined,
+        unread: t.unread,
+        lastBody: t.lastBody,
+        lastSender: t.lastSender,
+      }))
+    : vendorThreads.map((v) => ({
+        id: v.handymanId,
+        title: v.name,
+        subtitle: v.phone || undefined,
+        unread: v.unread,
+        lastBody: v.lastBody,
+        lastSender: v.lastSender,
+      }));
+
   const refreshThreads = useCallback(async () => {
     if (threadsPollRef.current) return;
     threadsPollRef.current = true;
     try {
-      const res = await messagesApi.threads();
-      setThreads(res.threads);
+      const [t, v] = await Promise.all([messagesApi.threads(), vendorMessagesApi.threads()]);
+      setTenantThreads(t.threads);
+      setVendorThreads(v.threads);
     } catch {
-      // Ignore during polling.
+      /* ignore during polling */
     } finally {
       threadsPollRef.current = false;
     }
   }, []);
 
-  // Poll-safe refresh of the open conversation: swaps the list only when it
-  // actually changed, so the panel does not flicker or re-scroll on every tick.
-  const refreshOpenThread = useCallback(async (tenantId: string) => {
+  const refreshOpenThread = useCallback(async (id: string, ch: Channel) => {
     if (openPollRef.current) return;
     openPollRef.current = true;
     try {
-      const res = await messagesApi.thread(tenantId);
+      const res = ch === 'tenant' ? await messagesApi.thread(id) : await vendorMessagesApi.thread(id);
       setMessages((prev) => {
-        const next = res.messages;
-        const same =
-          next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
+        const next = res.messages as AnyMessage[];
+        const same = next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
         return same ? prev : next;
       });
     } catch {
-      // Ignore during polling.
+      /* ignore during polling */
     } finally {
       openPollRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    messagesApi.threads()
-      .then((res) => setThreads(res.threads))
+    Promise.all([messagesApi.threads(), vendorMessagesApi.threads()])
+      .then(([t, v]) => { setTenantThreads(t.threads); setVendorThreads(v.threads); })
       .catch((err) => setError((err as Error).message || 'Could not load messages.'))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages]);
-
-  // Live inbox: refresh the thread list every 5s while the tab is visible.
-  useEffect(() => {
-    const tick = () => {
-      if (document.visibilityState === 'visible') refreshThreads();
-    };
+    const tick = () => { if (document.visibilityState === 'visible') refreshThreads(); };
     const id = window.setInterval(tick, 5000);
     window.addEventListener('focus', refreshThreads);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener('focus', refreshThreads);
-    };
+    return () => { window.clearInterval(id); window.removeEventListener('focus', refreshThreads); };
   }, [refreshThreads]);
 
-  // Live conversation: refresh the open thread every 5s while the tab is visible.
   useEffect(() => {
     if (!openId) return;
-    const tick = () => {
-      if (document.visibilityState === 'visible') refreshOpenThread(openId);
-    };
+    const tick = () => { if (document.visibilityState === 'visible') refreshOpenThread(openId, channel); };
     const id = window.setInterval(tick, 5000);
-    const onFocus = () => refreshOpenThread(openId);
+    const onFocus = () => refreshOpenThread(openId, channel);
     window.addEventListener('focus', onFocus);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [openId, refreshOpenThread]);
+    return () => { window.clearInterval(id); window.removeEventListener('focus', onFocus); };
+  }, [openId, channel, refreshOpenThread]);
 
-  const openThread = async (tenantId: string) => {
-    setOpenId(tenantId);
+  const switchChannel = (ch: Channel) => {
+    setChannel(ch);
+    setOpenId(null);
+    setMessages([]);
+  };
+
+  const openThread = async (id: string) => {
+    setOpenId(id);
     setThreadLoading(true);
     setMessages([]);
     try {
-      const res = await messagesApi.thread(tenantId);
-      setOpenName(res.tenantName);
-      setOpenPlace(placeLabel(res));
-      setMessages(res.messages);
-      // Opening cleared the unread flag server-side; reflect it in the list.
-      setThreads((prev) => prev.map((t) => (t.tenantId === tenantId ? { ...t, unread: 0 } : t)));
+      if (channel === 'tenant') {
+        const res = await messagesApi.thread(id);
+        setOpenName(res.tenantName);
+        setOpenPlace(placeLabel(res));
+        setMessages(res.messages);
+        setTenantThreads((prev) => prev.map((t) => (t.tenantId === id ? { ...t, unread: 0 } : t)));
+      } else {
+        const res = await vendorMessagesApi.thread(id);
+        setOpenName(res.handymanName);
+        setOpenPlace('');
+        setMessages(res.messages);
+        setVendorThreads((prev) => prev.map((v) => (v.handymanId === id ? { ...v, unread: 0 } : v)));
+      }
     } catch (err) {
       showToast((err as Error).message || 'Could not open that conversation.', 'error');
       setOpenId(null);
@@ -128,16 +142,15 @@ export function Messages() {
     }
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const body = draft.trim();
-    if (!body || !openId || sendingRef.current) return;
+  const handleSend = async (body: string, file: File | null) => {
+    if (!openId || sendingRef.current) return;
     sendingRef.current = true;
     setSending(true);
     try {
-      const sent = await messagesApi.reply(openId, body);
+      const sent = channel === 'tenant'
+        ? await messagesApi.reply(openId, body, file)
+        : await vendorMessagesApi.reply(openId, body, file);
       setMessages((prev) => [...prev, sent]);
-      setDraft('');
       refreshThreads();
     } catch (err) {
       showToast((err as Error).message || 'Could not send your reply.', 'error');
@@ -147,61 +160,72 @@ export function Messages() {
     }
   };
 
-  if (loading) {
-    return <p className="text-sm text-muted">Loading messages.</p>;
-  }
+  if (loading) return <p className="text-sm text-muted">Loading messages.</p>;
+  if (error) return <Card><CardContent className="p-6"><p className="text-sm text-danger">{error}</p></CardContent></Card>;
 
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <p className="text-sm text-danger">{error}</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const TABS: { key: Channel; label: string; count: number }[] = [
+    { key: 'tenant', label: 'Tenants', count: tenantThreads.reduce((s, t) => s + t.unread, 0) },
+    { key: 'vendor', label: 'Vendors', count: vendorThreads.reduce((s, v) => s + v.unread, 0) },
+  ];
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="eyebrow">Tenant inbox</p>
+        <p className="eyebrow">Inbox</p>
         <h1 className="font-display text-2xl text-ink mt-1">Messages</h1>
-        <p className="text-sm text-muted mt-1">Conversations tenants have started from their portal.</p>
+        <p className="text-sm text-muted mt-1">Conversations with tenants and with your vendors.</p>
+      </div>
+
+      {/* Channel tabs */}
+      <div className="flex gap-1 border-b border-line -mt-2">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => switchChannel(t.key)}
+            className={cn(
+              'px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors inline-flex items-center gap-2',
+              channel === t.key ? 'border-primary text-ink font-medium' : 'border-transparent text-muted hover:text-ink'
+            )}
+          >
+            {t.label}
+            {t.count > 0 && (
+              <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold grid place-items-center">{t.count}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* Thread list. Hidden on mobile once a conversation is open. */}
         <Card className={cn(openId && 'hidden lg:block')}>
           <CardContent className="p-0">
-            {threads.length === 0 ? (
-              <p className="text-sm text-muted p-6 text-center">No tenant messages yet.</p>
+            {rows.length === 0 ? (
+              <p className="text-sm text-muted p-6 text-center">
+                {channel === 'tenant' ? 'No tenant messages yet.' : 'No active vendors to message.'}
+              </p>
             ) : (
               <div className="divide-y divide-line">
-                {threads.map((t) => (
+                {rows.map((r) => (
                   <button
-                    key={t.tenantId}
-                    onClick={() => openThread(t.tenantId)}
-                    className={cn(
-                      'w-full text-left px-4 py-3 hover:bg-canvas transition-colors',
-                      openId === t.tenantId && 'bg-canvas'
-                    )}
+                    key={r.id}
+                    onClick={() => openThread(r.id)}
+                    className={cn('w-full text-left px-4 py-3 hover:bg-canvas transition-colors', openId === r.id && 'bg-canvas')}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-ink truncate">
-                        {t.firstName} {t.lastName}
-                        {placeLabel(t) && (
-                          <span className="font-normal text-muted"> · {placeLabel(t)}</span>
-                        )}
+                        {r.title}
+                        {r.subtitle && <span className="font-normal text-muted"> · {r.subtitle}</span>}
                       </span>
-                      {t.unread > 0 && (
+                      {r.unread > 0 && (
                         <span className="flex-shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold flex items-center justify-center">
-                          {t.unread}
+                          {r.unread}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted truncate mt-0.5">
-                      {t.lastSender === 'office' ? 'You: ' : ''}
-                      {t.lastBody || ''}
+                      {r.lastSender === 'office' ? 'You: ' : ''}
+                      {r.lastBody || (r.lastBody === '' ? 'Attachment' : 'No messages yet')}
                     </p>
                   </button>
                 ))}
@@ -221,77 +245,42 @@ export function Messages() {
             ) : (
               <>
                 <div className="flex items-center gap-2 border-b border-line pb-3 mb-3">
-                  <button
-                    onClick={() => setOpenId(null)}
-                    className="lg:hidden p-1 text-faint hover:text-ink"
-                    aria-label="Back to inbox"
-                  >
+                  <button onClick={() => setOpenId(null)} className="lg:hidden p-1 text-faint hover:text-ink" aria-label="Back to inbox">
                     <ArrowLeft className="h-4 w-4" />
                   </button>
                   <h3 className="font-semibold text-ink">
                     {openName}
                     {openPlace && <span className="font-normal text-muted"> · {openPlace}</span>}
                   </h3>
-                  <Link
-                    to={`/tenants/${openId}`}
-                    className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover whitespace-nowrap"
-                  >
-                    View profile
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-
-                <div className="space-y-3 max-h-[52vh] overflow-y-auto pr-1">
-                  {threadLoading ? (
-                    <p className="text-sm text-muted py-6 text-center">Loading conversation.</p>
-                  ) : messages.length === 0 ? (
-                    <p className="text-sm text-muted py-6 text-center">No messages in this thread.</p>
-                  ) : (
-                    messages.map((m) => {
-                      const office = m.senderRole === 'office';
-                      return (
-                        <div key={m.id} className={office ? 'flex justify-end' : 'flex justify-start'}>
-                          <div className={`max-w-[80%] ${office ? 'items-end' : 'items-start'} flex flex-col`}>
-                            <div
-                              className={`rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap break-words ${
-                                office
-                                  ? 'bg-primary text-white rounded-br-sm'
-                                  : 'bg-canvas border border-line text-ink rounded-bl-sm'
-                              }`}
-                            >
-                              {m.body}
-                            </div>
-                            <span className="text-[11px] text-faint mt-1 px-1">
-                              {office ? 'You' : openName} · {formatWhen(m.createdAt)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
+                  {channel === 'tenant' && (
+                    <Link to={`/tenants/${openId}`} className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover whitespace-nowrap">
+                      View profile
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
                   )}
-                  <div ref={bottomRef} />
                 </div>
 
-                <form onSubmit={handleSend} className="mt-4 flex items-end gap-2 border-t border-line pt-4">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend(e);
-                      }
-                    }}
-                    rows={2}
-                    maxLength={4000}
+                {threadLoading ? (
+                  <p className="text-sm text-muted py-6 text-center">Loading conversation.</p>
+                ) : (
+                  <ThreadView
+                    items={messages.map<ChatItem>((m) => ({
+                      id: m.id,
+                      body: m.body,
+                      createdAt: m.createdAt,
+                      mine: m.senderRole === 'office',
+                      senderLabel: m.senderRole === 'office' ? 'You' : openName,
+                      attachmentUrl: m.attachmentUrl,
+                      attachmentName: m.attachmentName,
+                      attachmentType: m.attachmentType,
+                    }))}
+                    onSend={handleSend}
+                    sending={sending}
+                    emptyText="No messages in this thread."
                     placeholder="Type your reply..."
-                    className="flex-1 resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    heightClass="max-h-[52vh]"
                   />
-                  <Button type="submit" disabled={sending || !draft.trim()}>
-                    <Send className="h-4 w-4 mr-2" />
-                    {sending ? 'Sending...' : 'Send'}
-                  </Button>
-                </form>
+                )}
               </>
             )}
           </CardContent>

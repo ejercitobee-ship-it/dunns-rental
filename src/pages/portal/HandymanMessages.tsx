@@ -1,34 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '../../components/ui/Card';
-import { portalApi, type Message } from '../../lib/api';
+import { portalApi, type VendorMessage } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { MessageThread, type ChatItem } from '../../components/MessageThread';
 
-export function TenantMessages() {
+/** A handyman's own thread with the office (vendor messaging, with attachments). */
+export function HandymanMessages() {
   const { showToast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<VendorMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   const pollingRef = useRef(false);
 
-  // A poll-safe refresh: swaps the list only when it actually changed (so the
-  // view does not flicker or re-scroll when nothing is new), ignores transient
-  // errors, and never overlaps itself.
   const refresh = useCallback(async () => {
     if (pollingRef.current) return;
     pollingRef.current = true;
     try {
-      const res = await portalApi.messages();
+      const res = await portalApi.vendorMessages();
       setMessages((prev) => {
         const next = res.messages;
-        const same =
-          next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
+        const same = next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
         return same ? prev : next;
       });
     } catch {
-      // Ignore poll errors; the initial load below surfaces real failures.
+      /* ignore poll errors */
     } finally {
       pollingRef.current = false;
     }
@@ -36,33 +33,18 @@ export function TenantMessages() {
 
   useEffect(() => {
     let cancelled = false;
-    portalApi.messages()
-      .then((res) => {
-        if (!cancelled) setMessages(res.messages);
-      })
-      .catch((err) => {
-        if (!cancelled) setError((err as Error).message || 'Could not load your messages.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    portalApi.vendorMessages()
+      .then((res) => { if (!cancelled) setMessages(res.messages); })
+      .catch((err) => { if (!cancelled) setError((err as Error).message || 'Could not load your messages.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
-  // Live updates: check for new messages every 5s while the tab is visible, and
-  // immediately when the window regains focus.
   useEffect(() => {
-    const tick = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
+    const tick = () => { if (document.visibilityState === 'visible') refresh(); };
     const id = window.setInterval(tick, 5000);
     window.addEventListener('focus', refresh);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener('focus', refresh);
-    };
+    return () => { window.clearInterval(id); window.removeEventListener('focus', refresh); };
   }, [refresh]);
 
   const handleSend = async (body: string, file: File | null) => {
@@ -70,7 +52,7 @@ export function TenantMessages() {
     sendingRef.current = true;
     setSending(true);
     try {
-      const sent = await portalApi.sendMessage(body, file);
+      const sent = await portalApi.sendVendorMessage(body, file);
       setMessages((prev) => [...prev, sent]);
     } catch (err) {
       showToast((err as Error).message || 'Could not send your message.', 'error');
@@ -80,28 +62,15 @@ export function TenantMessages() {
     }
   };
 
-  if (loading) {
-    return <p className="text-sm text-muted">Loading your messages.</p>;
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <p className="text-sm text-danger">{error}</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (loading) return <p className="text-sm text-muted">Loading your messages.</p>;
+  if (error) return <Card><CardContent className="p-6"><p className="text-sm text-danger">{error}</p></CardContent></Card>;
 
   return (
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Get in touch</p>
         <h1 className="font-display text-[26px] text-ink mt-1">Messages</h1>
-        <p className="text-sm text-muted mt-1">
-          Send us a message and we will reply here. You will get a notification when we do.
-        </p>
+        <p className="text-sm text-muted mt-1">Message the office about jobs, quotes, or paperwork. You can attach a file.</p>
       </div>
 
       <Card>
@@ -111,8 +80,8 @@ export function TenantMessages() {
               id: m.id,
               body: m.body,
               createdAt: m.createdAt,
-              mine: m.senderRole === 'tenant',
-              senderLabel: m.senderRole === 'tenant' ? 'You' : 'MH Dunn Property',
+              mine: m.senderRole === 'handyman',
+              senderLabel: m.senderRole === 'handyman' ? 'You' : 'MH Dunn Property',
               attachmentUrl: m.attachmentUrl,
               attachmentName: m.attachmentName,
               attachmentType: m.attachmentType,

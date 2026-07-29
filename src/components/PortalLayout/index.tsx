@@ -39,6 +39,7 @@ const REALTOR_TABS: Tab[] = [
 
 const HANDYMAN_TABS: Tab[] = [
   { name: 'Jobs', path: '/portal', Icon: Wrench },
+  { name: 'Messages', path: '/portal/messages', Icon: MessageSquare },
 ];
 
 export function PortalLayout({ children }: PortalLayoutProps) {
@@ -51,17 +52,17 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   useAutoEnablePush(user?.roleId === 'tenant');
 
   const isTenant = user?.roleId === 'tenant';
+  const isHandyman = user?.roleId === 'handyman';
 
-  // Unread office replies drive the badge on the Messages tab. Refresh on load,
-  // on navigation (opening the thread clears it server-side), and on focus, and
-  // poll every 15s so it updates without navigating.
+  // Unread office replies drive the badge on the Messages tab (tenant thread for
+  // a tenant, vendor thread for a handyman). Refresh on load, on navigation
+  // (opening the thread clears it server-side), on focus, and every 15s.
   const [unread, setUnread] = useState(0);
   useEffect(() => {
-    if (!isTenant) return;
+    if (!isTenant && !isHandyman) return;
     let cancelled = false;
     const load = () =>
-      portalApi
-        .messagesUnread()
+      (isHandyman ? portalApi.vendorMessagesUnread() : portalApi.messagesUnread())
         .then((r) => {
           if (!cancelled) setUnread(r.count);
         })
@@ -77,7 +78,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       window.clearInterval(id);
       window.removeEventListener('focus', load);
     };
-  }, [isTenant, location.pathname]);
+  }, [isTenant, isHandyman, location.pathname]);
 
   const handleSignOut = () => {
     logout();

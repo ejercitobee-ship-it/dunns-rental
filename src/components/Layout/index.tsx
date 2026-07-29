@@ -21,7 +21,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { messagesApi } from '../../lib/api';
+import { messagesApi, vendorMessagesApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../ui/Avatar';
 import { ProfileModal } from '../ProfileModal';
@@ -51,10 +51,9 @@ export function Layout({ children }: LayoutProps) {
     if (!canSeeMessages) return;
     let cancelled = false;
     const load = () =>
-      messagesApi
-        .unreadCount()
-        .then((r) => {
-          if (!cancelled) setUnreadMessages(r.count);
+      Promise.all([messagesApi.unreadCount(), vendorMessagesApi.unreadCount()])
+        .then(([t, v]) => {
+          if (!cancelled) setUnreadMessages(t.count + v.count);
         })
         .catch(() => {});
     load();
