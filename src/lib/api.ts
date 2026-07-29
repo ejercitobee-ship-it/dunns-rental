@@ -208,6 +208,18 @@ export interface InviteResult {
 }
 
 // Tenants API
+/** One logged outbound email from the office to a tenant. createdAt is unix seconds. */
+export interface TenantEmail {
+  id: string;
+  tenantId: string;
+  sentByUserId?: string;
+  toEmail: string;
+  subject: string;
+  body: string;
+  delivered: boolean;
+  createdAt: number;
+}
+
 export const tenantsApi = {
   getAll: (): Promise<Tenant[]> => apiRequest('/tenants'),
   getById: (id: string): Promise<Tenant> => apiRequest(`/tenants/${id}`),
@@ -226,6 +238,10 @@ export const tenantsApi = {
   // to share. 400s with a message if they have no login yet.
   resetPassword: (id: string): Promise<{ tempPassword: string; message: string }> =>
     apiRequest(`/tenants/${id}/reset-password`, { method: 'POST' }),
+  // Outbound email to the tenant + the office correspondence log (backend only).
+  emails: (id: string): Promise<TenantEmail[]> => apiRequest(`/tenants/${id}/emails`),
+  sendEmail: (id: string, subject: string, body: string): Promise<TenantEmail> =>
+    apiRequest(`/tenants/${id}/emails`, { method: 'POST', body: JSON.stringify({ subject, body }) }),
   getRealtors: (id: string): Promise<TenantRealtorLink[]> =>
     apiRequest(`/tenants/${id}/realtors`),
   linkRealtor: (id: string, realtorUserId: string) =>

@@ -49,6 +49,38 @@ export async function sendEmail(
   return true;
 }
 
+/**
+ * A free-form email the office writes to a tenant, wrapped in the app's branded
+ * shell. The body is plain text the office typed; newlines become paragraphs.
+ */
+export function officeTenantEmail(body: string, name?: string) {
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+  const text = [greeting, '', body, '', '— MH Dunn Property'].join('\n');
+  const paras = body
+    .split(/\n{2,}/)
+    .map(p => `<p style="margin:0 0 16px;font-size:15px;white-space:pre-wrap;">${escapeHtml(p)}</p>`)
+    .join('');
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${escapeHtml(greeting)}</p>
+      ${paras}
+      <p style="margin:24px 0 0;font-size:13px;color:#6b6a63;">MH Dunn Property</p>
+    </div>
+  </div>`;
+  return { html, text };
+}
+
+/** Minimal HTML escape so a typed message can't inject markup into the email. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /** Password reset email, styled to match the app. */
 export function passwordResetEmail(resetUrl: string, name?: string) {
   const greeting = name ? `Hi ${name},` : 'Hi,';

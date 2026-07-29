@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
   documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi,
-  type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message,
+  type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message, type TenantEmail,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
@@ -1207,6 +1207,9 @@ export function TenantDetail() {
       {/* Conversation history with this tenant, from the portal messaging. */}
       {id && <MessagesCard tenantId={id} canReply={canManagePortal} />}
 
+      {/* Email correspondence (outbound, logged here, backend only). */}
+      {id && <EmailCard tenantId={id} tenantEmail={tenant.email} tenantName={`${tenant.firstName} ${tenant.lastName}`.trim()} canSend={canManagePortal} />}
+
       {/* Payment history */}
       <Card>
         <CardContent className="p-0">
@@ -1704,6 +1707,126 @@ function MessagesCard({ tenantId, canReply }: { tenantId: string; canReply: bool
           </form>
         )}
       </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Outbound email to the tenant, plus a log of everything sent. This is a
+ * back-office record only: it never appears in the tenant portal. Replies from
+ * the tenant land in the office's real inbox, not here.
+ */
+function EmailCard({ tenantId, tenantEmail, tenantName, canSend }: { tenantId: string; tenantEmail?: string; tenantName: string; canSend: boolean }) {
+  const { showToast } = useToast();
+  const [emails, setEmails] = useState<TenantEmail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    tenantsApi.emails(tenantId)
+      .then((rows) => { if (!cancelled) setEmails(rows); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [tenantId]);
+
+  const send = async () => {
+    if (sendingRef.current) return;
+    if (!subject.trim() || !body.trim()) { showToast('Add a subject and a message.', 'error'); return; }
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      const sent = await tenantsApi.sendEmail(tenantId, subject.trim(), body.trim());
+      setEmails((prev) => [sent, ...prev]);
+      setOpen(false);
+      setSubject('');
+      setBody('');
+      showToast('Email sent and logged.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not send the email.', 'error');
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink flex items-center gap-2">
+            <Mail className="h-4 w-4 text-faint" /> Email correspondence
+          </h3>
+          {canSend && (
+            <Button size="sm" onClick={() => setOpen(true)} disabled={!tenantEmail} title={tenantEmail ? '' : 'No email address on file'}>
+              <Send className="h-4 w-4 mr-2" /> Send email
+            </Button>
+          )}
+        </div>
+
+        {!tenantEmail && <p className="text-xs text-warning mb-3">No email address on file for this tenant. Add one to send email.</p>}
+
+        {loading ? (
+          <p className="text-sm text-muted">Loading correspondence.</p>
+        ) : emails.length === 0 ? (
+          <p className="text-sm text-muted">No emails sent to this tenant yet.</p>
+        ) : (
+          <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+            {emails.map((e) => (
+              <div key={e.id} className="border border-line rounded-xl p-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium text-ink text-sm">{e.subject}</p>
+                  {!e.delivered && <Badge variant="warning" className="flex-shrink-0">Not delivered</Badge>}
+                </div>
+                <p className="text-sm text-muted whitespace-pre-wrap mt-1">{e.body}</p>
+                <p className="text-[11px] text-faint mt-1.5">To {e.toEmail} · {messageWhen(e.createdAt)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <Modal isOpen={open} onClose={() => setOpen(false)} title="Email tenant" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Sends an email to <span className="font-medium text-ink">{tenantName || 'this tenant'}</span>
+            {tenantEmail && <> at <span className="font-medium text-ink">{tenantEmail}</span></>}. A copy is saved here. Their reply goes to your normal inbox.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Subject</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              maxLength={200}
+              placeholder="e.g. About your lease renewal"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Message</label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={8}
+              maxLength={8000}
+              placeholder="Write your message..."
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={send} disabled={sending || !subject.trim() || !body.trim()}>
+              {sending ? 'Sending...' : 'Send email'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   );
 }
