@@ -78,18 +78,47 @@ export function Expenses() {
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | ''>('');
   // The expense currently being edited (null = the modal is adding a new one).
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  // Tracks the property picked in the expense modal, so a Utilities expense can
-  // show that property's utility accounts (numbers) to encode quickly.
+  // The expense modal keeps property/unit/vendor in state (not just FormData) so
+  // the utility-account lookup can auto-fill them from a pasted account number.
   const [expensePropertyId, setExpensePropertyId] = useState('');
+  const [expenseUnitId, setExpenseUnitId] = useState('');
+  const [expenseVendor, setExpenseVendor] = useState('');
+  // What the admin pasted into the "utility account #" lookup, and the match.
+  const [accountLookup, setAccountLookup] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canDelete = isSuperAdmin();
   // Editing a recorded expense is reserved to the workspace owner (super admin).
   const canEditExpense = isSuperAdmin();
 
+  // The utility account matching the pasted number (exact, trimmed). Drives the
+  // auto-fill and the little "matched" confirmation.
+  const accountMatch = useMemo(() => {
+    const q = accountLookup.trim().toLowerCase();
+    if (!q) return null;
+    return utilityAccounts.find(u => (u.accountNumber || '').trim().toLowerCase() === q) || null;
+  }, [accountLookup, utilityAccounts]);
+
+  // Paste an account number: fill the property, unit, category, and vendor from
+  // the utility account it belongs to, so the admin does not hunt for them.
+  const applyAccountLookup = (value: string) => {
+    setAccountLookup(value);
+    const q = value.trim().toLowerCase();
+    const match = q ? utilityAccounts.find(u => (u.accountNumber || '').trim().toLowerCase() === q) : null;
+    if (match) {
+      setExpensePropertyId(match.propertyId);
+      setExpenseUnitId(match.unitId || '');
+      setExpenseCategory('utilities');
+      if (match.provider) setExpenseVendor(match.provider);
+    }
+  };
+
   const openExpenseModal = () => {
     setEditingExpense(null);
     setExpenseCategory('');
     setExpensePropertyId('');
+    setExpenseUnitId('');
+    setExpenseVendor('');
+    setAccountLookup('');
     setIsModalOpen(true);
   };
 
@@ -97,6 +126,9 @@ export function Expenses() {
     setEditingExpense(expense);
     setExpenseCategory(expense.category);
     setExpensePropertyId(expense.propertyId || '');
+    setExpenseUnitId(expense.unitId || '');
+    setExpenseVendor(expense.vendor || '');
+    setAccountLookup('');
     setIsModalOpen(true);
   };
 
@@ -671,8 +703,8 @@ export function Expenses() {
               <select
                 name="propertyId"
                 required
-                defaultValue={editingExpense?.propertyId || ''}
-                onChange={(e) => setExpensePropertyId(e.target.value)}
+                value={expensePropertyId}
+                onChange={(e) => { setExpensePropertyId(e.target.value); setExpenseUnitId(''); }}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select Property</option>
@@ -686,11 +718,12 @@ export function Expenses() {
               <label className="text-sm font-medium">Unit (Optional)</label>
               <select
                 name="unitId"
-                defaultValue={editingExpense?.unitId || ''}
+                value={expenseUnitId}
+                onChange={(e) => setExpenseUnitId(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select Unit</option>
-                {units.map(u => (
+                {units.filter(u => !expensePropertyId || u.propertyId === expensePropertyId).map(u => (
                   <option key={u.id} value={u.id}>
                     {getProperty(u.propertyId)?.name} - Unit {u.unitNumber}
                   </option>
@@ -701,6 +734,30 @@ export function Expenses() {
 
           {view === 'expenses' ? (
             <>
+              {/* Paste a utility account number to auto-fill the property, unit,
+                  category, and vendor from the saved utility account. */}
+              <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary-soft/40 p-3">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Zap className="h-4 w-4 text-primary" /> Utility account number (quick fill)
+                </label>
+                <input
+                  type="text"
+                  value={accountLookup}
+                  onChange={(e) => applyAccountLookup(e.target.value)}
+                  placeholder="Paste the account number and the property fills in automatically"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                {accountLookup.trim() && (accountMatch ? (
+                  <p className="text-xs text-positive">
+                    Matched {getProperty(accountMatch.propertyId)?.name || 'property'}
+                    {accountMatch.unitId && getUnit(accountMatch.unitId) ? ` · Unit ${getUnit(accountMatch.unitId)?.unitNumber}` : ''}
+                    {accountMatch.provider ? ` · ${accountMatch.provider}` : ''} <span className="capitalize">({accountMatch.type})</span>. Filled in below.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted">No saved utility account matches that number. Add it on the property's Utilities section, or pick the property manually.</p>
+                ))}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Category *</label>
@@ -724,7 +781,8 @@ export function Expenses() {
                     type="text"
                     name="vendor"
                     placeholder="e.g., Home Depot, Electric Company"
-                    defaultValue={editingExpense?.vendor || ''}
+                    value={expenseVendor}
+                    onChange={(e) => setExpenseVendor(e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
