@@ -114,14 +114,14 @@ export function Dashboard() {
       .reduce((sum, e) => sum + e.amount, 0);
 
     // What's still owed across every elapsed month of the current year, one
-    // lease at a time. Walks leasesOwingMonth rather than activeLeases so a
-    // lease that ended at turnover mid-year still counts for the months it
-    // was lived in, and this figure can never disagree with Rent Management
-    // or the Tax Report.
+    // lease at a time. Terminated (ended) tenancies are excluded here: once the
+    // office ends a tenancy, its balance is closed out and no longer chased on
+    // the dashboard, though the history stays on the tenant's profile.
+    const currentLeases = leases.filter(l => l.status !== 'ended');
     const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
     let totalOwed = 0;
     for (const month of elapsedMonths) {
-      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+      for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
         totalOwed += settleMonth(lease, rentPayments, month, currentYear).balance;
       }
     }
@@ -213,6 +213,8 @@ export function Dashboard() {
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
     const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
+    // Terminated tenancies are closed out and not chased on the dashboard.
+    const currentLeases = leases.filter(l => l.status !== 'ended');
 
     const rows: {
       key: string;
@@ -224,7 +226,7 @@ export function Dashboard() {
     }[] = [];
 
     for (const month of elapsedMonths) {
-      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+      for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
         const settlement = settleMonth(lease, rentPayments, month, currentYear);
         if (settlement.status === 'paid') continue;
         const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
@@ -302,10 +304,12 @@ export function Dashboard() {
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
     const elapsed = Array.from({ length: currentMonth }, (_, i) => i + 1);
+    // Terminated tenancies are closed out and not chased on the dashboard.
+    const currentLeases = leases.filter(l => l.status !== 'ended');
 
     const perLease = new Map<string, { lease: ReturnType<typeof leasesOwingMonth>[number]; months: number; total: number }>();
     for (const month of elapsed) {
-      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+      for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
         const s = settleMonth(lease, rentPayments, month, currentYear);
         if (s.status === 'paid') continue;
         let e = perLease.get(lease.id);

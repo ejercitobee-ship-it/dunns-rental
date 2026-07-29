@@ -22,7 +22,7 @@ export function ProspectiveTenantDetail() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
-  const { units, properties, getUnitLease } = useApp();
+  const { units, properties, getUnitLease, refreshData } = useApp();
   const canEdit = hasPermission('tenants_edit');
   const canConvert = hasPermission('tenants_create');
   const canDelete = hasPermission('tenants_delete');
@@ -109,6 +109,10 @@ export function ProspectiveTenantDetail() {
         startDate: conv.startDate || undefined,
         endDate: conv.endDate || undefined,
       });
+      // The tenant + lease were created server-side, so refresh the app data
+      // before navigating, otherwise the new profile loads before the tenant is
+      // in memory and briefly shows a "not found" screen.
+      await refreshData();
       showToast('Applicant is now a tenant.', 'success');
       navigate(`/tenants/${tenantId}`);
     } catch (err) {

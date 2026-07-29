@@ -20,8 +20,7 @@ import {
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
-import { leasesOwingMonth, settleMonth, monthsBehind } from '../lib/rent';
-import { usePastDueMonths } from '../lib/usePastDueMonths';
+import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod } from '../types';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
@@ -197,13 +196,15 @@ export function TenantDetail() {
     return settleMonth(lease, rentPayments, month, year);
   }, [lease, rentPayments]);
 
-  const pastDueMonths = usePastDueMonths();
-  const pastDue = useMemo(() => {
-    if (!lease) return null;
+  // Every month this tenancy still owes (oldest first), with the amount, so the
+  // profile shows exactly which months are behind, not just a total.
+  const owed = useMemo(() => {
+    if (!lease) return { months: [] as { month: number; year: number; amount: number }[], total: 0 };
     const now = new Date();
-    const pd = monthsBehind(lease, rentPayments, now.getMonth() + 1, now.getFullYear());
-    return pd.months >= pastDueMonths ? pd : null;
-  }, [lease, rentPayments, pastDueMonths]);
+    const months = unsettledMonths(lease, rentPayments, now.getMonth() + 1, now.getFullYear());
+    const total = Math.round(months.reduce((s, m) => s + m.amount, 0) * 100) / 100;
+    return { months, total };
+  }, [lease, rentPayments]);
 
   const payments = useMemo(() => {
     if (!id) return [];
@@ -627,14 +628,21 @@ export function TenantDetail() {
         <ArrowLeft className="h-4 w-4" /> Back to Tenants
       </Link>
 
-      {pastDue && (
+      {owed.months.length > 0 && (
         <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-ink">Past due: {pastDue.months} months behind</p>
-            <p className="text-sm text-muted mt-0.5">
-              This tenancy owes {formatCurrency(pastDue.balance)} across {pastDue.months} unpaid months. Consider following up.
+          <div className="min-w-0">
+            <p className="font-semibold text-ink">
+              Owes {formatCurrency(owed.total)} across {owed.months.length} {owed.months.length === 1 ? 'month' : 'months'}
             </p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {owed.months.map(m => (
+                <span key={`${m.year}-${m.month}`} className="text-xs font-medium px-2 py-1 rounded-md bg-surface border border-danger/25 text-danger whitespace-nowrap">
+                  {formatMonthYear(m.month, m.year)} · {formatCurrency(m.amount)}
+                </span>
+              ))}
+            </div>
+            <p className="text-sm text-muted mt-2">The full record is in Payment History below.</p>
           </div>
         </div>
       )}
