@@ -341,7 +341,7 @@ export function Settings() {
             className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === tab.id
                 ? 'border-primary text-primary'
-                : 'border-transparent text-muted hover:text-foreground'
+                : 'border-transparent text-muted hover:text-ink'
             }`}
             onClick={() => setActiveTab(tab.id)}
           >
@@ -728,7 +728,7 @@ export function Settings() {
               <Card key={role.id} className="overflow-hidden">
                 <CardContent className="p-0">
                   <div
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-black/[0.02] transition-colors"
                     onClick={() => setExpandedRole(expandedRole === role.id ? null : role.id)}
                   >
                     <div className="flex items-center gap-4">
@@ -794,7 +794,7 @@ export function Settings() {
                           return (
                             <div
                               key={permission.id}
-                              className={`flex items-center justify-between p-2 rounded-lg ${locked ? 'opacity-60' : 'hover:bg-muted/50 cursor-pointer'}`}
+                              className={`flex items-center justify-between p-2 rounded-lg ${locked ? 'opacity-60' : 'hover:bg-black/[0.02] cursor-pointer'}`}
                               onClick={() => {
                                 if (locked) return;
                                 handleTogglePermission(role.id, permission.id);
@@ -871,7 +871,7 @@ export function Settings() {
                 return (
                   <div
                     key={permission.id}
-                    className="flex items-center justify-between p-3 hover:bg-muted/50 cursor-pointer border-b last:border-0"
+                    className="flex items-center justify-between p-3 hover:bg-black/[0.02] cursor-pointer border-b last:border-0"
                     onClick={() => toggleRolePermission(permission.id)}
                   >
                     <div className="flex items-center gap-3">

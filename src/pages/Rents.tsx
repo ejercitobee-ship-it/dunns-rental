@@ -1069,7 +1069,7 @@ export function Rents() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b bg-muted/50">
+                    <tr className="border-b bg-canvas">
                       <th className="text-left py-3 px-4 font-medium">Month</th>
                       <th className="text-right py-3 px-4 font-medium">Expected</th>
                       <th className="text-right py-3 px-4 font-medium">Collected</th>
@@ -1079,7 +1079,7 @@ export function Rents() {
                   </thead>
                   <tbody>
                     {annualData.map((month) => (
-                      <tr key={month.month} className="border-b last:border-0 hover:bg-muted/50">
+                      <tr key={month.month} className="border-b last:border-0 hover:bg-black/[0.02]">
                         <td className="py-3 px-4 font-medium">{MONTHS[month.month - 1]}</td>
                         <td className="py-3 px-4 text-right">{formatCurrency(month.expected)}</td>
                         <td className="py-3 px-4 text-right text-positive">{formatCurrency(month.collected)}</td>
@@ -1159,7 +1159,7 @@ export function Rents() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b bg-muted/50">
+                    <tr className="border-b bg-canvas">
                       <th className="text-left py-3 px-4 font-medium">Quarter</th>
                       <th className="text-right py-3 px-4 font-medium">Expected Rent</th>
                       <th className="text-right py-3 px-4 font-medium">Collected Rent</th>
@@ -1169,7 +1169,7 @@ export function Rents() {
                   </thead>
                   <tbody>
                     {taxData.quarterlyData.map((q) => (
-                      <tr key={q.name} className="border-b last:border-0 hover:bg-muted/50">
+                      <tr key={q.name} className="border-b last:border-0 hover:bg-black/[0.02]">
                         <td className="py-3 px-4 font-medium">{q.name}</td>
                         <td className="py-3 px-4 text-right">{formatCurrency(q.expected)}</td>
                         <td className="py-3 px-4 text-right text-positive font-semibold">{formatCurrency(q.collected)}</td>
@@ -1212,15 +1212,15 @@ export function Rents() {
                   <ul className="space-y-1 text-sm text-muted">
                     <li className="flex justify-between">
                       <span>Rent payments received</span>
-                      <span className="font-medium text-foreground">{formatCurrency(taxData.totalRentIncome)}</span>
+                      <span className="font-medium text-ink">{formatCurrency(taxData.totalRentIncome)}</span>
                     </li>
                     <li className="flex justify-between">
                       <span>Late fees</span>
-                      <span className="font-medium text-foreground">$0.00</span>
+                      <span className="font-medium text-ink">$0.00</span>
                     </li>
                     <li className="flex justify-between border-t pt-1">
                       <span className="font-semibold">Total Taxable Income</span>
-                      <span className="font-bold text-foreground">{formatCurrency(taxData.totalRentIncome)}</span>
+                      <span className="font-bold text-ink">{formatCurrency(taxData.totalRentIncome)}</span>
                     </li>
                   </ul>
                 </div>

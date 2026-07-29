@@ -402,7 +402,7 @@ export function Expenses() {
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
             view === 'expenses' 
               ? 'border-primary text-primary' 
-              : 'border-transparent text-muted hover:text-foreground'
+              : 'border-transparent text-muted hover:text-ink'
           }`}
           onClick={() => setView('expenses')}
         >
@@ -412,7 +412,7 @@ export function Expenses() {
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
             view === 'income' 
               ? 'border-primary text-primary' 
-              : 'border-transparent text-muted hover:text-foreground'
+              : 'border-transparent text-muted hover:text-ink'
           }`}
           onClick={() => setView('income')}
         >
@@ -463,7 +463,7 @@ export function Expenses() {
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <table className="w-full min-w-[700px] sm:min-w-0">
               <thead>
-                <tr className="border-b bg-muted/50">
+                <tr className="border-b bg-canvas">
                   <th className="text-left py-3 px-4 font-medium">Date</th>
                   <th className="text-left py-3 px-4 font-medium">Property & Unit</th>
                   {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Category</th>}
@@ -481,7 +481,7 @@ export function Expenses() {
                     const CategoryIcon = categoryIcons[expense.category];
                     
                     return (
-                      <tr key={expense.id} className="border-b last:border-0 hover:bg-muted/50">
+                      <tr key={expense.id} className="border-b last:border-0 hover:bg-black/[0.02]">
                         <td className="py-4 px-4 text-sm">{formatDate(expense.date)}</td>
                         <td className="py-4 px-4">
                           <div className="space-y-1">
@@ -546,7 +546,7 @@ export function Expenses() {
                     const unit = getUnit(income.unitId);
                     
                     return (
-                      <tr key={income.id} className="border-b last:border-0 hover:bg-muted/50">
+                      <tr key={income.id} className="border-b last:border-0 hover:bg-black/[0.02]">
                         <td className="py-4 px-4 text-sm">{formatDate(income.date)}</td>
                         <td className="py-4 px-4">
                           <div className="space-y-1">
