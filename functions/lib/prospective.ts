@@ -56,3 +56,9 @@ export function isProspectiveStatus(v: unknown): v is ProspectiveStatus {
 export async function getProspective(env: Env, id: string): Promise<Row | null> {
   return env.DB.prepare('SELECT * FROM prospective_tenants WHERE id = ?').bind(id).first();
 }
+
+/** Load an applicant by their secure signing token (public, no-login flow). */
+export async function getProspectiveByToken(env: Env, token: string): Promise<Row | null> {
+  if (!token) return null;
+  return env.DB.prepare('SELECT * FROM prospective_tenants WHERE sign_token = ?').bind(token).first();
+}

@@ -29,6 +29,7 @@ const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users }
 const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
 const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
 const ProspectiveTenantDetail = lazy(() => import('./pages/ProspectiveTenantDetail').then(m => ({ default: m.ProspectiveTenantDetail })));
+const SigningPage = lazy(() => import('./pages/SigningPage').then(m => ({ default: m.SigningPage })));
 const TenantHome = lazy(() => import('./pages/portal/TenantHome').then(m => ({ default: m.TenantHome })));
 const TenantPayments = lazy(() => import('./pages/portal/TenantPayments').then(m => ({ default: m.TenantPayments })));
 const TenantMaintenance = lazy(() => import('./pages/portal/TenantMaintenance').then(m => ({ default: m.TenantMaintenance })));
@@ -166,6 +167,9 @@ function AppRoutes() {
       {/* Reachable from an emailed link, so it must work even if a stale
           session cookie is present. */}
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Public, no-login document signing for prospective tenants. */}
+      <Route path="/sign/:token" element={<SigningPage />} />
       
       <Route path="/" element={<RootRoute />} />
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User, Link2, Copy } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -35,6 +35,9 @@ export function ProspectiveTenantDetail() {
   const uploadingRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [toDelete, setToDelete] = useState(false);
+  const [signLink, setSignLink] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
   const [converting, setConverting] = useState(false);
   const [conv, setConv] = useState({ unitId: '', monthlyRent: '', moveInFee: '', moveInFeePaid: true, startDate: '', endDate: '' });
@@ -64,6 +67,30 @@ export function ProspectiveTenantDetail() {
     } catch (err) {
       showToast((err as Error).message || 'Could not update the status.', 'error');
     }
+  };
+
+  const getSignLink = async () => {
+    if (!id || linkBusy) return;
+    setLinkBusy(true);
+    try {
+      const { token } = await prospectiveApi.signLink(id);
+      setSignLink(`${window.location.origin}/sign/${token}`);
+      // Sending the link moves an untouched applicant to "docs sent".
+      setApplicant(prev => (prev && prev.status === 'applied' ? { ...prev, status: 'docs_sent' } : prev));
+    } catch (err) {
+      showToast((err as Error).message || 'Could not create the link.', 'error');
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!signLink) return;
+    try {
+      await navigator.clipboard.writeText(signLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard blocked; the link is shown to copy by hand */ }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,6 +264,29 @@ export function ProspectiveTenantDetail() {
             )}
           </div>
           <p className="text-xs text-muted">Application, lease, and any documents for this applicant. On conversion these carry over to their tenant record.</p>
+
+          {canEdit && !isConverted && (
+            <div className="rounded-xl border border-line bg-canvas p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <Link2 className="h-4 w-4 text-primary" /> Secure signing link
+                </div>
+                <Button size="sm" variant="outline" disabled={linkBusy} onClick={getSignLink}>
+                  {linkBusy ? 'Creating...' : signLink ? 'New link' : 'Get link'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted">Send this to the applicant. They can view and upload their signed documents with no login.</p>
+              {signLink && (
+                <div className="flex items-center gap-2">
+                  <input readOnly value={signLink} className="flex-1 min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink" onFocus={e => e.currentTarget.select()} />
+                  <Button size="sm" variant="outline" onClick={copyLink} className="flex-shrink-0">
+                    {copied ? <><Copy className="h-4 w-4 mr-1.5" /> Copied</> : <><Copy className="h-4 w-4 mr-1.5" /> Copy</>}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           {docs.length === 0 ? (
             <p className="text-sm text-muted">No files yet. Upload their application or lease.</p>
           ) : (

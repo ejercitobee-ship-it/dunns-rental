@@ -780,6 +780,33 @@ export const prospectiveApi = {
   },
   convert: (id: string, data: { unitId: string; monthlyRent: number; moveInFee?: number; moveInFeePaid?: boolean; startDate?: string; endDate?: string }): Promise<{ tenantId: string }> =>
     apiRequest(`/prospective-tenants/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
+  // Mint (or reuse) the applicant's secure, no-login signing token.
+  signLink: (id: string): Promise<{ token: string }> =>
+    apiRequest(`/prospective-tenants/${id}/sign-link`, { method: 'POST' }),
+};
+
+// PUBLIC signing flow (no login), used by the /sign/:token page.
+export interface SigningInfo {
+  firstName: string;
+  status: ProspectiveStatus;
+  documents: { id: string; name: string }[];
+}
+export const signingApi = {
+  info: (token: string): Promise<SigningInfo> => apiRequest(`/sign/${token}`),
+  documentUrl: (token: string, docId: string) => `${API_BASE}/sign/${token}/document/${docId}`,
+  upload: async (token: string, file: File): Promise<{ id: string; name: string }> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/sign/${token}/upload`, { method: 'POST', credentials: 'include', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.data !== undefined ? data.data : data;
+  },
+  complete: (token: string): Promise<{ success: boolean }> =>
+    apiRequest(`/sign/${token}/complete`, { method: 'POST' }),
 };
 
 // Office side of tenant messaging: the inbox, one tenant's thread, and replies.
