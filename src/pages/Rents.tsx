@@ -998,18 +998,18 @@ export function Rents() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(annualData.reduce((s, m) => s + m.expected, 0))}</div>
-                <p className="text-xs text-muted-foreground">Total rent expected</p>
+                <p className="text-xs text-muted">Total rent expected</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Annual Collected</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-500" />
+                <TrendingUp className="h-4 w-4 text-positive" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-positive">{formatCurrency(annualData.reduce((s, m) => s + m.collected, 0))}</div>
-                <p className="text-xs text-muted-foreground">Total rent collected</p>
+                <p className="text-xs text-muted">Total rent collected</p>
               </CardContent>
             </Card>
 
@@ -1020,14 +1020,14 @@ export function Rents() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-danger">{formatCurrency(annualData.reduce((s, m) => s + m.outstanding, 0))}</div>
-                <p className="text-xs text-muted-foreground">Unpaid rent</p>
+                <p className="text-xs text-muted">Unpaid rent</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Collection Rate</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <DollarSign className="h-4 w-4 text-muted" />
               </CardHeader>
               <CardContent>
                 {/* Collected over expected for months that have actually begun,
@@ -1035,7 +1035,7 @@ export function Rents() {
                     12 monthly rates" counted not-yet-due future months as 0%
                     and read far below reality mid-year. */}
                 <div className="text-2xl font-bold">{yearStats.collectionRate.toFixed(1)}%</div>
-                <p className="text-xs text-muted-foreground">Collected of expected, months elapsed</p>
+                <p className="text-xs text-muted">Collected of expected, months elapsed</p>
               </CardContent>
             </Card>
           </div>
@@ -1106,11 +1106,11 @@ export function Rents() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Rent Income</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-500" />
+                <TrendingUp className="h-4 w-4 text-positive" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-positive">{formatCurrency(taxData.totalRentIncome)}</div>
-                <p className="text-xs text-muted-foreground">Taxable income</p>
+                <p className="text-xs text-muted">Taxable income</p>
               </CardContent>
             </Card>
 
@@ -1121,7 +1121,7 @@ export function Rents() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(taxData.totalExpected)}</div>
-                <p className="text-xs text-muted-foreground">Full year potential</p>
+                <p className="text-xs text-muted">Full year potential</p>
               </CardContent>
             </Card>
 
@@ -1132,7 +1132,7 @@ export function Rents() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-danger">{formatCurrency(taxData.totalOutstanding)}</div>
-                <p className="text-xs text-muted-foreground">Uncollected rent</p>
+                <p className="text-xs text-muted">Uncollected rent</p>
               </CardContent>
             </Card>
 
@@ -1145,7 +1145,7 @@ export function Rents() {
                 <div className="text-2xl font-bold">
                   {taxData.totalExpected > 0 ? ((taxData.totalRentIncome / taxData.totalExpected) * 100).toFixed(1) : '0.0'}%
                 </div>
-                <p className="text-xs text-muted-foreground">Collected of expected</p>
+                <p className="text-xs text-muted">Collected of expected</p>
               </CardContent>
             </Card>
           </div>
@@ -1209,7 +1209,7 @@ export function Rents() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <h4 className="font-semibold">Income to Report</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <ul className="space-y-1 text-sm text-muted">
                     <li className="flex justify-between">
                       <span>Rent payments received</span>
                       <span className="font-medium text-foreground">{formatCurrency(taxData.totalRentIncome)}</span>
@@ -1227,7 +1227,7 @@ export function Rents() {
 
                 <div className="space-y-2">
                   <h4 className="font-semibold">Common Deductions</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <ul className="space-y-1 text-sm text-muted">
                     <li>Property taxes</li>
                     <li>Mortgage interest</li>
                     <li>Insurance premiums</li>

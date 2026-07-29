@@ -285,7 +285,7 @@ export function Expenses() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Finances</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+          <p className="text-muted mt-1 text-sm sm:text-base">
             Track expenses and income across all properties
           </p>
         </div>
@@ -402,7 +402,7 @@ export function Expenses() {
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
             view === 'expenses' 
               ? 'border-primary text-primary' 
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+              : 'border-transparent text-muted hover:text-foreground'
           }`}
           onClick={() => setView('expenses')}
         >
@@ -412,7 +412,7 @@ export function Expenses() {
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
             view === 'income' 
               ? 'border-primary text-primary' 
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+              : 'border-transparent text-muted hover:text-foreground'
           }`}
           onClick={() => setView('income')}
         >
@@ -423,7 +423,7 @@ export function Expenses() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
             type="text"
             placeholder={`Search ${view}...`}
@@ -486,20 +486,20 @@ export function Expenses() {
                         <td className="py-4 px-4">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <Home className="h-4 w-4 text-muted-foreground" />
+                              <Home className="h-4 w-4 text-muted" />
                               <span className="text-sm">{property?.name}</span>
                             </div>
                             {unit && (
                               <div className="flex items-center gap-2">
-                                <DoorOpen className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">Unit {unit.unitNumber}</span>
+                                <DoorOpen className="h-4 w-4 text-muted" />
+                                <span className="text-sm text-muted">Unit {unit.unitNumber}</span>
                               </div>
                             )}
                           </div>
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
-                            <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+                            <CategoryIcon className="h-4 w-4 text-muted" />
                             <span className="text-sm capitalize">{categoryLabels[expense.category]}</span>
                             {expense.isRecurring && (
                               <Badge variant="secondary" className="text-xs">Recurring</Badge>
@@ -507,7 +507,7 @@ export function Expenses() {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-sm">{expense.description}</td>
-                        <td className="py-4 px-4 text-sm text-muted-foreground">
+                        <td className="py-4 px-4 text-sm text-muted">
                           {expense.vendor || '-'}
                         </td>
                         <td className="py-4 px-4 text-right font-semibold text-danger">
@@ -519,7 +519,7 @@ export function Expenses() {
                               {canAddExpense && <ExpenseReceiptButton expense={expense} />}
                               {canDelete && (linkedMaintenanceExpenseIds.has(expense.id) ? (
                                 <span
-                                  className="text-xs text-muted-foreground"
+                                  className="text-xs text-muted"
                                   title="This came from a maintenance job. Delete it from the Maintenance page."
                                 >
                                   Maintenance
@@ -551,13 +551,13 @@ export function Expenses() {
                         <td className="py-4 px-4">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <Home className="h-4 w-4 text-muted-foreground" />
+                              <Home className="h-4 w-4 text-muted" />
                               <span className="text-sm">{property?.name}</span>
                             </div>
                             {unit && (
                               <div className="flex items-center gap-2">
-                                <DoorOpen className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">Unit {unit.unitNumber}</span>
+                                <DoorOpen className="h-4 w-4 text-muted" />
+                                <span className="text-sm text-muted">Unit {unit.unitNumber}</span>
                               </div>
                             )}
                           </div>
@@ -573,7 +573,7 @@ export function Expenses() {
                           <td className="py-4 px-4 text-right">
                             {!canDelete ? null : income.id.startsWith('rent-') ? (
                               <span
-                                className="text-xs text-muted-foreground"
+                                className="text-xs text-muted"
                                 title="This rent came from a recorded payment. Delete it in Rent Management."
                               >
                                 Rent Mgmt
@@ -602,9 +602,9 @@ export function Expenses() {
 
       {(view === 'expenses' ? filteredExpenses : filteredIncome).length === 0 && (
         <div className="text-center py-12">
-          <DollarSign className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <DollarSign className="h-12 w-12 mx-auto text-muted mb-4" />
           <h3 className="text-lg font-medium">No {view} found</h3>
-          <p className="text-muted-foreground">Try adjusting your search or filters</p>
+          <p className="text-muted">Try adjusting your search or filters</p>
         </div>
       )}
 
@@ -716,7 +716,7 @@ export function Expenses() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Amount *</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
                 <input
                   type="number"
                   name="amount"

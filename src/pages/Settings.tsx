@@ -329,7 +329,7 @@ export function Settings() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Settings</h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted mt-1">
           Manage your application preferences
         </p>
       </div>
@@ -341,7 +341,7 @@ export function Settings() {
             className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === tab.id
                 ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                : 'border-transparent text-muted hover:text-foreground'
             }`}
             onClick={() => setActiveTab(tab.id)}
           >
@@ -678,10 +678,10 @@ export function Settings() {
               ].map((item) => (
                 <div key={item.key} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 text-muted-foreground" />
+                    <item.icon className="h-5 w-5 text-muted" />
                     <div>
                       <p className="font-medium">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.desc}</p>
+                      <p className="text-sm text-muted">{item.desc}</p>
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -711,7 +711,7 @@ export function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Team Access Control</h2>
-              <p className="text-muted-foreground">Manage roles and permissions for your team members</p>
+              <p className="text-muted">Manage roles and permissions for your team members</p>
             </div>
             <Button onClick={() => {
               setEditingRole(null);
@@ -742,7 +742,7 @@ export function Settings() {
                             <Badge variant="secondary" className="text-xs">System</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">{role.description}</p>
+                        <p className="text-sm text-muted">{role.description}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -772,9 +772,9 @@ export function Settings() {
                         </>
                       )}
                       {expandedRole === role.id ? (
-                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        <ChevronDown className="h-5 w-5 text-muted" />
                       ) : (
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        <ChevronRight className="h-5 w-5 text-muted" />
                       )}
                     </div>
                   </div>
@@ -783,7 +783,7 @@ export function Settings() {
                     <div className="border-t px-4 py-4">
                       <h4 className="text-sm font-medium mb-3">Permissions</h4>
                       {role.id === 'super_admin' && (
-                        <p className="text-xs text-muted-foreground mb-3">
+                        <p className="text-xs text-muted mb-3">
                           Super Admin always has full access. These cannot be changed, so you can never lock yourself out.
                         </p>
                       )}
@@ -810,7 +810,7 @@ export function Settings() {
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium">{permission.name}</p>
-                                  <p className="text-xs text-muted-foreground">{permission.description}</p>
+                                  <p className="text-xs text-muted">{permission.description}</p>
                                 </div>
                               </div>
                               <Badge variant="outline" className={`text-xs ${moduleColors[permission.module] || ''}`}>
@@ -885,7 +885,7 @@ export function Settings() {
                       </div>
                       <div>
                         <p className="text-sm font-medium">{permission.name}</p>
-                        <p className="text-xs text-muted-foreground">{permission.description}</p>
+                        <p className="text-xs text-muted">{permission.description}</p>
                       </div>
                     </div>
                     <Badge variant="outline" className={`text-xs ${moduleColors[permission.module] || ''}`}>
