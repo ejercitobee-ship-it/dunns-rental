@@ -293,55 +293,51 @@ export function TaxReport() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-            <TrendingUp className="h-4 w-4 text-positive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-positive">{formatCurrency(main.totalIncome)}</div>
-            <p className="text-xs text-muted">Taxable rental income</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deductible Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-danger" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-danger">{formatCurrency(main.totalDeductibleExpenses)}</div>
-            <p className="text-xs text-muted">Total deductions</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Income</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${main.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
-              {formatCurrency(main.netIncome)}
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Total Income</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingUp /></span>
             </div>
-            <p className="text-xs text-muted">Income minus deductions</p>
-          </CardContent>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-positive tnum">{formatCurrency(main.totalIncome)}</div>
+            <p className="mt-1.5 text-[13px] text-muted">Taxable rental income</p>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expense Ratio</CardTitle>
-            <Percent className="h-4 w-4 text-faint" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {main.totalIncome > 0
-                ? ((main.totalDeductibleExpenses / main.totalIncome) * 100).toFixed(1)
-                : 0}%
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Deductible Expenses</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
             </div>
-            <p className="text-xs text-muted">Expense to income ratio</p>
-          </CardContent>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-danger tnum">{formatCurrency(main.totalDeductibleExpenses)}</div>
+            <p className="mt-1.5 text-[13px] text-muted">Total deductions</p>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Net Income</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
+            </div>
+            <div className={`mt-3 font-display text-[27px] leading-none font-medium tnum ${main.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(main.netIncome)}</div>
+            <p className="mt-1.5 text-[13px] text-muted">Income minus deductions</p>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Expense Ratio</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Percent /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">
+              {main.totalIncome > 0 ? ((main.totalDeductibleExpenses / main.totalIncome) * 100).toFixed(1) : 0}%
+            </div>
+            <p className="mt-1.5 text-[13px] text-muted">Expense to income ratio</p>
+          </div>
         </Card>
       </div>
 

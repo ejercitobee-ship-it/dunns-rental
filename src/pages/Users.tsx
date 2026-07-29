@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Users as UsersIcon, Shield } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Avatar } from '../components/ui/Avatar';
@@ -299,7 +299,7 @@ export function Users() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-ink">Users</h1>
+          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Users</h1>
           <p className="text-muted mt-1">Manage the people who can sign in and what they can do.</p>
         </div>
         {tab === 'internal' && canManageUsers && (
@@ -311,43 +311,47 @@ export function Users() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Members</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Total Members</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UsersIcon /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{users.length}</div>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-positive">{users.filter(u => u.isActive).length}</div>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Active</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UserCheck /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-positive tnum">{users.filter(u => u.isActive).length}</div>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Roles</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{roles.length}</div>
-          </CardContent>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Roles</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Shield /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{roles.length}</div>
+          </div>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Admins</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow">Admins</span>
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><KeyRound /></span>
+            </div>
+            <div className="mt-3 font-display text-[27px] leading-none font-medium text-primary tnum">
               {users.filter(u => u.roleId === 'super_admin' || u.roleId === 'admin').length}
             </div>
-          </CardContent>
+          </div>
         </Card>
       </div>
 

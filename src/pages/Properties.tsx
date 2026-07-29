@@ -290,7 +290,7 @@ export function Properties() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-ink">Properties</h1>
+          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Properties</h1>
           <p className="text-muted mt-1 text-sm sm:text-base">Manage your rental properties and units</p>
         </div>
         {canCreateProperty && (

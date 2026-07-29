@@ -328,7 +328,7 @@ export function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Settings</h1>
         <p className="text-muted-foreground mt-1">
           Manage your application preferences
         </p>
