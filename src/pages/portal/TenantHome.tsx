@@ -195,6 +195,9 @@ export function TenantHome() {
         </div>
       )}
 
+      {/* Profile + contact card, kept above the rent banner at Belle's request. */}
+      <ProfileCard tenant={tenant} />
+
       {lease && (
         <RentHero
           monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
@@ -224,8 +227,6 @@ export function TenantHome() {
           <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
         </>
       )}
-
-      <ProfileCard tenant={tenant} />
 
       <HouseholdCard hasLease={!!me?.lease} />
 
