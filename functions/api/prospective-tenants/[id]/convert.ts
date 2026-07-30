@@ -55,10 +55,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       ),
       env.DB.prepare('INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)')
         .bind(crypto.randomUUID(), leaseId, tenantId),
-      // Carry the applicant's uploaded files onto the new tenant so their signed
-      // lease and application show on the tenant profile (history kept via the
-      // prospective_tenant_id column, which is left in place).
-      env.DB.prepare('UPDATE documents SET tenant_id = ? WHERE prospective_tenant_id = ?').bind(tenantId, id),
+      // Carry only the APPLICANT'S OWN uploads (their signed copies, uploaded_by
+      // IS NULL) onto the new tenant. The blank documents the office sent for
+      // signing (uploaded_by set, e.g. the lease we sent) are NOT carried over,
+      // so the tenant's file has what they signed, not the templates we sent.
+      // History is kept either way via the prospective_tenant_id column.
+      env.DB.prepare('UPDATE documents SET tenant_id = ? WHERE prospective_tenant_id = ? AND uploaded_by IS NULL').bind(tenantId, id),
       env.DB.prepare(
         `UPDATE prospective_tenants SET status = 'converted', converted_tenant_id = ?, updated_at = unixepoch() WHERE id = ?`
       ).bind(tenantId, id),

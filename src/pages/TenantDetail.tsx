@@ -219,6 +219,13 @@ export function TenantDetail() {
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
   }, [rentPayments, id, getTenantLeases]);
 
+  // Paid move-in fees show in the payment history alongside rent, each with its
+  // receipt. Derived from the lease, not a rent_payment.
+  const moveInFeeRows = useMemo(() => {
+    if (!id) return [];
+    return getTenantLeases(id).filter(l => l.moveInFeePaid && (l.securityDeposit || 0) > 0);
+  }, [id, getTenantLeases]);
+
   const openEdit = () => {
     if (!tenant) return;
     setForm({
@@ -1230,6 +1237,19 @@ export function TenantDetail() {
                 </tr>
               </thead>
               <tbody>
+                {moveInFeeRows.map(l => (
+                  <tr key={`mif-${l.id}`} className="border-b border-line last:border-0 bg-primary-soft/20">
+                    <td className="py-3 px-5 text-sm text-ink font-medium">Move-in fee</td>
+                    <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(l.securityDeposit || 0)}</td>
+                    <td className="py-3 px-5 text-sm text-muted">{formatMethod(l.moveInFeeMethod as PaymentMethod | undefined)}</td>
+                    <td className="py-3 px-5 text-sm text-muted">{l.moveInFeePaidDate ? formatDate(l.moveInFeePaidDate) : '—'}</td>
+                    <td className="py-3 px-5 text-sm">
+                      {l.moveInFeeReceiptDocumentId ? (
+                        <a href={`/api/documents/${l.moveInFeeReceiptDocumentId}`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary-hover">Download</a>
+                      ) : <span className="text-faint">—</span>}
+                    </td>
+                  </tr>
+                ))}
                 {payments.map(p => {
                   const receiptId = p.receiptDocumentId ?? receiptIds[p.id];
                   return (
@@ -1269,7 +1289,7 @@ export function TenantDetail() {
               </tbody>
             </table>
           </div>
-          {payments.length === 0 && (
+          {payments.length === 0 && moveInFeeRows.length === 0 && (
             <div className="text-center py-12">
               <DollarSign className="h-8 w-8 mx-auto text-faint mb-2" />
               <p className="text-sm text-muted">No payments recorded for this person yet.</p>

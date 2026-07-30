@@ -139,6 +139,7 @@ export function Rents() {
   const proofInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   // Move-in fee collection.
+  const [mifCollapsed, setMifCollapsed] = useState(true);
   const [mifLease, setMifLease] = useState<Lease | null>(null);
   const [mifForm, setMifForm] = useState({ amount: '', date: todayLocalDate(), method: 'check' as PaymentMethod });
   const [mifBusy, setMifBusy] = useState(false);
@@ -863,11 +864,24 @@ export function Rents() {
             return (
               <Card>
                 <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-ink flex items-center gap-2"><Wallet className="h-4 w-4 text-faint" /> Move-in fees</h3>
-                    {owedCount > 0 && <Badge variant="warning">{owedCount} owed</Badge>}
-                  </div>
-                  <div className="divide-y divide-line">
+                  <button
+                    type="button"
+                    onClick={() => setMifCollapsed(v => !v)}
+                    className="w-full flex items-center justify-between gap-2"
+                  >
+                    <h3 className="font-semibold text-ink flex items-center gap-2">
+                      {mifCollapsed ? <ChevronRight className="h-4 w-4 text-faint" /> : <ChevronDown className="h-4 w-4 text-faint" />}
+                      <Wallet className="h-4 w-4 text-faint" /> Move-in fees
+                    </h3>
+                    <span className="flex items-center gap-2">
+                      {owedCount > 0
+                        ? <Badge variant="warning">{owedCount} owed</Badge>
+                        : <Badge variant="success">All paid</Badge>}
+                      <span className="text-xs text-muted">{mifLeases.length}</span>
+                    </span>
+                  </button>
+                  {!mifCollapsed && (
+                  <div className="divide-y divide-line mt-4">
                     {mifLeases.map(l => {
                       const occ = getLeaseTenants(l.id);
                       const names = occ.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
@@ -896,6 +910,7 @@ export function Rents() {
                       );
                     })}
                   </div>
+                  )}
                 </CardContent>
               </Card>
             );
