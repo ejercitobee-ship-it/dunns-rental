@@ -16,13 +16,25 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     const driveRes = await getDriveFileStream(env, params.id as string);
     if (!driveRes.ok) return new Response('Not found', { status: 404 });
-    return new Response(driveRes.body, {
-      status: 200,
-      headers: {
-        'Content-Type': driveRes.headers.get('Content-Type') || 'image/jpeg',
-        'Cache-Control': 'private, max-age=3600',
-      },
-    });
+
+    // This route serves profile photos AND message attachments, which can be any
+    // file type. Only well-known raster images are allowed to render inline; any
+    // other type (HTML, SVG, PDF, ...) is forced to download so a malicious
+    // attachment can never execute script in this origin. nosniff stops the
+    // browser from re-interpreting a mistyped file, and the sandbox CSP neuters
+    // anything that is still opened as a document.
+    const ct = (driveRes.headers.get('Content-Type') || 'image/jpeg');
+    const base = ct.toLowerCase().split(';')[0].trim();
+    const inlineOk = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'].includes(base);
+    const headers: Record<string, string> = {
+      'Content-Type': ct,
+      'Cache-Control': 'private, max-age=3600',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+    };
+    if (!inlineOk) headers['Content-Disposition'] = 'attachment';
+
+    return new Response(driveRes.body, { status: 200, headers });
   } catch {
     return new Response('Not found', { status: 404 });
   }

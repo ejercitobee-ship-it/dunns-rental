@@ -22,10 +22,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const upstream = await getDriveFileStream(env, doc.drive_file_id);
     if (!upstream.ok) return jsonError('Document not found', 404);
 
+    // Only raster images may render inline; anything else (incl. HTML/SVG a
+    // signer might upload) is forced to download so it cannot run script.
+    const ct = doc.content_type || 'application/octet-stream';
+    const base = ct.toLowerCase().split(';')[0].trim();
+    const inlineOk = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'application/pdf'].includes(base);
+    const disp = inlineOk ? 'inline' : 'attachment';
     const headers = new Headers();
-    headers.set('Content-Type', doc.content_type || 'application/octet-stream');
-    headers.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`);
+    headers.set('Content-Type', ct);
+    headers.set('Content-Disposition', `${disp}; filename="${encodeURIComponent(doc.name)}"`);
     headers.set('Cache-Control', 'private, no-store');
+    headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(upstream.body, { headers });
   } catch (err) {
     if (err instanceof DriveNotConnected) return jsonError('Documents are unavailable right now.', 503);

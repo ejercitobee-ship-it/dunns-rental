@@ -21,6 +21,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     headers.set('Content-Type', meta.content_type || 'application/octet-stream');
     headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(meta.name)}"`);
     headers.set('Cache-Control', 'private, no-store');
+    headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(upstream.body, { headers });
   } catch (err) {
     // Never forward err.message: it can carry Drive internals. DriveNotConnected
