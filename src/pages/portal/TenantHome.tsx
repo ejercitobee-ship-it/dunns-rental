@@ -150,20 +150,35 @@ export function TenantHome() {
 
   return (
     <div className="space-y-5">
-      {/* Greeting */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm text-muted">{greetingFor()},</p>
-          <h1 className="font-display text-[26px] leading-tight text-ink truncate">
-            {tenant.firstName || 'Welcome'}
-          </h1>
-        </div>
-        <Avatar
-          photoUrl={tenant.photoUrl}
+      {/* Premium hero: the tenant's identity fused with their rent in one frame. */}
+      {lease ? (
+        <RentHero
+          monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
+          amount={lease.monthlyRent}
+          status={thisMonth?.status ?? null}
+          balance={thisMonth?.balance ?? 0}
+          dueDay={dueDay}
+          daysToDue={daysToDue}
+          greeting={greetingFor()}
+          firstName={tenant.firstName || 'Welcome'}
           initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
-          className="w-11 h-11 flex-shrink-0"
+          photoUrl={tenant.photoUrl}
         />
-      </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-muted">{greetingFor()},</p>
+            <h1 className="font-display text-[26px] leading-tight text-ink truncate">
+              {tenant.firstName || 'Welcome'}
+            </h1>
+          </div>
+          <Avatar
+            photoUrl={tenant.photoUrl}
+            initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
+            className="w-11 h-11 flex-shrink-0"
+          />
+        </div>
+      )}
 
       {pastDue && (
         <div className="rounded-2xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
@@ -195,23 +210,7 @@ export function TenantHome() {
         </div>
       )}
 
-      {/* Profile + contact card, kept above the rent banner at Belle's request. */}
-      <ProfileCard tenant={tenant} />
-
-      {lease && (
-        <RentHero
-          monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
-          amount={lease.monthlyRent}
-          status={thisMonth?.status ?? null}
-          balance={thisMonth?.balance ?? 0}
-          dueDay={dueDay}
-          daysToDue={daysToDue}
-        />
-      )}
-
       <QuickActions />
-
-      <NotificationsCard />
 
       {!lease ? (
         <Card>
@@ -228,6 +227,11 @@ export function TenantHome() {
         </>
       )}
 
+      {/* Contact + emergency details, now a calm card below the hero. */}
+      <ProfileCard tenant={tenant} />
+
+      <NotificationsCard />
+
       <HouseholdCard hasLease={!!me?.lease} />
 
       <RealtorCard realtors={realtors} />
@@ -238,7 +242,7 @@ export function TenantHome() {
 // The signature surface of the tenant app: this month's rent, its status, and
 // how close the due date is, on a rich evergreen card.
 function RentHero({
-  monthLabel, amount, status, balance, dueDay, daysToDue,
+  monthLabel, amount, status, balance, dueDay, daysToDue, greeting, firstName, initials, photoUrl,
 }: {
   monthLabel: string;
   amount: number;
@@ -246,6 +250,10 @@ function RentHero({
   balance: number;
   dueDay: number;
   daysToDue: number;
+  greeting: string;
+  firstName: string;
+  initials: string;
+  photoUrl?: string | null;
 }) {
   const scrollToPay = () => {
     document.getElementById('how-to-pay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -263,6 +271,21 @@ function RentHero({
     >
       <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 40% at 12% 8%, rgba(255,255,255,0.14), transparent 60%)' }} />
       <div className="relative">
+        {/* Identity header, fused onto the rent card so they read as one frame. */}
+        <div className="flex items-center gap-3">
+          {photoUrl ? (
+            <img src={photoUrl} alt="" className="w-11 h-11 rounded-full object-cover ring-1 ring-white/30" />
+          ) : (
+            <span className="w-11 h-11 rounded-full bg-white/15 ring-1 ring-white/25 grid place-items-center text-white font-medium">{initials}</span>
+          )}
+          <div className="min-w-0">
+            <p className="text-[13px] text-white/60 leading-tight">{greeting},</p>
+            <p className="font-display text-[20px] leading-tight text-white truncate">{firstName}</p>
+          </div>
+        </div>
+
+        <div className="my-5 h-px bg-white/12" />
+
         <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/65">{monthLabel} rent</p>
         <p className="font-display text-[42px] leading-none mt-2 tnum">{formatCurrency(amount)}</p>
 
