@@ -406,7 +406,8 @@ export function Rents() {
     if (proofInputRef.current) proofInputRef.current.value = '';
     setRecordForm({
       amount: row.settlement.balance > 0 ? String(row.settlement.balance) : '',
-      paidByTenantId: '',
+      // Default "Who Paid" to the main (first) tenant on the lease.
+      paidByTenantId: row.occupants[0]?.id || '',
       receivedDate: todayLocalDate(),
       paymentMethod: 'check',
       notes: '',

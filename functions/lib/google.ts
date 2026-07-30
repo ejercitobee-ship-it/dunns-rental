@@ -505,16 +505,18 @@ export async function getDriveFileStream(env: Env, fileId: string): Promise<Resp
 }
 
 /** Move a file to the Drive trash. */
-export async function deleteDriveFile(env: Env, fileId: string): Promise<void> {
-  const token = await getAccessToken(env);
-  const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  // 404 means it is already gone, which is the outcome we wanted.
-  if (!res.ok && res.status !== 404) {
-    throw new Error(`Drive delete failed: ${res.status}`);
-  }
+/**
+ * Deleting Drive files is DISABLED by policy (Belle, 2026-07-30): nothing the
+ * app has stored in Google Drive is ever removed. A record can still be deleted
+ * or hidden inside the app, but the underlying Drive file (receipt, photo,
+ * document, signed lease) is always kept, so it can never be lost, even by a
+ * mistaken delete or a receipt regeneration. Callers still invoke this on their
+ * "replace"/"delete" paths; it simply retains the file instead. Re-enable only
+ * deliberately, never as a side effect of a delete.
+ */
+export async function deleteDriveFile(_env: Env, _fileId: string): Promise<void> {
+  // Intentionally a no-op: Drive files are retained.
+  return;
 }
 
 /**
