@@ -180,6 +180,9 @@ export function TenantHome() {
         </div>
       )}
 
+      {/* Contact + emergency details, right under the hero. */}
+      <ProfileCard tenant={tenant} />
+
       {pastDue && (
         <div className="rounded-2xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
@@ -226,9 +229,6 @@ export function TenantHome() {
           <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
         </>
       )}
-
-      {/* Contact + emergency details, now a calm card below the hero. */}
-      <ProfileCard tenant={tenant} />
 
       <NotificationsCard />
 
