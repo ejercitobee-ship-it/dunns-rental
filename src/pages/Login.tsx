@@ -23,7 +23,9 @@ export function Login() {
   const [twoFactorMode, setTwoFactorMode] = useState(false);
   const [twoFactorMethod, setTwoFactorMethod] = useState<'app' | 'email'>('email');
   const [code, setCode] = useState('');
-  const [rememberDevice, setRememberDevice] = useState(false);
+  // Remember the device by default, so a code is only needed on a fresh login
+  // from a new device (or after 30 days), not on the routine inactivity re-login.
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [resending, setResending] = useState(false);
 
   // Check if user was logged out due to inactivity

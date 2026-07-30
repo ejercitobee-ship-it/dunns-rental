@@ -74,13 +74,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .run();
     }
 
-    // Second factor, required for everyone. An authenticator-app code (TOTP) if
-    // the user set one up; otherwise a one-time code emailed to them. A browser
-    // the user chose to remember (a valid td cookie) skips the step for 30 days.
+    // Second factor. A device the user chose to remember (a valid td cookie)
+    // needs NO code at all for 30 days, so the routine 30-minute inactivity
+    // re-login never re-prompts: only a genuinely fresh login on a new or
+    // long-idle device does. Otherwise the code is an authenticator-app code
+    // (TOTP) if they set one up, else a one-time code emailed to them.
     let tdCookieToSet: string | null = null;
     const tdToken = parseCookies(request)['td'];
+    const trustedDevice = await checkTrustedDevice(env, user.id, tdToken);
 
-    if (user.totp_enabled) {
+    if (trustedDevice) {
+      // Remembered device within its 30-day window: skip the code.
+    } else if (user.totp_enabled) {
       const code = (body.code || '').trim();
       if (!code) {
         return jsonOk({ success: false, twoFactorRequired: true, method: 'app' }, 200);
@@ -90,7 +95,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         await recordLoginFailure(env, ip);
         return jsonError('Invalid authentication code', 401);
       }
-    } else if (!(await checkTrustedDevice(env, user.id, tdToken))) {
+      if (body.rememberDevice) tdCookieToSet = trustedDeviceCookie(await issueTrustedDevice(env, user.id));
+    } else {
       const code = (body.code || '').trim();
       if (!code) {
         // Password was right; email a fresh code and ask the client for it.
@@ -102,9 +108,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         await recordLoginFailure(env, ip);
         return jsonError('That code is not valid or has expired. Request a new one.', 401);
       }
-      if (body.rememberDevice) {
-        tdCookieToSet = trustedDeviceCookie(await issueTrustedDevice(env, user.id));
-      }
+      if (body.rememberDevice) tdCookieToSet = trustedDeviceCookie(await issueTrustedDevice(env, user.id));
     }
 
     const userRole = await env.DB.prepare('SELECT role FROM user_roles WHERE user_id = ?')
