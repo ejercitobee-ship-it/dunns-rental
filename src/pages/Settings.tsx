@@ -162,7 +162,7 @@ export function Settings() {
     const query = params.toString();
     const newUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
     window.history.replaceState({}, '', newUrl);
-  }, []);
+  }, [showToast]);
 
   const handleConnectDrive = () => {
     // Full page navigation on purpose: this is an OAuth flow and has to

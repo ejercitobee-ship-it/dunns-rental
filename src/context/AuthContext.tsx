@@ -47,6 +47,10 @@ interface AuthContextType {
   isSuperAdmin: () => boolean;
 }
 
+// Auto-logout after 30 minutes of inactivity. Module-scoped so it is a stable
+// constant, not a value the effect/callback hooks have to list as a dependency.
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function mapSessionUser(sessionUser: Record<string, unknown>, role: Role): User {
@@ -75,8 +79,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
   const [users, setUsers] = useState<User[]>([]);
 
-  // Auto-logout after 30 minutes of inactivity
-  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Starts at 0 (updated on the first activity); Date.now() in a ref initializer
   // is an impure call during render.
@@ -142,7 +144,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (userData) {
           const sessionUser = userData as Record<string, unknown>;
-          const role = roles.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
+          // Runs once on mount, when `roles` is still DEFAULT_ROLES; reference
+          // DEFAULT_ROLES directly so this effect has no reactive dependency on
+          // the roles state. refreshTeam re-resolves custom roles once loaded.
+          const role = DEFAULT_ROLES.find(r => r.id === (sessionUser.role as string)) || DEFAULT_ROLES[0];
           setUser(mapSessionUser({ ...sessionUser, roleId: sessionUser.role }, role));
         }
       } catch {
