@@ -193,10 +193,10 @@ export function Login() {
           </form>
         </div>
 
-        {/* New tenants: the portal is invitation only, so point them to the
-            access request form. */}
+        {/* Existing tenants without a login yet: the portal is invitation only,
+            so point them to the access request form. */}
         <div className="mt-6 rounded-2xl border border-line bg-primary-soft/50 p-5 text-center">
-          <p className="text-sm font-medium text-ink">New tenant? Your portal is invitation only.</p>
+          <p className="text-sm font-medium text-ink">Active tenant? Your portal is invitation only.</p>
           <p className="text-sm text-muted mt-1">
             Request your sign in and we will set up your account.{' '}
             <a
