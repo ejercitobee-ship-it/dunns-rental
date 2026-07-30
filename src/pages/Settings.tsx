@@ -18,6 +18,7 @@ import {
   Cloud,
   FileSpreadsheet,
   ExternalLink,
+  ShieldCheck,
   RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -26,9 +27,10 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { settingsApi, googleApi, rentSheetApi, adminApi } from '../lib/api';
+import { settingsApi, googleApi, rentSheetApi, adminApi, authApi } from '../lib/api';
 import { SYSTEM_PERMISSIONS } from '../types/auth';
 import type { Role } from '../types/auth';
+import { QRCodeSVG } from 'qrcode.react';
 
 export function Settings() {
   const { showToast } = useToast();
@@ -312,6 +314,7 @@ export function Settings() {
     { id: 'company', label: 'Company', icon: Building2 },
     { id: 'rent', label: 'Rent', icon: DollarSign },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'security', label: 'Security', icon: ShieldCheck },
     { id: 'team-access', label: 'Team Access', icon: Users },
   ];
 
@@ -705,6 +708,9 @@ export function Settings() {
         </Card>
       )}
 
+      {/* Security (two-factor auth) */}
+      {activeTab === 'security' && <TwoFactorSection />}
+
       {/* Team Access Settings */}
       {activeTab === 'team-access' && (
         <div className="space-y-6">
@@ -921,5 +927,129 @@ export function Settings() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Two-factor authentication for the signed-in user's own account. Enable with an
+ * authenticator app (scan the QR), confirm a code, then save one-time backup
+ * codes. Disable requires a current code. Uses TOTP; tenants are unaffected.
+ */
+function TwoFactorSection() {
+  const { user, updateCurrentUser } = useAuth();
+  const { showToast } = useToast();
+  const enabled = !!user?.twoFactorEnabled;
+  const [phase, setPhase] = useState<'idle' | 'setup' | 'backup'>('idle');
+  const [secret, setSecret] = useState('');
+  const [otpauthUrl, setOtpauthUrl] = useState('');
+  const [code, setCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [disableCode, setDisableCode] = useState('');
+  const [disabling, setDisabling] = useState(false);
+
+  const startSetup = async () => {
+    setBusy(true);
+    try {
+      const res = await authApi.twoFactorSetup();
+      setSecret(res.secret);
+      setOtpauthUrl(res.otpauthUrl);
+      setCode('');
+      setPhase('setup');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not start setup.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmEnable = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await authApi.twoFactorEnable(code.trim());
+      setBackupCodes(res.backupCodes);
+      setPhase('backup');
+      updateCurrentUser({ twoFactorEnabled: true });
+      showToast('Two-factor authentication is on.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'That code was not valid.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    if (disabling) return;
+    setDisabling(true);
+    try {
+      await authApi.twoFactorDisable(disableCode.trim());
+      updateCurrentUser({ twoFactorEnabled: false });
+      setDisableCode('');
+      showToast('Two-factor authentication turned off.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'That code was not valid.', 'error');
+    } finally {
+      setDisabling(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Two-Factor Authentication</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <p className="text-sm text-muted max-w-xl">
+          Add a second step to your login: a 6-digit code from an authenticator app (Google Authenticator,
+          Authy, 1Password). It protects your account even if your password is ever stolen.
+        </p>
+
+        {enabled ? (
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-lg bg-positive-soft text-positive px-3 py-1.5 text-sm font-medium">
+              <Check className="h-4 w-4" /> Two-factor is ON
+            </div>
+            <div className="rounded-xl border border-line p-4 space-y-3 max-w-md">
+              <p className="text-sm font-medium text-ink">Turn it off</p>
+              <p className="text-xs text-muted">Enter a current code (or a backup code) to disable it.</p>
+              <div className="flex gap-2">
+                <input value={disableCode} onChange={(e) => setDisableCode(e.target.value)} placeholder="123456" className="flex-1 px-3 py-2 border border-line rounded-lg bg-surface text-sm" />
+                <Button variant="destructive" onClick={disable} disabled={disabling || !disableCode.trim()}>{disabling ? 'Disabling...' : 'Disable'}</Button>
+              </div>
+            </div>
+          </div>
+        ) : phase === 'idle' ? (
+          <Button onClick={startSetup} disabled={busy}>{busy ? 'Preparing...' : 'Enable two-factor'}</Button>
+        ) : phase === 'setup' ? (
+          <div className="space-y-4 max-w-md">
+            <p className="text-sm text-ink">1. Scan this with your authenticator app:</p>
+            <div className="bg-white p-3 rounded-xl border border-line inline-block"><QRCodeSVG value={otpauthUrl} size={168} /></div>
+            <p className="text-xs text-muted">Can't scan? Enter this key manually: <span className="font-mono text-ink break-all">{secret}</span></p>
+            <div>
+              <label className="block text-sm text-ink mb-1.5">2. Enter the 6-digit code it shows:</label>
+              <div className="flex gap-2">
+                <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" placeholder="123456" className="flex-1 px-3 py-2 border border-line rounded-lg bg-surface text-sm tracking-widest text-center" />
+                <Button onClick={confirmEnable} disabled={busy || code.trim().length < 6}>{busy ? 'Verifying...' : 'Verify & enable'}</Button>
+              </div>
+            </div>
+            <button type="button" onClick={() => setPhase('idle')} className="text-sm text-muted hover:text-ink">Cancel</button>
+          </div>
+        ) : (
+          <div className="space-y-3 max-w-md">
+            <div className="inline-flex items-center gap-2 rounded-lg bg-positive-soft text-positive px-3 py-1.5 text-sm font-medium">
+              <Check className="h-4 w-4" /> Enabled
+            </div>
+            <p className="text-sm text-ink font-medium">Save your backup codes</p>
+            <p className="text-xs text-muted">Each works once if you lose your authenticator. Keep them somewhere safe. They will not be shown again.</p>
+            <div className="grid grid-cols-2 gap-2 bg-canvas rounded-lg p-3 font-mono text-sm">
+              {backupCodes.map((c) => <span key={c} className="text-ink">{c}</span>)}
+            </div>
+            <Button variant="outline" onClick={() => { navigator.clipboard?.writeText(backupCodes.join('\n')); showToast('Backup codes copied.', 'success'); }}>Copy codes</Button>
+            <div><Button onClick={() => setPhase('idle')}>Done</Button></div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

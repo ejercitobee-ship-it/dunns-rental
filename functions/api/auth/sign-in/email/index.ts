@@ -9,6 +9,7 @@ import {
   sessionCookie,
 } from '../../../../lib/session';
 import { throttleLockedUntil, recordLoginFailure, clearLoginThrottle } from '../../../../lib/throttle';
+import { verifyUserTwoFactor } from '../../../../lib/two-factor';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
@@ -16,7 +17,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const ip = request.headers.get('CF-Connecting-IP');
 
   try {
-    const body = (await request.json()) as { email?: string; password?: string };
+    const body = (await request.json()) as { email?: string; password?: string; code?: string };
     const email = body.email?.trim().toLowerCase();
     const { password } = body;
 
@@ -31,9 +32,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError(`Too many sign in attempts. Please try again in ${mins} minute${mins === 1 ? '' : 's'}.`, 429);
     }
 
-    const user = await env.DB.prepare('SELECT id, name, email, is_active FROM user WHERE email = ?')
+    const user = await env.DB.prepare('SELECT id, name, email, is_active, totp_secret, totp_enabled, backup_codes FROM user WHERE email = ?')
       .bind(email)
-      .first<{ id: string; name: string; email: string; is_active: number | null }>();
+      .first<{ id: string; name: string; email: string; is_active: number | null; totp_secret: string | null; totp_enabled: number | null; backup_codes: string | null }>();
 
     if (!user) {
       await recordLoginFailure(env, ip);
@@ -69,6 +70,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       )
         .bind(upgraded, Math.floor(Date.now() / 1000), user.id, 'credential')
         .run();
+    }
+
+    // Two-factor gate: the password is correct, but if the user has 2FA on they
+    // must also present a valid TOTP or backup code before a session is issued.
+    if (user.totp_enabled) {
+      const code = (body.code || '').trim();
+      if (!code) {
+        // Not a failure (the password was right); ask the client for the code.
+        return jsonOk({ success: false, twoFactorRequired: true }, 200);
+      }
+      const ok = await verifyUserTwoFactor(env, user.id, user.totp_secret, user.backup_codes, code);
+      if (!ok) {
+        await recordLoginFailure(env, ip);
+        return jsonError('Invalid authentication code', 401);
+      }
     }
 
     const userRole = await env.DB.prepare('SELECT role FROM user_roles WHERE user_id = ?')

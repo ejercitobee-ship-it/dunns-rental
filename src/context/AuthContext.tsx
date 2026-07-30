@@ -29,7 +29,7 @@ interface AuthContextType {
   roles: Role[];
   users: User[];
   permissions: Permission[];
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string, code?: string) => Promise<{ success: boolean; error?: string; forcePasswordReset?: boolean; twoFactorRequired?: boolean }>;
   logout: () => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   hasPermission: (permissionId: string) => boolean;
@@ -65,6 +65,7 @@ function mapSessionUser(sessionUser: Record<string, unknown>, role: Role): User 
     isActive: true,
     lastLogin: new Date().toISOString(),
     createdAt: (sessionUser.createdAt as string) || new Date().toISOString(),
+    twoFactorEnabled: !!sessionUser.twoFactorEnabled,
   };
 }
 
@@ -204,9 +205,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, refreshTeam]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, code?: string) => {
     try {
-      const result = await authApi.signIn(email, password);
+      const result = await authApi.signIn(email, password, code);
+
+      // Password was correct but the account has 2FA: ask for the code.
+      if (result?.twoFactorRequired) {
+        return { success: false, twoFactorRequired: true };
+      }
 
       // Our custom API returns { success: true, user: {...} }
       if (result?.success && result?.user) {

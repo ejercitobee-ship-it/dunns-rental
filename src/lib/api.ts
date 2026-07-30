@@ -39,11 +39,19 @@ export const authApi = {
       body: JSON.stringify({ email, password, name }),
     }),
   
-  signIn: (email: string, password: string) =>
+  signIn: (email: string, password: string, code?: string) =>
     apiRequest('/auth/sign-in/email', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, code }),
     }),
+
+  // Two-factor authentication (TOTP) for the signed-in user's own account.
+  twoFactorSetup: (): Promise<{ secret: string; otpauthUrl: string }> =>
+    apiRequest('/auth/2fa/setup', { method: 'POST' }),
+  twoFactorEnable: (code: string): Promise<{ backupCodes: string[] }> =>
+    apiRequest('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ code }) }),
+  twoFactorDisable: (code: string): Promise<{ success: boolean }> =>
+    apiRequest('/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
   
   signOut: () =>
     apiRequest('/auth/sign-out', { method: 'POST' }),

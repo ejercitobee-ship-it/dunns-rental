@@ -28,6 +28,8 @@ export interface SessionUser {
   /** The user's own profile photo Drive id and phone, for the self-profile UI. */
   image?: string | null;
   phone?: string | null;
+  /** Whether the user has two-factor authentication enabled. */
+  twoFactorEnabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +79,7 @@ export async function getSessionUser(
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
     `SELECT u.id AS id, u.email AS email, u.name AS name, u.is_active AS is_active,
-            u.image AS image, u.phone AS phone,
+            u.image AS image, u.phone AS phone, u.totp_enabled AS totp_enabled,
             r.role AS role, ro.permissions AS permissions
        FROM session s
        JOIN user u ON u.id = s.user_id
@@ -95,6 +97,7 @@ export async function getSessionUser(
       phone: string | null;
       role: string | null;
       permissions: string | null;
+      totp_enabled: number | null;
     }>();
 
   if (!row) return null;
@@ -119,6 +122,7 @@ export async function getSessionUser(
     permissions,
     image: row.image,
     phone: row.phone,
+    twoFactorEnabled: !!row.totp_enabled,
   };
 }
 

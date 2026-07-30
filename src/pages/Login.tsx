@@ -18,6 +18,9 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // Two-factor: after a correct password, the server asks for a code.
+  const [twoFactorMode, setTwoFactorMode] = useState(false);
+  const [code, setCode] = useState('');
 
   // Check if user was logged out due to inactivity
   const logoutReason = searchParams.get('reason');
@@ -31,13 +34,21 @@ export function Login() {
     setIsLoading(true);
 
     try {
-      const result = await login(email, password);
-      
+      const result = await login(email, password, twoFactorMode ? code.trim() : undefined);
+
+      if (result.twoFactorRequired) {
+        // Password was accepted; switch to the code step.
+        setTwoFactorMode(true);
+        setError('');
+        setIsLoading(false);
+        return;
+      }
+
       if (result.success) {
         showToast('Welcome back!', 'success');
         navigate('/');
       } else {
-        setError(result.error || 'Invalid email or password');
+        setError(result.error || (twoFactorMode ? 'Invalid authentication code' : 'Invalid email or password'));
         showToast(result.error || 'Invalid credentials', 'error');
       }
     } catch {
@@ -134,15 +145,33 @@ export function Login() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded border-line-strong text-primary focus:ring-primary/30 accent-[#24503f]" />
-                <span className="text-sm text-muted">Remember me</span>
-              </label>
-              <Link to="/forgot-password" className="text-sm text-primary hover:text-primary-hover font-medium">
-                Forgot password?
-              </Link>
-            </div>
+            {twoFactorMode && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-2">Authentication code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-full px-4 py-3 border border-line rounded-lg bg-surface tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                  placeholder="123456"
+                />
+                <p className="text-xs text-muted mt-1.5">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+              </div>
+            )}
+
+            {!twoFactorMode && (
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 rounded border-line-strong text-primary focus:ring-primary/30 accent-[#24503f]" />
+                  <span className="text-sm text-muted">Remember me</span>
+                </label>
+                <Link to="/forgot-password" className="text-sm text-primary hover:text-primary-hover font-medium">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             <Button 
               type="submit" 
@@ -155,10 +184,10 @@ export function Login() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Signing in...
+                  {twoFactorMode ? 'Verifying...' : 'Signing in...'}
                 </span>
               ) : (
-                'Sign In'
+                twoFactorMode ? 'Verify' : 'Sign In'
               )}
             </Button>
           </form>

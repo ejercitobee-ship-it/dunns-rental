@@ -29,6 +29,7 @@ export interface User {
   phone?: string;
   department?: string;
   photoUrl?: string | null;
+  twoFactorEnabled?: boolean;
 }
 
 export interface AuthState {
