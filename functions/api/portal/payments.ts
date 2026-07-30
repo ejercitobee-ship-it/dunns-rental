@@ -45,10 +45,23 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         ORDER BY year DESC, month DESC`
     ).bind(lease.id).all();
 
+    // The move-in fee, when paid, shows in the tenant's payment history too,
+    // with its receipt. Derived from the lease, not a rent_payment.
+    const l = lease as Record<string, unknown>;
+    const moveInFee = l.move_in_fee_paid && Number(l.security_deposit || 0) > 0
+      ? {
+          amount: Number(l.security_deposit || 0),
+          paidDate: (l.move_in_fee_paid_date as string) ?? undefined,
+          method: (l.move_in_fee_method as string) ?? undefined,
+          receiptDocumentId: (l.move_in_fee_receipt_document_id as string) ?? undefined,
+        }
+      : null;
+
     return jsonOk({
       success: true,
       data: {
         lease: serializePortalLease(lease as Record<string, unknown>),
+        moveInFee,
         payments: (results || []).map(r => ({
           id: r.id,
           amount: r.amount,

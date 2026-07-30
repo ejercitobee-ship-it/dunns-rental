@@ -472,9 +472,17 @@ export interface PortalMeResponse {
   rentDueDay?: number;
 }
 
+export interface PortalMoveInFee {
+  amount: number;
+  paidDate?: string;
+  method?: string;
+  receiptDocumentId?: string;
+}
+
 export interface PortalPaymentsResponse {
   lease: PortalLease | null;
   payments: PortalPayment[];
+  moveInFee?: PortalMoveInFee | null;
 }
 
 /**

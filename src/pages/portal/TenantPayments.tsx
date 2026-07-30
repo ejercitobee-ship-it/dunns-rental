@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DollarSign, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { portalApi, type PortalLease } from '../../lib/api';
+import { portalApi, type PortalLease, type PortalMoveInFee } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
 import { settleMonth, rentMonthsToShow } from '../../lib/rent';
@@ -58,6 +58,7 @@ export function TenantPayments() {
   // The raw rows (with real id + receiptDocumentId) kept alongside, so a month
   // can offer its receipt; `payments` above stays the id-less shape settleMonth uses.
   const [rawPayments, setRawPayments] = useState<PortalPayment[]>([]);
+  const [moveInFee, setMoveInFee] = useState<PortalMoveInFee | null>(null);
   const [receiptOverrides, setReceiptOverrides] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +73,7 @@ export function TenantPayments() {
         setLease(res.lease);
         setPayments(res.lease ? toRentPayments(res.lease.id, res.payments) : []);
         setRawPayments(res.lease ? res.payments : []);
+        setMoveInFee(res.moveInFee ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -131,8 +133,21 @@ export function TenantPayments() {
         out.push({ key: `${year}-${month}-due`, label, amount: balance, method: '', status: 'unpaid' });
       }
     }
+
+    // The one-time move-in fee, shown at the end of the history with its receipt.
+    if (moveInFee) {
+      out.push({
+        key: 'move-in-fee',
+        label: 'Move-in fee',
+        amount: moveInFee.amount,
+        method: moveInFee.method ? prettyMethod(moveInFee.method) : '',
+        paidOn: moveInFee.paidDate,
+        status: 'paid',
+        receiptDocId: moveInFee.receiptDocumentId,
+      });
+    }
     return out;
-  }, [lease, payments, rawPayments, receiptOverrides]);
+  }, [lease, payments, rawPayments, receiptOverrides, moveInFee]);
 
   const handleGenerateReceipt = async (paymentId: string) => {
     if (generating) return;
