@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { useToast } from '../../context/ToastContext';
-import { portalApi, photoApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
-import { resizeImage } from '../../lib/image';
+import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
@@ -397,45 +396,11 @@ function HomeCard({
 // realtor Dashboard uses.
 function ProfileCard({ tenant }: { tenant: Tenant }) {
   const { showToast } = useToast();
-  const [photoUrl, setPhotoUrl] = useState<string | null>(tenant.photoUrl ?? null);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   // The tenant can ADD an emergency contact if they have none yet; once saved
   // it overlays the (read-only) value from the server.
   const [emergencyOverride, setEmergencyOverride] = useState<Tenant['emergencyContact'] | null>(null);
   const [ecForm, setEcForm] = useState({ name: '', phone: '', relationship: '' });
   const [ecBusy, setEcBusy] = useState(false);
-
-  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || photoBusy) return;
-    setPhotoBusy(true);
-    try {
-      const blob = await resizeImage(file);
-      const { photoUrl: newUrl } = await photoApi.uploadSelf(blob);
-      setPhotoUrl(`${newUrl}?t=${Date.now()}`);
-      showToast('Photo updated.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not update your photo.', 'error');
-    } finally {
-      setPhotoBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const handlePhotoRemove = async () => {
-    if (photoBusy) return;
-    setPhotoBusy(true);
-    try {
-      await photoApi.removeSelf();
-      setPhotoUrl(null);
-      showToast('Photo removed.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not remove your photo.', 'error');
-    } finally {
-      setPhotoBusy(false);
-    }
-  };
 
   const handleAddEmergency = async () => {
     if (ecBusy || !ecForm.name.trim()) return;
@@ -461,46 +426,7 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
   return (
     <Card>
       <CardContent className="p-5 space-y-5">
-        <div className="flex items-center gap-4">
-          <Avatar
-            photoUrl={photoUrl}
-            initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
-            className="w-16 h-16 flex-shrink-0"
-            initialsClassName="text-xl"
-          />
-          <div>
-            <p className="text-ink font-medium">{`${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim() || 'Your profile'}</p>
-            <div className="flex items-center gap-3 mt-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoPick}
-              />
-              <button
-                type="button"
-                disabled={photoBusy}
-                onClick={() => fileInputRef.current?.click()}
-                className="text-sm font-medium text-primary hover:text-primary-hover disabled:opacity-50"
-              >
-                {photoUrl ? 'Change photo' : 'Add photo'}
-              </button>
-              {photoUrl && (
-                <button
-                  type="button"
-                  disabled={photoBusy}
-                  onClick={handlePhotoRemove}
-                  className="text-sm font-medium text-muted hover:text-danger disabled:opacity-50"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3 border-t border-line pt-4">
+        <div className="space-y-3">
           <h3 className="font-semibold text-ink flex items-center gap-2">
             <User className="h-4 w-4 text-faint" /> Contact
           </h3>
