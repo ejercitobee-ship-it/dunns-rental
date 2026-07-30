@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2, Smartphone, X } from 'lucide-react';
+import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2, Smartphone, ChevronRight } from 'lucide-react';
 import logo from '../../assets/mh-dunn-logo.png';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -157,35 +157,27 @@ export function PortalLayout({ children }: PortalLayoutProps) {
  * it. Links to the full step-by-step guide.
  */
 function InstallPrompt() {
-  // Decide once, synchronously, on mount: hidden when already installed
-  // (standalone) or previously dismissed.
-  const [show, setShow] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const standalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (navigator as unknown as { standalone?: boolean }).standalone === true;
-    return !standalone && localStorage.getItem('installPromptDismissed') !== '1';
-  });
-  if (!show) return null;
+  // Show whenever the portal is opened in a browser; the only way it goes away
+  // is opening the app installed on the home screen (standalone). No dismiss, so
+  // it keeps gently reminding until they actually install it.
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true);
+  if (standalone) return null;
   return (
-    <div className="mb-5 rounded-2xl border border-primary/25 bg-primary-soft/50 p-4 flex items-center gap-3">
+    <Link
+      to="/portal/install"
+      className="mb-5 flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary-soft/50 p-4 hover:bg-primary-soft/70 transition-colors"
+    >
       <span className="w-9 h-9 rounded-xl bg-primary text-white grid place-items-center flex-shrink-0">
         <Smartphone className="h-[18px] w-[18px]" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-ink">Add MH Dunn to your home screen</p>
-        <p className="text-xs text-muted">
-          One tap to open, and get reminders as notifications.{' '}
-          <Link to="/portal/install" className="text-primary font-medium underline">Show me how</Link>
-        </p>
+        <p className="text-xs text-muted">One tap to open, and get reminders as notifications. Tap to see how.</p>
       </div>
-      <button
-        onClick={() => { localStorage.setItem('installPromptDismissed', '1'); setShow(false); }}
-        className="p-1.5 text-faint hover:text-ink flex-shrink-0"
-        aria-label="Dismiss"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    </div>
+      <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+    </Link>
   );
 }
