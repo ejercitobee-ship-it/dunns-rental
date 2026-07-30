@@ -81,6 +81,29 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** The one-time sign-in code email (email-based two-factor). */
+export function loginCodeEmail(code: string, name?: string) {
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+  const text = [
+    greeting,
+    '',
+    `Your MH Dunn Property sign-in code is: ${code}`,
+    '',
+    'Enter it on the sign-in page to finish logging in. It expires in 10 minutes.',
+    "If you did not try to sign in, you can ignore this email and your account stays secure.",
+  ].join('\n');
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;text-align:center;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:8px;">MH Dunn Property</div>
+      <p style="margin:0 0 20px;font-size:15px;color:#6b6a63;">${greeting} here is your sign-in code.</p>
+      <div style="font-size:34px;letter-spacing:10px;font-weight:700;color:#24503f;background:#f2f5f2;border:1px solid #dfe7e1;border-radius:10px;padding:16px;">${code}</div>
+      <p style="margin:20px 0 0;font-size:13px;color:#6b6a63;">Enter it on the sign-in page. It expires in 10 minutes. If this was not you, you can ignore this email.</p>
+    </div>
+  </div>`;
+  return { html, text };
+}
+
 /** Password reset email, styled to match the app. */
 export function passwordResetEmail(resetUrl: string, name?: string) {
   const greeting = name ? `Hi ${name},` : 'Hi,';

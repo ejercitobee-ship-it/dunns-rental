@@ -39,10 +39,10 @@ export const authApi = {
       body: JSON.stringify({ email, password, name }),
     }),
   
-  signIn: (email: string, password: string, code?: string) =>
+  signIn: (email: string, password: string, code?: string, rememberDevice?: boolean) =>
     apiRequest('/auth/sign-in/email', {
       method: 'POST',
-      body: JSON.stringify({ email, password, code }),
+      body: JSON.stringify({ email, password, code, rememberDevice }),
     }),
 
   // Two-factor authentication (TOTP) for the signed-in user's own account.

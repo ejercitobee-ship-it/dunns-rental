@@ -514,6 +514,7 @@ export async function getDriveFileStream(env: Env, fileId: string): Promise<Resp
  * "replace"/"delete" paths; it simply retains the file instead. Re-enable only
  * deliberately, never as a side effect of a delete.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function deleteDriveFile(_env: Env, _fileId: string): Promise<void> {
   // Intentionally a no-op: Drive files are retained.
   return;

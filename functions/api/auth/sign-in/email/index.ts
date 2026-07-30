@@ -7,9 +7,11 @@ import {
   jsonError,
   serverError,
   sessionCookie,
+  parseCookies,
 } from '../../../../lib/session';
 import { throttleLockedUntil, recordLoginFailure, clearLoginThrottle } from '../../../../lib/throttle';
 import { verifyUserTwoFactor } from '../../../../lib/two-factor';
+import { issueAndSendEmailCode, verifyEmailCode, checkTrustedDevice, issueTrustedDevice, trustedDeviceCookie } from '../../../../lib/email-otp';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
@@ -17,7 +19,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const ip = request.headers.get('CF-Connecting-IP');
 
   try {
-    const body = (await request.json()) as { email?: string; password?: string; code?: string };
+    const body = (await request.json()) as { email?: string; password?: string; code?: string; rememberDevice?: boolean };
     const email = body.email?.trim().toLowerCase();
     const { password } = body;
 
@@ -72,18 +74,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .run();
     }
 
-    // Two-factor gate: the password is correct, but if the user has 2FA on they
-    // must also present a valid TOTP or backup code before a session is issued.
+    // Second factor, required for everyone. An authenticator-app code (TOTP) if
+    // the user set one up; otherwise a one-time code emailed to them. A browser
+    // the user chose to remember (a valid td cookie) skips the step for 30 days.
+    let tdCookieToSet: string | null = null;
+    const tdToken = parseCookies(request)['td'];
+
     if (user.totp_enabled) {
       const code = (body.code || '').trim();
       if (!code) {
-        // Not a failure (the password was right); ask the client for the code.
-        return jsonOk({ success: false, twoFactorRequired: true }, 200);
+        return jsonOk({ success: false, twoFactorRequired: true, method: 'app' }, 200);
       }
       const ok = await verifyUserTwoFactor(env, user.id, user.totp_secret, user.backup_codes, code);
       if (!ok) {
         await recordLoginFailure(env, ip);
         return jsonError('Invalid authentication code', 401);
+      }
+    } else if (!(await checkTrustedDevice(env, user.id, tdToken))) {
+      const code = (body.code || '').trim();
+      if (!code) {
+        // Password was right; email a fresh code and ask the client for it.
+        await issueAndSendEmailCode(env, user.id, user.email, user.name);
+        return jsonOk({ success: false, twoFactorRequired: true, method: 'email' }, 200);
+      }
+      const ok = await verifyEmailCode(env, user.id, code);
+      if (!ok) {
+        await recordLoginFailure(env, ip);
+        return jsonError('That code is not valid or has expired. Request a new one.', 401);
+      }
+      if (body.rememberDevice) {
+        tdCookieToSet = trustedDeviceCookie(await issueTrustedDevice(env, user.id));
       }
     }
 
@@ -119,8 +139,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // A good sign in clears this IP's failure streak.
     context.waitUntil(clearLoginThrottle(env, ip));
 
-    return jsonOk(
-      {
+    // Two cookies may be set (session + remembered device), so build the headers
+    // by hand: a plain object cannot carry two Set-Cookie entries.
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    headers.append('Set-Cookie', sessionCookie(sessionToken));
+    if (tdCookieToSet) headers.append('Set-Cookie', tdCookieToSet);
+
+    return new Response(
+      JSON.stringify({
         success: true,
         user: {
           id: user.id,
@@ -129,9 +155,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           role: userRole?.role || 'viewer',
         },
         forcePasswordReset: forceReset,
-      },
-      200,
-      { 'Set-Cookie': sessionCookie(sessionToken) }
+      }),
+      { status: 200, headers }
     );
   } catch {
     return serverError();

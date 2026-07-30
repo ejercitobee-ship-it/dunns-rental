@@ -18,9 +18,13 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  // Two-factor: after a correct password, the server asks for a code.
+  // Two-factor: after a correct password, the server asks for a code (from the
+  // user's authenticator app, or one emailed to them).
   const [twoFactorMode, setTwoFactorMode] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'app' | 'email'>('email');
   const [code, setCode] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Check if user was logged out due to inactivity
   const logoutReason = searchParams.get('reason');
@@ -34,11 +38,12 @@ export function Login() {
     setIsLoading(true);
 
     try {
-      const result = await login(email, password, twoFactorMode ? code.trim() : undefined);
+      const result = await login(email, password, twoFactorMode ? code.trim() : undefined, rememberDevice);
 
       if (result.twoFactorRequired) {
         // Password was accepted; switch to the code step.
         setTwoFactorMode(true);
+        setTwoFactorMethod(result.method || 'email');
         setError('');
         setIsLoading(false);
         return;
@@ -56,6 +61,20 @@ export function Login() {
       showToast('Login failed', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Ask the server to email a fresh code (re-submit the password with no code).
+  const handleResend = async () => {
+    if (resending) return;
+    setResending(true);
+    try {
+      await login(email, password);
+      showToast('A new code is on its way to your email.', 'success');
+    } catch {
+      showToast('Could not send a new code. Please try again.', 'error');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -147,7 +166,9 @@ export function Login() {
 
             {twoFactorMode && (
               <div>
-                <label className="block text-sm font-medium text-ink mb-2">Authentication code</label>
+                <label className="block text-sm font-medium text-ink mb-2">
+                  {twoFactorMethod === 'email' ? 'Enter the code we emailed you' : 'Authentication code'}
+                </label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -157,7 +178,20 @@ export function Login() {
                   className="w-full px-4 py-3 border border-line rounded-lg bg-surface tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
                   placeholder="123456"
                 />
-                <p className="text-xs text-muted mt-1.5">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+                {twoFactorMethod === 'email' ? (
+                  <p className="text-xs text-muted mt-1.5">
+                    We sent a 6-digit code to your email. It expires in 10 minutes.{' '}
+                    <button type="button" onClick={handleResend} disabled={resending} className="text-primary hover:text-primary-hover font-medium disabled:opacity-50">
+                      {resending ? 'Sending...' : 'Resend code'}
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted mt-1.5">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+                )}
+                <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                  <input type="checkbox" checked={rememberDevice} onChange={(e) => setRememberDevice(e.target.checked)} className="w-4 h-4 rounded border-line-strong accent-[#24503f]" />
+                  <span className="text-sm text-muted">Remember this device for 30 days</span>
+                </label>
               </div>
             )}
 

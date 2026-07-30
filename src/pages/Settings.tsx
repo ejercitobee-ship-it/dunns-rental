@@ -1001,8 +1001,9 @@ function TwoFactorSection() {
       </CardHeader>
       <CardContent className="space-y-5">
         <p className="text-sm text-muted max-w-xl">
-          Add a second step to your login: a 6-digit code from an authenticator app (Google Authenticator,
-          Authy, 1Password). It protects your account even if your password is ever stolen.
+          Every sign-in already asks for a code emailed to you. For the strongest protection you can switch
+          your own account to an authenticator app (Google Authenticator, Authy, 1Password) instead, so the
+          code comes from the app rather than email.
         </p>
 
         {enabled ? (

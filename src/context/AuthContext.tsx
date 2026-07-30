@@ -29,7 +29,7 @@ interface AuthContextType {
   roles: Role[];
   users: User[];
   permissions: Permission[];
-  login: (email: string, password: string, code?: string) => Promise<{ success: boolean; error?: string; forcePasswordReset?: boolean; twoFactorRequired?: boolean }>;
+  login: (email: string, password: string, code?: string, rememberDevice?: boolean) => Promise<{ success: boolean; error?: string; forcePasswordReset?: boolean; twoFactorRequired?: boolean; method?: 'app' | 'email' }>;
   logout: () => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   hasPermission: (permissionId: string) => boolean;
@@ -205,13 +205,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, refreshTeam]);
 
-  const login = async (email: string, password: string, code?: string) => {
+  const login = async (email: string, password: string, code?: string, rememberDevice?: boolean) => {
     try {
-      const result = await authApi.signIn(email, password, code);
+      const result = await authApi.signIn(email, password, code, rememberDevice);
 
-      // Password was correct but the account has 2FA: ask for the code.
+      // Password was correct but a second factor is needed: ask for the code.
+      // `method` says whether it comes from their app or was emailed to them.
       if (result?.twoFactorRequired) {
-        return { success: false, twoFactorRequired: true };
+        return { success: false, twoFactorRequired: true, method: (result.method as 'app' | 'email') || 'email' };
       }
 
       // Our custom API returns { success: true, user: {...} }
