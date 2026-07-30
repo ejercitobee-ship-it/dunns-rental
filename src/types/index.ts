@@ -57,6 +57,10 @@ export interface Lease {
   securityDeposit?: number;
   /** Whether the move-in fee has been paid. Defaults to paid. */
   moveInFeePaid?: boolean;
+  /** When the move-in fee was recorded paid, how, and its receipt. */
+  moveInFeePaidDate?: string;
+  moveInFeeMethod?: string;
+  moveInFeeReceiptDocumentId?: string;
   status: LeaseStatus;
   needsReview?: boolean;
   /**

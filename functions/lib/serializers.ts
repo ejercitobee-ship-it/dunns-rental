@@ -117,6 +117,9 @@ export function serializeLease(r: Row) {
     securityDeposit: r.security_deposit ?? 0,
     // Null (column absent / never set) is treated as paid, matching the DB default.
     moveInFeePaid: r.move_in_fee_paid !== 0,
+    moveInFeePaidDate: r.move_in_fee_paid_date ?? undefined,
+    moveInFeeMethod: r.move_in_fee_method ?? undefined,
+    moveInFeeReceiptDocumentId: r.move_in_fee_receipt_document_id ?? undefined,
     status: r.status ?? 'active',
     needsReview: !!r.needs_review,
     notes: r.notes ?? undefined,

@@ -123,6 +123,10 @@ export interface ReceiptData {
   period: string;
   amount: string;
   method: string;
+  /** Heading, e.g. "RENT RECEIPT" (default) or "MOVE-IN FEE RECEIPT". */
+  title?: string;
+  /** Label for the period row, e.g. "For rent period" (default) or "Payment for". */
+  periodFieldLabel?: string;
 }
 
 /**
@@ -157,7 +161,8 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
   }
 
   // Title + receipt meta (right aligned-ish)
-  text('RENT RECEIPT', right - bold.widthOfTextAtSize('RENT RECEIPT', 16), 740, 16, bold);
+  const heading = (data.title || 'RENT RECEIPT').toUpperCase();
+  text(heading, right - bold.widthOfTextAtSize(heading, 16), 740, 16, bold);
   text(`No. ${data.receiptNumber}`, right - font.widthOfTextAtSize(`No. ${data.receiptNumber}`, 10), 722, 10, font, muted);
   text(`Date paid: ${data.datePaid}`, right - font.widthOfTextAtSize(`Date paid: ${data.datePaid}`, 10), 708, 10, font, muted);
 
@@ -173,7 +178,7 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
   };
   field('Received from', data.tenantName);
   field('Property', data.location);
-  field('For rent period', data.period);
+  field(data.periodFieldLabel || 'For rent period', data.period);
   field('Payment method', data.method);
 
   // Amount box
@@ -262,6 +267,129 @@ interface TenantRow {
  * Best-effort by contract: callers wrap it so a Drive/PDF/email failure never
  * affects recording the payment.
  */
+interface MoveInLeaseRow {
+  id: string;
+  security_deposit: number | null;
+  move_in_fee_paid_date: string | null;
+  move_in_fee_method: string | null;
+  move_in_fee_receipt_document_id: string | null;
+  property_id: string | null;
+  unit_number: string | null;
+  property_name: string | null;
+  property_address: string | null;
+  property_city: string | null;
+  property_state: string | null;
+  property_zip: string | null;
+}
+
+/**
+ * Generate the receipt for a paid MOVE-IN FEE on a lease: build the PDF, file it
+ * in the tenant's Drive folder, record it as a document, link it on the lease,
+ * and best-effort email the tenant. Returns the document id, or null when there
+ * is nothing to receipt. Best-effort by contract, like generateReceipt.
+ */
+export async function generateMoveInFeeReceipt(env: Env, leaseId: string, uploadedBy?: string): Promise<string | null> {
+  const l = await env.DB.prepare(
+    `SELECT l.id, l.security_deposit, l.move_in_fee_paid_date, l.move_in_fee_method,
+            l.move_in_fee_receipt_document_id, l.property_id AS property_id,
+            u.unit_number AS unit_number,
+            pr.name AS property_name, pr.address AS property_address,
+            pr.city AS property_city, pr.state AS property_state, pr.zip_code AS property_zip
+       FROM leases l
+       LEFT JOIN units u ON u.id = l.unit_id
+       LEFT JOIN properties pr ON pr.id = l.property_id
+      WHERE l.id = ?`
+  ).bind(leaseId).first<MoveInLeaseRow>();
+  if (!l) return null;
+
+  const tenant = await env.DB.prepare(
+    `SELECT t.id, t.first_name, t.last_name, t.email
+       FROM tenants t JOIN lease_tenants lt ON lt.tenant_id = t.id
+      WHERE lt.lease_id = ? ORDER BY t.last_name, t.first_name LIMIT 1`
+  ).bind(leaseId).first<TenantRow>();
+  if (!tenant) return null;
+
+  const company = await companySettings(env);
+  const tenantName = `${tenant.first_name} ${tenant.last_name}`.trim();
+  const cityStateZip = [
+    [l.property_city, l.property_state].filter(Boolean).join(', '),
+    l.property_zip,
+  ].filter(Boolean).join(' ');
+  const fullAddress = [l.property_address, cityStateZip].filter(Boolean).join(', ');
+  const location = [
+    fullAddress || l.property_name,
+    l.unit_number ? `Unit ${l.unit_number}` : null,
+  ].filter(Boolean).join(' · ') || '—';
+  const datePaid = l.move_in_fee_paid_date ? prettyDate(l.move_in_fee_paid_date) : '';
+  const rNumber = `MIF-${leaseId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+
+  const pdfBytes = await buildReceiptPdf({
+    receiptNumber: rNumber,
+    datePaid,
+    title: 'Move-In Fee Receipt',
+    periodFieldLabel: 'Payment for',
+    company: {
+      name: company.companyName,
+      lines: [
+        company.address,
+        [company.city, company.state, company.zipCode].filter(Boolean).join(', '),
+        [company.phone, company.email].filter(Boolean).join('  ·  '),
+      ],
+    },
+    tenantName,
+    location,
+    period: 'One-time move-in fee (non-refundable)',
+    amount: money(l.security_deposit || 0),
+    method: prettyMethod(l.move_in_fee_method),
+  });
+
+  const name = `Move-in fee receipt - ${tenantName || leaseId.slice(0, 6)}.pdf`;
+  const folderId = await ensureTenantFolder(env, tenant.id);
+  const { id: driveId } = await uploadToDrive(
+    env, folderId, name, 'application/pdf', new Blob([pdfBytes], { type: 'application/pdf' })
+  );
+
+  const docId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, tenant_id, uploaded_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(docId, name, driveId, 'application/pdf', pdfBytes.length, l.property_id, tenant.id, uploadedBy ?? null),
+    env.DB.prepare('UPDATE leases SET move_in_fee_receipt_document_id = ? WHERE id = ?').bind(docId, leaseId),
+  ]);
+
+  // Replace an older move-in fee receipt if regenerating.
+  if (l.move_in_fee_receipt_document_id && l.move_in_fee_receipt_document_id !== docId) {
+    try {
+      const old = await env.DB.prepare('SELECT drive_file_id FROM documents WHERE id = ?')
+        .bind(l.move_in_fee_receipt_document_id).first<{ drive_file_id: string | null }>();
+      if (old?.drive_file_id) await deleteDriveFile(env, old.drive_file_id);
+      await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(l.move_in_fee_receipt_document_id).run();
+    } catch { /* leave the old copy if cleanup fails */ }
+  }
+
+  if (tenant.email) {
+    try {
+      await sendEmail(env, {
+        to: tenant.email,
+        subject: `Your move-in fee receipt — ${company.companyName}`,
+        html: receiptEmailHtml({
+          companyName: company.companyName,
+          contact: [company.address, [company.city, company.state, company.zipCode].filter(Boolean).join(', '), [company.phone, company.email].filter(Boolean).join(' · ')].filter(Boolean).join(' · '),
+          receiptNumber: rNumber, firstName: tenant.first_name, tenantName, location,
+          period: 'Move-in fee', amount: money(l.security_deposit || 0), method: prettyMethod(l.move_in_fee_method), datePaid,
+        }),
+        text: receiptEmailText({
+          companyName: company.companyName, contact: '', receiptNumber: rNumber, firstName: tenant.first_name,
+          tenantName, location, period: 'Move-in fee', amount: money(l.security_deposit || 0), method: prettyMethod(l.move_in_fee_method), datePaid,
+        }),
+      });
+    } catch { /* best-effort */ }
+  }
+
+  return docId;
+}
+
 export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: string): Promise<string | null> {
   const p = await env.DB.prepare(
     `SELECT rp.id, rp.amount, rp.month, rp.year, rp.paid_date, rp.received_date,

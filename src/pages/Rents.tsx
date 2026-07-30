@@ -11,7 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -106,7 +106,7 @@ function matchSinglePayer(cell: string, occupants: Tenant[]): Tenant | undefined
 export function Rents() {
   const {
     properties, units, leases, rentPayments,
-    getLeaseTenants, addRentPayment, deleteRentPayment,
+    getLeaseTenants, addRentPayment, deleteRentPayment, refreshData,
   } = useApp();
   const { isSuperAdmin } = useAuth();
   const { showToast } = useToast();
@@ -138,6 +138,33 @@ export function Rents() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const proofInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
+  // Move-in fee collection.
+  const [mifLease, setMifLease] = useState<Lease | null>(null);
+  const [mifForm, setMifForm] = useState({ amount: '', date: todayLocalDate(), method: 'check' as PaymentMethod });
+  const [mifBusy, setMifBusy] = useState(false);
+
+  const openMoveInFee = (lease: Lease) => {
+    setMifLease(lease);
+    setMifForm({ amount: lease.securityDeposit ? String(lease.securityDeposit) : '', date: todayLocalDate(), method: 'check' });
+  };
+
+  const submitMoveInFee = async () => {
+    if (!mifLease || mifBusy) return;
+    const amount = Number(mifForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount.', 'error'); return; }
+    if (!mifForm.date) { showToast('Enter the date paid.', 'error'); return; }
+    setMifBusy(true);
+    try {
+      const res = await leasesApi.recordMoveInFee(mifLease.id, { amount, paidDate: mifForm.date, method: mifForm.method });
+      await refreshData();
+      showToast(res.receiptDocumentId ? 'Move-in fee recorded. Receipt sent to the tenant.' : 'Move-in fee recorded.', 'success');
+      setMifLease(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not record the move-in fee.', 'error');
+    } finally {
+      setMifBusy(false);
+    }
+  };
   // Same synchronous guard as the import loop above, for the same reason:
   // a double-click on "Record Payment" must not create two payments.
   const isRecordingRef = useRef(false);
@@ -826,6 +853,54 @@ export function Rents() {
             ))}
           </div>
 
+          {/* Move-in fees: a one-time obligation per lease, collected here. */}
+          {(() => {
+            const mifLeases = leases
+              .filter(l => l.status !== 'ended' && (l.securityDeposit || 0) > 0)
+              .sort((a, b) => Number(!!a.moveInFeePaid) - Number(!!b.moveInFeePaid));
+            if (mifLeases.length === 0) return null;
+            const owedCount = mifLeases.filter(l => !l.moveInFeePaid).length;
+            return (
+              <Card>
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-ink flex items-center gap-2"><Wallet className="h-4 w-4 text-faint" /> Move-in fees</h3>
+                    {owedCount > 0 && <Badge variant="warning">{owedCount} owed</Badge>}
+                  </div>
+                  <div className="divide-y divide-line">
+                    {mifLeases.map(l => {
+                      const occ = getLeaseTenants(l.id);
+                      const names = occ.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
+                      const prop = properties.find(p => p.id === l.propertyId);
+                      const unit = units.find(u => u.id === l.unitId);
+                      return (
+                        <div key={l.id} className="flex items-center justify-between gap-3 py-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-ink truncate">{names}</p>
+                            <p className="text-xs text-muted truncate">{prop?.name || '—'}{unit ? ` · Unit ${unit.unitNumber}` : ''}</p>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <span className="font-semibold text-ink tnum">{formatCurrency(l.securityDeposit || 0)}</span>
+                            {l.moveInFeePaid ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="success">Paid{l.moveInFeePaidDate ? ` ${formatDate(l.moveInFeePaidDate)}` : ''}</Badge>
+                                {l.moveInFeeReceiptDocumentId && (
+                                  <a href={documentsApi.downloadUrl(l.moveInFeeReceiptDocumentId)} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">Receipt</a>
+                                )}
+                              </div>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={() => openMoveInFee(l)}>Record payment</Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Search */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -1512,6 +1587,60 @@ export function Rents() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Record move-in fee */}
+      <Modal isOpen={!!mifLease} onClose={() => setMifLease(null)} title="Record move-in fee" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Record the non-refundable move-in fee as paid. This logs it as income and emails the tenant a receipt.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Amount</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={mifForm.amount}
+                onChange={(e) => setMifForm({ ...mifForm, amount: e.target.value })}
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Date paid</label>
+            <input
+              type="date"
+              value={mifForm.date}
+              onChange={(e) => setMifForm({ ...mifForm, date: e.target.value })}
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Payment method</label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(paymentMethodConfig) as PaymentMethod[]).map((method) => {
+                const cfg = paymentMethodConfig[method];
+                const Icon = cfg.icon;
+                const on = mifForm.method === method;
+                return (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setMifForm({ ...mifForm, method })}
+                    className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${on ? 'border-primary bg-primary-soft text-primary font-medium' : 'border-line text-muted hover:text-ink'}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setMifLease(null)}>Cancel</Button>
+            <Button onClick={submitMoveInFee} disabled={mifBusy}>{mifBusy ? 'Recording...' : 'Record payment'}</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
