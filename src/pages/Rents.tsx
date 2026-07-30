@@ -446,7 +446,9 @@ export function Rents() {
               `Proof of payment - ${formatMonthYear(recordRow.month, recordRow.year)}${ext}`,
               { type: proofFile.type || 'application/octet-stream' }
             );
-            await documentsApi.upload(named, { tenantId });
+            // Office-only: the proof is the landlord's record, hidden from the
+            // tenant portal.
+            await documentsApi.upload(named, { tenantId, officeOnly: true });
             proofNote = ' Proof uploaded.';
           } catch {
             proofNote = ' The payment saved, but the proof upload failed (add it from the tenant\'s Documents).';
@@ -1412,8 +1414,8 @@ export function Rents() {
               />
               <p className="text-xs text-muted">
                 {proofFile
-                  ? `Selected: ${proofFile.name}. Saved to the tenant's Documents folder.`
-                  : "Optional. A receipt or screenshot, saved to the tenant's Documents folder."}
+                  ? `Selected: ${proofFile.name}. Kept for your records only, not shown to the tenant.`
+                  : "Optional. A receipt or screenshot for your records. This stays private to the office and is not shown to the tenant."}
               </p>
             </div>
 

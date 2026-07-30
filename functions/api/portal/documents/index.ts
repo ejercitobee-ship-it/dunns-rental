@@ -36,6 +36,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       `SELECT * FROM documents
         WHERE tenant_id IN (${placeholders})
           AND name NOT LIKE 'Rent receipt -%'
+          -- Office-only docs (proof-of-payment screenshots) are the landlord's
+          -- record, never shown to the tenant. office_only covers new uploads;
+          -- the name pattern also hides proofs uploaded before that column.
+          AND office_only = 0
+          AND name NOT LIKE 'Proof of payment -%'
           AND id NOT IN (SELECT receipt_document_id FROM rent_payments WHERE receipt_document_id IS NOT NULL)
         ORDER BY created_at DESC`
     ).bind(...ids).all();

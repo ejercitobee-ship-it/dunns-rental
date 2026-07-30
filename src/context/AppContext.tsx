@@ -203,7 +203,7 @@ interface AppContextType extends AppState {
   addLease: (lease: Omit<Lease, 'id'> & { pausedAt?: string }) => Promise<Lease>;
   updateLease: (lease: Lease & { statusChangedOn?: string }) => Promise<void>;
   deleteLease: (id: string) => Promise<void>;
-  addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
+  addExpense: (expense: Omit<Expense, 'id'>) => Promise<Expense>;
   updateExpense: (expense: Expense) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   addUtilityAccount: (account: Omit<UtilityAccount, 'id'>) => Promise<void>;
@@ -353,9 +353,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_LEASE', payload: id });
   };
 
-  const addExpense = async (expense: Omit<Expense, 'id'>) => {
+  const addExpense = async (expense: Omit<Expense, 'id'>): Promise<Expense> => {
     const newExpense = await expensesApi.create(expense);
     dispatch({ type: 'ADD_EXPENSE', payload: newExpense });
+    return newExpense;
   };
 
   const updateExpense = async (expense: Expense) => {

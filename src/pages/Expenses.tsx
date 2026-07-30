@@ -63,7 +63,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome, dispatch } = useApp();
   const { isSuperAdmin, hasPermission } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
@@ -85,6 +85,8 @@ export function Expenses() {
   const [expenseVendor, setExpenseVendor] = useState('');
   // What the admin pasted into the "utility account #" lookup, and the match.
   const [accountLookup, setAccountLookup] = useState('');
+  // An invoice/receipt file to attach when adding (or replacing on) the expense.
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canDelete = isSuperAdmin();
   // Editing a recorded expense is reserved to the workspace owner (super admin).
@@ -119,6 +121,7 @@ export function Expenses() {
     setExpenseUnitId('');
     setExpenseVendor('');
     setAccountLookup('');
+    setReceiptFile(null);
     setIsModalOpen(true);
   };
 
@@ -129,6 +132,7 @@ export function Expenses() {
     setExpenseUnitId(expense.unitId || '');
     setExpenseVendor(expense.vendor || '');
     setAccountLookup('');
+    setReceiptFile(null);
     setIsModalOpen(true);
   };
 
@@ -329,10 +333,22 @@ export function Expenses() {
             ? Number(formData.get('interestAmount'))
             : undefined,
         };
+        // Create or update the expense, then attach the invoice/receipt if one
+        // was picked. Uploading updates the row's receipt, so reflect it locally.
+        let savedId: string;
         if (editingExpense) {
           await updateExpense({ ...editingExpense, ...fields });
+          savedId = editingExpense.id;
         } else {
-          await addExpense(fields);
+          savedId = (await addExpense(fields)).id;
+        }
+        if (receiptFile) {
+          try {
+            const withReceipt = await expensesApi.uploadReceipt(savedId, receiptFile);
+            dispatch({ type: 'UPDATE_EXPENSE', payload: withReceipt });
+          } catch {
+            showToast('Expense saved, but the receipt upload failed. Add it from the receipt icon on the row.', 'error');
+          }
         }
       } else {
         await addIncome({
@@ -859,6 +875,23 @@ export function Expenses() {
                   </p>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Invoice / receipt (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:border-primary/50"
+                />
+                <p className="text-xs text-muted">
+                  {receiptFile
+                    ? `Selected: ${receiptFile.name}`
+                    : editingExpense?.receiptUrl
+                      ? 'A receipt is already attached. Choosing a file replaces it. Stored in the unit\'s folder.'
+                      : 'Attach the invoice or payment receipt. Stored in the unit\'s Drive folder.'}
+                </p>
+              </div>
             </>
           ) : (
             <div className="space-y-2">

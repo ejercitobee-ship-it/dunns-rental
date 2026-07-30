@@ -61,6 +61,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const tenantId = (form.get('tenantId') as string) || null;
     const propertyId = (form.get('propertyId') as string) || null;
+    // Office-only documents (e.g. proof-of-payment screenshots) file under the
+    // tenant for the office's own reference but are hidden from the tenant portal.
+    const officeOnly = form.get('officeOnly') === '1' || form.get('officeOnly') === 'true';
 
     // A document must belong to a tenant, because Drive folders are per tenant.
     // (Behaviour change from the R2 version, which allowed property-only docs.)
@@ -77,10 +80,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, tenant_id, uploaded_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, tenant_id, uploaded_by, office_only)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(id, file.name, uploaded.id, file.type || null, file.size, propertyId, tenantId, auth.id)
+      .bind(id, file.name, uploaded.id, file.type || null, file.size, propertyId, tenantId, auth.id, officeOnly ? 1 : 0)
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM documents WHERE id = ?').bind(id).first();

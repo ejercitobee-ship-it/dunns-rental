@@ -384,11 +384,12 @@ export interface AppDocument {
 export const documentsApi = {
   list: (tenantId?: string): Promise<AppDocument[]> =>
     apiRequest(`/documents${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`),
-  upload: async (file: File, opts: { tenantId?: string; propertyId?: string } = {}): Promise<AppDocument> => {
+  upload: async (file: File, opts: { tenantId?: string; propertyId?: string; officeOnly?: boolean } = {}): Promise<AppDocument> => {
     const fd = new FormData();
     fd.append('file', file);
     if (opts.tenantId) fd.append('tenantId', opts.tenantId);
     if (opts.propertyId) fd.append('propertyId', opts.propertyId);
+    if (opts.officeOnly) fd.append('officeOnly', '1');
     // Note: no Content-Type header — the browser sets the multipart boundary.
     const res = await fetch(`${API_BASE}/documents`, { method: 'POST', credentials: 'include', body: fd });
     if (!res.ok) {
