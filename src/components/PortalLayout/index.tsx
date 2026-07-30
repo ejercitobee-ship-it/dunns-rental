@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2 } from 'lucide-react';
+import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2, Smartphone, X } from 'lucide-react';
 import logo from '../../assets/mh-dunn-logo.png';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -111,6 +111,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-28">
+        <InstallPrompt />
         {children}
       </main>
 
@@ -146,6 +147,45 @@ export function PortalLayout({ children }: PortalLayoutProps) {
             })}
         </div>
       </nav>
+    </div>
+  );
+}
+
+/**
+ * A one-time, dismissible nudge to add the app to the home screen. Hidden when
+ * the app is already running installed (standalone) or after the user dismisses
+ * it. Links to the full step-by-step guide.
+ */
+function InstallPrompt() {
+  // Decide once, synchronously, on mount: hidden when already installed
+  // (standalone) or previously dismissed.
+  const [show, setShow] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true;
+    return !standalone && localStorage.getItem('installPromptDismissed') !== '1';
+  });
+  if (!show) return null;
+  return (
+    <div className="mb-5 rounded-2xl border border-primary/25 bg-primary-soft/50 p-4 flex items-center gap-3">
+      <span className="w-9 h-9 rounded-xl bg-primary text-white grid place-items-center flex-shrink-0">
+        <Smartphone className="h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-ink">Add MH Dunn to your home screen</p>
+        <p className="text-xs text-muted">
+          One tap to open, and get reminders as notifications.{' '}
+          <Link to="/portal/install" className="text-primary font-medium underline">Show me how</Link>
+        </p>
+      </div>
+      <button
+        onClick={() => { localStorage.setItem('installPromptDismissed', '1'); setShow(false); }}
+        className="p-1.5 text-faint hover:text-ink flex-shrink-0"
+        aria-label="Dismiss"
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   );
 }
