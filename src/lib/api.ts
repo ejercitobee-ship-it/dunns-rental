@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification } from '../types';
 
 const API_BASE = '/api';
 
@@ -319,9 +319,16 @@ export const leasesApi = {
   update: (id: string, data: Lease & { statusChangedOn?: string }): Promise<Lease> =>
     apiRequest(`/leases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => apiRequest(`/leases/${id}`, { method: 'DELETE' }),
-  // Record the move-in fee as paid: marks it, logs income, generates a receipt.
   recordMoveInFee: (id: string, data: { amount: number; paidDate: string; method?: string }): Promise<{ moveInFeePaid: boolean; moveInFeePaidDate: string; moveInFeeMethod?: string; securityDeposit: number; receiptDocumentId: string | null }> =>
     apiRequest(`/leases/${id}/move-in-fee`, { method: 'POST', body: JSON.stringify(data) }),
+  approveRenewal: (id: string, action: 'approve' | 'reject'): Promise<{ status: string; newLeaseId?: string }> =>
+    apiRequest(`/leases/${id}/approve-renewal`, { method: 'POST', body: JSON.stringify({ action }) }),
+  getAuditHistory: (id: string): Promise<LeaseAuditEntry[]> =>
+    apiRequest(`/leases/${id}/audit`),
+  getNotifications: (id: string): Promise<LeaseNotification[]> =>
+    apiRequest(`/leases/${id}/notifications`),
+  resendNotification: (id: string): Promise<void> =>
+    apiRequest(`/leases/${id}/notifications`, { method: 'POST' }),
 };
 
 // Payments API

@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { generateAndSaveRenewal, type RenewalTerms } from '../../../lib/lease-pdf';
 import { DriveNotConnected } from '../../../lib/google';
 import { sendEmail } from '../../../lib/email';
+import { logLeaseChange } from '../../../lib/lease-audit';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -82,8 +83,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await env.DB.prepare(
       `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent,
         security_deposit, move_in_fee_paid, status, renewed_from_lease_id, renewal_generated_at,
-        previous_rent, rent_due_day, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, 0, 1, 'active', ?, ?, ?, ?, ?)`
+        previous_rent, rent_due_day, renewal_status, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 1, 'active', ?, ?, ?, ?, 'pending', ?)`
     ).bind(
       newLeaseId,
       lease.unit_id,
@@ -103,22 +104,30 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .bind(crypto.randomUUID(), newLeaseId, t.id)
     );
 
-    await env.DB.prepare(
-      `UPDATE leases SET status = 'ended', end_reason = 'Renewed', updated_at = unixepoch() WHERE id = ?`
-    ).bind(leaseId).run();
-
     for (const stmt of tenantInserts) await stmt.run();
+
+    context.waitUntil(
+      logLeaseChange(env, {
+        leaseId,
+        action: 'Renewal Created',
+        changedBy: auth.id,
+        changedByName: auth.name,
+        previousData: { monthlyRent: Number(lease.monthly_rent), endDate: lease.end_date },
+        newData: { monthlyRent: body.newMonthlyRent, startDate: body.newStartDate, endDate: body.newEndDate, newLeaseId },
+        notes: 'Renewal pending approval',
+      }).catch(() => {})
+    );
 
     if (body.emailToTenant && primaryTenant.email) {
       const rentChange = body.newMonthlyRent !== Number(lease.monthly_rent)
-        ? ` Your new monthly rent is $${body.newMonthlyRent.toFixed(2)}.`
+        ? ` Your new monthly rent will be $${body.newMonthlyRent.toFixed(2)} once approved.`
         : '';
       context.waitUntil(
         sendEmail(env, {
           to: primaryTenant.email,
-          subject: 'Your Lease Renewal Agreement is Ready',
-          text: `Hi ${primaryTenant.first_name},\n\nYour lease renewal agreement has been generated and is available in your tenant portal under Documents.${rentChange}\n\nPlease review it at your earliest convenience.\n\nThank you.`,
-          html: `<p>Hi ${primaryTenant.first_name},</p><p>Your lease renewal agreement has been generated and is available in your tenant portal under Documents.${rentChange}</p><p>Please review it at your earliest convenience.</p><p>Thank you.</p>`,
+          subject: 'Your Lease Renewal Agreement is Ready for Review',
+          text: `Hi ${primaryTenant.first_name},\n\nA lease renewal agreement has been prepared for your review and is available in your tenant portal under Documents.${rentChange}\n\nThe renewal will take effect once it has been approved.\n\nThank you.`,
+          html: `<p>Hi ${primaryTenant.first_name},</p><p>A lease renewal agreement has been prepared for your review and is available in your tenant portal under Documents.${rentChange}</p><p>The renewal will take effect once it has been approved.</p><p>Thank you.</p>`,
         }).catch(e => console.error('renewal email failed', e))
       );
     }

@@ -234,6 +234,68 @@ export function rentReminderEmail(opts: {
   return { subject: `Your rent for ${opts.monthLabel} is due`, html, text };
 }
 
+/** Lease status change notification to a tenant. */
+export function leaseStatusEmail(opts: {
+  name: string;
+  propertyAddress: string;
+  unitNumber?: string;
+  statusLabel: string;
+  effectiveDate: string;
+  reason?: string;
+  contact?: string;
+}) {
+  const greeting = `Hi ${opts.name},`;
+  const unit = opts.unitNumber ? ` Unit ${opts.unitNumber}` : '';
+  const location = `${opts.propertyAddress}${unit}`;
+  const reasonLine = opts.reason ? `\nReason: ${opts.reason}\n` : '';
+  const contactLine = opts.contact || 'MH Dunn Property';
+
+  const text = [
+    greeting,
+    '',
+    `Your lease information for ${location} has been updated.`,
+    '',
+    `New Status: ${opts.statusLabel}`,
+    `Effective Date: ${opts.effectiveDate}`,
+    reasonLine,
+    'If you have any questions, please contact us.',
+    '',
+    contactLine,
+  ].filter(l => l !== '').join('\n');
+
+  const reasonBlock = opts.reason
+    ? `<p style="margin:0 0 16px;font-size:14px;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:12px 16px;">
+        <strong>Reason:</strong> ${escapeHtml(opts.reason)}
+      </p>`
+    : '';
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Your lease information for <strong>${escapeHtml(location)}</strong> has been updated.
+      </p>
+      <div style="margin:0 0 20px;background:#f4f5f3;border:1px solid #e2e0d8;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 8px;font-size:14px;"><strong>New Status:</strong> ${escapeHtml(opts.statusLabel)}</p>
+        <p style="margin:0;font-size:14px;"><strong>Effective Date:</strong> ${escapeHtml(opts.effectiveDate)}</p>
+      </div>
+      ${reasonBlock}
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        If you have any questions, please contact MH Dunn Property.
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;color:#6b6a63;">${escapeHtml(contactLine)}</p>
+    </div>
+  </div>`;
+
+  return {
+    subject: 'Your Lease Information Has Been Updated',
+    html,
+    text,
+  };
+}
+
 /**
  * Invite email with a set-password link. Used for tenant/realtor/handyman portal
  * logins and, with kind 'account', for internal team members. The wording is the

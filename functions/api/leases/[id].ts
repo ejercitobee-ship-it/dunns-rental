@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { withLeaseDetails, findMissingTenantIds, readLeaseStatus, isValidDateString, leaseEndDate } from './index';
 import { syncRentSheet } from '../../lib/sheets';
+import { logLeaseChange, notifyLeaseStatusChange } from '../../lib/lease-audit';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -38,9 +39,12 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     // transition. Read before any write: the pause interval has to be
     // stamped in the SAME batch as the lease UPDATE below, so the batch needs
     // to know up front whether it is opening or closing one.
-    const current = await env.DB.prepare('SELECT status FROM leases WHERE id = ?')
-      .bind(id)
-      .first<{ status: string }>();
+    const current = await env.DB.prepare(
+      'SELECT status, monthly_rent, start_date, end_date, unit_id, property_id, rent_due_day, notes FROM leases WHERE id = ?'
+    ).bind(id).first<{
+      status: string; monthly_rent: number; start_date: string; end_date: string;
+      unit_id: string; property_id: string; rent_due_day: number | null; notes: string | null;
+    }>();
     if (!current) return jsonError('Lease not found', 404);
 
     // The day the status actually changed, in the OWNER's local day (America/
@@ -139,6 +143,52 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     await env.DB.batch(statements);
+
+    const statusChanged = current.status !== status;
+    const rentChanged = Number(current.monthly_rent) !== Number(body.monthlyRent);
+    const datesChanged = current.start_date !== (body.startDate ?? null) || current.end_date !== leaseEndDate(body.startDate, body.endDate);
+
+    let auditAction = 'Updated';
+    if (statusChanged) {
+      if (status === 'paused') auditAction = 'Paused';
+      else if (status === 'ended') auditAction = 'Terminated';
+      else if (current.status === 'paused' && status === 'active') auditAction = 'Resumed';
+    } else if (rentChanged) {
+      auditAction = 'Rent Changed';
+    } else if (datesChanged) {
+      auditAction = 'Dates Updated';
+    }
+
+    context.waitUntil(
+      logLeaseChange(env, {
+        leaseId: id,
+        action: auditAction,
+        changedBy: auth.id,
+        changedByName: auth.name,
+        previousData: {
+          status: current.status,
+          monthlyRent: current.monthly_rent,
+          startDate: current.start_date,
+          endDate: current.end_date,
+          rentDueDay: current.rent_due_day,
+        },
+        newData: {
+          status,
+          monthlyRent: body.monthlyRent,
+          startDate: body.startDate,
+          endDate: body.endDate,
+          rentDueDay: body.rentDueDay,
+        },
+        notes: statusChanged && status === 'ended' ? (body.endReason as string) || undefined : undefined,
+      }).catch(() => {})
+    );
+
+    if (statusChanged) {
+      context.waitUntil(
+        notifyLeaseStatusChange(env, id, status, statusChangedOn, (body.endReason as string) || undefined, auth.id)
+          .catch(e => console.error('lease notification failed', e))
+      );
+    }
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Lease not found', 404);

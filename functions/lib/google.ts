@@ -16,6 +16,7 @@ const KEY_PHOTO_FOLDER = 'google_photo_folder_id';
 const KEY_MAINTENANCE_FOLDER = 'google_maintenance_folder_id';
 const KEY_PROSPECTIVE_FOLDER = 'google_prospective_folder_id';
 const KEY_VENDORS_FOLDER = 'google_vendors_folder_id';
+const KEY_MGMT_EXPENSES_FOLDER = 'google_mgmt_expenses_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
@@ -23,6 +24,7 @@ const PHOTO_FOLDER_NAME = 'Profile Photos';
 const MAINTENANCE_FOLDER_NAME = 'Maintenance Photos';
 const PROSPECTIVE_FOLDER_NAME = 'Prospective Tenants';
 const VENDORS_FOLDER_NAME = 'Vendors';
+const MGMT_EXPENSES_NAME = 'Management Expenses';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -434,6 +436,41 @@ export async function ensurePropertyExpensesFolder(env: Env, propertyId: string,
   if (!year) return expensesId;
   const yearName = String(year);
   return (await findFolder(env, yearName, expensesId)) ?? (await createFolder(env, yearName, expensesId));
+}
+
+/**
+ * Management Expenses folder: business-level expenses not tied to a property.
+ * Nested under root with yearly subfolders (e.g. "2026").
+ */
+export async function ensureManagementExpensesFolder(env: Env, year?: number): Promise<string> {
+  const existing = await getSetting(env, KEY_MGMT_EXPENSES_FOLDER);
+  if (existing) {
+    const status = await folderStatus(env, existing);
+    if (status !== 'gone') {
+      if (!year) return existing;
+      const yearName = String(year);
+      return (await findFolder(env, yearName, existing)) ?? (await createFolder(env, yearName, existing));
+    }
+  }
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, MGMT_EXPENSES_NAME, root)) ?? (await createFolder(env, MGMT_EXPENSES_NAME, root));
+  await putSetting(env, KEY_MGMT_EXPENSES_FOLDER, id);
+  if (!year) return id;
+  const yearName = String(year);
+  return (await findFolder(env, yearName, id)) ?? (await createFolder(env, yearName, id));
+}
+
+/**
+ * Property Expenses subfolder by category (Utilities, Insurance, etc.).
+ * Created inside the property's "Expenses" folder.
+ */
+export async function ensurePropertyExpenseCategory(env: Env, propertyId: string, category: string, year?: number): Promise<string | null> {
+  const expensesFolder = await ensurePropertyExpensesFolder(env, propertyId);
+  if (!expensesFolder) return null;
+  const catFolder = (await findFolder(env, category, expensesFolder)) ?? (await createFolder(env, category, expensesFolder));
+  if (!year) return catFolder;
+  const yearName = String(year);
+  return (await findFolder(env, yearName, catFolder)) ?? (await createFolder(env, yearName, catFolder));
 }
 
 /** Move a Drive file into a new parent, removing its current parents. Best-effort. */

@@ -138,6 +138,7 @@ export function serializeLease(r: Row) {
     renewedFromLeaseId: r.renewed_from_lease_id ?? undefined,
     renewalGeneratedAt: r.renewal_generated_at ?? undefined,
     previousRent: r.previous_rent != null ? Number(r.previous_rent) : undefined,
+    renewalStatus: (r.renewal_status as string) ?? 'approved',
   };
 }
 

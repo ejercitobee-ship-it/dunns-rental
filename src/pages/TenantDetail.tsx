@@ -16,12 +16,12 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi,
+  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi, leasesApi,
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message, type TenantEmail,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
-import type { LeaseStatus, PaymentMethod } from '../types';
+import type { LeaseStatus, PaymentMethod, LeaseAuditEntry, LeaseNotification } from '../types';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -333,7 +333,7 @@ export function TenantDetail() {
         const err = await res.json().catch(() => null);
         throw new Error((err as Record<string, string>)?.error || 'Failed to generate renewal');
       }
-      showToast('Lease renewal generated, saved to Drive, and lease updated.', 'success');
+      showToast('Lease renewal created and pending approval.', 'success');
       setLeaseGenOpen(false);
       refreshData();
     } catch (err) {
@@ -368,6 +368,58 @@ export function TenantDetail() {
       showToast((err as Error).message || 'Could not terminate the tenancy.', 'error');
     } finally {
       setTerminating(false);
+    }
+  };
+
+  const [auditHistory, setAuditHistory] = useState<LeaseAuditEntry[]>([]);
+  const [notifHistory, setNotifHistory] = useState<LeaseNotification[]>([]);
+  const [showAudit, setShowAudit] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [renewalApproving, setRenewalApproving] = useState(false);
+
+  const loadAuditHistory = useCallback(async (leaseId: string) => {
+    try {
+      const data = await leasesApi.getAuditHistory(leaseId);
+      setAuditHistory(data);
+    } catch { /* */ }
+  }, []);
+
+  const loadNotifHistory = useCallback(async (leaseId: string) => {
+    try {
+      const data = await leasesApi.getNotifications(leaseId);
+      setNotifHistory(data);
+    } catch { /* */ }
+  }, []);
+
+  useEffect(() => {
+    if (lease?.id && showAudit) loadAuditHistory(lease.id);
+  }, [lease?.id, showAudit, loadAuditHistory]);
+
+  useEffect(() => {
+    if (lease?.id && showNotifs) loadNotifHistory(lease.id);
+  }, [lease?.id, showNotifs, loadNotifHistory]);
+
+  const handleRenewalApproval = async (renewalLeaseId: string, action: 'approve' | 'reject') => {
+    setRenewalApproving(true);
+    try {
+      await leasesApi.approveRenewal(renewalLeaseId, action);
+      showToast(action === 'approve' ? 'Renewal approved and activated.' : 'Renewal rejected.', 'success');
+      refreshData();
+    } catch (err) {
+      showToast((err as Error).message || `Could not ${action} the renewal.`, 'error');
+    } finally {
+      setRenewalApproving(false);
+    }
+  };
+
+  const handleResendNotification = async () => {
+    if (!lease) return;
+    try {
+      await leasesApi.resendNotification(lease.id);
+      showToast('Notification resent.', 'success');
+      if (showNotifs) loadNotifHistory(lease.id);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not resend notification.', 'error');
     }
   };
 
@@ -1431,9 +1483,27 @@ export function TenantDetail() {
                             {l.renewalGeneratedAt ? formatDate(new Date(l.renewalGeneratedAt * 1000).toISOString().slice(0, 10)) : '—'}
                           </td>
                           <td className="py-3 px-4">
-                            <Badge variant={l.status === 'active' ? 'success' : l.status === 'ended' ? 'secondary' : 'warning'}>
-                              {l.status === 'active' ? 'Active' : l.status === 'ended' ? 'Superseded' : 'Paused'}
-                            </Badge>
+                            {l.renewalStatus === 'pending' ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="warning">Pending Approval</Badge>
+                                <button
+                                  onClick={() => handleRenewalApproval(l.id, 'approve')}
+                                  disabled={renewalApproving}
+                                  className="text-xs font-medium text-positive hover:underline"
+                                >Approve</button>
+                                <button
+                                  onClick={() => handleRenewalApproval(l.id, 'reject')}
+                                  disabled={renewalApproving}
+                                  className="text-xs font-medium text-destructive hover:underline"
+                                >Reject</button>
+                              </div>
+                            ) : l.renewalStatus === 'rejected' ? (
+                              <Badge variant="destructive">Rejected</Badge>
+                            ) : (
+                              <Badge variant={l.status === 'active' ? 'success' : l.status === 'ended' ? 'secondary' : 'warning'}>
+                                {l.status === 'active' ? 'Active' : l.status === 'ended' ? 'Superseded' : 'Paused'}
+                              </Badge>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1445,6 +1515,118 @@ export function TenantDetail() {
           </Card>
         );
       })()}
+
+      {/* Lease Audit History */}
+      {lease && (
+        <Card className="shadow-lg">
+          <CardContent className="p-5">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between"
+              onClick={() => { setShowAudit(!showAudit); if (!showAudit && auditHistory.length === 0 && lease) loadAuditHistory(lease.id); }}
+            >
+              <h3 className="font-semibold text-ink flex items-center gap-2">
+                <FileText className="h-4 w-4 text-faint" /> Lease Change History
+              </h3>
+              <span className="text-xs text-muted">{showAudit ? 'Hide' : 'Show'}</span>
+            </button>
+            {showAudit && (
+              <div className="mt-4">
+                {auditHistory.length === 0 ? (
+                  <p className="text-sm text-muted text-center py-6">No changes recorded yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {auditHistory.map(entry => (
+                      <div key={entry.id} className="border border-line rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-ink">{entry.action}</span>
+                          <span className="text-xs text-muted">
+                            {new Date(entry.createdAt * 1000).toLocaleString()}
+                          </span>
+                        </div>
+                        {entry.changedByName && (
+                          <p className="text-xs text-muted mb-1">by {entry.changedByName}</p>
+                        )}
+                        {entry.notes && (
+                          <p className="text-xs text-muted italic">{entry.notes}</p>
+                        )}
+                        {entry.previousData && entry.newData && (
+                          <div className="mt-2 text-xs grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="font-medium text-muted">Before:</span>
+                              {Object.entries(entry.previousData).map(([k, v]) => (
+                                <div key={k} className="text-muted">{k}: {String(v)}</div>
+                              ))}
+                            </div>
+                            <div>
+                              <span className="font-medium text-muted">After:</span>
+                              {Object.entries(entry.newData).map(([k, v]) => (
+                                <div key={k} className="text-ink">{k}: {String(v)}</div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lease Notification History */}
+      {lease && (
+        <Card className="shadow-lg">
+          <CardContent className="p-5">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between"
+              onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs && notifHistory.length === 0 && lease) loadNotifHistory(lease.id); }}
+            >
+              <h3 className="font-semibold text-ink flex items-center gap-2">
+                <Mail className="h-4 w-4 text-faint" /> Notification History
+              </h3>
+              <span className="text-xs text-muted">{showNotifs ? 'Hide' : 'Show'}</span>
+            </button>
+            {showNotifs && (
+              <div className="mt-4">
+                {notifHistory.length === 0 ? (
+                  <p className="text-sm text-muted text-center py-6">No notifications sent yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {notifHistory.map(n => (
+                      <div key={n.id} className="flex items-center justify-between border border-line rounded-lg p-3">
+                        <div>
+                          <p className="text-sm text-ink">{n.subject || n.notificationType}</p>
+                          <p className="text-xs text-muted">
+                            To: {n.tenantName || n.tenantEmail || 'Unknown'}
+                            {' · '}
+                            {new Date(n.createdAt * 1000).toLocaleString()}
+                          </p>
+                        </div>
+                        <Badge variant={n.status === 'sent' ? 'success' : 'destructive'}>
+                          {n.status === 'sent' ? 'Sent' : 'Failed'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {hasPermission('tenants_edit') && (
+                  <button
+                    type="button"
+                    onClick={handleResendNotification}
+                    className="mt-3 text-sm font-medium text-primary hover:text-primary-hover"
+                  >
+                    Resend current status notification
+                  </button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit modal */}
       <Modal isOpen={tenancyOpen} onClose={() => (savingTenancy ? undefined : setTenancyOpen(false))} title="Edit tenancy" size="md">

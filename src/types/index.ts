@@ -90,6 +90,32 @@ export interface Lease {
   renewedFromLeaseId?: string;
   renewalGeneratedAt?: number;
   previousRent?: number;
+  renewalStatus?: 'draft' | 'pending' | 'approved' | 'rejected';
+}
+
+export interface LeaseAuditEntry {
+  id: string;
+  leaseId: string;
+  action: string;
+  changedBy?: string;
+  changedByName?: string;
+  previousData?: Record<string, unknown>;
+  newData?: Record<string, unknown>;
+  notes?: string;
+  createdAt: number;
+}
+
+export interface LeaseNotification {
+  id: string;
+  leaseId: string;
+  tenantId?: string;
+  tenantEmail?: string;
+  tenantName?: string;
+  notificationType: string;
+  subject?: string;
+  status: string;
+  sentBy?: string;
+  createdAt: number;
 }
 
 /** A person. Rent and lease dates live on the Lease. */
