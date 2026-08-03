@@ -1,12 +1,12 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   FileText, Download, Calculator, TrendingDown, TrendingUp,
-  DollarSign, Home, Percent, AlertCircle
+  DollarSign, Home, Percent, AlertCircle, ChevronDown
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { formatCurrency, formatDate, yearOf, monthOf, getMonthName } from '../lib/utils';
+import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
 import {
@@ -109,6 +109,19 @@ export function TaxReport() {
   const [cYear, setCYear] = useState(now.getFullYear() - 1);
   const [cQuarter, setCQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
   const [cMonth, setCMonth] = useState(now.getMonth() + 1);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem('tax_collapsed');
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+  const toggle = (key: string) => setCollapsed(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    sessionStorage.setItem('tax_collapsed', JSON.stringify([...next]));
+    return next;
+  });
+
   // 1-12 months covered by a scope selection.
   const monthsFor = (sc: 'year' | 'quarter' | 'month', q: number, m: number): number[] =>
     sc === 'year' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -529,13 +542,14 @@ export function TaxReport() {
 
       {/* Income Breakdown */}
       <Card>
-        <CardHeader>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('income')}>
           <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('income') && '-rotate-90')} />
             <FileText className="h-5 w-5" />
             Income Breakdown
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        {!collapsed.has('income') && <CardContent>
           <div className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b">
               <span className="font-medium">Rent Income</span>
@@ -563,18 +577,19 @@ export function TaxReport() {
               </div>
             )}
           </div>
-        </CardContent>
+        </CardContent>}
       </Card>
 
       {/* Expense Categories Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('expenses')}>
           <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('expenses') && '-rotate-90')} />
             <Calculator className="h-5 w-5" />
             Deductible Expenses by Category
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        {!collapsed.has('expenses') && <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -611,18 +626,19 @@ export function TaxReport() {
               </tbody>
             </table>
           </div>
-        </CardContent>
+        </CardContent>}
       </Card>
 
       {/* Operating vs Capital Expenses (IRS $2,500 de minimis safe harbor) */}
       <Card>
-        <CardHeader>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('opVsCap')}>
           <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('opVsCap') && '-rotate-90')} />
             <Calculator className="h-5 w-5" />
             Operating vs Capital Expenses
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        {!collapsed.has('opVsCap') && <CardContent>
           <p className="text-sm text-muted mb-4">
             Anything over {formatCurrency(CAPITAL_THRESHOLD)} per item is generally a
             capital improvement (capitalize and depreciate), not a same year deduction.
@@ -686,18 +702,19 @@ export function TaxReport() {
               </table>
             </div>
           )}
-        </CardContent>
+        </CardContent>}
       </Card>
 
       {/* Depreciation schedule */}
       <Card>
-        <CardHeader>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('depreciation')}>
           <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('depreciation') && '-rotate-90')} />
             <Home className="h-5 w-5" />
             Depreciation ({year})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        {!collapsed.has('depreciation') && <CardContent>
           <p className="text-sm text-muted mb-4">
             Residential buildings depreciate over 27.5 years (straight line, mid-month convention). Land does not
             depreciate. This is a non-cash deduction that lowers your taxable income.
@@ -756,19 +773,20 @@ export function TaxReport() {
             Land value defaults to 20% of the purchase price when left blank on a property. Set the assessed land
             value on each property (from your county tax bill) for accuracy, and confirm the basis with your accountant.
           </p>
-        </CardContent>
+        </CardContent>}
       </Card>
 
       {/* Mortgage interest vs principal */}
       {(main.mortgageInterestDeducted > 0 || main.mortgagePrincipalExcluded > 0 || main.mortgageNeedsSplit > 0) && (
         <Card>
-          <CardHeader>
+          <CardHeader className="cursor-pointer select-none" onClick={() => toggle('mortgage')}>
             <CardTitle className="flex items-center gap-2">
+              <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('mortgage') && '-rotate-90')} />
               <FileText className="h-5 w-5" />
               Mortgage Interest
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          {!collapsed.has('mortgage') && <CardContent className="space-y-3">
             <p className="text-sm text-muted">
               Only mortgage interest is deductible, not principal. The report deducts the interest portion you enter
               on each mortgage expense.
@@ -798,19 +816,20 @@ export function TaxReport() {
                 </span>
               </div>
             )}
-          </CardContent>
+          </CardContent>}
         </Card>
       )}
 
       {/* Property Breakdown */}
       <Card>
-        <CardHeader>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('property')}>
           <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('property') && '-rotate-90')} />
             <Home className="h-5 w-5" />
             Property Performance
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        {!collapsed.has('property') && <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -835,18 +854,19 @@ export function TaxReport() {
               </tbody>
             </table>
           </div>
-        </CardContent>
+        </CardContent>}
       </Card>
 
       {/* Tax Tips */}
       <Card>
-        <CardHeader>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('tips')}>
           <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('tips') && '-rotate-90')} />
             <AlertCircle className="h-5 w-5" />
             Tax Tips & Reminders
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        {!collapsed.has('tips') && <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <h4 className="font-semibold">Income to Report</h4>
@@ -868,7 +888,7 @@ export function TaxReport() {
               </ul>
             </div>
           </div>
-        </CardContent>
+        </CardContent>}
       </Card>
     </div>
   );

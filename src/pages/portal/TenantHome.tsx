@@ -108,7 +108,10 @@ export function TenantHome() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const days = Math.round((endMs - today.getTime()) / 86400000);
-    return days <= 30 ? { end, days } : null;
+    if (days > 90) return null;
+    const urgency: 'expired' | 'critical' | 'soon' | 'upcoming' =
+      days < 0 ? 'expired' : days <= 30 ? 'critical' : days <= 60 ? 'soon' : 'upcoming';
+    return { end, days, urgency };
   }, [me]);
 
   if (loading) {
@@ -194,23 +197,41 @@ export function TenantHome() {
         </div>
       )}
 
-      {leaseExpiry && (
-        <div className="rounded-2xl border border-warning/30 bg-warning-soft p-5 flex items-start gap-3">
-          <CalendarClock className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-ink">
-              {leaseExpiry.days > 0
-                ? `Your lease expires ${leaseExpiry.days === 1 ? 'tomorrow' : `in ${leaseExpiry.days} days`}`
-                : leaseExpiry.days === 0
-                  ? 'Your lease expires today'
-                  : 'Your lease has expired'}
-            </p>
-            <p className="text-sm text-muted mt-1">
-              Your current lease runs through {formatDate(leaseExpiry.end)}. Please reach out to us to renew so there is no gap in your tenancy.
-            </p>
+      {leaseExpiry && (() => {
+        const isDanger = leaseExpiry.urgency === 'expired' || leaseExpiry.urgency === 'critical';
+        const borderColor = isDanger ? 'border-danger/30' : 'border-warning/30';
+        const bgColor = isDanger ? 'bg-danger-soft' : 'bg-warning-soft';
+        const iconColor = isDanger ? 'text-danger' : 'text-warning';
+        const headline =
+          leaseExpiry.days < 0 ? 'Your lease has expired'
+          : leaseExpiry.days === 0 ? 'Your lease expires today'
+          : leaseExpiry.days === 1 ? 'Your lease expires tomorrow'
+          : `Your lease expires in ${leaseExpiry.days} days`;
+        const message =
+          leaseExpiry.urgency === 'expired'
+            ? `Your lease ended on ${formatDate(leaseExpiry.end)}. Please contact us right away to renew and avoid any disruption to your tenancy.`
+          : leaseExpiry.urgency === 'critical'
+            ? `Your current lease runs through ${formatDate(leaseExpiry.end)}. Please reach out soon to renew so there is no gap in your tenancy.`
+          : leaseExpiry.urgency === 'soon'
+            ? `Your lease is set to end on ${formatDate(leaseExpiry.end)}. Now is a good time to start the renewal conversation.`
+            : `Heads up: your lease ends on ${formatDate(leaseExpiry.end)}. No rush, but keep it on your radar.`;
+        return (
+          <div className={`rounded-2xl border ${borderColor} ${bgColor} p-5 flex items-start gap-3`}>
+            <CalendarClock className={`h-5 w-5 ${iconColor} flex-shrink-0 mt-0.5`} />
+            <div className="flex-1">
+              <p className="font-semibold text-ink">{headline}</p>
+              <p className="text-sm text-muted mt-1">{message}</p>
+              <Link
+                to="/portal/messages"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Message us to renew
+              </Link>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <QuickActions />
 
