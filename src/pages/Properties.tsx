@@ -422,7 +422,7 @@ export function Properties() {
               <span className="eyebrow">Total Properties</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Building2 /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{properties.length}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{properties.length}</div>
           </div>
         </Card>
 
@@ -432,7 +432,7 @@ export function Properties() {
               <span className="eyebrow">Total Units</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DoorOpen /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{totalUnits}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{totalUnits}</div>
             <p className="mt-1.5 text-[13px] text-muted">Across all properties</p>
           </div>
         </Card>
@@ -443,7 +443,7 @@ export function Properties() {
               <span className="eyebrow">Occupied Units</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Home /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-primary tnum">{occupiedUnits}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-primary tnum">{occupiedUnits}</div>
             <p className="mt-1.5 text-[13px] text-muted">{totalUnits > 0 ? ((occupiedUnits / totalUnits) * 100).toFixed(0) : 0}% occupancy</p>
           </div>
         </Card>
@@ -454,7 +454,7 @@ export function Properties() {
               <span className="eyebrow">Total Potential Rent</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{formatCurrency(totalMonthlyRent)}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{formatCurrency(totalMonthlyRent)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Per month</p>
           </div>
         </Card>

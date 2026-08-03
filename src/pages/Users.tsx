@@ -318,7 +318,7 @@ export function Users() {
               <span className="eyebrow">Total Members</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UsersIcon /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{users.length}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{users.length}</div>
           </div>
         </Card>
 
@@ -328,7 +328,7 @@ export function Users() {
               <span className="eyebrow">Active</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UserCheck /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-positive tnum">{users.filter(u => u.isActive).length}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-positive tnum">{users.filter(u => u.isActive).length}</div>
           </div>
         </Card>
 
@@ -338,7 +338,7 @@ export function Users() {
               <span className="eyebrow">Roles</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Shield /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{roles.length}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{roles.length}</div>
           </div>
         </Card>
 
@@ -348,7 +348,7 @@ export function Users() {
               <span className="eyebrow">Admins</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><KeyRound /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-primary tnum">
+            <div className="mt-3 text-[27px] leading-none font-semibold text-primary tnum">
               {users.filter(u => u.roleId === 'super_admin' || u.roleId === 'admin').length}
             </div>
           </div>

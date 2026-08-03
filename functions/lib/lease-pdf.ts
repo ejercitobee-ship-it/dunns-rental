@@ -123,7 +123,7 @@ export async function buildLeasePdf(
 
   section('3. RENT', `Tenant agrees to pay ${money(terms.monthlyRent)} per month in rent, due on the ${ordinal(terms.rentDueDay)} of each month. Rent is payable via Zelle, money order, or cashier's check unless otherwise agreed in writing.`);
 
-  section('4. LATE FEES', `If rent is not received by the ${ordinal(terms.rentDueDay + terms.lateFeeGraceDays)} of the month (${terms.lateFeeGraceDays} day grace period), a late fee of ${money(terms.lateFeeAmount)} will be charged. The Landlord reserves the right to pursue eviction proceedings for nonpayment.`);
+  section('4. LATE FEES', `If rent is not received by the ${gracePeriodDeadline(terms.rentDueDay, terms.lateFeeGraceDays)} (${terms.lateFeeGraceDays} day grace period), a late fee of ${money(terms.lateFeeAmount)} will be charged. The Landlord reserves the right to pursue eviction proceedings for nonpayment.`);
 
   let sectionNum = 5;
 
@@ -184,6 +184,17 @@ function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function gracePeriodDeadline(dueDay: number, graceDays: number): string {
+  const ref = new Date(2024, 6, dueDay);
+  ref.setDate(ref.getDate() + graceDays);
+  const day = ref.getDate();
+  const crossedMonth = ref.getMonth() !== 6;
+  if (crossedMonth) {
+    return `${ordinal(day)} of the following month`;
+  }
+  return `${ordinal(day)} of the month`;
 }
 
 export interface RenewalTerms {
@@ -298,7 +309,7 @@ export async function buildRenewalPdf(
 
   section('4. RENT', `${rentNote} Rent is due on the ${ordinal(terms.rentDueDay)} of each month, payable via Zelle, money order, or cashier's check unless otherwise agreed in writing.`);
 
-  section('5. LATE FEES', `If rent is not received by the ${ordinal(terms.rentDueDay + terms.lateFeeGraceDays)} of the month (${terms.lateFeeGraceDays} day grace period), a late fee of ${money(terms.lateFeeAmount)} will be charged. The Landlord reserves the right to pursue eviction proceedings for nonpayment.`);
+  section('5. LATE FEES', `If rent is not received by the ${gracePeriodDeadline(terms.rentDueDay, terms.lateFeeGraceDays)} (${terms.lateFeeGraceDays} day grace period), a late fee of ${money(terms.lateFeeAmount)} will be charged. The Landlord reserves the right to pursue eviction proceedings for nonpayment.`);
 
   section('6. UTILITIES', terms.utilities || 'Tenant is responsible for all utilities unless otherwise noted.');
 

@@ -1,17 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, TrendingUp,
   TrendingDown, AlertCircle, Wallet, Building2, Percent, ArrowRight, DoorOpen, Home, CalendarClock,
-  ChevronDown, ChevronRight
+  ChevronDown, ChevronRight, CalendarDays,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
+import { calendarApi } from '../lib/api';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
-import type { DashboardStats, Property, Tenant, Unit } from '../types';
+import type { DashboardStats, Property, Tenant, Unit, CalendarEvent } from '../types';
 import {
   BarChart,
   Bar,
@@ -58,7 +59,7 @@ function StatCard({ title, value, subtitle, icon, onClick, trend }: StatCardProp
           <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
         </div>
         <div className="mt-3.5 flex items-end gap-2">
-          <span className="font-display text-[27px] leading-none font-medium text-ink tnum">{value}</span>
+          <span className="text-[27px] leading-none font-semibold text-ink tnum">{value}</span>
           {trend && (
             <span className={`mb-1 text-xs font-medium ${trend.positive ? 'text-positive' : 'text-danger'}`}>
               {trend.positive ? '↑' : '↓'} {trend.value}
@@ -392,6 +393,20 @@ export function Dashboard() {
       return next;
     });
 
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const loadCalendar = useCallback(() => {
+    calendarApi.list().then(setCalendarEvents).catch(() => {});
+  }, []);
+  useEffect(() => { loadCalendar(); }, [loadCalendar]);
+
+  const upcomingActivities = useMemo(() => {
+    const t = todayLocalDate();
+    return calendarEvents
+      .filter(e => !e.completed && e.eventDate >= t)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
+      .slice(0, 8);
+  }, [calendarEvents]);
+
   const [showExpiring, setShowExpiring] = useState(() => sessionStorage.getItem('dash_expiring') !== 'collapsed');
   const [showOverdue, setShowOverdue] = useState(() => sessionStorage.getItem('dash_overdue') !== 'collapsed');
   const toggleSection = (key: string, setter: (v: boolean) => void, current: boolean) => {
@@ -577,7 +592,7 @@ export function Dashboard() {
             ].map(s => (
               <div key={s.label} className="text-center">
                 <p className="text-[11px] text-muted uppercase tracking-wide">{s.label}</p>
-                <p className={`font-display text-lg font-medium tnum mt-1 ${s.color}`}>{s.value}</p>
+                <p className={`text-lg font-semibold tnum mt-1 ${s.color}`}>{s.value}</p>
               </div>
             ))}
           </div>
@@ -788,6 +803,62 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming Activities from Calendar */}
+      {upcomingActivities.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <CalendarDays className="h-5 w-5 text-primary" />
+              </div>
+              Upcoming Activities ({upcomingActivities.length})
+              <button
+                type="button"
+                onClick={() => navigate('/calendar')}
+                title="Open Calendar"
+                className="ml-auto text-faint hover:text-ink transition-colors"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="border-t border-line divide-y divide-line">
+              {upcomingActivities.map(event => {
+                const t = todayLocalDate();
+                const diffMs = new Date(event.eventDate + 'T00:00:00').getTime() - new Date(t + 'T00:00:00').getTime();
+                const daysLeft = Math.round(diffMs / 86400000);
+                const property = event.propertyId ? properties.find(p => p.id === event.propertyId) : null;
+                const catLabel = event.category.replace(/_/g, ' ');
+                const isUrgent = event.priority === 'urgent' || event.priority === 'high';
+                return (
+                  <div
+                    key={event.id}
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-canvas/60 transition-colors"
+                    onClick={() => navigate('/calendar')}
+                  >
+                    <CalendarDays className={`h-4 w-4 flex-shrink-0 ${isUrgent ? 'text-danger' : 'text-faint'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-ink truncate">{event.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-muted capitalize">{catLabel}</span>
+                        {property && <span className="text-xs text-muted">· {property.name || property.address}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <Badge variant={daysLeft <= 3 ? 'destructive' : daysLeft <= 7 ? 'warning' : 'default'}>
+                        {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`}
+                      </Badge>
+                      <p className="text-xs text-faint mt-0.5">{formatDate(event.eventDate)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Leases expiring soon, soonest first */}
       {expiringSoon.length > 0 && (

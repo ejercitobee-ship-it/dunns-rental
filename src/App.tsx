@@ -27,6 +27,7 @@ const DataMigration = lazy(() => import('./pages/DataMigration').then(m => ({ de
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
 const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
+const Calendar = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
 const ProspectiveTenantDetail = lazy(() => import('./pages/ProspectiveTenantDetail').then(m => ({ default: m.ProspectiveTenantDetail })));
 const SigningPage = lazy(() => import('./pages/SigningPage').then(m => ({ default: m.SigningPage })));
@@ -315,6 +316,12 @@ function AppRoutes() {
       <Route path="/users" element={
         <ProtectedRoute requiredPermission="users_view">
           <Layout><Users /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/calendar" element={
+        <ProtectedRoute requiredPermission="finances_view">
+          <Layout><Calendar /></Layout>
         </ProtectedRoute>
       } />
 

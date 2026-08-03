@@ -307,7 +307,7 @@ function RentHero({
         <div className="my-5 h-px bg-white/12" />
 
         <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/65">{monthLabel} rent</p>
-        <p className="font-display text-[42px] leading-none mt-2 tnum">{formatCurrency(amount)}</p>
+        <p className="text-[42px] leading-none font-semibold mt-2 tnum">{formatCurrency(amount)}</p>
 
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           {status === null && (

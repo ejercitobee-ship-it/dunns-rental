@@ -423,7 +423,7 @@ export function Expenses() {
               <span className="eyebrow">Total Income</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingUp /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-positive tnum">{formatCurrency(stats.totalIncome)}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-positive tnum">{formatCurrency(stats.totalIncome)}</div>
             <p className="mt-1.5 text-[13px] text-muted">All time</p>
           </div>
         </Card>
@@ -434,7 +434,7 @@ export function Expenses() {
               <span className="eyebrow">Total Expenses</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-danger tnum">{formatCurrency(stats.totalExpenses)}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-danger tnum">{formatCurrency(stats.totalExpenses)}</div>
             <p className="mt-1.5 text-[13px] text-muted">All time</p>
           </div>
         </Card>
@@ -445,7 +445,7 @@ export function Expenses() {
               <span className="eyebrow">Net Income</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
             </div>
-            <div className={`mt-3 font-display text-[27px] leading-none font-medium tnum ${stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(stats.netIncome)}</div>
+            <div className={`mt-3 text-[27px] leading-none font-semibold tnum ${stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(stats.netIncome)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Overall profit/loss</p>
           </div>
         </Card>
@@ -456,7 +456,7 @@ export function Expenses() {
               <span className="eyebrow">This Month</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Calendar /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{formatCurrency(stats.monthlyExpenses)}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{formatCurrency(stats.monthlyExpenses)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Expenses</p>
           </div>
         </Card>

@@ -128,13 +128,13 @@ export function RealtorDashboard() {
         <Card>
           <CardContent className="p-5">
             <p className="eyebrow">Tenants placed</p>
-            <p className="font-display text-3xl text-ink mt-1 tnum">{tenantsPlaced}</p>
+            <p className="text-3xl font-semibold text-ink mt-1 tnum">{tenantsPlaced}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
             <p className="eyebrow">In your active window</p>
-            <p className="font-display text-3xl text-ink mt-1 tnum">{tenantsInWindow}</p>
+            <p className="text-3xl font-semibold text-ink mt-1 tnum">{tenantsInWindow}</p>
           </CardContent>
         </Card>
       </div>

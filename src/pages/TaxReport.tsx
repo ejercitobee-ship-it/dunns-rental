@@ -518,7 +518,7 @@ export function TaxReport() {
               <span className="eyebrow">Total Income</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingUp /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-positive tnum">{formatCurrency(main.totalIncome)}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-positive tnum">{formatCurrency(main.totalIncome)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Taxable rental income</p>
           </div>
         </Card>
@@ -529,7 +529,7 @@ export function TaxReport() {
               <span className="eyebrow">Deductible Expenses</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-danger tnum">{formatCurrency(main.totalDeductibleExpenses)}</div>
+            <div className="mt-3 text-[27px] leading-none font-semibold text-danger tnum">{formatCurrency(main.totalDeductibleExpenses)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Includes depreciation</p>
           </div>
         </Card>
@@ -540,7 +540,7 @@ export function TaxReport() {
               <span className="eyebrow">Net Income</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
             </div>
-            <div className={`mt-3 font-display text-[27px] leading-none font-medium tnum ${main.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(main.netIncome)}</div>
+            <div className={`mt-3 text-[27px] leading-none font-semibold tnum ${main.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(main.netIncome)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Income minus deductions</p>
           </div>
         </Card>
@@ -551,7 +551,7 @@ export function TaxReport() {
               <span className="eyebrow">Expense Ratio</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Percent /></span>
             </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">
+            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">
               {main.totalIncome > 0 ? ((main.totalDeductibleExpenses / main.totalIncome) * 100).toFixed(1) : 0}%
             </div>
             <p className="mt-1.5 text-[13px] text-muted">Expense to income ratio</p>
@@ -750,7 +750,7 @@ export function TaxReport() {
                 <span className="eyebrow">Operating (≤ {formatCurrency(CAPITAL_THRESHOLD)})</span>
                 <Badge variant="secondary">Deduct this year</Badge>
               </div>
-              <div className="mt-2 font-display text-[24px] leading-none font-medium text-ink tnum">
+              <div className="mt-2 text-[24px] leading-none font-semibold text-ink tnum">
                 {formatCurrency(main.operatingExpenses)}
               </div>
               <p className="mt-1.5 text-[13px] text-muted">
@@ -764,7 +764,7 @@ export function TaxReport() {
                 <span className="eyebrow">Capital (&gt; {formatCurrency(CAPITAL_THRESHOLD)})</span>
                 <Badge variant="warning">Capitalize / depreciate</Badge>
               </div>
-              <div className="mt-2 font-display text-[24px] leading-none font-medium text-ink tnum">
+              <div className="mt-2 text-[24px] leading-none font-semibold text-ink tnum">
                 {formatCurrency(main.capitalExpenses)}
               </div>
               <p className="mt-1.5 text-[13px] text-muted">
@@ -893,13 +893,13 @@ export function TaxReport() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl border border-line p-4">
                 <span className="eyebrow">Deductible interest</span>
-                <div className="mt-2 font-display text-[22px] leading-none font-medium text-ink tnum">
+                <div className="mt-2 text-[22px] leading-none font-semibold text-ink tnum">
                   {formatCurrency(main.mortgageInterestDeducted)}
                 </div>
               </div>
               <div className="rounded-xl border border-line p-4">
                 <span className="eyebrow">Principal (not deductible)</span>
-                <div className="mt-2 font-display text-[22px] leading-none font-medium text-muted tnum">
+                <div className="mt-2 text-[22px] leading-none font-semibold text-muted tnum">
                   {formatCurrency(main.mortgagePrincipalExcluded)}
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent } from '../types';
 
 const API_BASE = '/api';
 
@@ -940,4 +940,14 @@ export const vendorMessagesApi = {
     apiRequest(`/handyman-messages/${handymanId}`),
   reply: (handymanId: string, body: string, file?: File | null): Promise<VendorMessage> =>
     postMessageForm(`/handyman-messages/${handymanId}`, body, file),
+};
+
+export const calendarApi = {
+  list: (): Promise<CalendarEvent[]> => apiRequest('/calendar'),
+  get: (id: string): Promise<CalendarEvent> => apiRequest(`/calendar/${id}`),
+  create: (event: Partial<CalendarEvent>): Promise<CalendarEvent> =>
+    apiRequest('/calendar', { method: 'POST', body: JSON.stringify(event) }),
+  update: (id: string, event: Partial<CalendarEvent>): Promise<CalendarEvent> =>
+    apiRequest(`/calendar/${id}`, { method: 'PUT', body: JSON.stringify(event) }),
+  delete: (id: string): Promise<void> => apiRequest(`/calendar/${id}`, { method: 'DELETE' }),
 };

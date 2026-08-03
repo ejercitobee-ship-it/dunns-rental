@@ -76,8 +76,9 @@
   letter-spacing: -0.015em;
 }
 
-/* Tabular figures for aligned money/data columns */
+/* Tabular figures for aligned money/data columns — always sans-serif */
 .tnum {
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
 }
 

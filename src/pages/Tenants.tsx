@@ -441,7 +441,7 @@ export function Tenants() {
                 <span className="eyebrow">{s.label}</span>
                 <span className={`w-9 h-9 rounded-xl grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${active ? 'bg-primary text-white' : 'bg-primary-soft text-primary'}`}>{s.icon}</span>
               </div>
-              <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{s.value}</div>
+              <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
               {s.filter && (
                 <span className="mt-2 block text-[11px] text-muted">
                   {active ? 'Filtering · click to clear' : clickable ? 'Click to filter' : 'None expiring'}

@@ -854,7 +854,7 @@ export function Rents() {
                     <span className="eyebrow">{s.label}</span>
                     <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
                   </div>
-                  <div className={`mt-3 font-display text-[27px] leading-none font-medium tnum ${s.valueClass}`}>{s.value}</div>
+                  <div className={`mt-3 text-[27px] leading-none font-semibold tnum ${s.valueClass}`}>{s.value}</div>
                 </div>
               </Card>
             ))}

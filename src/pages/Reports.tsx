@@ -185,7 +185,7 @@ export function Reports() {
           <Card key={s.label}>
             <div className="p-5">
               <span className="eyebrow">{s.label}</span>
-              <div className="mt-3 font-display text-[27px] leading-none font-medium text-ink tnum">{s.value}</div>
+              <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
               <p className="mt-1.5 text-[13px] text-muted">{s.sub}</p>
             </div>
           </Card>

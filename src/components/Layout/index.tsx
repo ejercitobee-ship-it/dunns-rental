@@ -19,6 +19,7 @@ import {
   ClipboardList,
   ScrollText,
   MessageSquare,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { messagesApi, vendorMessagesApi } from '../../lib/api';
@@ -80,6 +81,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
     { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
     { name: 'Finances', path: '/finances', icon: Receipt, show: hasModuleAccess('finances'), badge: 0 },
+    { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },

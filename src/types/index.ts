@@ -299,6 +299,32 @@ export function isPortalRole(roleId?: string): boolean {
   return !!roleId && (PORTAL_ROLES as readonly string[]).includes(roleId);
 }
 
+export type CalendarCategory =
+  | 'rent_due' | 'utility_due' | 'mortgage' | 'hoa' | 'property_tax' | 'insurance'
+  | 'inspection' | 'smoke_detector' | 'hvac' | 'pest_control' | 'lawn_care' | 'snow_removal' | 'maintenance'
+  | 'lease_expiration' | 'lease_renewal' | 'move_in' | 'move_out'
+  | 'contractor' | 'vendor' | 'licensing' | 'city_inspection' | 'custom';
+
+export type CalendarPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type RecurrenceRule = 'monthly' | 'quarterly' | 'semi_annually' | 'annually';
+
+export interface CalendarEvent {
+  id: string;
+  propertyId?: string;
+  unitId?: string;
+  title: string;
+  description?: string;
+  category: CalendarCategory;
+  eventDate: string;
+  priority: CalendarPriority;
+  isRecurring: boolean;
+  recurrenceRule?: RecurrenceRule;
+  completed: boolean;
+  completedAt?: number;
+  notes?: string;
+  createdAt?: number;
+}
+
 export interface PortalPayment {
   // The payment's own id and receipt, so a tenant can download or generate the
   // receipt for their own rent. Still never the payer (shared-lease privacy).

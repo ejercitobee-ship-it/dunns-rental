@@ -848,7 +848,7 @@ export function DataMigration() {
                     }`}
                   >
                     <item.icon className="h-5 w-5 mx-auto mb-1 text-faint" />
-                    <div className="text-2xl font-display font-medium text-ink tnum">{item.count}</div>
+                    <div className="text-2xl font-semibold text-ink tnum">{item.count}</div>
                     <div className="text-xs text-muted">{item.label}</div>
                   </button>
                 ))}
