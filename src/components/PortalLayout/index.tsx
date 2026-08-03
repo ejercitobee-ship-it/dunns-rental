@@ -174,7 +174,7 @@ function InstallPrompt() {
         <Smartphone className="h-[18px] w-[18px]" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">Add MH Dunn Property app</p>
+        <p className="text-sm font-medium text-ink">Add MH Dunn Property App to your Phone Screen!</p>
         <p className="text-xs text-muted">One tap to open, and get reminders as notifications. Tap to see how.</p>
       </div>
       <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
