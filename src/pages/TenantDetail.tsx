@@ -55,6 +55,7 @@ export function TenantDetail() {
   const {
     tenants, properties, units, rentPayments,
     updateTenant, deleteTenant, updateLease, getLeaseTenants, getTenantLeases,
+    refreshData,
   } = useApp();
   const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
@@ -273,34 +274,68 @@ export function TenantDetail() {
 
   const [leaseGenOpen, setLeaseGenOpen] = useState(false);
   const [generatingLease, setGeneratingLease] = useState(false);
-  const [leaseGenForm, setLeaseGenForm] = useState({
-    securityDeposit: '', lateFeeAmount: '50', lateFeeGraceDays: '5',
-    utilities: '', petPolicy: '', additionalTerms: '', emailToTenant: true,
+  const openRenewalModal = () => {
+    if (!lease) return;
+    const endDate = lease.endDate || '';
+    const nextStart = endDate || todayLocalDate();
+    const nextEndParts = nextStart.split('-');
+    const nextEnd = nextEndParts.length === 3
+      ? `${Number(nextEndParts[0]) + 1}-${nextEndParts[1]}-${nextEndParts[2]}`
+      : '';
+    setRenewalForm({
+      newStartDate: nextStart,
+      newEndDate: nextEnd,
+      newMonthlyRent: String(lease.monthlyRent),
+      rentDueDay: String(lease.rentDueDay ?? 1),
+      lateFeeAmount: '50',
+      lateFeeGraceDays: '5',
+      utilities: '',
+      additionalTerms: '',
+      emailToTenant: true,
+    });
+    setLeaseGenOpen(true);
+  };
+  const [renewalForm, setRenewalForm] = useState({
+    newStartDate: '', newEndDate: '', newMonthlyRent: '',
+    rentDueDay: '1', lateFeeAmount: '50', lateFeeGraceDays: '5',
+    utilities: '', additionalTerms: '', emailToTenant: true,
   });
 
-  const handleGenerateLease = async () => {
+  const handleGenerateRenewal = async () => {
     if (!lease || generatingLease) return;
+    if (!renewalForm.newStartDate || !renewalForm.newEndDate) {
+      showToast('Start and end dates are required.', 'error');
+      return;
+    }
+    const rent = Number(renewalForm.newMonthlyRent);
+    if (!rent || rent <= 0) {
+      showToast('Monthly rent must be a positive number.', 'error');
+      return;
+    }
     setGeneratingLease(true);
     try {
-      const res = await fetch(`/api/leases/${lease.id}/generate-pdf`, {
+      const res = await fetch(`/api/leases/${lease.id}/generate-renewal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          securityDeposit: Number(leaseGenForm.securityDeposit) || 0,
-          lateFeeAmount: Number(leaseGenForm.lateFeeAmount) || 50,
-          lateFeeGraceDays: Number(leaseGenForm.lateFeeGraceDays) || 5,
-          utilities: leaseGenForm.utilities || undefined,
-          petPolicy: leaseGenForm.petPolicy || undefined,
-          additionalTerms: leaseGenForm.additionalTerms || undefined,
-          emailToTenant: leaseGenForm.emailToTenant,
+          newStartDate: renewalForm.newStartDate,
+          newEndDate: renewalForm.newEndDate,
+          newMonthlyRent: rent,
+          rentDueDay: Number(renewalForm.rentDueDay) || 1,
+          lateFeeAmount: Number(renewalForm.lateFeeAmount) || 50,
+          lateFeeGraceDays: Number(renewalForm.lateFeeGraceDays) || 5,
+          utilities: renewalForm.utilities || undefined,
+          additionalTerms: renewalForm.additionalTerms || undefined,
+          emailToTenant: renewalForm.emailToTenant,
         }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error((err as Record<string, string>)?.error || 'Failed to generate lease');
+        throw new Error((err as Record<string, string>)?.error || 'Failed to generate renewal');
       }
-      showToast('Lease agreement generated and saved to Drive.', 'success');
+      showToast('Lease renewal generated, saved to Drive, and lease updated.', 'success');
       setLeaseGenOpen(false);
+      refreshData();
     } catch (err) {
       showToast((err as Error).message, 'error');
     } finally {
@@ -851,10 +886,10 @@ export function TenantDetail() {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setLeaseGenOpen(true)}
+                    onClick={openRenewalModal}
                     className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
                   >
-                    <FileText className="h-3.5 w-3.5" /> Generate Lease
+                    <FileText className="h-3.5 w-3.5" /> Renew Lease
                   </button>
                   <button
                     type="button"
@@ -1346,6 +1381,71 @@ export function TenantDetail() {
         </CardContent>
       </Card>
 
+      {/* Renewal History */}
+      {(() => {
+        if (!id) return null;
+        const allLeases = getTenantLeases(id).sort((a, b) =>
+          (a.startDate || '').localeCompare(b.startDate || '')
+        );
+        const renewals = allLeases.filter(l => l.renewedFromLeaseId || l.previousRent != null);
+        if (renewals.length === 0) return null;
+        return (
+          <Card className="shadow-lg">
+            <CardContent className="p-5">
+              <h3 className="font-semibold text-ink flex items-center gap-2 mb-4">
+                <FileText className="h-4 w-4 text-faint" /> Renewal History
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[500px]">
+                  <thead>
+                    <tr className="border-b border-line bg-canvas">
+                      <th className="text-left py-2.5 px-4 font-semibold text-ink text-sm">Renewal Period</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-ink text-sm">Previous Rent</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-ink text-sm">New Rent</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-ink text-sm">Change</th>
+                      <th className="text-left py-2.5 px-4 font-semibold text-ink text-sm">Generated</th>
+                      <th className="text-left py-2.5 px-4 font-semibold text-ink text-sm">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {renewals.map(l => {
+                      const prev = l.previousRent ?? 0;
+                      const curr = l.monthlyRent;
+                      const diff = curr - prev;
+                      const pct = prev > 0 ? ((diff / prev) * 100).toFixed(1) : '—';
+                      return (
+                        <tr key={l.id} className="border-b border-line last:border-0">
+                          <td className="py-3 px-4 text-sm text-ink">
+                            {l.startDate ? formatDate(l.startDate) : '—'} to {l.endDate ? formatDate(l.endDate) : '—'}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted text-right tnum">{prev > 0 ? formatCurrency(prev) : '—'}</td>
+                          <td className="py-3 px-4 text-sm text-ink text-right tnum font-medium">{formatCurrency(curr)}</td>
+                          <td className="py-3 px-4 text-sm text-right tnum">
+                            {prev > 0 ? (
+                              <span className={diff > 0 ? 'text-destructive' : diff < 0 ? 'text-positive' : 'text-muted'}>
+                                {diff > 0 ? '+' : ''}{formatCurrency(diff)} ({pct}%)
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted">
+                            {l.renewalGeneratedAt ? formatDate(new Date(l.renewalGeneratedAt * 1000).toISOString().slice(0, 10)) : '—'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant={l.status === 'active' ? 'success' : l.status === 'ended' ? 'secondary' : 'warning'}>
+                              {l.status === 'active' ? 'Active' : l.status === 'ended' ? 'Superseded' : 'Paused'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Edit modal */}
       <Modal isOpen={tenancyOpen} onClose={() => (savingTenancy ? undefined : setTenancyOpen(false))} title="Edit tenancy" size="md">
         <div className="space-y-4">
@@ -1669,77 +1769,111 @@ export function TenantDetail() {
         </div>
       </Modal>
 
-      {/* Generate Lease Agreement PDF */}
-      <Modal isOpen={leaseGenOpen} onClose={() => (generatingLease ? undefined : setLeaseGenOpen(false))} title="Generate Lease Agreement" size="md">
-        <div className="space-y-4">
+      {/* Generate Lease Renewal Agreement */}
+      <Modal isOpen={leaseGenOpen} onClose={() => (generatingLease ? undefined : setLeaseGenOpen(false))} title="Generate Lease Renewal" size="lg">
+        <div className="space-y-5">
           <p className="text-sm text-muted">
-            Creates a PDF lease agreement using the current tenancy details (rent, dates, unit). Fill in any additional terms below.
+            Creates a renewal agreement PDF for the current tenancy. The existing lease will be marked as ended (reason: Renewed) and a new lease created with the dates and rent below.
           </p>
-          <div>
-            <label className="block text-sm font-medium mb-1">Move-In Fee</label>
-            <input type="number" min="0" step="0.01"
-              value={leaseGenForm.securityDeposit}
-              onChange={e => setLeaseGenForm({ ...leaseGenForm, securityDeposit: e.target.value })}
-              placeholder="0.00"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          {/* Read-only current lease info */}
+          {lease && (
+            <div className="bg-canvas rounded-lg p-4 space-y-2 border border-line">
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wide">Current Lease</h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                <div><span className="text-muted">Tenant:</span> <span className="text-ink font-medium">{tenant ? `${tenant.firstName} ${tenant.lastName}` : '—'}</span></div>
+                <div><span className="text-muted">Property:</span> <span className="text-ink">{property?.name || '—'}</span></div>
+                <div><span className="text-muted">Unit:</span> <span className="text-ink">{unit ? `Unit ${unit.unitNumber}` : '—'}</span></div>
+                <div><span className="text-muted">Address:</span> <span className="text-ink">{property ? [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(', ') : '—'}</span></div>
+                <div><span className="text-muted">Term:</span> <span className="text-ink">{lease.startDate ? formatDate(lease.startDate) : '—'} to {lease.endDate ? formatDate(lease.endDate) : '—'}</span></div>
+                <div><span className="text-muted">Current Rent:</span> <span className="text-ink font-semibold">{formatCurrency(lease.monthlyRent)}/mo</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* Editable renewal fields */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-semibold text-muted uppercase tracking-wide">Renewal Terms</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">New Start Date</label>
+                <input type="date"
+                  value={renewalForm.newStartDate}
+                  onChange={e => setRenewalForm({ ...renewalForm, newStartDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">New End Date</label>
+                <input type="date"
+                  value={renewalForm.newEndDate}
+                  onChange={e => setRenewalForm({ ...renewalForm, newEndDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">New Monthly Rent</label>
+                <input type="number" min="0" step="0.01"
+                  value={renewalForm.newMonthlyRent}
+                  onChange={e => setRenewalForm({ ...renewalForm, newMonthlyRent: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+                {lease && Number(renewalForm.newMonthlyRent) !== lease.monthlyRent && Number(renewalForm.newMonthlyRent) > 0 && (
+                  <p className="text-xs text-muted mt-1">
+                    {Number(renewalForm.newMonthlyRent) > lease.monthlyRent ? 'Increase' : 'Decrease'}: {formatCurrency(Math.abs(Number(renewalForm.newMonthlyRent) - lease.monthlyRent))} ({((Math.abs(Number(renewalForm.newMonthlyRent) - lease.monthlyRent) / lease.monthlyRent) * 100).toFixed(1)}%)
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Rent Due Day</label>
+                <input type="number" min="1" max="31"
+                  value={renewalForm.rentDueDay}
+                  onChange={e => setRenewalForm({ ...renewalForm, rentDueDay: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Late Fee</label>
+                <input type="number" min="0" step="0.01"
+                  value={renewalForm.lateFeeAmount}
+                  onChange={e => setRenewalForm({ ...renewalForm, lateFeeAmount: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Late Fee Amount</label>
-              <input type="number" min="0" step="0.01"
-                value={leaseGenForm.lateFeeAmount}
-                onChange={e => setLeaseGenForm({ ...leaseGenForm, lateFeeAmount: e.target.value })}
+              <label className="block text-sm font-medium mb-1">Utilities (if changing)</label>
+              <textarea rows={2}
+                value={renewalForm.utilities}
+                onChange={e => setRenewalForm({ ...renewalForm, utilities: e.target.value })}
+                placeholder="Tenant is responsible for all utilities."
                 className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Grace Period (days)</label>
-              <input type="number" min="0" max="30"
-                value={leaseGenForm.lateFeeGraceDays}
-                onChange={e => setLeaseGenForm({ ...leaseGenForm, lateFeeGraceDays: e.target.value })}
+              <label className="block text-sm font-medium mb-1">Special Renewal Terms or Notes (optional)</label>
+              <textarea rows={3}
+                value={renewalForm.additionalTerms}
+                onChange={e => setRenewalForm({ ...renewalForm, additionalTerms: e.target.value })}
+                placeholder="Any additional renewal clauses, updated pet policies, parking agreements..."
                 className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Utilities Clause</label>
-            <textarea rows={2}
-              value={leaseGenForm.utilities}
-              onChange={e => setLeaseGenForm({ ...leaseGenForm, utilities: e.target.value })}
-              placeholder="Tenant is responsible for all utilities."
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Pet Policy</label>
-            <textarea rows={2}
-              value={leaseGenForm.petPolicy}
-              onChange={e => setLeaseGenForm({ ...leaseGenForm, petPolicy: e.target.value })}
-              placeholder="No pets allowed without prior written consent."
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Additional Terms (optional)</label>
-            <textarea rows={3}
-              value={leaseGenForm.additionalTerms}
-              onChange={e => setLeaseGenForm({ ...leaseGenForm, additionalTerms: e.target.value })}
-              placeholder="Any additional clauses or conditions..."
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={leaseGenForm.emailToTenant}
-              onChange={e => setLeaseGenForm({ ...leaseGenForm, emailToTenant: e.target.checked })}
+            <input type="checkbox" checked={renewalForm.emailToTenant}
+              onChange={e => setRenewalForm({ ...renewalForm, emailToTenant: e.target.checked })}
               className="rounded border-line"
             />
-            Email the tenant that their lease is ready
+            Email the tenant that their renewal is ready
           </label>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setLeaseGenOpen(false)} disabled={generatingLease}>Cancel</Button>
-            <Button onClick={handleGenerateLease} disabled={generatingLease}>
-              {generatingLease ? 'Generating...' : 'Generate PDF'}
+            <Button onClick={handleGenerateRenewal} disabled={generatingLease}>
+              {generatingLease ? 'Generating...' : 'Generate Renewal PDF'}
             </Button>
           </div>
         </div>

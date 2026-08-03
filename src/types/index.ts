@@ -87,6 +87,9 @@ export interface Lease {
   endedUnitLabel?: string;
   tenantIds: string[];
   rentDueDay?: number;
+  renewedFromLeaseId?: string;
+  renewalGeneratedAt?: number;
+  previousRent?: number;
 }
 
 /** A person. Rent and lease dates live on the Lease. */
