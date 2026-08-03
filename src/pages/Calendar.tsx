@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, List, Grid3X3,
-  Check, Trash2, Edit2, X, AlertCircle,
+  Check, Trash2, Edit2, X, AlertCircle, Bell,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -114,11 +114,94 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const RECURRENCE_LABELS: Record<RecurrenceRule, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  semi_annually: 'Semi Annually',
+  annually: 'Annually',
+};
+
+function addRecurrenceInterval(date: Date, rule: RecurrenceRule): Date {
+  const d = new Date(date);
+  switch (rule) {
+    case 'daily':
+      d.setDate(d.getDate() + 1);
+      break;
+    case 'weekly':
+      d.setDate(d.getDate() + 7);
+      break;
+    case 'monthly':
+      d.setMonth(d.getMonth() + 1);
+      break;
+    case 'quarterly':
+      d.setMonth(d.getMonth() + 3);
+      break;
+    case 'semi_annually':
+      d.setMonth(d.getMonth() + 6);
+      break;
+    case 'annually':
+      d.setFullYear(d.getFullYear() + 1);
+      break;
+  }
+  return d;
+}
+
+function pad2(n: number) { return String(n).padStart(2, '0'); }
+function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+
+interface ExpandedEvent extends CalendarEvent {
+  isVirtual?: boolean;
+  sourceEventId?: string;
+}
+
+function expandRecurringEvents(events: CalendarEvent[], windowStart: string, windowEnd: string): ExpandedEvent[] {
+  const result: ExpandedEvent[] = [];
+  const startDate = new Date(windowStart + 'T00:00:00');
+  const endDate = new Date(windowEnd + 'T00:00:00');
+
+  for (const event of events) {
+    if (!event.isRecurring || !event.recurrenceRule || event.completed) {
+      if (event.eventDate >= windowStart && event.eventDate <= windowEnd) {
+        result.push(event);
+      }
+      continue;
+    }
+
+    let cursor = new Date(event.eventDate + 'T00:00:00');
+    const maxOccurrences = event.recurrenceRule === 'daily' ? 400 : 100;
+    let count = 0;
+
+    while (cursor <= endDate && count < maxOccurrences) {
+      if (cursor >= startDate) {
+        const dateStr = toDateStr(cursor);
+        if (dateStr === event.eventDate) {
+          result.push(event);
+        } else {
+          result.push({
+            ...event,
+            eventDate: dateStr,
+            isVirtual: true,
+            sourceEventId: event.id,
+            id: `${event.id}__${dateStr}`,
+          });
+        }
+      }
+      cursor = addRecurrenceInterval(cursor, event.recurrenceRule);
+      count++;
+    }
+  }
+
+  return result;
+}
+
 const EMPTY_FORM = {
   title: '', description: '', category: 'custom' as CalendarCategory,
   eventDate: '', priority: 'medium' as CalendarPriority,
   isRecurring: false, recurrenceRule: '' as RecurrenceRule | '',
   propertyId: '', unitId: '', notes: '',
+  reminderHours: '' as string,
 };
 
 export function Calendar() {
@@ -133,7 +216,8 @@ export function Calendar() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState<CalendarCategory | ''>('');
-  const [filterProperty, setFilterProperty] = useState('');
+  const [filterProperties, setFilterProperties] = useState<Set<string>>(new Set());
+  const [showPropertyFilter, setShowPropertyFilter] = useState(false);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -148,13 +232,57 @@ export function Calendar() {
   const filteredEvents = useMemo(() => {
     let result = events;
     if (filterCategory) result = result.filter(e => e.category === filterCategory);
-    if (filterProperty) result = result.filter(e => e.propertyId === filterProperty);
+    if (filterProperties.size > 0) {
+      result = result.filter(e => !e.propertyId || filterProperties.has(e.propertyId));
+    }
     return result;
-  }, [events, filterCategory, filterProperty]);
+  }, [events, filterCategory, filterProperties]);
+
+  const calendarWindowStart = useMemo(() =>
+    `${currentYear}-${pad2(currentMonth + 1)}-01`,
+  [currentYear, currentMonth]);
+
+  const calendarWindowEnd = useMemo(() => {
+    const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+    return `${currentYear}-${pad2(currentMonth + 1)}-${pad2(daysInMonth)}`;
+  }, [currentYear, currentMonth]);
+
+  const expandedCalendarEvents = useMemo(() =>
+    expandRecurringEvents(filteredEvents, calendarWindowStart, calendarWindowEnd),
+  [filteredEvents, calendarWindowStart, calendarWindowEnd]);
 
   const eventsForDate = useCallback((dateStr: string) =>
-    filteredEvents.filter(e => e.eventDate === dateStr),
-  [filteredEvents]);
+    expandedCalendarEvents.filter(e => e.eventDate === dateStr),
+  [expandedCalendarEvents]);
+
+  const today = todayLocalDate();
+
+  const agendaWindowEnd = useMemo(() => {
+    const d = new Date(today + 'T00:00:00');
+    d.setFullYear(d.getFullYear() + 1);
+    return toDateStr(d);
+  }, [today]);
+
+  const expandedAgendaEvents = useMemo(() =>
+    expandRecurringEvents(filteredEvents, today, agendaWindowEnd),
+  [filteredEvents, today, agendaWindowEnd]);
+
+  const upcomingEvents = useMemo(() =>
+    expandedAgendaEvents
+      .filter(e => !e.completed && e.eventDate >= today)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
+      .slice(0, 50),
+  [expandedAgendaEvents, today]);
+
+  const overdueEvents = useMemo(() =>
+    filteredEvents
+      .filter(e => !e.completed && !e.isRecurring && e.eventDate < today)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate)),
+  [filteredEvents, today]);
+
+  const propertyUnits = useMemo(() =>
+    form.propertyId ? units.filter(u => u.propertyId === form.propertyId) : [],
+  [units, form.propertyId]);
 
   const openNew = (date?: string) => {
     setEditingEvent(null);
@@ -162,19 +290,23 @@ export function Calendar() {
     setShowModal(true);
   };
 
-  const openEdit = (event: CalendarEvent) => {
-    setEditingEvent(event);
+  const openEdit = (event: ExpandedEvent) => {
+    const source = event.isVirtual
+      ? events.find(e => e.id === event.sourceEventId) || event
+      : event;
+    setEditingEvent(source);
     setForm({
-      title: event.title,
-      description: event.description || '',
-      category: event.category,
-      eventDate: event.eventDate,
-      priority: event.priority,
-      isRecurring: event.isRecurring,
-      recurrenceRule: event.recurrenceRule || '',
-      propertyId: event.propertyId || '',
-      unitId: event.unitId || '',
-      notes: event.notes || '',
+      title: source.title,
+      description: source.description || '',
+      category: source.category,
+      eventDate: source.eventDate,
+      priority: source.priority,
+      isRecurring: source.isRecurring,
+      recurrenceRule: source.recurrenceRule || '',
+      propertyId: source.propertyId || '',
+      unitId: source.unitId || '',
+      notes: source.notes || '',
+      reminderHours: source.reminderHours != null ? String(source.reminderHours) : '',
     });
     setShowModal(true);
   };
@@ -190,6 +322,7 @@ export function Calendar() {
         unitId: form.unitId || undefined,
         description: form.description || undefined,
         notes: form.notes || undefined,
+        reminderHours: form.reminderHours ? Number(form.reminderHours) : undefined,
       };
       if (editingEvent) {
         await calendarApi.update(editingEvent.id, payload);
@@ -209,7 +342,8 @@ export function Calendar() {
     } catch { /* */ }
   };
 
-  const handleToggleComplete = async (event: CalendarEvent) => {
+  const handleToggleComplete = async (event: ExpandedEvent) => {
+    if (event.isVirtual) return;
     try {
       await calendarApi.update(event.id, { ...event, completed: !event.completed });
       await loadEvents();
@@ -230,24 +364,21 @@ export function Calendar() {
     setCurrentYear(now.getFullYear());
   };
 
-  const today = todayLocalDate();
+  const togglePropertyFilter = (id: string) => {
+    setFilterProperties(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
-  const upcomingEvents = useMemo(() =>
-    filteredEvents
-      .filter(e => !e.completed && e.eventDate >= today)
-      .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
-      .slice(0, 30),
-  [filteredEvents, today]);
-
-  const overdueEvents = useMemo(() =>
-    filteredEvents
-      .filter(e => !e.completed && e.eventDate < today)
-      .sort((a, b) => a.eventDate.localeCompare(b.eventDate)),
-  [filteredEvents, today]);
-
-  const propertyUnits = useMemo(() =>
-    form.propertyId ? units.filter(u => u.propertyId === form.propertyId) : [],
-  [units, form.propertyId]);
+  const toggleAllProperties = () => {
+    if (filterProperties.size === properties.length) {
+      setFilterProperties(new Set());
+    } else {
+      setFilterProperties(new Set(properties.map(p => p.id)));
+    }
+  };
 
   if (loading) {
     return (
@@ -288,7 +419,7 @@ export function Calendar() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-start">
         <select
           value={filterCategory}
           onChange={e => setFilterCategory(e.target.value as CalendarCategory | '')}
@@ -301,14 +432,53 @@ export function Calendar() {
             </optgroup>
           ))}
         </select>
-        <select
-          value={filterProperty}
-          onChange={e => setFilterProperty(e.target.value)}
-          className="text-sm border border-line rounded-lg px-3 py-1.5 bg-surface text-ink"
-        >
-          <option value="">All Properties</option>
-          {properties.map(p => <option key={p.id} value={p.id}>{p.name || p.address}</option>)}
-        </select>
+
+        {/* Multi-property filter */}
+        <div className="relative">
+          <button
+            onClick={() => setShowPropertyFilter(!showPropertyFilter)}
+            className="text-sm border border-line rounded-lg px-3 py-1.5 bg-surface text-ink flex items-center gap-2 min-w-[160px]"
+          >
+            <span className="truncate">
+              {filterProperties.size === 0
+                ? 'All Properties'
+                : filterProperties.size === properties.length
+                  ? 'All Properties'
+                  : `${filterProperties.size} ${filterProperties.size === 1 ? 'Property' : 'Properties'}`}
+            </span>
+            <ChevronLeft className={`h-3.5 w-3.5 transition-transform flex-shrink-0 ${showPropertyFilter ? 'rotate-90' : '-rotate-90'}`} />
+          </button>
+          {showPropertyFilter && (
+            <div className="absolute top-full left-0 mt-1 z-30 bg-surface border border-line rounded-lg shadow-lg py-1 min-w-[220px]">
+              <button
+                onClick={toggleAllProperties}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-canvas flex items-center gap-2"
+              >
+                <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
+                  filterProperties.size === 0 || filterProperties.size === properties.length ? 'bg-primary border-primary text-white' : 'border-line'
+                }`}>
+                  {(filterProperties.size === 0 || filterProperties.size === properties.length) && <Check className="h-3 w-3" />}
+                </span>
+                All Properties
+              </button>
+              <div className="border-t border-line my-1" />
+              {properties.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => togglePropertyFilter(p.id)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-canvas flex items-center gap-2"
+                >
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
+                    filterProperties.has(p.id) ? 'bg-primary border-primary text-white' : 'border-line'
+                  }`}>
+                    {filterProperties.has(p.id) && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate">{p.name || p.address}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Overdue Banner */}
@@ -379,7 +549,7 @@ export function Calendar() {
                 }
 
                 for (let day = 1; day <= daysInMonth; day++) {
-                  const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const dateStr = `${currentYear}-${pad2(currentMonth + 1)}-${pad2(day)}`;
                   const dayEvents = eventsForDate(dateStr);
                   const isToday = dateStr === today;
 
@@ -446,19 +616,23 @@ export function Calendar() {
                   const days = daysFromNow(event.eventDate);
                   const property = event.propertyId ? properties.find(p => p.id === event.propertyId) : null;
                   const pb = PRIORITY_BADGE[event.priority];
+                  const expanded = event as ExpandedEvent;
                   return (
                     <div key={event.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-canvas/60">
                       <button
-                        onClick={() => handleToggleComplete(event)}
+                        onClick={() => handleToggleComplete(expanded)}
+                        disabled={expanded.isVirtual}
                         className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
                           event.completed
                             ? 'bg-primary border-primary text-white'
-                            : 'border-line hover:border-primary'
+                            : expanded.isVirtual
+                              ? 'border-line/50 cursor-not-allowed'
+                              : 'border-line hover:border-primary'
                         }`}
                       >
                         {event.completed && <Check className="h-3 w-3" />}
                       </button>
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(event)}>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(expanded)}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-sm font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
                             {event.title}
@@ -471,8 +645,11 @@ export function Calendar() {
                           )}
                           {event.isRecurring && (
                             <span className="text-[10px] text-muted bg-canvas rounded px-1.5 py-0.5">
-                              {event.recurrenceRule?.replace(/_/g, ' ')}
+                              {event.recurrenceRule ? RECURRENCE_LABELS[event.recurrenceRule] : 'Recurring'}
                             </span>
+                          )}
+                          {event.reminderHours != null && (
+                            <Bell className="h-3 w-3 text-muted" />
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
@@ -485,13 +662,15 @@ export function Calendar() {
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
-                          onClick={() => openEdit(event)}
+                          onClick={() => openEdit(expanded)}
                           className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
                         ><Edit2 className="h-3.5 w-3.5" /></button>
-                        <button
-                          onClick={() => handleDelete(event.id)}
-                          className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                        ><Trash2 className="h-3.5 w-3.5" /></button>
+                        {!expanded.isVirtual && (
+                          <button
+                            onClick={() => handleDelete(event.id)}
+                            className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                          ><Trash2 className="h-3.5 w-3.5" /></button>
+                        )}
                       </div>
                     </div>
                   );
@@ -609,12 +788,31 @@ export function Calendar() {
                     className="mt-2 w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
                   >
                     <option value="">Select frequency</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
                     <option value="quarterly">Quarterly</option>
                     <option value="semi_annually">Semi Annually</option>
                     <option value="annually">Annually</option>
                   </select>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">
+                  <span className="flex items-center gap-1.5"><Bell className="h-3.5 w-3.5" /> Email Reminder</span>
+                </label>
+                <select
+                  value={form.reminderHours}
+                  onChange={e => setForm(f => ({ ...f, reminderHours: e.target.value }))}
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                >
+                  <option value="">No reminder</option>
+                  <option value="24">24 hours before</option>
+                  <option value="48">48 hours before</option>
+                  <option value="168">1 week before</option>
+                  <option value="336">2 weeks before</option>
+                </select>
               </div>
 
               <div>

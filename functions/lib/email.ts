@@ -362,3 +362,63 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
     html,
   };
 }
+
+export function calendarEventEmail(opts: {
+  type: 'created' | 'updated' | 'cancelled' | 'reminder';
+  title: string;
+  eventDate: string;
+  propertyName?: string;
+  unitLabel?: string;
+  description?: string;
+  category?: string;
+  priority?: string;
+  reminderInfo?: string;
+}) {
+  const TYPE_LABELS: Record<string, string> = {
+    created: 'New Event Scheduled',
+    updated: 'Event Updated',
+    cancelled: 'Event Cancelled',
+    reminder: 'Upcoming Event Reminder',
+  };
+
+  const heading = TYPE_LABELS[opts.type] || 'Calendar Event';
+  const catLabel = opts.category ? opts.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
+
+  const rows: string[] = [];
+  rows.push(`Event: ${opts.title}`);
+  if (catLabel) rows.push(`Category: ${catLabel}`);
+  rows.push(`Date: ${opts.eventDate}`);
+  if (opts.propertyName) rows.push(`Property: ${opts.propertyName}`);
+  if (opts.unitLabel) rows.push(`Unit: ${opts.unitLabel}`);
+  if (opts.priority && opts.priority !== 'medium') rows.push(`Priority: ${opts.priority.charAt(0).toUpperCase() + opts.priority.slice(1)}`);
+  if (opts.description) rows.push(`Description: ${opts.description}`);
+  if (opts.reminderInfo) rows.push(`Reminder: ${opts.reminderInfo}`);
+
+  const text = [heading, '', ...rows, '', '— MH Dunn Property'].join('\n');
+
+  const detailRows = rows.map(r => {
+    const [label, ...rest] = r.split(': ');
+    const val = rest.join(': ');
+    return `<tr><td style="padding:6px 0;font-size:14px;color:#8a887f;vertical-align:top;width:100px;">${escapeHtml(label)}</td><td style="padding:6px 0 6px 8px;font-size:14px;color:#1c1a17;">${escapeHtml(val)}</td></tr>`;
+  }).join('');
+
+  const html = `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">MH Dunn Property</div>
+      </td></tr>
+      <tr><td style="padding:26px 32px 20px;">
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;margin-bottom:16px;">${escapeHtml(heading)}</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">${detailRows}</table>
+      </td></tr>
+      <tr><td style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        MH Dunn Property
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+
+  return { subject: `${heading}: ${opts.title}`, html, text };
+}

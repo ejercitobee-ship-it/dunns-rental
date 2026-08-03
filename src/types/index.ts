@@ -332,7 +332,7 @@ export type CalendarCategory =
   | 'contractor' | 'vendor' | 'licensing' | 'city_inspection' | 'custom';
 
 export type CalendarPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type RecurrenceRule = 'monthly' | 'quarterly' | 'semi_annually' | 'annually';
+export type RecurrenceRule = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semi_annually' | 'annually';
 
 export interface CalendarEvent {
   id: string;
@@ -348,6 +348,7 @@ export interface CalendarEvent {
   completed: boolean;
   completedAt?: number;
   notes?: string;
+  reminderHours?: number;
   createdAt?: number;
 }
 
