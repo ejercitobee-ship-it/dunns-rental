@@ -301,7 +301,6 @@ export function TenantDetail() {
       }
       showToast('Lease agreement generated and saved to Drive.', 'success');
       setLeaseGenOpen(false);
-      refresh();
     } catch (err) {
       showToast((err as Error).message, 'error');
     } finally {
