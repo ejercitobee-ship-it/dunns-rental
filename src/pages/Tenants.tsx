@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
-  Plus, Trash2, UserPlus, Check, X,
+  Plus, Trash2, UserPlus, Check, X, ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -176,6 +176,41 @@ export function Tenants() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [households, searchTerm, expiringOnly, today, view]);
+
+  interface PropertyGroup {
+    propertyId: string;
+    propertyName: string;
+    households: typeof filteredGroups;
+  }
+  const propertyGroups = useMemo<PropertyGroup[]>(() => {
+    const map = new Map<string, PropertyGroup>();
+    for (const g of filteredGroups) {
+      const pid = g.property?.id || '__none__';
+      const pname = g.property?.name || 'Unassigned';
+      let grp = map.get(pid);
+      if (!grp) {
+        grp = { propertyId: pid, propertyName: pname, households: [] };
+        map.set(pid, grp);
+      }
+      grp.households.push(g);
+    }
+    return [...map.values()].sort((a, b) => a.propertyName.localeCompare(b.propertyName));
+  }, [filteredGroups]);
+
+  const [collapsedProps, setCollapsedProps] = useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem('tenants_collapsed');
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+  const toggleProperty = (pid: string) => {
+    setCollapsedProps(prev => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid); else next.add(pid);
+      sessionStorage.setItem('tenants_collapsed', JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   // Toggle the expiring-soon filter and keep it in the URL so the view is
   // shareable and survives a refresh.
@@ -447,127 +482,149 @@ export function Tenants() {
                 </tr>
               </thead>
               <tbody>
-                {filteredGroups.map(({ key, lease, property, unit, occupants }) => (
-                  <tr
-                    key={key}
-                    onClick={() => navigate(`/tenants/${occupants[0].id}`)}
-                    className="border-b border-line last:border-0 hover:bg-black/[0.02] cursor-pointer align-top"
-                  >
-                    <td className="py-4 px-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
-                          {occupants.length > 1 ? (
-                            <Users className="h-4 w-4 text-primary" />
-                          ) : (
-                            <span className="font-semibold text-primary text-sm">
-                              {occupants[0].firstName[0]}{occupants[0].lastName[0]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap gap-x-1.5">
-                            {occupants.map((t, i) => (
-                              <span key={t.id} className="whitespace-nowrap inline-flex items-center gap-0.5">
-                                <Link
-                                  to={`/tenants/${t.id}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="font-medium text-ink hover:text-primary"
-                                >
-                                  {t.firstName} {t.lastName}
-                                </Link>
-                                {t.verified && (
-                                  <Check className="h-3.5 w-3.5 text-positive" aria-label="Verified: has logged in" />
-                                )}{i < occupants.length - 1 ? ',' : ''}
+                {propertyGroups.map(pg => {
+                  const collapsed = collapsedProps.has(pg.propertyId);
+                  const totalRent = pg.households.reduce((s, h) => s + (h.lease?.monthlyRent || 0), 0);
+                  return (
+                    <React.Fragment key={pg.propertyId}>
+                      {propertyGroups.length > 1 && (
+                        <tr
+                          className="bg-canvas border-b border-line cursor-pointer select-none"
+                          onClick={() => toggleProperty(pg.propertyId)}
+                        >
+                          <td colSpan={6} className="py-2.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed && '-rotate-90')} />
+                              <Home className="h-4 w-4 text-primary" />
+                              <span className="font-semibold text-ink text-sm">{pg.propertyName}</span>
+                              <span className="text-xs text-muted">
+                                {pg.households.length} {pg.households.length === 1 ? 'household' : 'households'}
+                                {totalRent > 0 ? ` · ${formatCurrency(totalRent)}/mo` : ''}
                               </span>
-                            ))}
-                          </div>
-                          {occupants.length > 1 && (
-                            <p className="text-xs text-muted mt-0.5">{occupants.length} housemates</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-4">
-                      {(() => {
-                        // For terminated tenancies the unit may since have been
-                        // deleted, so fall back to the labels snapshotted at
-                        // termination time.
-                        const propLabel = property?.name || lease?.endedPropertyLabel;
-                        const unitLabel = unit ? `Unit ${unit.unitNumber}` : lease?.endedUnitLabel;
-                        return propLabel || unitLabel ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm text-ink">
-                              <Home className="h-3.5 w-3.5 text-faint" />
-                              <span>{propLabel || '—'}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted">
-                              <DoorOpen className="h-3.5 w-3.5 text-faint" />
-                              <span>{unitLabel || '—'}</span>
+                          </td>
+                        </tr>
+                      )}
+                      {!collapsed && pg.households.map(({ key, lease, property, unit, occupants }) => (
+                        <tr
+                          key={key}
+                          onClick={() => navigate(`/tenants/${occupants[0].id}`)}
+                          className="border-b border-line last:border-0 hover:bg-black/[0.02] cursor-pointer align-top"
+                        >
+                          <td className="py-4 px-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">
+                                {occupants.length > 1 ? (
+                                  <Users className="h-4 w-4 text-primary" />
+                                ) : (
+                                  <span className="font-semibold text-primary text-sm">
+                                    {occupants[0].firstName[0]}{occupants[0].lastName[0]}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap gap-x-1.5">
+                                  {occupants.map((t, i) => (
+                                    <span key={t.id} className="whitespace-nowrap inline-flex items-center gap-0.5">
+                                      <Link
+                                        to={`/tenants/${t.id}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="font-medium text-ink hover:text-primary"
+                                      >
+                                        {t.firstName} {t.lastName}
+                                      </Link>
+                                      {t.verified && (
+                                        <Check className="h-3.5 w-3.5 text-positive" aria-label="Verified: has logged in" />
+                                      )}{i < occupants.length - 1 ? ',' : ''}
+                                    </span>
+                                  ))}
+                                </div>
+                                {occupants.length > 1 && (
+                                  <p className="text-xs text-muted mt-0.5">{occupants.length} housemates</p>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-faint">—</span>
-                        );
-                      })()}
-                    </td>
+                          </td>
 
-                    <td className="py-4 px-4">
-                      {occupants.length === 1 ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-sm text-muted">
-                            <Mail className="h-3 w-3 text-faint" />
-                            <span className="truncate">{occupants[0].email || '—'}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted">
-                            <Phone className="h-3 w-3 text-faint" />
-                            <span>{occupants[0].phone || '—'}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted">{occupants.length} people</span>
-                      )}
-                    </td>
+                          <td className="py-4 px-4">
+                            {(() => {
+                              const propLabel = property?.name || lease?.endedPropertyLabel;
+                              const unitLabel = unit ? `Unit ${unit.unitNumber}` : lease?.endedUnitLabel;
+                              return propLabel || unitLabel ? (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 text-sm text-ink">
+                                    <Home className="h-3.5 w-3.5 text-faint" />
+                                    <span>{propLabel || '—'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm text-muted">
+                                    <DoorOpen className="h-3.5 w-3.5 text-faint" />
+                                    <span>{unitLabel || '—'}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-faint">—</span>
+                              );
+                            })()}
+                          </td>
 
-                    <td className="py-4 px-4">
-                      {lease?.startDate || lease?.endDate ? (
-                        <span className="text-sm text-ink">
-                          {lease?.startDate ? formatDate(lease.startDate) : '—'} to {lease?.endDate ? formatDate(lease.endDate) : '—'}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-faint">—</span>
-                      )}
-                    </td>
-
-                    <td className="py-4 px-4 text-right">
-                      {lease ? (
-                        <p className="font-semibold text-ink tnum">{formatCurrency(lease.monthlyRent)}</p>
-                      ) : (
-                        <span className="text-sm text-faint">—</span>
-                      )}
-                    </td>
-
-                    <td className="py-4 px-4 text-center">
-                      {lease ? (
-                        lease.needsReview ? (
-                          <Badge variant="warning">Pending review</Badge>
-                        ) : (
-                          <div className="inline-flex flex-col items-center gap-1">
-                            <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
-                            {lease.status === 'ended' && lease.endReason && (
-                              <span className="text-[11px] text-muted max-w-[160px] truncate" title={lease.endReason}>
-                                {lease.endReason}
-                              </span>
+                          <td className="py-4 px-4">
+                            {occupants.length === 1 ? (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-sm text-muted">
+                                  <Mail className="h-3 w-3 text-faint" />
+                                  <span className="truncate">{occupants[0].email || '—'}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted">
+                                  <Phone className="h-3 w-3 text-faint" />
+                                  <span>{occupants[0].phone || '—'}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted">{occupants.length} people</span>
                             )}
-                          </div>
-                        )
-                      ) : (
-                        <Badge variant="outline">No tenancy</Badge>
-                      )}
-                    </td>
+                          </td>
 
-                  </tr>
-                ))}
+                          <td className="py-4 px-4">
+                            {lease?.startDate || lease?.endDate ? (
+                              <span className="text-sm text-ink">
+                                {lease?.startDate ? formatDate(lease.startDate) : '—'} to {lease?.endDate ? formatDate(lease.endDate) : '—'}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-faint">—</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4 text-right">
+                            {lease ? (
+                              <p className="font-semibold text-ink tnum">{formatCurrency(lease.monthlyRent)}</p>
+                            ) : (
+                              <span className="text-sm text-faint">—</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4 text-center">
+                            {lease ? (
+                              lease.needsReview ? (
+                                <Badge variant="warning">Pending review</Badge>
+                              ) : (
+                                <div className="inline-flex flex-col items-center gap-1">
+                                  <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                                  {lease.status === 'ended' && lease.endReason && (
+                                    <span className="text-[11px] text-muted max-w-[160px] truncate" title={lease.endReason}>
+                                      {lease.endReason}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            ) : (
+                              <Badge variant="outline">No tenancy</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

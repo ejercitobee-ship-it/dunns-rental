@@ -756,7 +756,7 @@ export function DataMigration() {
                 <h4 className="font-semibold text-ink flex items-center gap-2">
                   <Receipt className="h-4 w-4" /> Expense Categories
                 </h4>
-                <p className="text-sm text-muted">maintenance, utilities, insurance, taxes, mortgage, repairs, cleaning, landscaping, management, other</p>
+                <p className="text-sm text-muted">maintenance, utilities, insurance, taxes, mortgage, repairs, cleaning, landscaping, management, realtor_commission, other</p>
               </div>
             </div>
           </div>

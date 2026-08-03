@@ -479,6 +479,7 @@ export function Properties() {
         {filteredProperties.map(property => {
           const propertyUnits = getPropertyUnits(property.id);
           const occupiedCount = propertyUnits.filter(u => !!getUnitLease(u.id)).length;
+          const propUtilTypes = [...new Set(utilityAccounts.filter(u => u.propertyId === property.id).map(u => u.type))];
           const open = expanded.has(property.id);
 
           return (
@@ -497,8 +498,13 @@ export function Properties() {
                   <div className="text-white min-w-0">
                     <h3 className="text-lg sm:text-xl font-bold truncate">{property.name}</h3>
                     <p className="text-white/80 text-xs sm:text-sm truncate">{property.address}, {property.city}</p>
-                    <p className="text-white/70 text-xs mt-0.5">
-                      {propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'} · {occupiedCount} occupied · {propertyUnits.length - occupiedCount} vacant
+                    <p className="text-white/70 text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span>{propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'} · {occupiedCount} occupied · {propertyUnits.length - occupiedCount} vacant</span>
+                      {propUtilTypes.length > 0 && (
+                        <span className="inline-flex items-center gap-1 ml-1 px-1.5 py-px rounded-full bg-white/15 text-white/80 text-[10px]">
+                          {propUtilTypes.map(t => { const M = UTILITY_META[t]; return M ? <M.icon key={t} className="h-3 w-3" /> : null; })}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </button>

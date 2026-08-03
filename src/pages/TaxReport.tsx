@@ -90,6 +90,7 @@ function mapToTaxCategory(expenseCategory: string): string {
     cleaning: 'cleaning_maintenance',
     landscaping: 'cleaning_maintenance',
     management: 'management_fees',
+    realtor_commission: 'commissions',
     other: 'other',
   };
   return mapping[expenseCategory] || 'other';
@@ -108,7 +109,6 @@ export function TaxReport() {
   const [cYear, setCYear] = useState(now.getFullYear() - 1);
   const [cQuarter, setCQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
   const [cMonth, setCMonth] = useState(now.getMonth() + 1);
-
   // 1-12 months covered by a scope selection.
   const monthsFor = (sc: 'year' | 'quarter' | 'month', q: number, m: number): number[] =>
     sc === 'year' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]

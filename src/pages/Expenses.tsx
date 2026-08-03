@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
   Plus, Download, Home, Wrench, Zap, Shield, Receipt,
-  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy
+  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy, Users
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -46,6 +46,7 @@ const categoryIcons: Record<ExpenseCategory, typeof Wrench> = {
   cleaning: Paintbrush,
   landscaping: Trees,
   management: Briefcase,
+  realtor_commission: Users,
   other: MoreHorizontal,
 };
 
@@ -59,6 +60,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
   cleaning: 'Cleaning',
   landscaping: 'Landscaping',
   management: 'Management',
+  realtor_commission: 'Realtor Commission',
   other: 'Other',
 };
 
@@ -92,12 +94,13 @@ export function Expenses() {
   // Editing a recorded expense is reserved to the workspace owner (super admin).
   const canEditExpense = isSuperAdmin();
 
-  // The utility account matching the pasted number (exact, trimmed). Drives the
-  // auto-fill and the little "matched" confirmation.
   const accountMatch = useMemo(() => {
     const q = accountLookup.trim().toLowerCase();
     if (!q) return null;
-    return utilityAccounts.find(u => (u.accountNumber || '').trim().toLowerCase() === q) || null;
+    return utilityAccounts.find(u => {
+      const acct = (u.accountNumber || '').trim().toLowerCase();
+      return acct === q || (q.length >= 4 && acct.endsWith(q));
+    }) || null;
   }, [accountLookup, utilityAccounts]);
 
   // Paste an account number: fill the property, unit, category, and vendor from
@@ -105,7 +108,10 @@ export function Expenses() {
   const applyAccountLookup = (value: string) => {
     setAccountLookup(value);
     const q = value.trim().toLowerCase();
-    const match = q ? utilityAccounts.find(u => (u.accountNumber || '').trim().toLowerCase() === q) : null;
+    const match = q ? utilityAccounts.find(u => {
+      const acct = (u.accountNumber || '').trim().toLowerCase();
+      return acct === q || (q.length >= 4 && acct.endsWith(q));
+    }) : null;
     if (match) {
       setExpensePropertyId(match.propertyId);
       setExpenseUnitId(match.unitId || '');

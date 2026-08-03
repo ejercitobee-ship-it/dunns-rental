@@ -360,6 +360,14 @@ export function Dashboard() {
       return next;
     });
 
+  const [showExpiring, setShowExpiring] = useState(() => sessionStorage.getItem('dash_expiring') !== 'collapsed');
+  const [showOverdue, setShowOverdue] = useState(() => sessionStorage.getItem('dash_overdue') !== 'collapsed');
+  const toggleSection = (key: string, setter: (v: boolean) => void, current: boolean) => {
+    const next = !current;
+    setter(next);
+    sessionStorage.setItem(key, next ? 'expanded' : 'collapsed');
+  };
+
   // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
   // rather than the unit's own stored status field, so the two counts can
   // never disagree (maintenance is the one status still set by hand).
@@ -521,6 +529,28 @@ export function Dashboard() {
           onClick={() => navigate('/rents')}
         />
       </div>
+
+      {/* Monthly Financial Summary */}
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="eyebrow mb-4">Monthly Financial Summary</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
+            {[
+              { label: 'Projected Rent', value: formatCurrency(monthlyRevenue(leases)), color: 'text-ink' },
+              { label: 'Actual Collections', value: formatCurrency(stats.monthlyIncome), color: 'text-positive' },
+              { label: 'Expenses (MTD)', value: formatCurrency(stats.monthlyExpenses), color: 'text-danger' },
+              { label: 'Outstanding', value: formatCurrency(stats.totalOwed), color: stats.totalOwed > 0 ? 'text-danger' : 'text-ink' },
+              { label: 'Collection %', value: monthlyRevenue(leases) > 0 ? `${Math.round((stats.monthlyIncome / monthlyRevenue(leases)) * 100)}%` : '—', color: 'text-ink' },
+              { label: 'Net Cash Flow', value: formatCurrency(stats.monthlyIncome - stats.monthlyExpenses), color: stats.monthlyIncome - stats.monthlyExpenses >= 0 ? 'text-positive' : 'text-danger' },
+            ].map(s => (
+              <div key={s.label} className="text-center">
+                <p className="text-[11px] text-muted uppercase tracking-wide">{s.label}</p>
+                <p className={`font-display text-lg font-medium tnum mt-1 ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Alerts - Clickable */}
       {stats.totalOwed > 0 && (
@@ -711,10 +741,13 @@ export function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-warning-soft rounded-lg">
-                <CalendarClock className="h-5 w-5 text-warning" />
-              </div>
-              Leases Expiring Soon ({expiringSoon.length})
+              <button type="button" onClick={() => toggleSection('dash_expiring', setShowExpiring, showExpiring)} className="flex items-center gap-2">
+                {showExpiring ? <ChevronDown className="h-4 w-4 text-faint" /> : <ChevronRight className="h-4 w-4 text-faint" />}
+                <div className="p-2 bg-warning-soft rounded-lg">
+                  <CalendarClock className="h-5 w-5 text-warning" />
+                </div>
+                Leases Expiring Soon ({expiringSoon.length})
+              </button>
               <button
                 type="button"
                 onClick={() => navigate('/tenants?expiring=1')}
@@ -725,6 +758,7 @@ export function Dashboard() {
               </button>
             </CardTitle>
           </CardHeader>
+          {showExpiring && (
           <CardContent className="p-0">
             <div className="border-t border-line">
               {expiringSoon.map(row => {
@@ -755,6 +789,7 @@ export function Dashboard() {
               })}
             </div>
           </CardContent>
+          )}
         </Card>
       )}
 
@@ -828,17 +863,20 @@ export function Dashboard() {
       {overduePayments.length > 0 && (
         <Card className="shadow-lg border-[#e8cdc8]">
           <CardHeader>
-            <CardTitle 
-              className="flex items-center gap-2 text-danger cursor-pointer hover:text-red-800 transition-colors"
-              onClick={() => navigate('/rents')}
-            >
-              <div className="p-2 bg-danger-soft rounded-lg">
-                <AlertCircle className="h-5 w-5 text-danger" />
-              </div>
-              Overdue Payments ({overdueList.length})
-              <ArrowRight className="h-4 w-4 ml-auto" />
+            <CardTitle className="flex items-center gap-2 text-danger">
+              <button type="button" onClick={() => toggleSection('dash_overdue', setShowOverdue, showOverdue)} className="flex items-center gap-2">
+                {showOverdue ? <ChevronDown className="h-4 w-4 text-danger/70" /> : <ChevronRight className="h-4 w-4 text-danger/70" />}
+                <div className="p-2 bg-danger-soft rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-danger" />
+                </div>
+                Overdue Payments ({overdueList.length})
+              </button>
+              <button type="button" onClick={() => navigate('/rents')} className="ml-auto text-danger/60 hover:text-danger transition-colors">
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </CardTitle>
           </CardHeader>
+          {showOverdue && (
           <CardContent className="p-0">
             <div className="border-t border-line">
               {overdueList.map(row => (
@@ -857,6 +895,7 @@ export function Dashboard() {
               ))}
             </div>
           </CardContent>
+          )}
         </Card>
       )}
     </div>

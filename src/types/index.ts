@@ -170,7 +170,7 @@ export type TaxDeductibleCategory =
   | 'depreciation'
   | 'other';
 
-export type ExpenseCategory = 
+export type ExpenseCategory =
   | 'maintenance'
   | 'utilities'
   | 'insurance'
@@ -180,6 +180,7 @@ export type ExpenseCategory =
   | 'cleaning'
   | 'landscaping'
   | 'management'
+  | 'realtor_commission'
   | 'other';
 
 export interface Income {
