@@ -115,3 +115,13 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+@media print {
+  body { background: white !important; }
+  nav, aside, header, [data-sidebar], [data-no-print] { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
+  * { color-adjust: exact !important; print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+  .recharts-wrapper { break-inside: avoid; }
+  table { break-inside: auto; }
+  tr { break-inside: avoid; }
+}

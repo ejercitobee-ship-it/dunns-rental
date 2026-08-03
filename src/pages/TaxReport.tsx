@@ -331,6 +331,11 @@ export function TaxReport() {
     downloadBlob([header, ...rows].join('\n'), `expenses-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
   };
 
+  const exportPrintPdf = () => {
+    setExportOpen(false);
+    setTimeout(() => window.print(), 100);
+  };
+
   const exportIncomeCSV = () => {
     const header = 'Date,Source,Amount,Property';
     const rentRows = main.pPaidRent.map(p => {
@@ -370,6 +375,7 @@ export function TaxReport() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
               <div className="absolute right-0 mt-1 z-50 w-52 rounded-lg border border-line bg-surface shadow-lg py-1 text-sm">
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportPrintPdf}>Print / Save as PDF</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportExpensesCSV}>Expenses (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportIncomeCSV}>Income (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportJSON}>Full Report (JSON)</button>
