@@ -213,6 +213,23 @@ export function Tenants() {
     });
   };
 
+  const hasActiveSearch = searchTerm.trim().length > 0;
+  const isCollapsed = (pid: string) => !hasActiveSearch && collapsedProps.has(pid);
+
+  const highlightMatch = (text: string) => {
+    if (!hasActiveSearch || !text) return text;
+    const q = searchTerm.trim();
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-amber-200/60 text-inherit rounded-sm px-0.5">{text.slice(idx, idx + q.length)}</mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  };
+
   // Toggle the expiring-soon filter and keep it in the URL so the view is
   // shareable and survives a refresh.
   const toggleExpiring = () => {
@@ -485,7 +502,7 @@ export function Tenants() {
               </thead>
               <tbody>
                 {propertyGroups.map(pg => {
-                  const collapsed = collapsedProps.has(pg.propertyId);
+                  const collapsed = isCollapsed(pg.propertyId);
                   const totalRent = pg.households.reduce((s, h) => s + (h.lease?.monthlyRent || 0), 0);
                   return (
                     <React.Fragment key={pg.propertyId}>
@@ -533,7 +550,7 @@ export function Tenants() {
                                         onClick={(e) => e.stopPropagation()}
                                         className="font-medium text-ink hover:text-primary"
                                       >
-                                        {t.firstName} {t.lastName}
+                                        {highlightMatch(`${t.firstName} ${t.lastName}`)}
                                       </Link>
                                       {t.verified && (
                                         <Check className="h-3.5 w-3.5 text-positive" aria-label="Verified: has logged in" />
@@ -556,11 +573,11 @@ export function Tenants() {
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2 text-sm text-ink">
                                     <Home className="h-3.5 w-3.5 text-faint" />
-                                    <span>{propLabel || '—'}</span>
+                                    <span>{propLabel ? highlightMatch(propLabel) : '—'}</span>
                                   </div>
                                   <div className="flex items-center gap-2 text-sm text-muted">
                                     <DoorOpen className="h-3.5 w-3.5 text-faint" />
-                                    <span>{unitLabel || '—'}</span>
+                                    <span>{unitLabel ? highlightMatch(unitLabel) : '—'}</span>
                                   </div>
                                 </div>
                               ) : (
@@ -574,11 +591,11 @@ export function Tenants() {
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2 text-sm text-muted">
                                   <Mail className="h-3 w-3 text-faint" />
-                                  <span className="truncate">{occupants[0].email || '—'}</span>
+                                  <span className="truncate">{occupants[0].email ? highlightMatch(occupants[0].email) : '—'}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted">
                                   <Phone className="h-3 w-3 text-faint" />
-                                  <span>{occupants[0].phone || '—'}</span>
+                                  <span>{occupants[0].phone ? highlightMatch(occupants[0].phone) : '—'}</span>
                                 </div>
                               </div>
                             ) : (

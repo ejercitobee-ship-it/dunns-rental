@@ -629,7 +629,7 @@ export function Settings() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Security Deposit (Months of Rent)</label>
+              <label className="text-sm font-medium">Move-In Fee (Months of Rent)</label>
               <input
                 type="number"
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"

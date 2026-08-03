@@ -32,6 +32,7 @@ export interface LeaseTerms {
   utilities: string;
   petPolicy: string;
   additionalTerms?: string;
+  isRenewal?: boolean;
 }
 
 export async function buildLeasePdf(
@@ -124,20 +125,30 @@ export async function buildLeasePdf(
 
   section('4. LATE FEES', `If rent is not received by the ${ordinal(terms.rentDueDay + terms.lateFeeGraceDays)} of the month (${terms.lateFeeGraceDays} day grace period), a late fee of ${money(terms.lateFeeAmount)} will be charged. The Landlord reserves the right to pursue eviction proceedings for nonpayment.`);
 
-  section('5. SECURITY DEPOSIT', `Tenant has paid a security deposit of ${money(terms.securityDeposit)}. The deposit will be returned within 30 days of move out, less any deductions for unpaid rent, damages beyond normal wear and tear, or cleaning costs. An itemized statement of deductions will be provided if the full deposit is not returned.`);
+  let sectionNum = 5;
 
-  section('6. UTILITIES', terms.utilities || 'Tenant is responsible for all utilities unless otherwise noted.');
+  if (!terms.isRenewal) {
+    section(`${sectionNum}. MOVE-IN FEE`, `Tenant has paid a non-refundable move-in fee of ${money(terms.securityDeposit)}. This fee covers administrative and preparation costs associated with the tenancy and is not applied toward rent.`);
+    sectionNum++;
+  }
 
-  section('7. MAINTENANCE AND REPAIRS', 'Tenant shall maintain the premises in clean and sanitary condition and promptly notify Landlord of any needed repairs. Tenant is responsible for damages caused by misuse or neglect. Landlord will make necessary repairs in a reasonable time after receiving notice.');
+  section(`${sectionNum}. UTILITIES`, terms.utilities || 'Tenant is responsible for all utilities unless otherwise noted.');
+  sectionNum++;
 
-  section('8. PETS', terms.petPolicy || 'No pets are allowed on the premises without prior written consent from the Landlord.');
+  section(`${sectionNum}. MAINTENANCE AND REPAIRS`, 'Tenant shall maintain the premises in clean and sanitary condition and promptly notify Landlord of any needed repairs. Tenant is responsible for damages caused by misuse or neglect. Landlord will make necessary repairs in a reasonable time after receiving notice.');
+  sectionNum++;
 
-  section('9. ENTRY BY LANDLORD', 'Landlord or their agents may enter the premises for inspections, repairs, or showings with at least 24 hours written notice, except in cases of emergency.');
+  section(`${sectionNum}. PETS`, terms.petPolicy || 'No pets are allowed on the premises without prior written consent from the Landlord.');
+  sectionNum++;
 
-  section('10. TERMINATION', 'Either party may terminate this lease with at least 30 days written notice before the end of the current term. Early termination by the Tenant without cause may result in forfeiture of the security deposit and liability for rent through the end of the lease term or until a replacement tenant is found.');
+  section(`${sectionNum}. ENTRY BY LANDLORD`, 'Landlord or their agents may enter the premises for inspections, repairs, or showings with at least 24 hours written notice, except in cases of emergency.');
+  sectionNum++;
+
+  section(`${sectionNum}. TERMINATION`, 'Either party may terminate this lease with at least 30 days written notice before the end of the current term. Early termination by the Tenant without cause may result in liability for rent through the end of the lease term or until a replacement tenant is found.');
 
   if (terms.additionalTerms) {
-    section('11. ADDITIONAL TERMS', terms.additionalTerms);
+    sectionNum++;
+    section(`${sectionNum}. ADDITIONAL TERMS`, terms.additionalTerms);
   }
 
   // Signature section

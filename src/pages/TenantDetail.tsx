@@ -1676,7 +1676,7 @@ export function TenantDetail() {
             Creates a PDF lease agreement using the current tenancy details (rent, dates, unit). Fill in any additional terms below.
           </p>
           <div>
-            <label className="block text-sm font-medium mb-1">Security Deposit</label>
+            <label className="block text-sm font-medium mb-1">Move-In Fee</label>
             <input type="number" min="0" step="0.01"
               value={leaseGenForm.securityDeposit}
               onChange={e => setLeaseGenForm({ ...leaseGenForm, securityDeposit: e.target.value })}

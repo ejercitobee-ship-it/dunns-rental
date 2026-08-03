@@ -35,9 +35,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const primaryTenant = tenants.results[0];
     const tenantNames = tenants.results.map(t => `${t.first_name} ${t.last_name}`).join(' and ');
 
-    const body = (await request.json()) as Partial<LeaseTerms> & { emailToTenant?: boolean };
+    const body = (await request.json()) as Partial<LeaseTerms> & { emailToTenant?: boolean; isRenewal?: boolean };
 
     const location = lease.prop_address || lease.prop_name || '';
+
+    let isRenewal = body.isRenewal ?? false;
+    if (!isRenewal && lease.unit_id) {
+      const prior = await env.DB.prepare(
+        `SELECT 1 FROM leases ol
+         JOIN lease_tenants olt ON olt.lease_id = ol.id
+         WHERE ol.unit_id = ? AND ol.id != ? AND ol.status = 'ended'
+           AND olt.tenant_id IN (SELECT tenant_id FROM lease_tenants WHERE lease_id = ?)
+         LIMIT 1`
+      ).bind(lease.unit_id, leaseId, leaseId).first();
+      if (prior) isRenewal = true;
+    }
 
     const terms: LeaseTerms = {
       tenantNames,
@@ -53,6 +65,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       utilities: body.utilities || 'Tenant is responsible for all utilities.',
       petPolicy: body.petPolicy || 'No pets allowed without prior written consent.',
       additionalTerms: body.additionalTerms || undefined,
+      isRenewal,
     };
 
     const result = await generateAndSaveLease(env, primaryTenant.id, terms);

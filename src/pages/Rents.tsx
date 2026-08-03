@@ -1298,7 +1298,7 @@ export function Rents() {
                 <h4 className="font-semibold text-amber-800 mb-2">Important Tax Information</h4>
                 <ul className="list-disc list-inside space-y-1 text-sm text-warning">
                   <li>Rent income is taxable and must be reported on your tax return</li>
-                  <li>Security deposits are not taxable income unless kept</li>
+                  <li>Move-in fees are taxable income when received</li>
                   <li>Late fees collected are considered rental income</li>
                   <li>Keep records of all expenses for deductions</li>
                 </ul>

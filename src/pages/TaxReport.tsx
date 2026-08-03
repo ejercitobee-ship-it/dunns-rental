@@ -310,7 +310,7 @@ export function TaxReport() {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
       income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, other: main.otherIncome },
-      securityDepositsReceived: main.depositsReceived,
+      moveInFeesReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
       operatingExpenses: main.operatingExpenses,
@@ -648,8 +648,8 @@ export function TaxReport() {
             {main.depositsReceived > 0 && (
               <div className="flex justify-between items-center py-2 border-t border-line">
                 <span className="text-sm text-muted">
-                  Security deposits received
-                  <span className="block text-xs text-muted">Not taxable while held. Record a kept deposit as Other income.</span>
+                  Move-in fees received
+                  <span className="block text-xs text-muted">Taxable as income in the year received.</span>
                 </span>
                 <span className="text-sm text-muted tnum">{formatCurrency(main.depositsReceived)}</span>
               </div>
@@ -992,7 +992,7 @@ export function TaxReport() {
               <ul className="list-disc list-inside space-y-1 text-sm text-muted">
                 <li>All rent payments received</li>
                 <li>Late fees and penalties</li>
-                <li>Security deposits kept (not returned)</li>
+                <li>Move-in fees collected</li>
                 <li>Payments for repairs from tenants</li>
               </ul>
             </div>

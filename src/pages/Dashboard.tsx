@@ -27,7 +27,11 @@ import {
   Line,
 } from 'recharts';
 
-const COLORS = ['#24503f', '#2c7a58', '#97671c', '#a23429', '#7e8b83'];
+const COLORS = [
+  '#24503f', '#2c7a58', '#97671c', '#a23429', '#7e8b83',
+  '#5b6abf', '#c2553a', '#3a8a6e', '#8b6f47', '#6b4c8a',
+  '#2e8b8b', '#b5651d', '#5f7a3a', '#9b3a5f', '#4a7a9b',
+];
 const INCOME_COLOR = '#2c7a58';
 const EXPENSE_COLOR = '#b98a5e';
 const NET_COLOR = '#24503f';
@@ -89,6 +93,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const { properties, units, leases, rentPayments, expenses, incomes, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
   const pastDueMonths = usePastDueMonths();
+  const [expenseView, setExpenseView] = useState<'monthly' | 'annual'>('monthly');
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
@@ -176,12 +181,22 @@ export function Dashboard() {
   }, [rentPayments, incomes, expenses]);
 
   const expenseByCategory = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const filtered = expenses.filter(e => {
+      const y = yearOf(e.date);
+      if (expenseView === 'annual') return y === currentYear;
+      return y === currentYear && monthOf(e.date) === currentMonth;
+    });
     const categories: Record<string, number> = {};
-    expenses.forEach(e => {
+    filtered.forEach(e => {
       categories[e.category] = (categories[e.category] || 0) + e.amount;
     });
-    return Object.entries(categories).map(([name, value]) => ({ name, value }));
-  }, [expenses]);
+    return Object.entries(categories)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenses, expenseView]);
 
   const recentActivity = useMemo(() => {
     const activities = [
@@ -660,46 +675,67 @@ export function Dashboard() {
         {/* Expenses by Category - Clickable */}
         <ClickableCard onClick={() => navigate('/finances')}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <TrendingDown className="h-5 w-5 text-primary" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <div className="p-2 bg-primary-soft rounded-lg">
+                  <TrendingDown className="h-5 w-5 text-primary" />
+                </div>
+                Expenses by Category
+              </CardTitle>
+              <div
+                className="flex rounded-lg border border-line overflow-hidden text-xs"
+                onClick={e => e.stopPropagation()}
+              >
+                <button
+                  className={`px-2.5 py-1 transition-colors ${expenseView === 'monthly' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
+                  onClick={() => setExpenseView('monthly')}
+                >Monthly</button>
+                <button
+                  className={`px-2.5 py-1 transition-colors ${expenseView === 'annual' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
+                  onClick={() => setExpenseView('annual')}
+                >Annual</button>
               </div>
-              Expenses by Category
-            </CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={expenseByCategory}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {expenseByCategory.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            {expenseByCategory.length === 0 ? (
+              <p className="text-center text-sm text-muted py-8">No expenses this {expenseView === 'monthly' ? 'month' : 'year'}</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={expenseByCategory}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={70}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {expenseByCategory.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
+                  {expenseByCategory.map((cat, idx) => (
+                    <div key={cat.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                        />
+                        <span className="capitalize text-muted">{cat.name}</span>
+                      </div>
+                      <span className="font-semibold text-ink tnum">{formatCurrency(cat.value)}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2 mt-2">
-              {expenseByCategory.slice(0, 4).map((cat, idx) => (
-                <div key={cat.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                    />
-                    <span className="capitalize text-muted">{cat.name}</span>
-                  </div>
-                  <span className="font-semibold text-ink">{formatCurrency(cat.value)}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </ClickableCard>
 
