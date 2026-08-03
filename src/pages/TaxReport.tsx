@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   FileText, Download, Calculator, TrendingDown, TrendingUp,
-  DollarSign, Home, Percent, AlertCircle, ChevronDown
+  DollarSign, Home, Percent, AlertCircle, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -109,6 +109,8 @@ export function TaxReport() {
   const [cYear, setCYear] = useState(now.getFullYear() - 1);
   const [cQuarter, setCQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
   const [cMonth, setCMonth] = useState(now.getMonth() + 1);
+  const [drilldown, setDrilldown] = useState<string | null>(null);
+  const [drilldownProp, setDrilldownProp] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       const raw = sessionStorage.getItem('tax_collapsed');
@@ -260,7 +262,7 @@ export function TaxReport() {
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown };
+    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
   }, [expenses, incomes, properties, rentPayments, leases]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
@@ -274,7 +276,25 @@ export function TaxReport() {
       .sort((a, b) => b.value - a.value);
   }, [main.expensesByCategory]);
 
-  const exportTaxReport = () => {
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const downloadBlob = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    setExportOpen(false);
+  };
+
+  const csvEscape = (v: string | number | undefined): string => {
+    const s = v == null ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const exportJSON = () => {
     const report = {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
@@ -287,28 +307,44 @@ export function TaxReport() {
       capitalItems: main.capitalItems,
       depreciation: main.depreciation,
       depreciationSchedule: main.depreciationSchedule,
-      mortgage: {
-        interestDeducted: main.mortgageInterestDeducted,
-        principalExcluded: main.mortgagePrincipalExcluded,
-        entriesNeedingSplit: main.mortgageNeedsSplit,
-      },
+      mortgage: { interestDeducted: main.mortgageInterestDeducted, principalExcluded: main.mortgagePrincipalExcluded, entriesNeedingSplit: main.mortgageNeedsSplit },
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
         income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, other: comp.otherIncome },
-        deductibleExpenses: comp.expensesByCategory,
-        totalDeductibleExpenses: comp.totalDeductibleExpenses,
-        operatingExpenses: comp.operatingExpenses,
-        capitalExpenses: comp.capitalExpenses,
-        netIncome: comp.netIncome,
+        deductibleExpenses: comp.expensesByCategory, totalDeductibleExpenses: comp.totalDeductibleExpenses,
+        operatingExpenses: comp.operatingExpenses, capitalExpenses: comp.capitalExpenses, netIncome: comp.netIncome,
       } : undefined,
     };
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tax-report-${mainLabel.replace(/\s+/g, '-')}.json`;
-    a.click();
+    downloadBlob(JSON.stringify(report, null, 2), `tax-report-${mainLabel.replace(/\s+/g, '-')}.json`, 'application/json');
+  };
+
+  const exportExpensesCSV = () => {
+    const header = 'Date,Category,Tax Category,Description,Amount,Property,Deductible';
+    const rows = main.pExpenses
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(e => {
+        const taxCat = TAX_CATEGORIES[e.taxCategory || mapToTaxCategory(e.category)]?.label || e.category;
+        const propName = properties.find(p => p.id === e.propertyId)?.name || '';
+        return [e.date, e.category, taxCat, csvEscape(e.description), e.amount.toFixed(2), csvEscape(propName), e.taxDeductible !== false ? 'Yes' : 'No'].join(',');
+      });
+    downloadBlob([header, ...rows].join('\n'), `expenses-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
+  };
+
+  const exportIncomeCSV = () => {
+    const header = 'Date,Source,Amount,Property';
+    const rentRows = main.pPaidRent.map(p => {
+      const lease = leases.find(l => l.id === p.leaseId);
+      const propName = lease ? properties.find(pr => pr.id === lease.propertyId)?.name || '' : '';
+      return [`${p.year}-${String(p.month).padStart(2, '0')}-01`, 'Rent', p.amount.toFixed(2), csvEscape(propName)].join(',');
+    });
+    const otherRows = main.pIncome
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(i => {
+        const propName = properties.find(p => p.id === i.propertyId)?.name || '';
+        return [i.date, i.source, i.amount.toFixed(2), csvEscape(propName)].join(',');
+      });
+    downloadBlob([header, ...rentRows, ...otherRows].join('\n'), `income-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
   };
 
   const selectCls = 'px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/25';
@@ -324,10 +360,23 @@ export function TaxReport() {
             Tax summary and deductible expenses for {mainLabel}{comp ? ` vs ${compLabel}` : ''}.
           </p>
         </div>
-        <Button variant="outline" onClick={exportTaxReport} className="flex-shrink-0">
-          <Download className="h-4 w-4 mr-2" />
-          Export
-        </Button>
+        <div className="relative flex-shrink-0">
+          <Button variant="outline" onClick={() => setExportOpen(!exportOpen)}>
+            <Download className="h-4 w-4 mr-2" />
+            Export
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          </Button>
+          {exportOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+              <div className="absolute right-0 mt-1 z-50 w-52 rounded-lg border border-line bg-surface shadow-lg py-1 text-sm">
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportExpensesCSV}>Expenses (CSV)</button>
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportIncomeCSV}>Income (CSV)</button>
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportJSON}>Full Report (JSON)</button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Period + comparison controls */}
@@ -603,26 +652,47 @@ export function TaxReport() {
               <tbody>
                 {Object.entries(main.expensesByCategory)
                   .sort(([, a], [, b]) => b - a)
-                  .map(([key, value]) => (
-                    <tr key={key} className="border-b last:border-0 hover:bg-canvas">
-                      <td className="py-3 px-4 font-medium">
-                        {TAX_CATEGORIES[key]?.label || key}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted">
-                        {TAX_CATEGORIES[key]?.description || ''}
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold">
-                        {formatCurrency(value)}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Badge variant="secondary">
-                          {main.totalDeductibleExpenses > 0
-                            ? ((value / main.totalDeductibleExpenses) * 100).toFixed(1)
-                            : 0}%
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  .flatMap(([key, value]) => {
+                    const open = drilldown === key;
+                    const items = open
+                      ? main.pExpenses
+                          .filter(e => (e.taxCategory || mapToTaxCategory(e.category)) === key)
+                          .sort((a, b) => b.amount - a.amount)
+                      : [];
+                    return [
+                      <tr key={key} className="border-b last:border-0 hover:bg-canvas cursor-pointer" onClick={() => setDrilldown(open ? null : key)}>
+                        <td className="py-3 px-4 font-medium flex items-center gap-1.5">
+                          {key !== 'depreciation' ? (
+                            open ? <ChevronDown className="h-3.5 w-3.5 text-muted" /> : <ChevronRight className="h-3.5 w-3.5 text-muted" />
+                          ) : <span className="w-3.5" />}
+                          {TAX_CATEGORIES[key]?.label || key}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted">
+                          {TAX_CATEGORIES[key]?.description || ''}
+                        </td>
+                        <td className="py-3 px-4 text-right font-semibold">
+                          {formatCurrency(value)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <Badge variant="secondary">
+                            {main.totalDeductibleExpenses > 0
+                              ? ((value / main.totalDeductibleExpenses) * 100).toFixed(1)
+                              : 0}%
+                          </Badge>
+                        </td>
+                      </tr>,
+                      ...items.map(e => (
+                        <tr key={`detail-${e.id}`} className="bg-canvas/50 border-b last:border-0 text-sm">
+                          <td className="py-2 px-4 pl-10 text-muted">{formatDate(e.date)}</td>
+                          <td className="py-2 px-4 text-muted">{e.description || '—'}</td>
+                          <td className="py-2 px-4 text-right tnum">{formatCurrency(e.amount)}</td>
+                          <td className="py-2 px-4 text-right text-muted text-xs">
+                            {properties.find(p => p.id === e.propertyId)?.name || ''}
+                          </td>
+                        </tr>
+                      )),
+                    ];
+                  })}
               </tbody>
             </table>
           </div>
@@ -841,16 +911,36 @@ export function TaxReport() {
                 </tr>
               </thead>
               <tbody>
-                {main.propertyBreakdown.map((p) => (
-                  <tr key={p.name} className="border-b last:border-0 hover:bg-canvas">
-                    <td className="py-3 px-4 font-medium">{p.name}</td>
-                    <td className="py-3 px-4 text-right text-positive">{formatCurrency(p.income)}</td>
-                    <td className="py-3 px-4 text-right text-danger">{formatCurrency(p.expenses)}</td>
-                    <td className={`py-3 px-4 text-right font-semibold ${p.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
-                      {formatCurrency(p.netIncome)}
-                    </td>
-                  </tr>
-                ))}
+                {main.propertyBreakdown.flatMap((p) => {
+                  const prop = properties.find(pr => pr.name === p.name);
+                  const open = drilldownProp === p.name;
+                  const items = open && prop
+                    ? main.pExpenses.filter(e => e.propertyId === prop.id).sort((a, b) => a.date.localeCompare(b.date))
+                    : [];
+                  return [
+                    <tr key={p.name} className="border-b last:border-0 hover:bg-canvas cursor-pointer" onClick={() => setDrilldownProp(open ? null : p.name)}>
+                      <td className="py-3 px-4 font-medium flex items-center gap-1.5">
+                        {open ? <ChevronDown className="h-3.5 w-3.5 text-muted" /> : <ChevronRight className="h-3.5 w-3.5 text-muted" />}
+                        {p.name}
+                      </td>
+                      <td className="py-3 px-4 text-right text-positive">{formatCurrency(p.income)}</td>
+                      <td className="py-3 px-4 text-right text-danger">{formatCurrency(p.expenses)}</td>
+                      <td className={`py-3 px-4 text-right font-semibold ${p.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>
+                        {formatCurrency(p.netIncome)}
+                      </td>
+                    </tr>,
+                    ...items.map(e => (
+                      <tr key={`prop-${e.id}`} className="bg-canvas/50 border-b last:border-0 text-sm">
+                        <td className="py-2 px-4 pl-10 text-muted">{formatDate(e.date)}</td>
+                        <td className="py-2 px-4 text-muted">{e.description || '—'}</td>
+                        <td className="py-2 px-4 text-right tnum">{formatCurrency(e.amount)}</td>
+                        <td className="py-2 px-4 text-right text-xs text-muted">
+                          {TAX_CATEGORIES[e.taxCategory || mapToTaxCategory(e.category)]?.label || e.category}
+                        </td>
+                      </tr>
+                    )),
+                  ];
+                })}
               </tbody>
             </table>
           </div>
