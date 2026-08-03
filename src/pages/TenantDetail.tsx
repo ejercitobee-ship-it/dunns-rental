@@ -271,6 +271,44 @@ export function TenantDetail() {
   const [terminating, setTerminating] = useState(false);
   const [termForm, setTermForm] = useState({ date: todayLocalDate(), reason: '' });
 
+  const [leaseGenOpen, setLeaseGenOpen] = useState(false);
+  const [generatingLease, setGeneratingLease] = useState(false);
+  const [leaseGenForm, setLeaseGenForm] = useState({
+    securityDeposit: '', lateFeeAmount: '50', lateFeeGraceDays: '5',
+    utilities: '', petPolicy: '', additionalTerms: '', emailToTenant: true,
+  });
+
+  const handleGenerateLease = async () => {
+    if (!lease || generatingLease) return;
+    setGeneratingLease(true);
+    try {
+      const res = await fetch(`/api/leases/${lease.id}/generate-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          securityDeposit: Number(leaseGenForm.securityDeposit) || 0,
+          lateFeeAmount: Number(leaseGenForm.lateFeeAmount) || 50,
+          lateFeeGraceDays: Number(leaseGenForm.lateFeeGraceDays) || 5,
+          utilities: leaseGenForm.utilities || undefined,
+          petPolicy: leaseGenForm.petPolicy || undefined,
+          additionalTerms: leaseGenForm.additionalTerms || undefined,
+          emailToTenant: leaseGenForm.emailToTenant,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error((err as Record<string, string>)?.error || 'Failed to generate lease');
+      }
+      showToast('Lease agreement generated and saved to Drive.', 'success');
+      setLeaseGenOpen(false);
+      refresh();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setGeneratingLease(false);
+    }
+  };
+
   const handleTerminate = async () => {
     if (!lease || terminating) return;
     if (!termForm.date) {
@@ -811,13 +849,22 @@ export function TenantDetail() {
                 <Home className="h-4 w-4 text-faint" /> Tenancy
               </h3>
               {lease && canManagePortal && (
-                <button
-                  type="button"
-                  onClick={openEditTenancy}
-                  className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
-                >
-                  <Edit2 className="h-3.5 w-3.5" /> Edit
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLeaseGenOpen(true)}
+                    className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Generate Lease
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openEditTenancy}
+                    className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" /> Edit
+                  </button>
+                </div>
               )}
             </div>
             {lease ? (
@@ -1618,6 +1665,82 @@ export function TenantDetail() {
             <Button variant="outline" onClick={() => setTerminateOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleTerminate} disabled={terminating}>
               {terminating ? 'Terminating...' : 'Terminate tenancy'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Generate Lease Agreement PDF */}
+      <Modal isOpen={leaseGenOpen} onClose={() => (generatingLease ? undefined : setLeaseGenOpen(false))} title="Generate Lease Agreement" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Creates a PDF lease agreement using the current tenancy details (rent, dates, unit). Fill in any additional terms below.
+          </p>
+          <div>
+            <label className="block text-sm font-medium mb-1">Security Deposit</label>
+            <input type="number" min="0" step="0.01"
+              value={leaseGenForm.securityDeposit}
+              onChange={e => setLeaseGenForm({ ...leaseGenForm, securityDeposit: e.target.value })}
+              placeholder="0.00"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Late Fee Amount</label>
+              <input type="number" min="0" step="0.01"
+                value={leaseGenForm.lateFeeAmount}
+                onChange={e => setLeaseGenForm({ ...leaseGenForm, lateFeeAmount: e.target.value })}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Grace Period (days)</label>
+              <input type="number" min="0" max="30"
+                value={leaseGenForm.lateFeeGraceDays}
+                onChange={e => setLeaseGenForm({ ...leaseGenForm, lateFeeGraceDays: e.target.value })}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Utilities Clause</label>
+            <textarea rows={2}
+              value={leaseGenForm.utilities}
+              onChange={e => setLeaseGenForm({ ...leaseGenForm, utilities: e.target.value })}
+              placeholder="Tenant is responsible for all utilities."
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Pet Policy</label>
+            <textarea rows={2}
+              value={leaseGenForm.petPolicy}
+              onChange={e => setLeaseGenForm({ ...leaseGenForm, petPolicy: e.target.value })}
+              placeholder="No pets allowed without prior written consent."
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Additional Terms (optional)</label>
+            <textarea rows={3}
+              value={leaseGenForm.additionalTerms}
+              onChange={e => setLeaseGenForm({ ...leaseGenForm, additionalTerms: e.target.value })}
+              placeholder="Any additional clauses or conditions..."
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={leaseGenForm.emailToTenant}
+              onChange={e => setLeaseGenForm({ ...leaseGenForm, emailToTenant: e.target.checked })}
+              className="rounded border-line"
+            />
+            Email the tenant that their lease is ready
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setLeaseGenOpen(false)} disabled={generatingLease}>Cancel</Button>
+            <Button onClick={handleGenerateLease} disabled={generatingLease}>
+              {generatingLease ? 'Generating...' : 'Generate PDF'}
             </Button>
           </div>
         </div>
