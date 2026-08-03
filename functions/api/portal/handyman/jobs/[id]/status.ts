@@ -4,6 +4,7 @@ import { handymanForUser } from '../../../../../lib/portal';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
 import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../../../lib/push';
+import { generateAndSaveWorkReport } from '../../../../../lib/work-report';
 
 // Which prior statuses each move is allowed from. Start work from an assigned or
 // scheduled job; complete only from in progress. Anything else is a 409.
@@ -81,6 +82,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             ['Handyman', hName],
             ['Location', job.locationLabel || 'Not set'],
           ]);
+          await generateAndSaveWorkReport(env, row, hName).catch(e => console.error('work report failed', e));
         }
       })().catch((e) => console.error('status notify failed', e))
     );

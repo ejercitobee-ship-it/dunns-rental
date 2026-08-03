@@ -3,6 +3,7 @@ import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../
 import { handymanForUser } from '../../../lib/portal';
 import { serializeJob, loadOwnedJob } from '../../../lib/handyman-jobs';
 import { notifyOffice } from '../../../lib/maintenance-notify';
+import { generateAndSaveWorkReport } from '../../../lib/work-report';
 
 /**
  * POST /api/portal/handyman/report — a handyman logs work they did (for cases a
@@ -61,12 +62,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const hName = (await env.DB.prepare('SELECT name FROM handymen WHERE id = ?').bind(handyman.id).first<{ name: string }>())?.name;
 
     context.waitUntil(
-      notifyOffice(env, `Work logged for approval: ${job.title}`, [
-        ['Handyman', hName || 'Unknown'],
-        ['Location', job.locationLabel || 'Not set'],
-        ['Proposed cost', `$${cost.toFixed(2)}`],
-        ['Next', 'Review and approve it on the Maintenance page.'],
-      ]).catch((e) => console.error('report notify failed', e))
+      (async () => {
+        await notifyOffice(env, `Work logged for approval: ${job.title}`, [
+          ['Handyman', hName || 'Unknown'],
+          ['Location', job.locationLabel || 'Not set'],
+          ['Proposed cost', `$${cost.toFixed(2)}`],
+          ['Next', 'Review and approve it on the Maintenance page.'],
+        ]);
+        const fullRow = await env.DB.prepare(
+          `SELECT m.*, p.name AS property_name, p.address AS property_address, u.unit_number
+           FROM maintenance_requests m
+           LEFT JOIN properties p ON p.id = m.property_id
+           LEFT JOIN units u ON u.id = m.unit_id
+           WHERE m.id = ?`
+        ).bind(id).first();
+        if (fullRow) await generateAndSaveWorkReport(env, fullRow as Record<string, unknown>, hName || 'Unknown');
+      })().catch((e) => console.error('report notify failed', e))
     );
 
     return jsonOk({ success: true, data: job }, 201);

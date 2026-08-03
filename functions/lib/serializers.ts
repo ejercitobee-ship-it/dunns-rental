@@ -240,6 +240,9 @@ export function serializeMaintenance(r: Row) {
     needsApproval: !!r.needs_approval,
     approvedAt: r.approved_at ?? undefined,
     reportedCost: r.reported_cost ?? undefined,
+    completionPhotoUrl: r.completion_photo_drive_id ? `/api/photo/${r.completion_photo_drive_id}` : null,
+    workReportDriveId: r.work_report_drive_id ?? undefined,
+    workReportUrl: r.work_report_drive_id ? `/api/documents/download/${r.work_report_drive_id}` : null,
   };
 }
 
