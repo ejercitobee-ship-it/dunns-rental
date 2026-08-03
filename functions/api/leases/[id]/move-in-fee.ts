@@ -39,10 +39,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // correction updates the same row instead of duplicating it.
       env.DB.prepare(
         `INSERT INTO incomes (id, property_id, unit_id, source, amount, date, description, user_id)
-         VALUES (?, ?, ?, 'other', ?, ?, 'Move-in fee', ?)
+         VALUES (?, ?, ?, 'move_in_fee', ?, ?, 'Move-in fee', ?)
          ON CONFLICT(id) DO UPDATE SET
            amount = excluded.amount, date = excluded.date, property_id = excluded.property_id,
-           unit_id = excluded.unit_id`
+           unit_id = excluded.unit_id, source = excluded.source`
       ).bind(`movein-${leaseId}`, lease.property_id, lease.unit_id, amount, paidDate, auth.id),
     ]);
 

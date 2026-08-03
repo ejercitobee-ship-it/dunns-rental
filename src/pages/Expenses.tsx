@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate, formatMonthYear, yearOf, monthOf } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { rentIncomeForMonths } from '../lib/rent';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -984,7 +984,7 @@ export function Expenses() {
                 type="date"
                 name="date"
                 required
-                defaultValue={editingExpense?.date || new Date().toISOString().split('T')[0]}
+                defaultValue={editingExpense?.date || todayLocalDate()}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>

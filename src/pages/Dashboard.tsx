@@ -87,7 +87,7 @@ function ClickableCard({ children, onClick, className = '' }: ClickableCardProps
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { properties, units, leases, rentPayments, expenses, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
+  const { properties, units, leases, rentPayments, expenses, incomes, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
   const pastDueMonths = usePastDueMonths();
 
   const stats: DashboardStats = useMemo(() => {
@@ -104,10 +104,15 @@ export function Dashboard() {
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
 
-    // Calculate monthly income from paid rent payments (not the separate incomes array)
-    const monthlyIncome = rentPayments
+    const monthlyRentIncome = rentPayments
       .filter(r => r.status === 'paid' && r.month === currentMonth && r.year === currentYear)
       .reduce((sum, r) => sum + r.amount, 0);
+
+    const monthlyOtherIncome = incomes
+      .filter(i => monthOf(i.date) === currentMonth && yearOf(i.date) === currentYear)
+      .reduce((sum, i) => sum + i.amount, 0);
+
+    const monthlyIncome = monthlyRentIncome + monthlyOtherIncome;
 
     const monthlyExpenses = expenses
       .filter(e => monthOf(e.date) === currentMonth && yearOf(e.date) === currentYear)
@@ -141,21 +146,26 @@ export function Dashboard() {
       occupancyRate: totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0,
       projectedYearlyIncome,
     };
-  }, [properties, units, leases, expenses, rentPayments, getUnitLease]);
+  }, [properties, units, leases, expenses, incomes, rentPayments, getUnitLease]);
 
   const monthlyData = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     return months.map(month => {
-      // Calculate income from paid rent payments for this month
-      const monthIncome = rentPayments
+      const rent = rentPayments
         .filter(r => r.status === 'paid' && r.month === month && r.year === currentYear)
         .reduce((sum, r) => sum + r.amount, 0);
-      
+
+      const other = incomes
+        .filter(i => monthOf(i.date) === month && yearOf(i.date) === currentYear)
+        .reduce((sum, i) => sum + i.amount, 0);
+
+      const monthIncome = rent + other;
+
       const monthExpenses = expenses
         .filter(e => monthOf(e.date) === month && yearOf(e.date) === currentYear)
         .reduce((sum, e) => sum + e.amount, 0);
-      
+
       return {
         name: getMonthName(month),
         income: monthIncome,
@@ -163,7 +173,7 @@ export function Dashboard() {
         net: monthIncome - monthExpenses,
       };
     });
-  }, [rentPayments, expenses]);
+  }, [rentPayments, incomes, expenses]);
 
   const expenseByCategory = useMemo(() => {
     const categories: Record<string, number> = {};
@@ -176,7 +186,7 @@ export function Dashboard() {
   const recentActivity = useMemo(() => {
     const activities = [
       ...rentPayments
-        .filter(r => r.paidDate)
+        .filter(r => r.status === 'paid' && r.paidDate)
         .map(r => {
           const lease = leases.find(l => l.id === r.leaseId);
           const property = lease?.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
@@ -188,6 +198,13 @@ export function Dashboard() {
             property: property?.name || '',
           };
         }),
+      ...incomes.map(i => ({
+        type: 'payment' as const,
+        date: i.date,
+        description: i.description || i.source.replace(/_/g, ' '),
+        amount: i.amount,
+        property: properties.find(p => p.id === i.propertyId)?.name || '',
+      })),
       ...expenses.map(e => ({
         type: 'expense' as const,
         date: e.date,
@@ -200,7 +217,7 @@ export function Dashboard() {
       .slice(0, 10);
 
     return activities;
-  }, [rentPayments, expenses, properties, leases]);
+  }, [rentPayments, incomes, expenses, properties, leases]);
 
   // Derived from settlement, not payment.status: nothing in the app ever
   // writes the 'overdue' payment status, so filtering on it always found

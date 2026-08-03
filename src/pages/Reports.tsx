@@ -99,7 +99,7 @@ export function Reports() {
           .filter(pm => pm.status === 'paid' && leasePropertyId.get(pm.leaseId) === p.id && inYear(pm.year))
           .reduce((s, pm) => s + (pm.amount || 0), 0);
         const other = incomes
-          .filter(i => i.propertyId === p.id && inYear(yearOf(i.date)))
+          .filter(i => i.propertyId === p.id && i.source !== 'deposit' && inYear(yearOf(i.date)))
           .reduce((s, i) => s + i.amount, 0);
         const expenseTotal = expenses
           .filter(e => e.propertyId === p.id && inYear(yearOf(e.date)))

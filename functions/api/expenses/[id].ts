@@ -27,6 +27,13 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   try {
     const id = params.id as string;
     const body = (await request.json()) as Record<string, unknown>;
+    if (!body.category || body.amount === undefined || !body.date || !body.description) {
+      return jsonError('Category, amount, date and description are required', 400);
+    }
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return jsonError('Amount must be a positive number', 400);
+    }
 
     await env.DB.prepare(
       `UPDATE expenses SET

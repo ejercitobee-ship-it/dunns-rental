@@ -145,13 +145,15 @@ export function TaxReport() {
     // this matches Rent Management's Tax tab for the same months.
     const rentIncome = rentIncomeForMonths(rentPayments, months, y);
     const lateFeeIncome = pIncome.filter(i => i.source === 'late_fee').reduce((s, i) => s + i.amount, 0);
+    const moveInFeeIncome = pIncome.filter(i => i.source === 'move_in_fee').reduce((s, i) => s + i.amount, 0);
+    const utilityReimbursement = pIncome.filter(i => i.source === 'utility_reimbursement').reduce((s, i) => s + i.amount, 0);
     const otherIncome = pIncome.filter(i => i.source === 'other').reduce((s, i) => s + i.amount, 0);
     // A refundable security deposit you are holding is a liability you owe back,
     // NOT taxable income. It becomes income only in the year you keep it (record
     // that as "Other" income). So deposits are tracked separately and excluded
     // from the taxable total.
     const depositsReceived = pIncome.filter(i => i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
-    const totalIncome = rentIncome + lateFeeIncome + otherIncome;
+    const totalIncome = rentIncome + lateFeeIncome + moveInFeeIncome + utilityReimbursement + otherIncome;
 
     const propertyNameById = new Map(properties.map(p => [p.id, p.name]));
     const expensesByCategory: Record<string, number> = {};
@@ -191,11 +193,11 @@ export function TaxReport() {
         return;
       }
 
-      expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + deductible;
       if (deductible > 0) {
-        totalDeductibleExpenses += deductible;
-        // A capital improvement (over the $2,500 line) vs. a current-year expense.
         if (e.amount > CAPITAL_THRESHOLD) {
+          // Capital improvement: NOT deductible in the current year. It should
+          // be capitalized and depreciated over its useful life. Track it
+          // separately for reference but do NOT add it to totalDeductibleExpenses.
           capitalExpenses += e.amount;
           capitalItems.push({
             id: e.id,
@@ -206,7 +208,9 @@ export function TaxReport() {
             propertyName: e.propertyId ? propertyNameById.get(e.propertyId) : undefined,
           });
         } else {
-          operatingExpenses += e.amount;
+          expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + deductible;
+          totalDeductibleExpenses += deductible;
+          operatingExpenses += deductible;
         }
       }
     });
@@ -247,8 +251,8 @@ export function TaxReport() {
       const propDepreciation = round2((depreciationByProperty.get(p.id) || 0) * periodFactor);
       const propertyExpenses = cashExpenses + propDepreciation;
       const propertyRent = pPaidRent.filter(pmt => leasePropertyId.get(pmt.leaseId) === p.id).reduce((s, pmt) => s + pmt.amount, 0);
-      // Property income excludes deposits (not taxable) and rent (counted above).
-      const propertyOther = pIncome.filter(i => i.propertyId === p.id && i.source === 'other').reduce((s, i) => s + i.amount, 0);
+      // Property income excludes deposits (not taxable) and source==='rent' (already in propertyRent via rent_payments).
+      const propertyOther = pIncome.filter(i => i.propertyId === p.id && i.source !== 'deposit' && i.source !== 'rent').reduce((s, i) => s + i.amount, 0);
       const propertyIncome = propertyRent + propertyOther;
       return { name: p.name, income: propertyIncome, expenses: propertyExpenses, netIncome: propertyIncome - propertyExpenses };
     });
@@ -256,13 +260,20 @@ export function TaxReport() {
     // Income/expenses per month across the selected months, for the chart.
     const breakdown = months.map(m => {
       const mRent = pPaidRent.filter(p => p.month === m).reduce((s, p) => s + p.amount, 0);
-      const mOther = pIncome.filter(i => i.source !== 'rent' && monthOf(i.date) === m).reduce((s, i) => s + i.amount, 0);
+      // Exclude deposits (non-taxable) and source==='rent' (already in mRent via rent_payments)
+      const mOther = pIncome.filter(i => i.source !== 'rent' && i.source !== 'deposit' && monthOf(i.date) === m).reduce((s, i) => s + i.amount, 0);
       const mInc = mRent + mOther;
-      const mExp = pExpenses.filter(e => monthOf(e.date) === m).reduce((s, e) => s + (e.taxDeductible !== false ? e.amount : 0), 0);
+      // Exclude capital items (over threshold) and non-deductible; use interest-only for mortgage
+      const mExp = pExpenses.filter(e => monthOf(e.date) === m).reduce((s, e) => {
+        if (e.taxDeductible === false) return s;
+        if (e.amount > CAPITAL_THRESHOLD && e.category !== 'mortgage') return s;
+        if (e.category === 'mortgage') return s + (e.interestAmount != null ? e.interestAmount : e.amount);
+        return s + e.amount;
+      }, 0);
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return { totalIncome, rentIncome, lateFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
+    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
   }, [expenses, incomes, properties, rentPayments, leases]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
@@ -298,7 +309,7 @@ export function TaxReport() {
     const report = {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
-      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, other: main.otherIncome },
+      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, other: main.otherIncome },
       securityDepositsReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
@@ -311,7 +322,7 @@ export function TaxReport() {
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
-        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, other: comp.otherIncome },
+        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, moveInFees: comp.moveInFeeIncome, utilityReimbursements: comp.utilityReimbursement, other: comp.otherIncome },
         deductibleExpenses: comp.expensesByCategory, totalDeductibleExpenses: comp.totalDeductibleExpenses,
         operatingExpenses: comp.operatingExpenses, capitalExpenses: comp.capitalExpenses, netIncome: comp.netIncome,
       } : undefined,
@@ -614,6 +625,18 @@ export function TaxReport() {
               <span className="font-medium">Late Fees</span>
               <span className="font-bold">{formatCurrency(main.lateFeeIncome)}</span>
             </div>
+            {main.moveInFeeIncome > 0 && (
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="font-medium">Move-In Fees</span>
+              <span className="font-bold">{formatCurrency(main.moveInFeeIncome)}</span>
+            </div>
+            )}
+            {main.utilityReimbursement > 0 && (
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="font-medium">Utility Reimbursements</span>
+              <span className="font-bold">{formatCurrency(main.utilityReimbursement)}</span>
+            </div>
+            )}
             <div className="flex justify-between items-center py-2 border-b">
               <span className="font-medium">Other Income</span>
               <span className="font-bold">{formatCurrency(main.otherIncome)}</span>

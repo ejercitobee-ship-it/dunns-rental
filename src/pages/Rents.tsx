@@ -200,8 +200,13 @@ export function Rents() {
   // "expected" and "collected" were nearly the same number by construction.
   const annualData = useMemo(() => {
     const year = parseInt(yearFilter, 10);
+    const today = new Date();
+    const elapsedCount = year < today.getFullYear() ? 12 : year > today.getFullYear() ? 0 : today.getMonth() + 1;
     return MONTHS.map((monthName, index) => {
       const month = index + 1;
+      if (month > elapsedCount) {
+        return { name: monthName.substring(0, 3), month, collected: 0, expected: 0, outstanding: 0, collectionRate: 0 };
+      }
       let expected = 0;
       let collected = 0;
       let outstanding = 0;

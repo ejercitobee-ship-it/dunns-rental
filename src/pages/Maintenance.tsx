@@ -584,9 +584,12 @@ export function Maintenance() {
                 onChange={e => setForm({ ...form, status: e.target.value as MaintenanceStatus })}
                 className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
               >
-                <option value="open">Open</option>
+                <option value="submitted">Submitted</option>
+                <option value="assigned">Assigned</option>
+                <option value="scheduled">Scheduled</option>
                 <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
+                <option value="completed">Completed</option>
+                <option value="paid">Paid</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>

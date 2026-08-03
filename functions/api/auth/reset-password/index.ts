@@ -18,6 +18,10 @@ import { roleCan } from '../../../lib/permissions';
 //   2. A valid session, in which case a user may reset their OWN password
 //      (verifying their current password), and an admin with `users_edit`
 //      may reset another user's password.
+function hasPerm(user: { role: string; permissions: string[] | null }, perm: string): boolean {
+  if (user.role === 'super_admin') return true;
+  return user.permissions ? user.permissions.includes(perm) : roleCan(user.role, perm);
+}
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
@@ -59,7 +63,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const requested = userId || sessionUser.id;
       if (requested !== sessionUser.id) {
         // Resetting someone else's password requires admin rights.
-        if (!roleCan(sessionUser.role, 'users_edit')) {
+        if (!hasPerm(sessionUser, 'users_edit')) {
           return forbidden();
         }
         targetUserId = requested;

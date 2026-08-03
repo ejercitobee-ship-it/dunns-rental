@@ -27,6 +27,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!body.category || body.amount === undefined || !body.date || !body.description) {
       return jsonError('Category, amount, date and description are required', 400);
     }
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return jsonError('Amount must be a positive number', 400);
+    }
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
