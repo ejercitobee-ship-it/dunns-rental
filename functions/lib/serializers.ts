@@ -17,6 +17,7 @@ export function serializeProperty(r: Row) {
     purchaseDate: r.purchase_date ?? undefined,
     purchasePrice: r.purchase_price ?? undefined,
     landValue: r.land_value ?? undefined,
+    driveFolderId: r.drive_folder_id ?? undefined,
   };
 }
 

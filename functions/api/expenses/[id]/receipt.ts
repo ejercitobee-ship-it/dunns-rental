@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeExpense } from '../../../lib/serializers';
-import { ensureUnitFolder, ensureRootFolder, uploadToDrive, DriveNotConnected } from '../../../lib/google';
+import { ensurePropertyExpensesFolder, ensureUnitFolder, ensureRootFolder, uploadToDrive, DriveNotConnected } from '../../../lib/google';
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
 
@@ -17,8 +17,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const id = params.id as string;
-    const expense = await env.DB.prepare('SELECT id, unit_id, description FROM expenses WHERE id = ?')
-      .bind(id).first<{ id: string; unit_id: string | null; description: string | null }>();
+    const expense = await env.DB.prepare('SELECT id, unit_id, property_id, date, description FROM expenses WHERE id = ?')
+      .bind(id).first<{ id: string; unit_id: string | null; property_id: string | null; date: string | null; description: string | null }>();
     if (!expense) return jsonError('Expense not found', 404);
 
     const form = await request.formData();
@@ -26,9 +26,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!file || typeof file.arrayBuffer !== 'function') return jsonError('No file provided', 400);
     if (file.size > MAX_BYTES) return jsonError('File is too large (max 15 MB)', 413);
 
-    // File it under the unit the expense belongs to; fall back to the root when
-    // the expense is not tied to a unit.
-    const folderId = (expense.unit_id ? await ensureUnitFolder(env, expense.unit_id) : null) ?? await ensureRootFolder(env);
+    const expenseYear = expense.date ? parseInt(expense.date.slice(0, 4), 10) : new Date().getFullYear();
+    const folderId =
+      (expense.property_id ? await ensurePropertyExpensesFolder(env, expense.property_id, expenseYear) : null)
+      ?? (expense.unit_id ? await ensureUnitFolder(env, expense.unit_id) : null)
+      ?? await ensureRootFolder(env);
     const label = `Receipt - ${(expense.description || 'Expense').slice(0, 40)} - ${file.name}`;
     const uploaded = await uploadToDrive(env, folderId, label, file.type || 'application/octet-stream', file);
 

@@ -244,13 +244,14 @@ export async function ensureRootFolder(env: Env): Promise<string> {
 }
 
 /**
- * The unit folder (under the root) for a tenant's CURRENT unit, created and
- * remembered on units.drive_folder_id. Named "<address> - Unit <n>". Returns
- * null when the tenant has no current unit.
+ * The unit folder for a tenant's CURRENT unit, nested under the property folder.
+ * Created and remembered on units.drive_folder_id. Named "Unit <n>".
+ * Falls back to the root if the property folder cannot be created.
  */
 async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<string | null> {
   const unit = await env.DB.prepare(
     `SELECT u.id AS unit_id, u.unit_number AS unit_number, u.drive_folder_id AS unit_folder_id,
+            u.property_id AS property_id,
             p.name AS property_name, p.address AS property_address
        FROM tenants t
        JOIN lease_tenants lt ON lt.tenant_id = t.id
@@ -263,6 +264,7 @@ async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<st
     .bind(tenantId)
     .first<{
       unit_id: string; unit_number: string | null; unit_folder_id: string | null;
+      property_id: string | null;
       property_name: string | null; property_address: string | null;
     }>();
   if (!unit?.unit_id) return null;
@@ -270,10 +272,11 @@ async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<st
     const status = await folderStatus(env, unit.unit_folder_id);
     if (status !== 'gone') return unit.unit_folder_id;
   }
-  const root = await ensureRootFolder(env);
-  const place = (unit.property_address || unit.property_name || 'Property').trim();
-  const name = `${place} - Unit ${unit.unit_number || '?'}`;
-  const id = await createFolder(env, name, root);
+  const parent = unit.property_id
+    ? ((await ensurePropertyFolder(env, unit.property_id)) ?? (await ensureRootFolder(env)))
+    : await ensureRootFolder(env);
+  const name = `Unit ${unit.unit_number || '?'}`;
+  const id = await createFolder(env, name, parent);
   await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
     .bind(id, unit.unit_id)
     .run();
@@ -332,29 +335,28 @@ export async function ensureVendorFolder(env: Env, handymanId: string): Promise<
 
 /**
  * The Drive folder for a unit, addressed by unit id (not via a tenant). Creates
- * and remembers it on units.drive_folder_id, named "<address> - Unit <n>" under
- * the root, the SAME folder that unit's tenant documents use. Returns null when
- * the unit does not exist. Used to file expense receipts under the unit.
+ * and remembers it on units.drive_folder_id, nested under the property folder.
+ * Returns null when the unit does not exist. Used to file expense receipts.
  */
 export async function ensureUnitFolder(env: Env, unitId: string): Promise<string | null> {
   const unit = await env.DB.prepare(
     `SELECT u.id AS unit_id, u.unit_number AS unit_number, u.drive_folder_id AS unit_folder_id,
-            p.name AS property_name, p.address AS property_address
-       FROM units u LEFT JOIN properties p ON p.id = u.property_id
-      WHERE u.id = ?`
+            u.property_id AS property_id
+       FROM units u WHERE u.id = ?`
   ).bind(unitId).first<{
     unit_id: string; unit_number: string | null; unit_folder_id: string | null;
-    property_name: string | null; property_address: string | null;
+    property_id: string | null;
   }>();
   if (!unit?.unit_id) return null;
   if (unit.unit_folder_id) {
     const status = await folderStatus(env, unit.unit_folder_id);
     if (status !== 'gone') return unit.unit_folder_id;
   }
-  const root = await ensureRootFolder(env);
-  const place = (unit.property_address || unit.property_name || 'Property').trim();
-  const name = `${place} - Unit ${unit.unit_number || '?'}`;
-  const id = await createFolder(env, name, root);
+  const parent = unit.property_id
+    ? ((await ensurePropertyFolder(env, unit.property_id)) ?? (await ensureRootFolder(env)))
+    : await ensureRootFolder(env);
+  const name = `Unit ${unit.unit_number || '?'}`;
+  const id = await createFolder(env, name, parent);
   await env.DB.prepare('UPDATE units SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
     .bind(id, unit.unit_id).run();
   return id;
@@ -388,6 +390,50 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
     .bind(id, tenantId)
     .run();
   return id;
+}
+
+/**
+ * The Drive folder for a property, under the root. Created on first use and
+ * remembered on properties.drive_folder_id. New unit folders nest under it.
+ */
+export async function ensurePropertyFolder(env: Env, propertyId: string): Promise<string | null> {
+  const prop = await env.DB.prepare('SELECT id, name, address, drive_folder_id FROM properties WHERE id = ?')
+    .bind(propertyId)
+    .first<{ id: string; name: string; address: string | null; drive_folder_id: string | null }>();
+  if (!prop) return null;
+  if (prop.drive_folder_id) {
+    const status = await folderStatus(env, prop.drive_folder_id);
+    if (status !== 'gone') return prop.drive_folder_id;
+  }
+  const root = await ensureRootFolder(env);
+  const folderName = (prop.address || prop.name || 'Property').trim();
+  const id = await createFolder(env, folderName, root);
+  await env.DB.prepare('UPDATE properties SET drive_folder_id = ? WHERE id = ?').bind(id, prop.id).run();
+  return id;
+}
+
+/**
+ * A named subfolder inside a tenant's Drive folder (e.g. "Lease", "Move In Photos").
+ * Creates the subfolder if it doesn't exist yet. Uses findFolder to avoid duplicates.
+ */
+export async function ensureTenantSubfolder(env: Env, tenantId: string, subfolderName: string): Promise<string> {
+  const parentId = await ensureTenantFolder(env, tenantId);
+  const existing = await findFolder(env, subfolderName, parentId);
+  if (existing) return existing;
+  return createFolder(env, subfolderName, parentId);
+}
+
+/**
+ * The Expenses folder for a property, nested under the property's Drive folder.
+ * Optionally creates a yearly subfolder (e.g. "2026") inside it.
+ */
+export async function ensurePropertyExpensesFolder(env: Env, propertyId: string, year?: number): Promise<string | null> {
+  const propFolder = await ensurePropertyFolder(env, propertyId);
+  if (!propFolder) return null;
+  const expensesId = (await findFolder(env, 'Expenses', propFolder)) ?? (await createFolder(env, 'Expenses', propFolder));
+  if (!year) return expensesId;
+  const yearName = String(year);
+  return (await findFolder(env, yearName, expensesId)) ?? (await createFolder(env, yearName, expensesId));
 }
 
 /** Move a Drive file into a new parent, removing its current parents. Best-effort. */

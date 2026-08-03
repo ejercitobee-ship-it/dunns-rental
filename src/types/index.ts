@@ -13,6 +13,7 @@ export interface Property {
   /** Non-depreciable land portion of the cost basis. Only the building
    * depreciates, so this is subtracted from purchasePrice for depreciation. */
   landValue?: number;
+  driveFolderId?: string;
 }
 
 export type UtilityType = 'water' | 'gas' | 'electric';
