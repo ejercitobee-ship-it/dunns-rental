@@ -65,7 +65,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 };
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome, dispatch } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, tenants, getLeaseTenants, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome, dispatch } = useApp();
   const { isSuperAdmin, hasPermission } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
@@ -73,6 +73,7 @@ export function Expenses() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
   const [propertyFilter, setPropertyFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [view, setView] = useState<'expenses' | 'income'>('expenses');
   const [isModalOpen, setIsModalOpen] = useState(false);
   // Tracked so the mortgage "interest portion" field can appear only for a
@@ -266,6 +267,14 @@ export function Expenses() {
   // The income list = rent collected (from paid rent_payments, read-only) PLUS
   // the manually-entered `incomes`, so the list matches the totals above and the
   // Dashboard. Rent rows come from the payment's lease for their property/unit.
+  const sourceLabels: Record<string, string> = {
+    rent: 'Rent',
+    late_fee: 'Late Fee',
+    deposit: 'Deposit',
+    move_in_fee: 'Move-In Fee',
+    utility_reimbursement: 'Utility Reimbursement',
+    other: 'Other',
+  };
   interface IncomeRow {
     id: string;
     date: string;
@@ -274,6 +283,8 @@ export function Expenses() {
     source: string;
     description: string;
     amount: number;
+    tenantName?: string;
+    rentMonth?: string;
   }
   const incomeRows = useMemo<IncomeRow[]>(() => {
     const manual: IncomeRow[] = incomes.map(i => ({
@@ -284,18 +295,25 @@ export function Expenses() {
       .filter(p => p.status === 'paid')
       .map(p => {
         const lease = leases.find(l => l.id === p.leaseId);
+        const payer = p.paidByTenantId ? tenants.find(t => t.id === p.paidByTenantId) : undefined;
+        const tenantName = payer
+          ? `${payer.firstName} ${payer.lastName}`
+          : lease ? getLeaseTenants(lease.id).map(t => `${t.firstName} ${t.lastName}`).join(', ') : undefined;
         return {
           id: `rent-${p.id}`,
           date: p.paidDate || p.receivedDate || `${p.year}-${String(p.month).padStart(2, '0')}-01`,
           propertyId: lease?.propertyId,
           unitId: lease?.unitId,
           source: 'rent',
-          description: `Rent — ${formatMonthYear(p.month, p.year)}`,
+          description: `Rent`,
           amount: p.amount,
+          tenantName,
+          rentMonth: formatMonthYear(p.month, p.year),
         };
       });
     return [...manual, ...rent];
-  }, [incomes, rentPayments, leases]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomes, rentPayments, leases, tenants]);
 
   const filteredIncome = useMemo(() => {
     return incomeRows.filter(income => {
@@ -306,14 +324,16 @@ export function Expenses() {
         !searchTerm ||
         income.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         income.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (income.tenantName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         property?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         unit?.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesProperty = propertyFilter === 'all' || income.propertyId === propertyFilter;
+      const matchesSource = sourceFilter === 'all' || income.source === sourceFilter;
 
-      return matchesSearch && matchesProperty;
+      return matchesSearch && matchesProperty && matchesSource;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [incomeRows, properties, units, searchTerm, propertyFilter]);
+  }, [incomeRows, properties, units, searchTerm, propertyFilter, sourceFilter]);
 
   const getProperty = (propertyId?: string) => propertyId ? properties.find(p => p.id === propertyId) : undefined;
   const getUnit = (unitId?: string) => unitId ? units.find(u => u.id === unitId) : null;
@@ -547,18 +567,32 @@ export function Expenses() {
             ))}
           </select>
         )}
+        {view === 'income' && (
+          <select
+            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+          >
+            <option value="all">All Sources</option>
+            {Object.entries(sourceLabels).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Data Table */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full min-w-[700px] sm:min-w-0">
+            <table className={`w-full sm:min-w-0 ${view === 'income' ? 'min-w-[900px]' : 'min-w-[700px]'}`}>
               <thead>
                 <tr className="border-b bg-canvas">
                   <th className="text-left py-3 px-4 font-medium">Date</th>
                   <th className="text-left py-3 px-4 font-medium">Property & Unit</th>
                   {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Category</th>}
+                  {view === 'income' && <th className="text-left py-3 px-4 font-medium">Source</th>}
+                  {view === 'income' && <th className="text-left py-3 px-4 font-medium">Tenant</th>}
                   <th className="text-left py-3 px-4 font-medium">Description</th>
                   {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Vendor</th>}
                   <th className="text-right py-3 px-4 font-medium">Amount</th>
@@ -645,7 +679,7 @@ export function Expenses() {
                   filteredIncome.map(income => {
                     const property = getProperty(income.propertyId);
                     const unit = getUnit(income.unitId);
-                    
+
                     return (
                       <tr key={income.id} className="border-b last:border-0 hover:bg-black/[0.02]">
                         <td className="py-4 px-4 text-sm">{formatDate(income.date)}</td>
@@ -653,7 +687,7 @@ export function Expenses() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <Home className="h-4 w-4 text-muted" />
-                              <span className="text-sm">{property?.name}</span>
+                              <span className="text-sm">{property?.name || '—'}</span>
                             </div>
                             {unit && (
                               <div className="flex items-center gap-2">
@@ -664,9 +698,17 @@ export function Expenses() {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <Badge variant="success" className="capitalize">{income.source}</Badge>
+                          <Badge variant="success">{sourceLabels[income.source] || income.source}</Badge>
                         </td>
-                        <td className="py-4 px-4 text-sm">{income.description}</td>
+                        <td className="py-4 px-4 text-sm text-ink">
+                          {income.tenantName || <span className="text-faint">{'—'}</span>}
+                        </td>
+                        <td className="py-4 px-4 text-sm">
+                          {income.description}
+                          {income.rentMonth && (
+                            <span className="block text-xs text-muted">{income.rentMonth}</span>
+                          )}
+                        </td>
                         <td className="py-4 px-4 text-right font-semibold text-positive">
                           +{formatCurrency(income.amount)}
                         </td>
@@ -909,8 +951,10 @@ export function Expenses() {
               >
                 <option value="">Select Source</option>
                 <option value="rent">Rent</option>
-                <option value="late_fee">Late Fee</option>
+                <option value="move_in_fee">Move-In Fee</option>
                 <option value="deposit">Deposit</option>
+                <option value="late_fee">Late Fee</option>
+                <option value="utility_reimbursement">Utility Reimbursement</option>
                 <option value="other">Other</option>
               </select>
             </div>

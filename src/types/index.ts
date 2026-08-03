@@ -85,6 +85,7 @@ export interface Lease {
   endedPropertyLabel?: string;
   endedUnitLabel?: string;
   tenantIds: string[];
+  rentDueDay?: number;
 }
 
 /** A person. Rent and lease dates live on the Lease. */
@@ -187,7 +188,7 @@ export interface Income {
   id: string;
   propertyId: string;
   unitId?: string;
-  source: 'rent' | 'late_fee' | 'deposit' | 'other';
+  source: 'rent' | 'late_fee' | 'deposit' | 'move_in_fee' | 'utility_reimbursement' | 'other';
   amount: number;
   date: string;
   description: string;

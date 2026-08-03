@@ -57,11 +57,12 @@ function chicagoToday(): { day: number; monthKey: string; monthLabel: string } {
   return { day, monthKey: `${year}-${month}`, monthLabel };
 }
 
-interface Recipient {
+interface RecipientRow {
   tenant_id: string;
   user_id: string | null;
   first_name: string | null;
   email: string | null;
+  lease_due_day: number | null;
 }
 
 /**
@@ -92,51 +93,55 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const url = new URL(request.url);
     const dryRun = url.searchParams.get('dryRun') === '1';
 
-    const { rentDueDay, paymentInstructions } = await rentSettings(env);
+    const { rentDueDay: globalDueDay, paymentInstructions } = await rentSettings(env);
     const { day, monthKey, monthLabel } = chicagoToday();
 
-    // Only the due day sends (a dry run reports regardless of the date).
-    if (!dryRun && day !== rentDueDay) {
-      return jsonOk({ success: true, skipped: 'not the rent due day', dueDay: rentDueDay, today: day });
-    }
-
-    // Never send the same month twice.
-    if (!dryRun) {
-      const stateRaw = await getSetting(env, STATE_KEY);
-      let lastSentMonth = '';
-      if (stateRaw) {
-        try {
-          lastSentMonth = (JSON.parse(stateRaw) as { lastSentMonth?: string }).lastSentMonth || '';
-        } catch {
-          /* ignore */
-        }
-      }
-      if (lastSentMonth === monthKey) {
-        return jsonOk({ success: true, skipped: 'already sent this month', month: monthKey });
-      }
-    }
-
-    // Every distinct tenant on an active lease.
-    const { results } = await env.DB.prepare(
-      `SELECT DISTINCT t.id AS tenant_id, t.user_id, t.first_name, t.email
+    // Every distinct tenant on an active lease, with the lease's per-lease due
+    // day (NULL = use the global setting).
+    const { results: allRows } = await env.DB.prepare(
+      `SELECT DISTINCT t.id AS tenant_id, t.user_id, t.first_name, t.email,
+              l.rent_due_day AS lease_due_day
          FROM leases l
          JOIN lease_tenants lt ON lt.lease_id = l.id
          JOIN tenants t ON t.id = lt.tenant_id
         WHERE l.status = 'active'`
-    ).all<Recipient>();
-    const recipients = results || [];
+    ).all<RecipientRow>();
+
+    const recipients = (allRows || []).filter(r => {
+      const effectiveDay = r.lease_due_day ?? globalDueDay;
+      return effectiveDay === day;
+    });
 
     if (dryRun) {
       return jsonOk({
         success: true,
         dryRun: true,
-        dueDay: rentDueDay,
+        globalDueDay,
         today: day,
         month: monthKey,
-        recipients: recipients.length,
+        totalActive: (allRows || []).length,
+        dueToday: recipients.length,
         withLogin: recipients.filter((r) => r.user_id).length,
         withEmail: recipients.filter((r) => r.email).length,
       });
+    }
+
+    if (recipients.length === 0) {
+      return jsonOk({ success: true, skipped: 'no leases due today', globalDueDay, today: day });
+    }
+
+    // Never send the same day twice.
+    const dayKey = `${monthKey}-${String(day).padStart(2, '0')}`;
+    const stateRaw = await getSetting(env, STATE_KEY);
+    let lastSentDay = '';
+    if (stateRaw) {
+      try {
+        const st = JSON.parse(stateRaw) as { lastSentDay?: string; lastSentMonth?: string };
+        lastSentDay = st.lastSentDay || st.lastSentMonth || '';
+      } catch { /* ignore */ }
+    }
+    if (lastSentDay === dayKey) {
+      return jsonOk({ success: true, skipped: 'already sent today', day: dayKey });
     }
 
     const portalUrl = `${SITE_URL}/portal/payments`;
@@ -173,8 +178,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     }
 
-    // Record the month so a repeat call today does nothing.
-    await putSetting(env, STATE_KEY, JSON.stringify({ lastSentMonth: monthKey }));
+    await putSetting(env, STATE_KEY, JSON.stringify({ lastSentDay: dayKey }));
 
     return jsonOk({
       success: true,

@@ -42,6 +42,7 @@ const emptyTenancyForm = {
   securityDeposit: '',
   moveInFeePaid: true,
   notes: '',
+  rentDueDay: '',
 };
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
@@ -339,6 +340,7 @@ export function Tenants() {
         monthlyRent: Number(tenancyForm.monthlyRent) || 0,
         securityDeposit: tenancyForm.securityDeposit ? Number(tenancyForm.securityDeposit) : undefined,
         moveInFeePaid: tenancyForm.moveInFeePaid,
+        rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
         status: 'active',
         notes: tenancyForm.notes.trim() || undefined,
         tenantIds,
@@ -746,6 +748,22 @@ export function Tenants() {
                 {!tenancyForm.moveInFeePaid && tenancyForm.securityDeposit && (
                   <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
                 )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Rent Due Day</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={tenancyForm.rentDueDay}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, rentDueDay: e.target.value })}
+                  placeholder="Global default"
+                />
+                <p className="text-xs text-muted mt-1">Leave blank to use the global setting from Settings.</p>
               </div>
             </div>
 

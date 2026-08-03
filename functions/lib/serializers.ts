@@ -133,6 +133,7 @@ export function serializeLease(r: Row) {
     tenantIds: (r.tenantIds as string[]) ?? [],
     // Filled in by the leases endpoints, which join lease_pauses.
     pauses: (r.pauses as { pausedAt: string; resumedAt?: string }[]) ?? [],
+    rentDueDay: r.rent_due_day != null ? Number(r.rent_due_day) : undefined,
   };
 }
 

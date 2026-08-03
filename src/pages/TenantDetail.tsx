@@ -352,7 +352,7 @@ export function TenantDetail() {
   // Edit an existing tenancy's rent, dates, and move-in fee (the Tenancy card).
   const [tenancyOpen, setTenancyOpen] = useState(false);
   const [savingTenancy, setSavingTenancy] = useState(false);
-  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true });
+  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, rentDueDay: '' });
 
   const openEditTenancy = () => {
     if (!lease) return;
@@ -362,6 +362,7 @@ export function TenantDetail() {
       endDate: lease.endDate || '',
       moveInFee: lease.securityDeposit ? String(lease.securityDeposit) : '',
       moveInFeePaid: lease.moveInFeePaid !== false,
+      rentDueDay: lease.rentDueDay ? String(lease.rentDueDay) : '',
     });
     setTenancyOpen(true);
   };
@@ -382,6 +383,7 @@ export function TenantDetail() {
         endDate: tenancyForm.endDate || undefined,
         securityDeposit: tenancyForm.moveInFee ? Number(tenancyForm.moveInFee) : 0,
         moveInFeePaid: tenancyForm.moveInFeePaid,
+        rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
       });
       showToast('Tenancy updated.', 'success');
       setTenancyOpen(false);
@@ -1360,6 +1362,19 @@ export function TenantDetail() {
               />
               Move-in fee already paid
             </label>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Rent Due Day</label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              value={tenancyForm.rentDueDay}
+              onChange={(e) => setTenancyForm({ ...tenancyForm, rentDueDay: e.target.value })}
+              placeholder="Global default"
+            />
+            <p className="text-xs text-muted mt-1">Leave blank to use the global setting.</p>
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setTenancyOpen(false)} disabled={savingTenancy}>

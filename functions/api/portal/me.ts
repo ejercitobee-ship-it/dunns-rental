@@ -65,6 +65,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       ? await env.DB.prepare('SELECT * FROM properties WHERE id = ?').bind(lease.property_id).first()
       : null;
 
+    const globalSettings = await rentPortalSettings(env);
+    const leaseSpecificDueDay = lease?.rent_due_day;
     return jsonOk({
       success: true,
       data: {
@@ -72,7 +74,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         lease: lease ? serializePortalLease(lease as Record<string, unknown>) : null,
         unit: unit ? serializeUnit(unit as Record<string, unknown>) : null,
         property: property ? serializeProperty(property as Record<string, unknown>) : null,
-        ...(await rentPortalSettings(env)),
+        ...globalSettings,
+        rentDueDay: typeof leaseSpecificDueDay === 'number' ? leaseSpecificDueDay : globalSettings.rentDueDay,
       },
     });
   } catch {
