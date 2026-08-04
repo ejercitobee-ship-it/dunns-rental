@@ -2,10 +2,11 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { sendEmail, calendarEventEmail } from '../../lib/email';
 
-function serializeEvent(r: Record<string, unknown>) {
+function serializeEvent(r: Record<string, unknown>, propertyIds?: string[]) {
   return {
     id: r.id,
     propertyId: r.property_id ?? undefined,
+    propertyIds: propertyIds ?? (r.property_id ? [r.property_id as string] : []),
     unitId: r.unit_id ?? undefined,
     title: r.title,
     description: r.description ?? undefined,
@@ -22,16 +23,42 @@ function serializeEvent(r: Record<string, unknown>) {
   };
 }
 
-async function notifyAdmins(env: Env, type: 'created' | 'updated' | 'cancelled', eventRow: Record<string, unknown>) {
+async function getEventPropertyIds(env: Env, eventId: string): Promise<string[]> {
+  const { results } = await env.DB.prepare(
+    'SELECT property_id FROM calendar_event_properties WHERE event_id = ?'
+  ).bind(eventId).all();
+  return (results || []).map(r => r.property_id as string);
+}
+
+async function syncEventProperties(env: Env, eventId: string, propertyIds: string[]) {
+  await env.DB.prepare('DELETE FROM calendar_event_properties WHERE event_id = ?').bind(eventId).run();
+  if (propertyIds.length > 0) {
+    const values = propertyIds.map(() => '(?, ?)').join(', ');
+    const binds: string[] = [];
+    for (const pid of propertyIds) { binds.push(eventId, pid); }
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO calendar_event_properties (event_id, property_id) VALUES ${values}`
+    ).bind(...binds).run();
+  }
+}
+
+async function notifyAdmins(env: Env, type: 'created' | 'updated' | 'cancelled', eventRow: Record<string, unknown>, propertyIds?: string[]) {
   const admins = await env.DB.prepare(
     `SELECT email FROM user WHERE role IN ('super_admin', 'admin') AND email IS NOT NULL`
   ).all();
   const emails = (admins.results || []).map(r => r.email as string).filter(Boolean);
   if (emails.length === 0) return;
 
-  const propertyName = eventRow.property_id
-    ? ((await env.DB.prepare('SELECT name, address FROM properties WHERE id = ?').bind(eventRow.property_id).first()) as { name?: string; address?: string } | null)
-    : null;
+  let propertyName: string | undefined;
+  const pids = propertyIds ?? (eventRow.property_id ? [eventRow.property_id as string] : []);
+  if (pids.length > 0) {
+    const placeholders = pids.map(() => '?').join(',');
+    const { results } = await env.DB.prepare(
+      `SELECT name, address FROM properties WHERE id IN (${placeholders})`
+    ).bind(...pids).all();
+    propertyName = (results || []).map(r => (r.name || r.address) as string).filter(Boolean).join(', ');
+  }
+
   const unitRow = eventRow.unit_id
     ? ((await env.DB.prepare('SELECT unit_number FROM units WHERE id = ?').bind(eventRow.unit_id).first()) as { unit_number?: string } | null)
     : null;
@@ -40,7 +67,7 @@ async function notifyAdmins(env: Env, type: 'created' | 'updated' | 'cancelled',
     type,
     title: eventRow.title as string,
     eventDate: eventRow.event_date as string,
-    propertyName: propertyName?.name || propertyName?.address || undefined,
+    propertyName: propertyName || undefined,
     unitLabel: unitRow?.unit_number ? `Unit ${unitRow.unit_number}` : undefined,
     description: (eventRow.description as string) || undefined,
     category: (eventRow.category as string) || undefined,
@@ -58,10 +85,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    const row = await env.DB.prepare('SELECT * FROM calendar_events WHERE id = ?')
-      .bind(params.id as string).first();
+    const id = params.id as string;
+    const row = await env.DB.prepare('SELECT * FROM calendar_events WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Event not found', 404);
-    return jsonOk({ success: true, data: serializeEvent(row as Record<string, unknown>) });
+    const pids = await getEventPropertyIds(env, id);
+    return jsonOk({ success: true, data: serializeEvent(row as Record<string, unknown>, pids) });
   } catch {
     return serverError();
   }
@@ -78,6 +106,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     if (!existing) return jsonError('Event not found', 404);
 
     const body = (await request.json()) as Record<string, unknown>;
+    const propertyIds = Array.isArray(body.propertyIds) ? (body.propertyIds as string[]).filter(Boolean) : undefined;
+    const primaryPropertyId = propertyIds?.[0] ?? (body.propertyId as string) ?? null;
+
     await env.DB.prepare(
       `UPDATE calendar_events SET
         property_id = ?, unit_id = ?, title = ?, description = ?,
@@ -88,7 +119,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         updated_at = unixepoch()
        WHERE id = ?`
     ).bind(
-      body.propertyId ?? null,
+      primaryPropertyId,
       body.unitId ?? null,
       body.title ?? null,
       body.description ?? null,
@@ -104,9 +135,14 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       id,
     ).run();
 
+    if (propertyIds !== undefined) {
+      await syncEventProperties(env, id, propertyIds);
+    }
+
     const row = await env.DB.prepare('SELECT * FROM calendar_events WHERE id = ?').bind(id).first();
-    context.waitUntil(notifyAdmins(env, 'updated', row as Record<string, unknown>));
-    return jsonOk({ success: true, data: serializeEvent(row as Record<string, unknown>) });
+    const pids = propertyIds ?? await getEventPropertyIds(env, id);
+    context.waitUntil(notifyAdmins(env, 'updated', row as Record<string, unknown>, pids));
+    return jsonOk({ success: true, data: serializeEvent(row as Record<string, unknown>, pids) });
   } catch {
     return serverError();
   }
@@ -121,9 +157,11 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     const id = params.id as string;
     const existing = await env.DB.prepare('SELECT * FROM calendar_events WHERE id = ?').bind(id).first();
     if (!existing) return jsonError('Event not found', 404);
+    const pids = await getEventPropertyIds(env, id);
 
+    // Junction rows cascade-delete with the event.
     await env.DB.prepare('DELETE FROM calendar_events WHERE id = ?').bind(id).run();
-    context.waitUntil(notifyAdmins(env, 'cancelled', existing as Record<string, unknown>));
+    context.waitUntil(notifyAdmins(env, 'cancelled', existing as Record<string, unknown>, pids));
     return jsonOk({ success: true });
   } catch {
     return serverError();

@@ -337,6 +337,8 @@ export type RecurrenceRule = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'sem
 export interface CalendarEvent {
   id: string;
   propertyId?: string;
+  /** All property IDs this event is assigned to (multi-property support). */
+  propertyIds?: string[];
   unitId?: string;
   title: string;
   description?: string;

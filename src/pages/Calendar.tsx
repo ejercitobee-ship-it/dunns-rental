@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, List, Grid3X3,
   Check, Trash2, Edit2, X, AlertCircle, Bell,
@@ -6,6 +6,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
 import { calendarApi } from '../lib/api';
 import { formatDate, todayLocalDate } from '../lib/utils';
 import type { CalendarEvent, CalendarCategory, CalendarPriority, RecurrenceRule } from '../types';
@@ -126,24 +127,12 @@ const RECURRENCE_LABELS: Record<RecurrenceRule, string> = {
 function addRecurrenceInterval(date: Date, rule: RecurrenceRule): Date {
   const d = new Date(date);
   switch (rule) {
-    case 'daily':
-      d.setDate(d.getDate() + 1);
-      break;
-    case 'weekly':
-      d.setDate(d.getDate() + 7);
-      break;
-    case 'monthly':
-      d.setMonth(d.getMonth() + 1);
-      break;
-    case 'quarterly':
-      d.setMonth(d.getMonth() + 3);
-      break;
-    case 'semi_annually':
-      d.setMonth(d.getMonth() + 6);
-      break;
-    case 'annually':
-      d.setFullYear(d.getFullYear() + 1);
-      break;
+    case 'daily': d.setDate(d.getDate() + 1); break;
+    case 'weekly': d.setDate(d.getDate() + 7); break;
+    case 'monthly': d.setMonth(d.getMonth() + 1); break;
+    case 'quarterly': d.setMonth(d.getMonth() + 3); break;
+    case 'semi_annually': d.setMonth(d.getMonth() + 6); break;
+    case 'annually': d.setFullYear(d.getFullYear() + 1); break;
   }
   return d;
 }
@@ -196,16 +185,110 @@ function expandRecurringEvents(events: CalendarEvent[], windowStart: string, win
   return result;
 }
 
-const EMPTY_FORM = {
-  title: '', description: '', category: 'custom' as CalendarCategory,
-  eventDate: '', priority: 'medium' as CalendarPriority,
-  isRecurring: false, recurrenceRule: '' as RecurrenceRule | '',
-  propertyId: '', unitId: '', notes: '',
-  reminderHours: '' as string,
+/** Reusable multi-select checkbox dropdown */
+function MultiCheckSelect({ label, options, selected, onChange, allLabel = 'All' }: {
+  label: string;
+  options: { id: string; name: string }[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+  allLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const allSelected = selected.size === 0 || selected.size === options.length;
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onChange(next);
+  };
+
+  const toggleAll = () => {
+    onChange(allSelected ? new Set() : new Set(options.map(o => o.id)));
+  };
+
+  const displayLabel = allSelected
+    ? allLabel
+    : selected.size === 1
+      ? (options.find(o => selected.has(o.id))?.name ?? `1 ${label}`)
+      : `${selected.size} ${label}`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="text-sm border border-line rounded-lg px-3 py-1.5 bg-surface text-ink flex items-center gap-2 min-w-[160px]"
+      >
+        <span className="truncate">{displayLabel}</span>
+        <ChevronLeft className={`h-3.5 w-3.5 transition-transform flex-shrink-0 ${open ? 'rotate-90' : '-rotate-90'}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-30 bg-surface border border-line rounded-lg shadow-lg py-1 min-w-[220px] max-h-[260px] overflow-y-auto">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-canvas flex items-center gap-2"
+          >
+            <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${allSelected ? 'bg-primary border-primary text-white' : 'border-line'}`}>
+              {allSelected && <Check className="h-3 w-3" />}
+            </span>
+            {allLabel}
+          </button>
+          <div className="border-t border-line my-1" />
+          {options.map(o => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => toggle(o.id)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-canvas flex items-center gap-2"
+            >
+              <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${selected.has(o.id) ? 'bg-primary border-primary text-white' : 'border-line'}`}>
+                {selected.has(o.id) && <Check className="h-3 w-3" />}
+              </span>
+              <span className="truncate">{o.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface FormState {
+  title: string;
+  description: string;
+  category: CalendarCategory;
+  eventDate: string;
+  priority: CalendarPriority;
+  isRecurring: boolean;
+  recurrenceRule: RecurrenceRule | '';
+  propertyIds: Set<string>;
+  unitId: string;
+  notes: string;
+  reminderHours: string;
+}
+
+const EMPTY_FORM: FormState = {
+  title: '', description: '', category: 'custom',
+  eventDate: '', priority: 'medium',
+  isRecurring: false, recurrenceRule: '',
+  propertyIds: new Set(), unitId: '', notes: '',
+  reminderHours: '',
 };
 
 export function Calendar() {
   const { properties, units } = useApp();
+  const { showToast } = useToast();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'calendar' | 'agenda'>('calendar');
@@ -213,11 +296,10 @@ export function Calendar() {
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState<CalendarCategory | ''>('');
   const [filterProperties, setFilterProperties] = useState<Set<string>>(new Set());
-  const [showPropertyFilter, setShowPropertyFilter] = useState(false);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -233,7 +315,11 @@ export function Calendar() {
     let result = events;
     if (filterCategory) result = result.filter(e => e.category === filterCategory);
     if (filterProperties.size > 0) {
-      result = result.filter(e => !e.propertyId || filterProperties.has(e.propertyId));
+      result = result.filter(e => {
+        const pids = e.propertyIds ?? (e.propertyId ? [e.propertyId] : []);
+        if (pids.length === 0) return true;
+        return pids.some(pid => filterProperties.has(pid));
+      });
     }
     return result;
   }, [events, filterCategory, filterProperties]);
@@ -280,13 +366,18 @@ export function Calendar() {
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate)),
   [filteredEvents, today]);
 
-  const propertyUnits = useMemo(() =>
-    form.propertyId ? units.filter(u => u.propertyId === form.propertyId) : [],
-  [units, form.propertyId]);
+  const formPropertyIds = form.propertyIds;
+  const propertyUnits = useMemo(() => {
+    if (formPropertyIds.size === 1) {
+      const pid = [...formPropertyIds][0];
+      return units.filter(u => u.propertyId === pid);
+    }
+    return [];
+  }, [units, formPropertyIds]);
 
   const openNew = (date?: string) => {
     setEditingEvent(null);
-    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate() });
+    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate(), propertyIds: new Set() });
     setShowModal(true);
   };
 
@@ -295,6 +386,7 @@ export function Calendar() {
       ? events.find(e => e.id === event.sourceEventId) || event
       : event;
     setEditingEvent(source);
+    const pids = source.propertyIds ?? (source.propertyId ? [source.propertyId] : []);
     setForm({
       title: source.title,
       description: source.description || '',
@@ -303,7 +395,7 @@ export function Calendar() {
       priority: source.priority,
       isRecurring: source.isRecurring,
       recurrenceRule: source.recurrenceRule || '',
-      propertyId: source.propertyId || '',
+      propertyIds: new Set(pids),
       unitId: source.unitId || '',
       notes: source.notes || '',
       reminderHours: source.reminderHours != null ? String(source.reminderHours) : '',
@@ -315,39 +407,55 @@ export function Calendar() {
     if (!form.title.trim() || !form.eventDate) return;
     setSaving(true);
     try {
+      const pids = [...form.propertyIds];
       const payload = {
-        ...form,
-        recurrenceRule: form.isRecurring && form.recurrenceRule ? form.recurrenceRule : undefined,
-        propertyId: form.propertyId || undefined,
-        unitId: form.unitId || undefined,
+        title: form.title,
         description: form.description || undefined,
+        category: form.category,
+        eventDate: form.eventDate,
+        priority: form.priority,
+        isRecurring: form.isRecurring,
+        recurrenceRule: form.isRecurring && form.recurrenceRule ? form.recurrenceRule : undefined,
+        propertyIds: pids,
+        propertyId: pids[0] || undefined,
+        unitId: form.unitId || undefined,
         notes: form.notes || undefined,
         reminderHours: form.reminderHours ? Number(form.reminderHours) : undefined,
       };
       if (editingEvent) {
         await calendarApi.update(editingEvent.id, payload);
+        showToast('Event updated', 'success');
       } else {
         await calendarApi.create(payload);
+        showToast('Event created', 'success');
       }
       setShowModal(false);
       await loadEvents();
-    } catch { /* */ }
+    } catch {
+      showToast('Failed to save event', 'error');
+    }
     setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
     try {
       await calendarApi.delete(id);
+      showToast('Event deleted', 'success');
       await loadEvents();
-    } catch { /* */ }
+    } catch {
+      showToast('Failed to delete event', 'error');
+    }
   };
 
   const handleToggleComplete = async (event: ExpandedEvent) => {
     if (event.isVirtual) return;
     try {
       await calendarApi.update(event.id, { ...event, completed: !event.completed });
+      showToast(event.completed ? 'Marked as incomplete' : 'Marked as complete', 'success');
       await loadEvents();
-    } catch { /* */ }
+    } catch {
+      showToast('Failed to update event', 'error');
+    }
   };
 
   const prevMonth = () => {
@@ -364,21 +472,18 @@ export function Calendar() {
     setCurrentYear(now.getFullYear());
   };
 
-  const togglePropertyFilter = (id: string) => {
-    setFilterProperties(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+  const propertyOptions = useMemo(() =>
+    properties.map(p => ({ id: p.id, name: p.name || p.address })),
+  [properties]);
 
-  const toggleAllProperties = () => {
-    if (filterProperties.size === properties.length) {
-      setFilterProperties(new Set());
-    } else {
-      setFilterProperties(new Set(properties.map(p => p.id)));
-    }
-  };
+  const eventPropertyNames = useCallback((event: CalendarEvent): string | null => {
+    const pids = event.propertyIds ?? (event.propertyId ? [event.propertyId] : []);
+    if (pids.length === 0) return null;
+    return pids.map(pid => {
+      const p = properties.find(pr => pr.id === pid);
+      return p ? (p.name || p.address) : '';
+    }).filter(Boolean).join(', ');
+  }, [properties]);
 
   if (loading) {
     return (
@@ -433,52 +538,13 @@ export function Calendar() {
           ))}
         </select>
 
-        {/* Multi-property filter */}
-        <div className="relative">
-          <button
-            onClick={() => setShowPropertyFilter(!showPropertyFilter)}
-            className="text-sm border border-line rounded-lg px-3 py-1.5 bg-surface text-ink flex items-center gap-2 min-w-[160px]"
-          >
-            <span className="truncate">
-              {filterProperties.size === 0
-                ? 'All Properties'
-                : filterProperties.size === properties.length
-                  ? 'All Properties'
-                  : `${filterProperties.size} ${filterProperties.size === 1 ? 'Property' : 'Properties'}`}
-            </span>
-            <ChevronLeft className={`h-3.5 w-3.5 transition-transform flex-shrink-0 ${showPropertyFilter ? 'rotate-90' : '-rotate-90'}`} />
-          </button>
-          {showPropertyFilter && (
-            <div className="absolute top-full left-0 mt-1 z-30 bg-surface border border-line rounded-lg shadow-lg py-1 min-w-[220px]">
-              <button
-                onClick={toggleAllProperties}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-canvas flex items-center gap-2"
-              >
-                <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
-                  filterProperties.size === 0 || filterProperties.size === properties.length ? 'bg-primary border-primary text-white' : 'border-line'
-                }`}>
-                  {(filterProperties.size === 0 || filterProperties.size === properties.length) && <Check className="h-3 w-3" />}
-                </span>
-                All Properties
-              </button>
-              <div className="border-t border-line my-1" />
-              {properties.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => togglePropertyFilter(p.id)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-canvas flex items-center gap-2"
-                >
-                  <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
-                    filterProperties.has(p.id) ? 'bg-primary border-primary text-white' : 'border-line'
-                  }`}>
-                    {filterProperties.has(p.id) && <Check className="h-3 w-3" />}
-                  </span>
-                  <span className="truncate">{p.name || p.address}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <MultiCheckSelect
+          label="Properties"
+          allLabel="All Properties"
+          options={propertyOptions}
+          selected={filterProperties}
+          onChange={setFilterProperties}
+        />
       </div>
 
       {/* Overdue Banner */}
@@ -531,13 +597,11 @@ export function Calendar() {
             </div>
           </CardHeader>
           <CardContent className="p-0 sm:p-2">
-            {/* Day headers */}
             <div className="grid grid-cols-7 border-b border-line">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                 <div key={d} className="py-2 text-center text-xs font-medium text-muted uppercase tracking-wide">{d}</div>
               ))}
             </div>
-            {/* Day cells */}
             <div className="grid grid-cols-7">
               {(() => {
                 const daysInMonth = getDaysInMonth(currentYear, currentMonth);
@@ -614,7 +678,7 @@ export function Calendar() {
               <div className="border-t border-line divide-y divide-line">
                 {upcomingEvents.map(event => {
                   const days = daysFromNow(event.eventDate);
-                  const property = event.propertyId ? properties.find(p => p.id === event.propertyId) : null;
+                  const propNames = eventPropertyNames(event);
                   const pb = PRIORITY_BADGE[event.priority];
                   const expanded = event as ExpandedEvent;
                   return (
@@ -657,7 +721,7 @@ export function Calendar() {
                           {days === 0 && <span className="text-primary font-medium">Today</span>}
                           {days === 1 && <span className="text-primary font-medium">Tomorrow</span>}
                           {days > 1 && days <= 7 && <span className="text-warning font-medium">In {days} days</span>}
-                          {property && <span>· {property.name || property.address}</span>}
+                          {propNames && <span>· {propNames}</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -699,7 +763,7 @@ export function Calendar() {
                 <input
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   placeholder="Event title"
                 />
               </div>
@@ -711,7 +775,7 @@ export function Calendar() {
                     type="date"
                     value={form.eventDate}
                     onChange={e => setForm(f => ({ ...f, eventDate: e.target.value }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   />
                 </div>
                 <div>
@@ -719,7 +783,7 @@ export function Calendar() {
                   <select
                     value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as CalendarCategory }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   >
                     {CATEGORY_GROUPS.map(g => (
                       <optgroup key={g.label} label={g.label}>
@@ -730,40 +794,77 @@ export function Calendar() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Priority</label>
-                  <select
-                    value={form.priority}
-                    onChange={e => setForm(f => ({ ...f, priority: e.target.value as CalendarPriority }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Property</label>
-                  <select
-                    value={form.propertyId}
-                    onChange={e => setForm(f => ({ ...f, propertyId: e.target.value, unitId: '' }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
-                  >
-                    <option value="">All / None</option>
-                    {properties.map(p => <option key={p.id} value={p.id}>{p.name || p.address}</option>)}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Priority</label>
+                <select
+                  value={form.priority}
+                  onChange={e => setForm(f => ({ ...f, priority: e.target.value as CalendarPriority }))}
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
               </div>
 
-              {propertyUnits.length > 0 && (
+              {/* Multi-property assignment */}
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Assign to Properties</label>
+                <div className="border border-line rounded-lg p-2 space-y-1 max-h-[160px] overflow-y-auto bg-surface">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (form.propertyIds.size === properties.length) {
+                        setForm(f => ({ ...f, propertyIds: new Set(), unitId: '' }));
+                      } else {
+                        setForm(f => ({ ...f, propertyIds: new Set(properties.map(p => p.id)), unitId: '' }));
+                      }
+                    }}
+                    className="w-full text-left px-2 py-1.5 text-sm hover:bg-canvas rounded flex items-center gap-2"
+                  >
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
+                      form.propertyIds.size === properties.length ? 'bg-primary border-primary text-white' : 'border-line'
+                    }`}>
+                      {form.propertyIds.size === properties.length && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="font-medium">Select All Properties</span>
+                  </button>
+                  <div className="border-t border-line my-1" />
+                  {properties.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setForm(f => {
+                          const next = new Set(f.propertyIds);
+                          if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                          return { ...f, propertyIds: next, unitId: next.size === 1 ? f.unitId : '' };
+                        });
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-sm hover:bg-canvas rounded flex items-center gap-2"
+                    >
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
+                        form.propertyIds.has(p.id) ? 'bg-primary border-primary text-white' : 'border-line'
+                      }`}>
+                        {form.propertyIds.has(p.id) && <Check className="h-3 w-3" />}
+                      </span>
+                      <span className="truncate">{p.name || p.address}</span>
+                    </button>
+                  ))}
+                </div>
+                {form.propertyIds.size === 0 && (
+                  <p className="text-xs text-muted mt-1">No property selected. Event applies to all.</p>
+                )}
+              </div>
+
+              {propertyUnits.length > 0 && form.propertyIds.size === 1 && (
                 <div>
                   <label className="block text-sm font-medium text-ink mb-1">Unit</label>
                   <select
                     value={form.unitId}
                     onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   >
                     <option value="">All units</option>
                     {propertyUnits.map(u => <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>)}
@@ -785,7 +886,7 @@ export function Calendar() {
                   <select
                     value={form.recurrenceRule}
                     onChange={e => setForm(f => ({ ...f, recurrenceRule: e.target.value as RecurrenceRule }))}
-                    className="mt-2 w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                    className="mt-2 w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   >
                     <option value="">Select frequency</option>
                     <option value="daily">Daily</option>
@@ -805,7 +906,7 @@ export function Calendar() {
                 <select
                   value={form.reminderHours}
                   onChange={e => setForm(f => ({ ...f, reminderHours: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                 >
                   <option value="">No reminder</option>
                   <option value="24">24 hours before</option>
@@ -820,7 +921,7 @@ export function Calendar() {
                 <textarea
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   rows={2}
                   placeholder="Optional details"
                 />
@@ -831,7 +932,7 @@ export function Calendar() {
                 <textarea
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                   rows={2}
                   placeholder="Internal notes"
                 />
