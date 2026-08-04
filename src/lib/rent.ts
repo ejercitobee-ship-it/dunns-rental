@@ -58,6 +58,10 @@ export function leaseCoversMonth(lease: Lease, month: number, year: number): boo
   // primitive, keeps it out of leasesOwingMonth AND settleMonth at once, so a
   // draft (which has a null start date) never bills every month by mistake.
   if (lease.needsReview) return false;
+  // A pending or rejected renewal lease must not bill rent. Only approved
+  // renewals are active for billing. Without this check both the old and new
+  // lease count for the same months, doubling the tenant's owed rent.
+  if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled') return false;
   const target = year * 12 + month;
   // Nothing before the fresh-start cutoff is ever owed, regardless of how far
   // back the lease began.
@@ -208,6 +212,10 @@ export function settleMonth(
   // finalizes it, enforced here too so no caller can bill it by skipping the
   // leasesOwingMonth gate.
   if (lease.needsReview) return { due: 0, paid: 0, balance: 0, status: 'paid' };
+  // Same safety net for unapproved renewals: a pending/rejected/draft renewal
+  // must never bill rent, even if a caller bypasses leasesOwingMonth.
+  if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
+    return { due: 0, paid: 0, balance: 0, status: 'paid' };
   const due = round2(lease.monthlyRent || 0);
   const paid = round2(
     paymentsForMonth(lease.id, payments, month, year).reduce((sum, p) => sum + (p.amount || 0), 0)
@@ -273,6 +281,8 @@ export function monthsBehind(
   currentYear: number
 ): PastDue {
   if (!lease.startDate || lease.needsReview) return { months: 0, balance: 0 };
+  if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
+    return { months: 0, balance: 0 };
   const currentTarget = currentYear * 12 + currentMonth;
   const from = Math.max(yearMonthOf(lease.startDate), currentTarget - 60);
   let months = 0;
@@ -305,6 +315,8 @@ export function unsettledMonths(
   throughYear: number
 ): Array<{ month: number; year: number; amount: number }> {
   if (!lease.startDate || lease.needsReview) return [];
+  if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
+    return [];
   const from = yearMonthOf(lease.startDate);
   const through = throughYear * 12 + throughMonth;
   const out: Array<{ month: number; year: number; amount: number }> = [];

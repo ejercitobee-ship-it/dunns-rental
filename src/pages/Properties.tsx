@@ -509,6 +509,12 @@ export function Properties() {
                   </div>
                 </button>
                 <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  <Link to={`/properties/${property.id}`}>
+                    <Button size="sm" variant="secondary">
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Profile
+                    </Button>
+                  </Link>
                   {canCreateUnit && (
                     <Button
                       size="sm"

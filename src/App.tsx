@@ -17,6 +17,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ de
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Properties = lazy(() => import('./pages/Properties').then(m => ({ default: m.Properties })));
+const PropertyProfile = lazy(() => import('./pages/PropertyProfile').then(m => ({ default: m.PropertyProfile })));
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
 const TenantDetail = lazy(() => import('./pages/TenantDetail').then(m => ({ default: m.TenantDetail })));
 const Rents = lazy(() => import('./pages/Rents').then(m => ({ default: m.Rents })));
@@ -250,7 +251,13 @@ function AppRoutes() {
           <Layout><Properties /></Layout>
         </ProtectedRoute>
       } />
-      
+
+      <Route path="/properties/:id" element={
+        <ProtectedRoute requiredPermission="properties_view">
+          <Layout><PropertyProfile /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/tenants" element={
         <ProtectedRoute requiredPermission="tenants_view">
           <Layout><Tenants /></Layout>

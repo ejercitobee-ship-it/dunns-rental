@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile } from '../types';
 
 const API_BASE = '/api';
 
@@ -171,6 +171,8 @@ export const propertiesApi = {
     apiRequest(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/properties/${id}`, { method: 'DELETE' }),
+  getProfile: (id: string): Promise<PropertyProfile> =>
+    apiRequest(`/properties/${id}/profile`),
 };
 
 // Utility accounts API (water/gas/electric the landlord pays, per property)
@@ -321,6 +323,8 @@ export const leasesApi = {
   delete: (id: string) => apiRequest(`/leases/${id}`, { method: 'DELETE' }),
   recordMoveInFee: (id: string, data: { amount: number; paidDate: string; method?: string }): Promise<{ moveInFeePaid: boolean; moveInFeePaidDate: string; moveInFeeMethod?: string; securityDeposit: number; receiptDocumentId: string | null }> =>
     apiRequest(`/leases/${id}/move-in-fee`, { method: 'POST', body: JSON.stringify(data) }),
+  editMoveInFee: (id: string, data: { paidDate?: string; amount?: number; method?: string; reason?: string }): Promise<{ success: boolean }> =>
+    apiRequest(`/leases/${id}/move-in-fee`, { method: 'PUT', body: JSON.stringify(data) }),
   approveRenewal: (id: string, action: 'approve' | 'reject'): Promise<{ status: string; newLeaseId?: string }> =>
     apiRequest(`/leases/${id}/approve-renewal`, { method: 'POST', body: JSON.stringify({ action }) }),
   getAuditHistory: (id: string): Promise<LeaseAuditEntry[]> =>

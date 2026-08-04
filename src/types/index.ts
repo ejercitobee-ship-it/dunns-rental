@@ -90,7 +90,7 @@ export interface Lease {
   renewedFromLeaseId?: string;
   renewalGeneratedAt?: number;
   previousRent?: number;
-  renewalStatus?: 'draft' | 'pending' | 'approved' | 'rejected';
+  renewalStatus?: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 }
 
 export interface LeaseAuditEntry {
@@ -368,4 +368,120 @@ export interface PortalPayment {
   // still never who paid, so the shared-lease privacy rule holds.
   paymentMethod?: PaymentMethod;
   receiptDocumentId?: string;
+}
+
+/** Comprehensive property profile returned by GET /api/properties/:id/profile. */
+export interface PropertyProfile {
+  property: {
+    id: string;
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    type: string;
+    description?: string;
+    purchaseDate?: string;
+    purchasePrice?: number;
+    landValue?: number;
+    createdAt?: number;
+  };
+  units: Array<{
+    id: string;
+    unitNumber: string;
+    bedrooms?: number;
+    bathrooms?: number;
+    squareFeet?: number;
+    monthlyRent?: number;
+  }>;
+  leases: Array<{
+    id: string;
+    unitId?: string;
+    unitNumber?: string;
+    status: string;
+    startDate?: string;
+    endDate?: string;
+    monthlyRent?: number;
+    tenantNames?: string;
+    tenantIds: string[];
+    endReason?: string;
+    renewalStatus?: string;
+    moveInFeePaid?: boolean;
+    securityDeposit?: number;
+  }>;
+  rentPayments: Array<{
+    id: string;
+    leaseId: string;
+    unitNumber?: string;
+    month: number;
+    year: number;
+    amount: number;
+    status: string;
+    paidDate?: string;
+    paymentMethod?: string;
+  }>;
+  expenses: Array<{
+    id: string;
+    category: string;
+    amount: number;
+    date: string;
+    description?: string;
+    vendor?: string;
+    unitId?: string;
+  }>;
+  incomes: Array<{
+    id: string;
+    source: string;
+    amount: number;
+    date: string;
+    description?: string;
+  }>;
+  maintenance: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    status: string;
+    priority?: string;
+    unitNumber?: string;
+    tenantName?: string;
+    handymanName?: string;
+    createdAt?: number;
+    completedAt?: number;
+    estimatedCost?: number;
+    actualCost?: number;
+  }>;
+  documents: Array<{
+    id: string;
+    name: string;
+    contentType?: string;
+    size?: number;
+    createdAt?: number;
+    driveFileId?: string;
+  }>;
+  utilityAccounts: Array<{
+    id: string;
+    utilityType: string;
+    provider?: string;
+    accountNumber?: string;
+    notes?: string;
+  }>;
+  financialSummary: Record<string, { income: number; expenses: number; net: number }>;
+  auditLog: Array<{
+    id: string;
+    leaseId: string;
+    action: string;
+    changedByName?: string;
+    previousData?: Record<string, unknown>;
+    newData?: Record<string, unknown>;
+    notes?: string;
+    createdAt?: number;
+  }>;
+  calendarEvents: Array<{
+    id: string;
+    title: string;
+    startDate?: string;
+    endDate?: string;
+    category?: string;
+    notes?: string;
+  }>;
 }

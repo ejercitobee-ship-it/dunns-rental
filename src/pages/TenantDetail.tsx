@@ -252,6 +252,33 @@ export function TenantDetail() {
     }
   };
 
+  // Super-admin inline editing of move-in fee date.
+  const isSuperAdmin = user?.roleId === 'super_admin';
+  const [editingMoveInFeeLeaseId, setEditingMoveInFeeLeaseId] = useState<string | null>(null);
+  const [editMoveInFeeDate, setEditMoveInFeeDate] = useState('');
+  const [editMoveInFeeReason, setEditMoveInFeeReason] = useState('');
+  const [savingMoveInFee, setSavingMoveInFee] = useState(false);
+
+  const handleEditMoveInFeeDate = async (leaseId: string) => {
+    if (!editMoveInFeeDate) return;
+    setSavingMoveInFee(true);
+    try {
+      await leasesApi.editMoveInFee(leaseId, {
+        paidDate: editMoveInFeeDate,
+        reason: editMoveInFeeReason || undefined,
+      });
+      showToast('Move-in fee date updated.', 'success');
+      setEditingMoveInFeeLeaseId(null);
+      setEditMoveInFeeDate('');
+      setEditMoveInFeeReason('');
+      refreshData();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the date.', 'error');
+    } finally {
+      setSavingMoveInFee(false);
+    }
+  };
+
   // Pause or resume rent collection on the current tenancy. The server stamps
   // the pause/resume interval from statusChangedOn, so today is the day sent.
   const handlePauseResume = async () => {
@@ -1377,7 +1404,53 @@ export function TenantDetail() {
                     <td className="py-3 px-5 text-sm text-ink font-medium">Move-in fee</td>
                     <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(l.securityDeposit || 0)}</td>
                     <td className="py-3 px-5 text-sm text-muted">{formatMethod(l.moveInFeeMethod as PaymentMethod | undefined)}</td>
-                    <td className="py-3 px-5 text-sm text-muted">{l.moveInFeePaidDate ? formatDate(l.moveInFeePaidDate) : '—'}</td>
+                    <td className="py-3 px-5 text-sm text-muted">
+                      {editingMoveInFeeLeaseId === l.id ? (
+                        <div className="flex flex-col gap-1.5">
+                          <input
+                            type="date"
+                            value={editMoveInFeeDate}
+                            onChange={(e) => setEditMoveInFeeDate(e.target.value)}
+                            className="w-full rounded border border-line bg-surface px-2 py-1 text-sm text-ink"
+                          />
+                          <input
+                            type="text"
+                            value={editMoveInFeeReason}
+                            onChange={(e) => setEditMoveInFeeReason(e.target.value)}
+                            placeholder="Reason (optional)"
+                            className="w-full rounded border border-line bg-surface px-2 py-1 text-xs text-ink"
+                          />
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleEditMoveInFeeDate(l.id)}
+                              disabled={savingMoveInFee || !editMoveInFeeDate}
+                              className="text-xs font-medium text-primary hover:text-primary-hover disabled:opacity-50"
+                            >
+                              {savingMoveInFee ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              onClick={() => { setEditingMoveInFeeLeaseId(null); setEditMoveInFeeDate(''); setEditMoveInFeeReason(''); }}
+                              className="text-xs text-muted hover:text-ink"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          {l.moveInFeePaidDate ? formatDate(l.moveInFeePaidDate) : '—'}
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => { setEditingMoveInFeeLeaseId(l.id); setEditMoveInFeeDate(l.moveInFeePaidDate || ''); }}
+                              className="text-faint hover:text-primary"
+                              title="Edit date (super admin)"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-5 text-sm">
                       {l.moveInFeeReceiptDocumentId ? (
                         <a href={`/api/documents/${l.moveInFeeReceiptDocumentId}`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary-hover">Download</a>
