@@ -308,10 +308,19 @@ export function Expenses() {
     rentMonth?: string;
   }
   const incomeRows = useMemo<IncomeRow[]>(() => {
-    const manual: IncomeRow[] = incomes.map(i => ({
-      id: i.id, date: i.date, propertyId: i.propertyId, unitId: i.unitId,
-      source: i.source, description: i.description, amount: i.amount,
-    }));
+    const manual: IncomeRow[] = incomes.map(i => {
+      // For move-in fee income, resolve tenant names from the lease.
+      let tenantName: string | undefined;
+      if (i.source === 'move_in_fee' && i.id.startsWith('movein-')) {
+        const leaseId = i.id.replace('movein-', '');
+        const names = getLeaseTenants(leaseId).map(t => `${t.firstName} ${t.lastName}`);
+        if (names.length) tenantName = names.join(', ');
+      }
+      return {
+        id: i.id, date: i.date, propertyId: i.propertyId, unitId: i.unitId,
+        source: i.source, description: i.description, amount: i.amount, tenantName,
+      };
+    });
     const rent: IncomeRow[] = rentPayments
       .filter(p => p.status === 'paid')
       .map(p => {
