@@ -484,3 +484,34 @@ export interface PropertyProfile {
     notes?: string;
   }>;
 }
+
+export type NoteCategory =
+  | 'general' | 'property_management' | 'tenant_communication' | 'maintenance'
+  | 'financial' | 'inspection' | 'legal' | 'compliance' | 'other';
+
+export interface NoteAttachment {
+  id: string;
+  name: string;
+  driveFileId: string;
+  contentType?: string;
+  size: number;
+  uploadedBy?: string;
+  uploadedByName?: string;
+  uploadedAt: number;
+}
+
+export interface PropertyNote {
+  id: string;
+  propertyId: string;
+  title: string;
+  content: string;
+  category: NoteCategory;
+  isPinned: boolean;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt: number;
+  updatedAt: number;
+  updatedBy?: string;
+  updatedByName?: string;
+  attachments: NoteAttachment[];
+}

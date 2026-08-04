@@ -150,7 +150,7 @@ export async function disconnectDrive(env: Env): Promise<void> {
   await delSetting(env, KEY_ACCESS_EXPIRES);
 }
 
-async function createFolder(env: Env, name: string, parentId?: string): Promise<string> {
+export async function createFolder(env: Env, name: string, parentId?: string): Promise<string> {
   const token = await getAccessToken(env);
   const res = await fetch(`${DRIVE_API}/files?fields=id`, {
     method: 'POST',
@@ -208,7 +208,7 @@ async function folderStatus(env: Env, id: string): Promise<FolderStatus> {
  * may have moved anywhere in her Drive. Used only where the name is unique
  * (the root) — never for tenant folders, where two people can share a name.
  */
-async function findFolder(env: Env, name: string, parentId?: string): Promise<string | null> {
+export async function findFolder(env: Env, name: string, parentId?: string): Promise<string | null> {
   const token = await getAccessToken(env);
   const esc = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const clauses = [`name='${esc}'`, `mimeType='${FOLDER_MIME}'`, 'trashed=false'];

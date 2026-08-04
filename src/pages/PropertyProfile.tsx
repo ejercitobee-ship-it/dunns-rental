@@ -12,8 +12,9 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import { propertiesApi } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import type { PropertyProfile as ProfileData } from '../types';
+import { PropertyNotes } from '../components/PropertyNotes';
 
-const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Activity'] as const;
+const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Notes', 'Activity'] as const;
 type Tab = typeof tabs[number];
 
 const maintenanceStatusBadge: Record<string, 'success' | 'warning' | 'secondary' | 'destructive'> = {
@@ -616,6 +617,10 @@ export function PropertyProfile() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === 'Notes' && id && (
+        <PropertyNotes propertyId={id} />
       )}
 
       {activeTab === 'Activity' && (

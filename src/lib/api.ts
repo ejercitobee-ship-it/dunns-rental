@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment } from '../types';
 
 const API_BASE = '/api';
 
@@ -173,6 +173,40 @@ export const propertiesApi = {
     apiRequest(`/properties/${id}`, { method: 'DELETE' }),
   getProfile: (id: string): Promise<PropertyProfile> =>
     apiRequest(`/properties/${id}/profile`),
+};
+
+// Property Notes API
+export const propertyNotesApi = {
+  list: (propertyId: string, opts?: { category?: string; search?: string }): Promise<PropertyNote[]> => {
+    const params = new URLSearchParams();
+    if (opts?.category) params.set('category', opts.category);
+    if (opts?.search) params.set('search', opts.search);
+    const qs = params.toString();
+    return apiRequest(`/properties/${propertyId}/notes${qs ? `?${qs}` : ''}`);
+  },
+  create: (propertyId: string, data: { title: string; content: string; category: string; isPinned?: boolean }): Promise<PropertyNote> =>
+    apiRequest(`/properties/${propertyId}/notes`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (propertyId: string, noteId: string, data: { title?: string; content?: string; category?: string; isPinned?: boolean }): Promise<PropertyNote> =>
+    apiRequest(`/properties/${propertyId}/notes/${noteId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (propertyId: string, noteId: string) =>
+    apiRequest(`/properties/${propertyId}/notes/${noteId}`, { method: 'DELETE' }),
+  togglePin: (propertyId: string, noteId: string): Promise<{ isPinned: boolean }> =>
+    apiRequest(`/properties/${propertyId}/notes/${noteId}/pin`, { method: 'POST' }),
+  uploadAttachment: async (propertyId: string, noteId: string, file: File): Promise<NoteAttachment> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/properties/${propertyId}/notes/${noteId}/attachments`, {
+      method: 'POST', body: fd, credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    return json.data !== undefined ? json.data : json;
+  },
+  deleteAttachment: (propertyId: string, noteId: string, attachmentId: string) =>
+    apiRequest(`/properties/${propertyId}/notes/${noteId}/attachments?attachmentId=${attachmentId}`, { method: 'DELETE' }),
 };
 
 // Utility accounts API (water/gas/electric the landlord pays, per property)
