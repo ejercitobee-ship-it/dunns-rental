@@ -204,7 +204,12 @@ export function ProspectiveTenantDetail() {
     }
   };
 
-  if (loading) return <p className="text-sm text-muted">Loading applicant.</p>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 animate-in fade-in duration-200">
+      <User className="h-8 w-8 text-faint animate-pulse" />
+      <p className="text-sm text-muted">Loading applicant</p>
+    </div>
+  );
   if (error || !applicant) {
     return (
       <div className="space-y-4">

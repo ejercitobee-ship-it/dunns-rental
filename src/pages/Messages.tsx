@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, ArrowLeft, ExternalLink } from 'lucide-react';
+import { MessageSquare, ArrowLeft, ExternalLink, Inbox } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { messagesApi, vendorMessagesApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread } from '../lib/api';
 import { useToast } from '../context/ToastContext';
@@ -160,7 +160,12 @@ export function Messages() {
     }
   };
 
-  if (loading) return <p className="text-sm text-muted">Loading messages.</p>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 animate-in fade-in duration-200">
+      <Inbox className="h-8 w-8 text-faint animate-pulse" />
+      <p className="text-sm text-muted">Loading messages</p>
+    </div>
+  );
   if (error) return <Card><CardContent className="p-6"><p className="text-sm text-danger">{error}</p></CardContent></Card>;
 
   const TABS: { key: Channel; label: string; count: number }[] = [

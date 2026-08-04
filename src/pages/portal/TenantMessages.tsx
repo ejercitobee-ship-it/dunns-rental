@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { portalApi, type Message } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
@@ -81,7 +82,12 @@ export function TenantMessages() {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading your messages.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 animate-in fade-in duration-200">
+        <MessageSquare className="h-8 w-8 text-faint animate-pulse" />
+        <p className="text-sm text-muted">Loading your messages</p>
+      </div>
+    );
   }
 
   if (error) {

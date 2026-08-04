@@ -487,8 +487,18 @@ export function Calendar() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      <div className="space-y-6 animate-in fade-in duration-200">
+        <div className="flex justify-between items-center">
+          <div className="h-8 w-40 bg-line/60 animate-pulse rounded" />
+          <div className="h-9 w-28 bg-line/60 animate-pulse rounded-lg" />
+        </div>
+        <div className="grid grid-cols-7 gap-px bg-line rounded-xl overflow-hidden">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div key={i} className="bg-surface h-20 p-2">
+              <div className="h-4 w-5 bg-line/60 animate-pulse rounded" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

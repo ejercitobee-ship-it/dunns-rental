@@ -69,7 +69,12 @@ export function RealtorTenantDetail() {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading this tenant.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 animate-in fade-in duration-200">
+        <User className="h-8 w-8 text-faint animate-pulse" />
+        <p className="text-sm text-muted">Loading tenant details</p>
+      </div>
+    );
   }
 
   if (error || !tenant) {

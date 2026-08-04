@@ -164,7 +164,12 @@ export function TenantPayments() {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading your payment history.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 animate-in fade-in duration-200">
+        <DollarSign className="h-8 w-8 text-faint animate-pulse" />
+        <p className="text-sm text-muted">Loading your payment history</p>
+      </div>
+    );
   }
 
   if (error) {

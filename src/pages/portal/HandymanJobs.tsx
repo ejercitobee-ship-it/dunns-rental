@@ -226,7 +226,12 @@ export function HandymanJobs() {
       .finally(() => setBusyId(null));
   };
 
-  if (loading) return <p className="text-sm text-muted">Loading your jobs.</p>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 animate-in fade-in duration-200">
+      <Wrench className="h-8 w-8 text-faint animate-pulse" />
+      <p className="text-sm text-muted">Loading your jobs</p>
+    </div>
+  );
   if (error) return <Card><CardContent className="py-8 text-center text-sm text-danger">{error}</CardContent></Card>;
 
   // Their own jobs split into work they are still on versus work they finished.

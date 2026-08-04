@@ -130,7 +130,12 @@ export function RealtorTenants() {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading your tenants.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 animate-in fade-in duration-200">
+        <Users className="h-8 w-8 text-faint animate-pulse" />
+        <p className="text-sm text-muted">Loading your tenants</p>
+      </div>
+    );
   }
 
   if (error) {

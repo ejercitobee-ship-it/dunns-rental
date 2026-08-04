@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, MapPin, DoorOpen, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, MapPin, DoorOpen, AlertCircle, Home } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type AvailableUnit } from '../../lib/api';
@@ -65,7 +65,12 @@ export function RealtorAvailableUnits() {
   // single address is pre-opened above but can still be collapsed).
   const isOpen = (address: string) => expanded.has(address);
 
-  if (loading) return <p className="text-sm text-muted">Loading available units.</p>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 animate-in fade-in duration-200">
+      <Home className="h-8 w-8 text-faint animate-pulse" />
+      <p className="text-sm text-muted">Loading available units</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

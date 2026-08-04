@@ -63,7 +63,12 @@ export function TenantDocuments() {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading your documents.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 animate-in fade-in duration-200">
+        <FileText className="h-8 w-8 text-faint animate-pulse" />
+        <p className="text-sm text-muted">Loading your documents</p>
+      </div>
+    );
   }
 
   if (error) {

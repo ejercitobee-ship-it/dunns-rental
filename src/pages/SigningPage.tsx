@@ -64,7 +64,15 @@ export function SigningPage() {
     </div>
   );
 
-  if (loading) return shell(<p className="text-center text-sm text-muted">Loading your documents.</p>);
+  if (loading) return shell(
+    <div className="flex flex-col items-center justify-center py-12 gap-3 animate-in fade-in duration-200">
+      <div className="relative w-10 h-10">
+        <div className="absolute inset-0 rounded-full border-2 border-line" />
+        <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+      <p className="text-sm text-muted">Loading your documents</p>
+    </div>
+  );
 
   if (error) {
     return shell(
