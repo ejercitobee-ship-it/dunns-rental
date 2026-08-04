@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut, MessageSquare, Send,
+  Pause, Play, LogOut, MessageSquare, Send, Clock,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -115,6 +115,9 @@ export function TenantDetail() {
   const [householdToRemove, setHouseholdToRemove] = useState<HouseholdMember | null>(null);
   const [householdBusy, setHouseholdBusy] = useState(false);
   const [tenantToDelete, setTenantToDelete] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     if (!id) return;
@@ -154,9 +157,13 @@ export function TenantDetail() {
     };
   }, [id, canManagePortal]);
 
+  // Pick the current active lease, but NEVER the pending renewal — that one
+  // should stay in the Renewal History section until approved.
   const lease = useMemo(() => {
     if (!id) return undefined;
-    return getTenantLeases(id).find(l => l.status !== 'ended');
+    return getTenantLeases(id).find(
+      l => l.status !== 'ended' && l.renewalStatus !== 'pending' && l.renewalStatus !== 'rejected'
+    );
   }, [id, getTenantLeases]);
 
   // The most recent ENDED tenancy, shown only when there is no current one, so a
@@ -166,6 +173,12 @@ export function TenantDetail() {
     return getTenantLeases(id)
       .filter(l => l.status === 'ended')
       .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || ''))[0] ?? null;
+  }, [id, getTenantLeases]);
+
+  // True when there is already a pending renewal — prevents generating another.
+  const hasPendingRenewal = useMemo(() => {
+    if (!id) return false;
+    return getTenantLeases(id).some(l => l.renewalStatus === 'pending');
   }, [id, getTenantLeases]);
 
   const housemates = useMemo(() => {
@@ -963,13 +976,19 @@ export function TenantDetail() {
               </h3>
               {lease && canManagePortal && (
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={openRenewalModal}
-                    className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
-                  >
-                    <FileText className="h-3.5 w-3.5" /> Renew Lease
-                  </button>
+                  {hasPendingRenewal ? (
+                    <span className="text-sm font-medium text-warning inline-flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" /> Renewal Pending Approval
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={openRenewalModal}
+                      className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
+                    >
+                      <FileText className="h-3.5 w-3.5" /> Renew Lease
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={openEditTenancy}
@@ -982,6 +1001,12 @@ export function TenantDetail() {
             </div>
             {lease ? (
               <div className="space-y-3 text-sm">
+                {hasPendingRenewal && (
+                  <div className="bg-warning/10 border border-warning/30 text-warning rounded-md px-3 py-2 text-xs flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                    A lease renewal is pending approval. Scroll down to the Renewal History section to approve or reject it.
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-ink">
                   <Home className="h-3.5 w-3.5 text-faint" />
                   <span>{property?.name || '—'}</span>
@@ -1557,18 +1582,34 @@ export function TenantDetail() {
                           </td>
                           <td className="py-3 px-4">
                             {l.renewalStatus === 'pending' ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <Badge variant="warning">Pending Approval</Badge>
-                                <button
-                                  onClick={() => handleRenewalApproval(l.id, 'approve')}
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => setConfirmState({
+                                    open: true,
+                                    title: 'Approve Lease Renewal',
+                                    message: `Approve this renewal? The current lease will be ended and the new lease (${formatCurrency(l.monthlyRent)}/month, ${l.startDate ? formatDate(l.startDate) : '—'} to ${l.endDate ? formatDate(l.endDate) : '—'}) will become active.`,
+                                    onConfirm: () => handleRenewalApproval(l.id, 'approve'),
+                                  })}
                                   disabled={renewalApproving}
-                                  className="text-xs font-medium text-positive hover:underline"
-                                >Approve</button>
-                                <button
-                                  onClick={() => handleRenewalApproval(l.id, 'reject')}
+                                >
+                                  <Check className="h-3.5 w-3.5 mr-1" /> Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => setConfirmState({
+                                    open: true,
+                                    title: 'Reject Lease Renewal',
+                                    message: 'Reject this renewal? The current lease will remain active and the renewal will be cancelled.',
+                                    onConfirm: () => handleRenewalApproval(l.id, 'reject'),
+                                  })}
                                   disabled={renewalApproving}
-                                  className="text-xs font-medium text-destructive hover:underline"
-                                >Reject</button>
+                                >
+                                  Reject
+                                </Button>
                               </div>
                             ) : l.renewalStatus === 'rejected' ? (
                               <Badge variant="destructive">Rejected</Badge>
@@ -1988,6 +2029,16 @@ export function TenantDetail() {
             : 'This removes this tenant. Their lease payment records are kept. This cannot be undone.'
         }
         confirmText="Delete"
+      />
+
+      {/* Generic confirm dialog for renewal approval/rejection */}
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        onClose={() => setConfirmState(s => ({ ...s, open: false }))}
+        onConfirm={() => { confirmState.onConfirm(); setConfirmState(s => ({ ...s, open: false })); }}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText="Confirm"
       />
 
       {/* Terminate tenancy: capture the move-out date and reason. */}
