@@ -446,9 +446,8 @@ export interface PropertyProfile {
     tenantName?: string;
     handymanName?: string;
     createdAt?: number;
-    completedAt?: number;
-    estimatedCost?: number;
-    actualCost?: number;
+    completedAt?: string | number | null;
+    cost?: number;
   }>;
   documents: Array<{
     id: string;

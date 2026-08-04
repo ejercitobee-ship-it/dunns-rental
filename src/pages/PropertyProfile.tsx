@@ -567,7 +567,7 @@ export function PropertyProfile() {
                           </Badge>
                         </td>
                         <td className="py-2 px-3 text-right tnum">
-                          {m.actualCost ? formatCurrency(m.actualCost) : m.estimatedCost ? `~${formatCurrency(m.estimatedCost)}` : '—'}
+                          {m.cost ? formatCurrency(m.cost) : '—'}
                         </td>
                         <td className="py-2 px-3 text-muted">
                           {m.createdAt ? new Date(m.createdAt * 1000).toLocaleDateString() : '—'}

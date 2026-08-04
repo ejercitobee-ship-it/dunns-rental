@@ -61,17 +61,33 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     ).bind(propertyId).all();
 
     // Maintenance requests for this property
-    const maintenance = await env.DB.prepare(
-      `SELECT mr.*, u.unit_number,
-              t.first_name || ' ' || t.last_name AS tenant_name,
-              h.first_name || ' ' || h.last_name AS handyman_name
-       FROM maintenance_requests mr
-       LEFT JOIN units u ON u.id = mr.unit_id
-       LEFT JOIN tenants t ON t.id = mr.tenant_id
-       LEFT JOIN handymen h ON h.id = mr.handyman_id
-       WHERE mr.property_id = ?
-       ORDER BY mr.created_at DESC`
-    ).bind(propertyId).all();
+    let maintenance: { results: Record<string, unknown>[] } = { results: [] };
+    try {
+      maintenance = await env.DB.prepare(
+        `SELECT mr.*, u.unit_number,
+                t.first_name || ' ' || t.last_name AS tenant_name,
+                h.name AS handyman_name
+         FROM maintenance_requests mr
+         LEFT JOIN units u ON u.id = mr.unit_id
+         LEFT JOIN tenants t ON t.id = mr.tenant_id
+         LEFT JOIN handymen h ON h.id = mr.assigned_handyman_id
+         WHERE mr.property_id = ?
+         ORDER BY mr.created_at DESC`
+      ).bind(propertyId).all();
+    } catch {
+      // handymen table may not exist yet — fall back without handyman join
+      try {
+        maintenance = await env.DB.prepare(
+          `SELECT mr.*, u.unit_number,
+                  t.first_name || ' ' || t.last_name AS tenant_name
+           FROM maintenance_requests mr
+           LEFT JOIN units u ON u.id = mr.unit_id
+           LEFT JOIN tenants t ON t.id = mr.tenant_id
+           WHERE mr.property_id = ?
+           ORDER BY mr.created_at DESC`
+        ).bind(propertyId).all();
+      } catch { /* maintenance table itself may not exist */ }
+    }
 
     // Documents linked to this property
     const documents = await env.DB.prepare(
@@ -220,11 +236,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           priority: m.priority,
           unitNumber: m.unit_number,
           tenantName: m.tenant_name,
-          handymanName: m.handyman_name,
+          handymanName: m.handyman_name ?? null,
           createdAt: m.created_at,
-          completedAt: m.completed_at,
-          estimatedCost: m.estimated_cost,
-          actualCost: m.actual_cost,
+          completedAt: m.resolved_date ?? m.paid_at ?? null,
+          cost: m.cost ?? m.reported_cost ?? 0,
         })),
         documents: (documents.results || []).map(d => ({
           id: d.id,
@@ -262,7 +277,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         })),
       },
     });
-  } catch {
+  } catch (err) {
+    console.error('Property profile error:', err);
     return serverError();
   }
 };

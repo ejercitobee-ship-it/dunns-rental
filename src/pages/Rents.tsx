@@ -1011,7 +1011,17 @@ export function Rents() {
                           ? <ChevronDown className="h-4 w-4 text-faint flex-shrink-0" />
                           : <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />}
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-ink truncate">{names}</div>
+                          <div className="text-sm font-medium text-ink truncate">
+                            {occupants.length === 1 ? (
+                              <Link
+                                to={`/tenants/${occupants[0].id}`}
+                                onClick={e => e.stopPropagation()}
+                                className="hover:text-primary hover:underline underline-offset-2 transition-colors"
+                              >
+                                {names}
+                              </Link>
+                            ) : names}
+                          </div>
                           <div className="text-sm text-muted truncate">{location}</div>
                         </div>
                       </button>
