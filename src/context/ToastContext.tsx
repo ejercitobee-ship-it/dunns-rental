@@ -33,17 +33,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   };
 
   const icons = {
-    success: <CheckCircle className="h-5 w-5 text-emerald-500" />,
-    error: <AlertCircle className="h-5 w-5 text-red-500" />,
-    info: <Info className="h-5 w-5 text-blue-500" />,
-    warning: <AlertCircle className="h-5 w-5 text-amber-500" />,
+    success: <CheckCircle className="h-5 w-5 text-positive" />,
+    error: <AlertCircle className="h-5 w-5 text-danger" />,
+    info: <Info className="h-5 w-5 text-primary" />,
+    warning: <AlertCircle className="h-5 w-5 text-warning" />,
   };
 
   const styles = {
-    success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-    warning: 'bg-amber-50 border-amber-200 text-amber-800',
+    success: 'bg-positive-soft border-positive/20 text-ink',
+    error: 'bg-danger-soft border-danger/20 text-ink',
+    info: 'bg-primary-soft border-primary-line text-ink',
+    warning: 'bg-warning-soft border-warning/20 text-ink',
   };
 
   return (

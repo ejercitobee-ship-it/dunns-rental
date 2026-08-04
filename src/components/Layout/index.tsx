@@ -20,12 +20,15 @@ import {
   ScrollText,
   MessageSquare,
   CalendarDays,
+  Search,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { messagesApi, vendorMessagesApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../ui/Avatar';
 import { ProfileModal } from '../ProfileModal';
+import { BackToTop } from '../BackToTop';
+import { CommandPalette } from '../CommandPalette';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -122,6 +125,18 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
 
+        {/* Quick search hint */}
+        <div className="mx-3 mt-3 mb-1">
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-sidebar-muted hover:bg-white/[0.04] transition-colors border border-sidebar-line"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="flex-1 text-left">Go to...</span>
+            <kbd className="text-[10px] font-mono px-1 py-px rounded border border-sidebar-line">⌘K</kbd>
+          </button>
+        </div>
+
         {/* Navigation */}
         <nav className="p-3 space-y-0.5">
           <p className="px-3 pt-3 pb-2 eyebrow text-sidebar-muted">Main Menu</p>
@@ -212,6 +227,9 @@ export function Layout({ children }: LayoutProps) {
           {children}
         </div>
       </main>
+
+      <BackToTop />
+      <CommandPalette />
     </div>
   );
 }
