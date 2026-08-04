@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
 import { PortalLayout } from './components/PortalLayout';
+import { ScrollToTop } from './components/ScrollToTop';
 import { Login } from './pages/Login';
 import { isPortalRole } from './types';
 
@@ -135,11 +136,14 @@ function RootRoute() {
 }
 
 // A calm, on-brand loader shown while a route's chunk (or the initial session
-// check) is loading.
+// check) is loading. Uses a slim progress bar at the top of the viewport instead
+// of a spinner to feel faster and less intrusive.
 function RouteFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-canvas">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+    <div className="min-h-screen bg-canvas">
+      <div className="fixed top-0 left-0 right-0 z-[60] h-[3px] bg-primary/20 overflow-hidden">
+        <div className="h-full w-1/3 bg-primary rounded-full animate-[shimmer_1.2s_ease-in-out_infinite]" />
+      </div>
     </div>
   );
 }
@@ -342,6 +346,7 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <AppProvider>
           <ToastProvider>

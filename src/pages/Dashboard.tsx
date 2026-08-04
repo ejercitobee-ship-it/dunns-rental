@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { calendarApi } from '../lib/api';
@@ -448,11 +449,7 @@ export function Dashboard() {
     });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {
@@ -1022,6 +1019,30 @@ export function Dashboard() {
           )}
         </Card>
       )}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      <div>
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="mt-2 h-4 w-72" />
+      </div>
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-line bg-surface p-6">
+          <Skeleton className="h-5 w-32 mb-4" />
+          <Skeleton className="h-[200px] w-full rounded-lg" />
+        </div>
+        <div className="rounded-xl border border-line bg-surface p-6">
+          <Skeleton className="h-5 w-32 mb-4" />
+          <Skeleton className="h-[200px] w-full rounded-lg" />
+        </div>
+      </div>
     </div>
   );
 }

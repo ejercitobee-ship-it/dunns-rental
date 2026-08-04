@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -8,9 +9,27 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Optional footer content rendered below the scroll area with a top border. */
+  footer?: React.ReactNode;
 }
 
-export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, size = 'md', footer }: ModalProps) {
+  // Close on Escape key.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    // Prevent body scroll while modal is open.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handler);
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -42,15 +61,23 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
           <button
             onClick={onClose}
             className="p-2 -mr-2 hover:bg-black/[0.05] rounded-lg transition-colors group"
+            aria-label="Close"
           >
             <X className="h-5 w-5 text-faint group-hover:text-ink" />
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
           {children}
         </div>
+
+        {/* Optional footer */}
+        {footer && (
+          <div className="px-5 sm:px-6 py-4 border-t border-line">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

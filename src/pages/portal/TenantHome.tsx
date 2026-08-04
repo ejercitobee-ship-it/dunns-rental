@@ -4,6 +4,7 @@ import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, Message
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
@@ -115,7 +116,7 @@ export function TenantHome() {
   }, [me]);
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading your account.</p>;
+    return <TenantHomeSkeleton />;
   }
 
   if (error) {
@@ -628,5 +629,45 @@ function HouseholdCard({ hasLease }: { hasLease: boolean }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Skeleton that mirrors the RentHero + quick-actions + cards structure. */
+function TenantHomeSkeleton() {
+  return (
+    <div className="space-y-5 animate-in fade-in duration-200">
+      {/* Hero skeleton */}
+      <div className="rounded-3xl p-6 bg-[#1f4535]">
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-11 h-11 rounded-full bg-white/10" />
+          <div>
+            <Skeleton className="h-3 w-24 bg-white/10" />
+            <Skeleton className="mt-1 h-5 w-32 bg-white/10" />
+          </div>
+        </div>
+        <div className="my-5 h-px bg-white/10" />
+        <Skeleton className="h-3 w-20 bg-white/10" />
+        <Skeleton className="mt-2 h-10 w-36 bg-white/10" />
+        <Skeleton className="mt-4 h-7 w-40 rounded-full bg-white/10" />
+        <Skeleton className="mt-5 h-12 w-full rounded-xl bg-white/10" />
+      </div>
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-xl" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        ))}
+      </div>
+      {/* Cards */}
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-line bg-surface p-5 space-y-3">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+      ))}
+    </div>
   );
 }
