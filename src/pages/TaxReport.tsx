@@ -310,7 +310,7 @@ export function TaxReport() {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
       income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, other: main.otherIncome },
-      moveInFeesReceived: main.depositsReceived,
+      securityDepositsReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
       operatingExpenses: main.operatingExpenses,
@@ -648,8 +648,8 @@ export function TaxReport() {
             {main.depositsReceived > 0 && (
               <div className="flex justify-between items-center py-2 border-t border-line">
                 <span className="text-sm text-muted">
-                  Move-in fees received
-                  <span className="block text-xs text-muted">Taxable as income in the year received.</span>
+                  Security deposits received
+                  <span className="block text-xs text-muted">Not included in taxable income (refundable liability).</span>
                 </span>
                 <span className="text-sm text-muted tnum">{formatCurrency(main.depositsReceived)}</span>
               </div>

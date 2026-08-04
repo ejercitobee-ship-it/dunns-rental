@@ -142,14 +142,18 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       `UPDATE leases SET ${updates.join(', ')} WHERE id = ?`
     ).bind(...binds).run();
 
-    // If the amount changed, also update the idempotent income row.
+    // Sync the idempotent income row. Uses INSERT ... ON CONFLICT so the
+    // row is created if it was never recorded (legacy data) and updated
+    // otherwise. This is the same pattern the POST handler uses.
     if (newData.amount !== undefined || newData.paidDate !== undefined) {
       const incomeAmount = (newData.amount as number) ?? lease.security_deposit ?? 0;
       const incomeDate = (newData.paidDate as string) ?? lease.move_in_fee_paid_date ?? '';
       if (incomeDate && incomeAmount > 0) {
         await env.DB.prepare(
-          `UPDATE incomes SET amount = ?, date = ? WHERE id = ?`
-        ).bind(incomeAmount, incomeDate, `movein-${leaseId}`).run();
+          `INSERT INTO incomes (id, property_id, unit_id, source, amount, date, description, user_id)
+           VALUES (?, ?, ?, 'move_in_fee', ?, ?, 'Move-in fee', ?)
+           ON CONFLICT(id) DO UPDATE SET amount = excluded.amount, date = excluded.date`
+        ).bind(`movein-${leaseId}`, lease.property_id, lease.unit_id, incomeAmount, incomeDate, auth.id).run();
       }
     }
 
