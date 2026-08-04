@@ -206,7 +206,19 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    await env.DB.prepare('DELETE FROM leases WHERE id = ?').bind(params.id as string).run();
+    const id = params.id as string;
+    // D1 does not enforce foreign keys by default, so cascade manually.
+    // Core tables first, then the lease itself.
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM rent_payments WHERE lease_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM lease_tenants WHERE lease_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM lease_pauses WHERE lease_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM household_members WHERE lease_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM leases WHERE id = ?').bind(id),
+    ]);
+    // Newer tables that may not exist in all environments.
+    try { await env.DB.prepare('DELETE FROM lease_audit_log WHERE lease_id = ?').bind(id).run(); } catch { /* table may not exist */ }
+    try { await env.DB.prepare('DELETE FROM lease_notifications WHERE lease_id = ?').bind(id).run(); } catch { /* table may not exist */ }
     syncRentSheet(context);
     return jsonOk({ success: true });
   } catch {

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
 import { rentSheetApi, documentsApi, leasesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -106,7 +107,7 @@ function matchSinglePayer(cell: string, occupants: Tenant[]): Tenant | undefined
 export function Rents() {
   const {
     properties, units, leases, rentPayments,
-    getLeaseTenants, addRentPayment, deleteRentPayment, refreshData,
+    getLeaseTenants, addRentPayment, deleteRentPayment, deleteLease, refreshData,
   } = useApp();
   const { isSuperAdmin } = useAuth();
   const { showToast } = useToast();
@@ -380,29 +381,69 @@ export function Rents() {
     { label: 'Overdue', value: yearStats.overdueCount, icon: <XCircle />, valueClass: yearStats.overdueCount > 0 ? 'text-danger' : 'text-ink' },
   ];
 
+  // Shared confirm dialog state for destructive actions on this page.
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'info'; confirmText?: string;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
   // Super Admin only: undo a mistakenly recorded payment. Removes every payment
   // logged for this lease-month (and its receipt), so the month goes back to owed.
   const [deletingRow, setDeletingRow] = useState<string | null>(null);
-  const handleDeleteRent = async (mr: LeaseMonthRow) => {
+  const handleDeleteRent = (mr: LeaseMonthRow) => {
     const pmts = rentPayments.filter(
       pm => pm.leaseId === mr.lease.id && pm.month === mr.month && pm.year === mr.year
     );
     if (pmts.length === 0) return;
     const total = pmts.reduce((sum, p) => sum + (p.amount || 0), 0);
     const label = `${pmts.length} payment${pmts.length > 1 ? 's' : ''} totaling ${formatCurrency(total)}`;
-    if (!confirm(
-      `Delete the recorded rent for ${formatMonthYear(mr.month, mr.year)}?\n\nThis removes ${label} and any receipt, and the month goes back to owed. This cannot be undone.`
-    )) return;
-    const rowKey = `${mr.lease.id}-${mr.month}-${mr.year}`;
-    setDeletingRow(rowKey);
-    try {
-      for (const p of pmts) await deleteRentPayment(p.id);
-      showToast('Rent payment deleted. The month is back to owed.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not delete the payment', 'error');
-    } finally {
-      setDeletingRow(null);
-    }
+    setConfirmState({
+      open: true,
+      title: 'Delete recorded rent',
+      message: `Delete the recorded rent for ${formatMonthYear(mr.month, mr.year)}?\n\nThis removes ${label} and any receipt, and the month goes back to owed. This cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        const rowKey = `${mr.lease.id}-${mr.month}-${mr.year}`;
+        setDeletingRow(rowKey);
+        try {
+          for (const p of pmts) await deleteRentPayment(p.id);
+          showToast('Rent payment deleted. The month is back to owed.', 'success');
+        } catch (err) {
+          showToast((err as Error).message || 'Could not delete the payment', 'error');
+        } finally {
+          setDeletingRow(null);
+        }
+      },
+    });
+  };
+
+  // Super Admin only: delete an entire lease (and all its rent payments). Used
+  // to remove duplicate lease records created by data import or past bugs.
+  const [deletingLeaseId, setDeletingLeaseId] = useState<string | null>(null);
+  const handleDeleteLease = (group: typeof tenantGroups[number]) => {
+    const head = group.monthRows[0];
+    const names = head?.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'this tenant';
+    const location = [head?.property?.name, head?.unit ? `Unit ${head.unit.unitNumber}` : null]
+      .filter(Boolean).join(' · ');
+    setConfirmState({
+      open: true,
+      title: 'Delete this lease',
+      message: `Remove the lease for ${names} at ${location}?\n\nThis permanently deletes the lease and all its rent records (paid and unpaid). Use this to clean up duplicate entries. This cannot be undone.`,
+      confirmText: 'Delete lease',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingLeaseId(group.lease.id);
+        try {
+          await deleteLease(group.lease.id);
+          showToast('Lease and its rent records deleted.', 'success');
+        } catch (err) {
+          showToast((err as Error).message || 'Could not delete the lease', 'error');
+        } finally {
+          setDeletingLeaseId(null);
+        }
+      },
+    });
   };
 
   const openRecordModal = (row: LeaseMonthRow) => {
@@ -996,6 +1037,16 @@ export function Rents() {
                           <Button size="sm" variant="outline" onClick={() => openRecordModal(group.thisMonth!)}>
                             Record
                           </Button>
+                        )}
+                        {isSuperAdmin() && (
+                          <button
+                            onClick={() => handleDeleteLease(group)}
+                            disabled={deletingLeaseId === group.lease.id}
+                            title="Delete this lease (super admin)"
+                            className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1663,6 +1714,16 @@ export function Rents() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        onClose={() => setConfirmState(s => ({ ...s, open: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        variant={confirmState.variant}
+      />
     </div>
   );
 }

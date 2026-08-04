@@ -10,7 +10,7 @@ const Card = React.forwardRef<
     className={cn(
       'rounded-xl border border-line bg-surface',
       'shadow-[0_1px_2px_rgba(27,26,23,0.04)]',
-      'transition-shadow duration-200',
+      'transition-all duration-200',
       className
     )}
     {...props}

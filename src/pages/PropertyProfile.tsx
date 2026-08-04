@@ -36,6 +36,7 @@ export function PropertyProfile() {
   const { showToast } = useToast();
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()));
   const [expandedLeases, setExpandedLeases] = useState<Set<string>>(new Set());
@@ -43,9 +44,14 @@ export function PropertyProfile() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setError(null);
     propertiesApi.getProfile(id)
       .then(d => setData(d))
-      .catch(() => showToast('Could not load property profile.', 'error'))
+      .catch(err => {
+        const msg = (err as Error).message || 'Could not load property profile.';
+        setError(msg);
+        showToast(msg, 'error');
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -86,7 +92,14 @@ export function PropertyProfile() {
   }, [data, activeLeases]);
 
   if (loading) return <ProfileSkeleton />;
-  if (!data) return <div className="text-center py-20 text-muted">Property not found.</div>;
+  if (!data) return (
+    <div className="text-center py-20 space-y-3">
+      <p className="text-muted">{error || 'Property not found.'}</p>
+      <Link to="/properties" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to properties
+      </Link>
+    </div>
+  );
 
   const { property, units, maintenance, documents, utilityAccounts, auditLog, calendarEvents } = data;
 

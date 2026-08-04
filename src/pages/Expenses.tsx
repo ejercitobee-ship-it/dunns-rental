@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate, formatMonthYear, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { rentIncomeForMonths } from '../lib/rent';
 import { useApp } from '../context/AppContext';
@@ -91,6 +92,10 @@ export function Expenses() {
   // An invoice/receipt file to attach when adding (or replacing on) the expense.
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'info'; confirmText?: string;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const canDelete = isSuperAdmin();
   // Editing a recorded expense is reserved to the workspace owner (super admin).
   const canEditExpense = isSuperAdmin();
@@ -152,30 +157,46 @@ export function Expenses() {
   // deleted here: rent income belongs to a recorded payment (delete it in Rent
   // Management) and a maintenance expense belongs to a job (delete the report on
   // the Maintenance page), so removing them at the source keeps the two in step.
-  const handleDeleteExpense = async (id: string, label: string) => {
-    if (!confirm(`Delete this expense?\n\n${label}\n\nThis removes it from Finances and cannot be undone.`)) return;
-    setDeletingId(id);
-    try {
-      await deleteExpense(id);
-      showToast('Expense deleted.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not delete the expense', 'error');
-    } finally {
-      setDeletingId(null);
-    }
+  const handleDeleteExpense = (id: string, label: string) => {
+    setConfirmState({
+      open: true,
+      title: 'Delete expense',
+      message: `${label}\n\nThis removes it from Finances and cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteExpense(id);
+          showToast('Expense deleted.', 'success');
+        } catch (err) {
+          showToast((err as Error).message || 'Could not delete the expense', 'error');
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
-  const handleDeleteIncome = async (id: string, label: string) => {
-    if (!confirm(`Delete this income?\n\n${label}\n\nThis removes it from Finances and cannot be undone.`)) return;
-    setDeletingId(id);
-    try {
-      await deleteIncome(id);
-      showToast('Income deleted.', 'success');
-    } catch (err) {
-      showToast((err as Error).message || 'Could not delete the income', 'error');
-    } finally {
-      setDeletingId(null);
-    }
+  const handleDeleteIncome = (id: string, label: string) => {
+    setConfirmState({
+      open: true,
+      title: 'Delete income',
+      message: `${label}\n\nThis removes it from Finances and cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteIncome(id);
+          showToast('Income deleted.', 'success');
+        } catch (err) {
+          showToast((err as Error).message || 'Could not delete the income', 'error');
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
   const now = new Date();
@@ -1017,6 +1038,16 @@ export function Expenses() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        onClose={() => setConfirmState(s => ({ ...s, open: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        variant={confirmState.variant}
+      />
     </div>
   );
 }

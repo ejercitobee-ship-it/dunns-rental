@@ -78,28 +78,45 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       `SELECT * FROM documents WHERE property_id = ? ORDER BY created_at DESC`
     ).bind(propertyId).all();
 
-    // Utility accounts for this property
-    const utilityAccounts = await env.DB.prepare(
-      `SELECT * FROM utility_accounts WHERE property_id = ? ORDER BY utility_type`
-    ).bind(propertyId).all();
+    // Utility accounts for this property — tolerant of missing table
+    let utilityAccounts: { results: Record<string, unknown>[] } = { results: [] };
+    try {
+      utilityAccounts = await env.DB.prepare(
+        `SELECT * FROM utility_accounts WHERE property_id = ? ORDER BY utility_type`
+      ).bind(propertyId).all();
+    } catch {
+      // Table may not exist yet — return empty list rather than crashing.
+    }
 
-    // Recent audit log entries for leases on this property
-    const auditLog = await env.DB.prepare(
-      `SELECT la.* FROM lease_audit_log la
-       JOIN leases l ON l.id = la.lease_id
-       WHERE l.property_id = ?
-       ORDER BY la.created_at DESC
-       LIMIT 50`
-    ).bind(propertyId).all();
+    // Recent audit log entries for leases on this property — tolerant of
+    // missing table (migration 0045 may not be applied yet).
+    let auditLog: { results: Record<string, unknown>[] } = { results: [] };
+    try {
+      auditLog = await env.DB.prepare(
+        `SELECT la.* FROM lease_audit_log la
+         JOIN leases l ON l.id = la.lease_id
+         WHERE l.property_id = ?
+         ORDER BY la.created_at DESC
+         LIMIT 50`
+      ).bind(propertyId).all();
+    } catch {
+      // Table may not exist yet — return empty log rather than crashing.
+    }
 
-    // Calendar events for this property
-    const calendarEvents = await env.DB.prepare(
-      `SELECT ce.* FROM calendar_events ce
-       JOIN calendar_event_properties cep ON cep.event_id = ce.id
-       WHERE cep.property_id = ?
-       ORDER BY ce.start_date DESC
-       LIMIT 50`
-    ).bind(propertyId).all();
+    // Calendar events for this property — tolerant of missing table
+    // (migration 0047 may not be applied yet in all environments).
+    let calendarEvents: { results: Record<string, unknown>[] } = { results: [] };
+    try {
+      calendarEvents = await env.DB.prepare(
+        `SELECT ce.* FROM calendar_events ce
+         JOIN calendar_event_properties cep ON cep.event_id = ce.id
+         WHERE cep.property_id = ?
+         ORDER BY ce.start_date DESC
+         LIMIT 50`
+      ).bind(propertyId).all();
+    } catch {
+      // Table may not exist yet — return empty events rather than crashing.
+    }
 
     // Build financial summary per year
     const financialYears: Record<string, { income: number; expenses: number; net: number }> = {};
