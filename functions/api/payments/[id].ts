@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializePayment } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { deleteDriveFile } from '../../lib/google';
+import { logActivityStmt } from '../../lib/activity';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -27,6 +28,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
   try {
     const id = params.id as string;
+    const before = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first<Record<string, unknown>>();
+    if (!before) return jsonError('Payment not found', 404);
+
     const body = (await request.json()) as Record<string, unknown>;
     // lease_id is NOT NULL: reject a payment with no lease here rather than
     // letting D1 raise a raw constraint error.
@@ -45,30 +49,40 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       return jsonError('Year is required', 400);
     }
 
-    await env.DB.prepare(
-      `UPDATE rent_payments SET
-        lease_id = ?, paid_by_tenant_id = ?, amount = ?, due_date = ?, paid_date = ?,
-        received_date = ?, status = ?, month = ?, year = ?, payment_method = ?,
-        uploaded_by = ?, uploaded_at = ?, notes = ?, updated_at = unixepoch()
-       WHERE id = ?`
-    )
-      .bind(
-        body.leaseId,
-        body.paidByTenantId ?? null,
-        body.amount,
-        body.dueDate ?? null,
-        body.paidDate ?? null,
-        body.receivedDate ?? null,
-        body.status ?? 'pending',
-        body.month,
-        body.year,
-        body.paymentMethod ?? null,
-        body.uploadedBy ?? null,
-        body.uploadedAt ?? null,
-        body.notes ?? null,
-        id
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE rent_payments SET
+          lease_id = ?, paid_by_tenant_id = ?, amount = ?, due_date = ?, paid_date = ?,
+          received_date = ?, status = ?, month = ?, year = ?, payment_method = ?,
+          uploaded_by = ?, uploaded_at = ?, notes = ?, updated_at = unixepoch()
+         WHERE id = ?`
       )
-      .run();
+        .bind(
+          body.leaseId,
+          body.paidByTenantId ?? null,
+          body.amount,
+          body.dueDate ?? null,
+          body.paidDate ?? null,
+          body.receivedDate ?? null,
+          body.status ?? 'pending',
+          body.month,
+          body.year,
+          body.paymentMethod ?? null,
+          body.uploadedBy ?? null,
+          body.uploadedAt ?? null,
+          body.notes ?? null,
+          id
+        ),
+      logActivityStmt(env.DB, auth, {
+        module: 'finances',
+        action: 'Updated a rent payment',
+        targetType: 'payments',
+        targetId: id,
+        description: `$${body.amount} for ${body.month}/${body.year}`,
+        previousValues: { amount: before.amount, status: before.status, month: before.month, year: before.year },
+        newValues: { amount: body.amount, status: body.status ?? 'pending', month: body.month, year: body.year },
+      }),
+    ]);
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Payment not found', 404);
@@ -103,7 +117,18 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(payment.receipt_document_id).run();
     }
 
-    await env.DB.prepare('DELETE FROM rent_payments WHERE id = ?').bind(id).run();
+    const paymentInfo = await env.DB.prepare('SELECT amount, month, year, status FROM rent_payments WHERE id = ?')
+      .bind(id).first<{ amount: number; month: number; year: number; status: string }>();
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM rent_payments WHERE id = ?').bind(id),
+      logActivityStmt(env.DB, auth, {
+        module: 'finances',
+        action: 'Deleted a rent payment',
+        targetType: 'payments',
+        targetId: id,
+        description: paymentInfo ? `$${paymentInfo.amount} for ${paymentInfo.month}/${paymentInfo.year}` : undefined,
+      }),
+    ]);
     syncRentSheet(context);
     return jsonOk({ success: true });
   } catch {

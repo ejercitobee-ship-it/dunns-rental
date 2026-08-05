@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTenant } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
+import { logActivityStmt } from '../../lib/activity';
 
 interface EmergencyContact {
   name?: string;
@@ -54,23 +55,33 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // tenant with `WHERE user_id = ?` and takes the first match, so that would
     // have handed whoever it matched an arbitrary tenant's documents.
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO tenants (id, first_name, last_name, email, phone, notes,
-        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        body.firstName,
-        body.lastName,
-        body.email ?? null,
-        body.phone ?? null,
-        body.notes ?? null,
-        ec.name ?? null,
-        ec.phone ?? null,
-        ec.relationship ?? null
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO tenants (id, first_name, last_name, email, phone, notes,
+          emergency_contact_name, emergency_contact_phone, emergency_contact_relationship)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run();
+        .bind(
+          id,
+          body.firstName,
+          body.lastName,
+          body.email ?? null,
+          body.phone ?? null,
+          body.notes ?? null,
+          ec.name ?? null,
+          ec.phone ?? null,
+          ec.relationship ?? null
+        ),
+      logActivityStmt(env.DB, auth, {
+        module: 'tenants',
+        action: 'Created a tenant',
+        targetType: 'tenants',
+        targetId: id,
+        targetName: `${body.firstName} ${body.lastName}`,
+        tenantId: id,
+        newValues: { firstName: body.firstName, lastName: body.lastName, email: body.email, phone: body.phone },
+      }),
+    ]);
 
     const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
     syncRentSheet(context);

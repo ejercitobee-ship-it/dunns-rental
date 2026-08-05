@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { withLeaseDetails, findMissingTenantIds, readLeaseStatus, isValidDateString, leaseEndDate } from './index';
 import { syncRentSheet } from '../../lib/sheets';
 import { logLeaseChange, notifyLeaseStatusChange } from '../../lib/lease-audit';
+import { logActivityStmt } from '../../lib/activity';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -142,6 +143,21 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       );
     }
 
+    statements.push(
+      logActivityStmt(env.DB, auth, {
+        module: 'leases',
+        action: current.status !== status
+          ? (status === 'paused' ? 'Paused a lease' : status === 'ended' ? 'Terminated a lease' : 'Resumed a lease')
+          : 'Updated a lease',
+        targetType: 'leases',
+        targetId: id,
+        propertyId: (body.propertyId as string) || undefined,
+        unitId: (body.unitId as string) || undefined,
+        previousValues: { status: current.status, monthlyRent: current.monthly_rent, startDate: current.start_date, endDate: current.end_date },
+        newValues: { status, monthlyRent: body.monthlyRent, startDate: body.startDate, endDate: body.endDate },
+      })
+    );
+
     await env.DB.batch(statements);
 
     const statusChanged = current.status !== status;
@@ -207,6 +223,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   try {
     const id = params.id as string;
+    const leaseInfo = await env.DB.prepare('SELECT property_id, unit_id, monthly_rent FROM leases WHERE id = ?')
+      .bind(id).first<{ property_id: string | null; unit_id: string | null; monthly_rent: number }>();
     // D1 does not enforce foreign keys by default, so cascade manually.
     // Core tables first, then the lease itself.
     await env.DB.batch([
@@ -215,6 +233,15 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       env.DB.prepare('DELETE FROM lease_pauses WHERE lease_id = ?').bind(id),
       env.DB.prepare('DELETE FROM household_members WHERE lease_id = ?').bind(id),
       env.DB.prepare('DELETE FROM leases WHERE id = ?').bind(id),
+      logActivityStmt(env.DB, auth, {
+        module: 'leases',
+        action: 'Deleted a lease',
+        targetType: 'leases',
+        targetId: id,
+        propertyId: leaseInfo?.property_id || undefined,
+        unitId: leaseInfo?.unit_id || undefined,
+        description: leaseInfo ? `$${leaseInfo.monthly_rent}/mo` : undefined,
+      }),
     ]);
     // Newer tables that may not exist in all environments.
     try { await env.DB.prepare('DELETE FROM lease_audit_log WHERE lease_id = ?').bind(id).run(); } catch { /* table may not exist */ }

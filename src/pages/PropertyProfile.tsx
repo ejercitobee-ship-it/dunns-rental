@@ -13,6 +13,7 @@ import { propertiesApi } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import type { PropertyProfile as ProfileData } from '../types';
 import { PropertyNotes } from '../components/PropertyNotes';
+import { ActivityTimeline } from '../components/ActivityTimeline';
 
 const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Notes', 'Activity'] as const;
 type Tab = typeof tabs[number];
@@ -102,7 +103,7 @@ export function PropertyProfile() {
     </div>
   );
 
-  const { property, units, maintenance, documents, utilityAccounts, auditLog, calendarEvents } = data;
+  const { property, units, maintenance, documents, utilityAccounts, calendarEvents } = data;
 
   const toggleLease = (leaseId: string) => {
     setExpandedLeases(prev => {
@@ -625,48 +626,8 @@ export function PropertyProfile() {
 
       {activeTab === 'Activity' && (
         <Card>
-          <CardContent className="p-5 space-y-4">
-            <h2 className="font-semibold text-ink">Activity Timeline</h2>
-            {auditLog.length === 0 ? (
-              <p className="text-sm text-muted">No activity recorded yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {auditLog.map(entry => (
-                  <div key={entry.id} className="flex gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-ink">{entry.action}</span>
-                        {entry.changedByName && (
-                          <span className="text-xs text-muted">by {entry.changedByName}</span>
-                        )}
-                      </div>
-                      {entry.notes && (
-                        <p className="text-xs text-muted mt-0.5">{entry.notes}</p>
-                      )}
-                      {entry.previousData && entry.newData && (
-                        <div className="mt-1 text-xs text-muted bg-canvas rounded p-2">
-                          {Object.entries(entry.newData).map(([key, val]) => (
-                            <div key={key}>
-                              <span className="font-medium">{key}:</span>{' '}
-                              {entry.previousData?.[key] != null && (
-                                <span className="line-through mr-1">{String(entry.previousData[key])}</span>
-                              )}
-                              <span className="text-ink">{String(val)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-xs text-faint mt-0.5">
-                        {entry.createdAt ? new Date(entry.createdAt * 1000).toLocaleString() : '—'}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <CardContent className="p-5">
+            <ActivityTimeline propertyId={id} title="Activity Timeline" />
           </CardContent>
         </Card>
       )}

@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializePayment } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { generateReceipt } from '../../lib/receipts';
+import { logActivityStmt } from '../../lib/activity';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -47,28 +48,37 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO rent_payments (id, lease_id, paid_by_tenant_id, amount, due_date, paid_date,
-        received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        body.leaseId,
-        body.paidByTenantId ?? null,
-        amount,
-        body.dueDate ?? null,
-        body.paidDate ?? null,
-        body.receivedDate ?? null,
-        body.status ?? 'pending',
-        body.month,
-        body.year,
-        body.paymentMethod ?? null,
-        body.uploadedBy ?? auth.id,
-        body.uploadedAt ?? null,
-        body.notes ?? null
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO rent_payments (id, lease_id, paid_by_tenant_id, amount, due_date, paid_date,
+          received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run();
+        .bind(
+          id,
+          body.leaseId,
+          body.paidByTenantId ?? null,
+          amount,
+          body.dueDate ?? null,
+          body.paidDate ?? null,
+          body.receivedDate ?? null,
+          body.status ?? 'pending',
+          body.month,
+          body.year,
+          body.paymentMethod ?? null,
+          body.uploadedBy ?? auth.id,
+          body.uploadedAt ?? null,
+          body.notes ?? null
+        ),
+      logActivityStmt(env.DB, auth, {
+        module: 'finances',
+        action: 'Recorded a rent payment',
+        targetType: 'payments',
+        targetId: id,
+        description: `$${amount} for ${body.month}/${body.year}`,
+        newValues: { amount, month: body.month, year: body.year, status: body.status ?? 'pending', paymentMethod: body.paymentMethod },
+      }),
+    ]);
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
     // A bulk CSV import posts one row at a time with ?deferSheetSync=1: it skips

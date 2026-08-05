@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, serverError } from '../../lib/session';
 import { serializeProperty } from '../../lib/serializers';
+import { logActivityStmt } from '../../lib/activity';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -29,11 +30,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, purchase_date, purchase_price, land_value, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO properties (id, name, address, city, state, zip_code, type, description, purchase_date, purchase_price, land_value, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
         id,
         body.name,
         body.address,
@@ -46,8 +47,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.purchasePrice ?? null,
         body.landValue ?? null,
         auth.id
-      )
-      .run();
+      ),
+      logActivityStmt(env.DB, auth, {
+        module: 'properties',
+        action: 'Created a property',
+        targetType: 'properties',
+        targetId: id,
+        targetName: String(body.name),
+        propertyId: id,
+        newValues: { name: body.name, address: body.address, city: body.city, state: body.state, type: body.type || 'house' },
+      }),
+    ]);
 
     const row = await env.DB.prepare('SELECT * FROM properties WHERE id = ?').bind(id).first();
     return jsonOk({ success: true, data: serializeProperty(row as Record<string, unknown>) }, 201);

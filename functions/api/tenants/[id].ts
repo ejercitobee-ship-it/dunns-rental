@@ -4,6 +4,7 @@ import { serializeTenant } from '../../lib/serializers';
 import { deleteUserStatements } from '../../lib/users';
 import { soleOccupantLeaseIds, tenantWipeStatements } from '../../lib/tenants';
 import { syncRentSheet } from '../../lib/sheets';
+import { logActivityStmt } from '../../lib/activity';
 
 interface EmergencyContact {
   name?: string;
@@ -34,13 +35,13 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
   try {
     const id = params.id as string;
+    const before = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first<Record<string, unknown>>();
+    if (!before) return jsonError('Tenant not found', 404);
+
     const body = (await request.json()) as Record<string, unknown>;
     const ec = (body.emergencyContact as EmergencyContact) || {};
     const newEmail = (typeof body.email === 'string' && body.email.trim()) ? body.email.trim() : null;
 
-    // Keep the tenant's portal LOGIN email in sync with their profile email, so
-    // changing it here means they both receive AND sign in with the new address
-    // (the password lives in `account` keyed by user_id, so it is unaffected).
     const linked = await env.DB.prepare('SELECT user_id FROM tenants WHERE id = ?')
       .bind(id).first<{ user_id: string | null }>();
     if (linked?.user_id && newEmail) {
@@ -74,6 +75,20 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         .bind(newEmail, Math.floor(Date.now() / 1000), linked.user_id).run();
     }
 
+    // Log the change with before/after values.
+    context.waitUntil(
+      logActivityStmt(env.DB, auth, {
+        module: 'tenants',
+        action: 'Updated a tenant',
+        targetType: 'tenants',
+        targetId: id,
+        targetName: `${body.firstName} ${body.lastName}`,
+        tenantId: id,
+        previousValues: { firstName: before.first_name, lastName: before.last_name, email: before.email, phone: before.phone },
+        newValues: { firstName: body.firstName, lastName: body.lastName, email: body.email, phone: body.phone },
+      }).run().catch(() => {})
+    );
+
     const row = await env.DB.prepare('SELECT t.*, u.last_login_at AS last_login_at FROM tenants t LEFT JOIN user u ON u.id = t.user_id WHERE t.id = ?').bind(id).first();
     if (!row) return jsonError('Tenant not found', 404);
     syncRentSheet(context);
@@ -90,9 +105,9 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   try {
     const id = params.id as string;
-    const tenant = await env.DB.prepare('SELECT user_id FROM tenants WHERE id = ?')
+    const tenant = await env.DB.prepare('SELECT user_id, first_name, last_name FROM tenants WHERE id = ?')
       .bind(id)
-      .first<{ user_id: string | null }>();
+      .first<{ user_id: string | null; first_name: string; last_name: string }>();
     if (!tenant) return jsonError('Tenant not found', 404);
 
     let statements: D1PreparedStatement[];
@@ -116,6 +131,16 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       statements = [env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id)];
       if (tenant.user_id) statements.push(...deleteUserStatements(env, tenant.user_id));
     }
+    statements.push(
+      logActivityStmt(env.DB, auth, {
+        module: 'tenants',
+        action: 'Deleted a tenant',
+        targetType: 'tenants',
+        targetId: id,
+        targetName: `${tenant.first_name} ${tenant.last_name}`,
+        tenantId: id,
+      })
+    );
     await env.DB.batch(statements);
 
     syncRentSheet(context);

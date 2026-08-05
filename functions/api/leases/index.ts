@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeLease } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
+import { logActivityStmt } from '../../lib/activity';
 
 /**
  * Attach the tenant ids and pause intervals on each lease, in two extra
@@ -181,6 +182,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             ).bind(crypto.randomUUID(), id, body.pausedAt),
           ]
         : []),
+      logActivityStmt(env.DB, auth, {
+        module: 'leases',
+        action: 'Created a lease',
+        targetType: 'leases',
+        targetId: id,
+        propertyId: (body.propertyId as string) || unit.property_id || undefined,
+        unitId: body.unitId as string,
+        description: `$${body.monthlyRent}/mo`,
+        newValues: { monthlyRent: body.monthlyRent, startDate: body.startDate, endDate: body.endDate, status },
+      }),
     ];
     await env.DB.batch(statements);
 

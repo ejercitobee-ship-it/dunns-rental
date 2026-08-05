@@ -22,6 +22,7 @@ import {
 import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod, LeaseAuditEntry, LeaseNotification } from '../types';
+import { ActivityTimeline } from '../components/ActivityTimeline';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -1738,6 +1739,15 @@ export function TenantDetail() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Activity Timeline */}
+      {id && (
+        <Card>
+          <CardContent className="p-5">
+            <ActivityTimeline tenantId={id} title="Activity Timeline" />
           </CardContent>
         </Card>
       )}

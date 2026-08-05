@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeExpense } from '../../lib/serializers';
+import { logActivityStmt } from '../../lib/activity';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -33,25 +34,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, recurring_frequency, interest_amount, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        body.propertyId ?? null,
-        body.unitId ?? null,
-        body.category,
-        body.amount,
-        body.date,
-        body.description,
-        body.vendor ?? null,
-        body.isRecurring ? 1 : 0,
-        body.recurringFrequency ?? null,
-        body.interestAmount ?? null,
-        auth.id
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, recurring_frequency, interest_amount, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run();
+        .bind(
+          id,
+          body.propertyId ?? null,
+          body.unitId ?? null,
+          body.category,
+          body.amount,
+          body.date,
+          body.description,
+          body.vendor ?? null,
+          body.isRecurring ? 1 : 0,
+          body.recurringFrequency ?? null,
+          body.interestAmount ?? null,
+          auth.id
+        ),
+      logActivityStmt(env.DB, auth, {
+        module: 'finances',
+        action: 'Created an expense',
+        targetType: 'expenses',
+        targetId: id,
+        targetName: String(body.description),
+        propertyId: (body.propertyId as string) || undefined,
+        unitId: (body.unitId as string) || undefined,
+        newValues: { category: body.category, amount: body.amount, date: body.date, description: body.description, vendor: body.vendor },
+      }),
+    ]);
 
     const row = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
     return jsonOk({ success: true, data: serializeExpense(row as Record<string, unknown>) }, 201);

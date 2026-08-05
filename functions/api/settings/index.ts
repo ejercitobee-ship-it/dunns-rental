@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, serverError } from '../../lib/session';
+import { logActivityAsync } from '../../lib/activity';
 
 // Default settings returned when nothing has been saved yet. Keys mirror the
 // shapes the Settings page expects.
@@ -100,6 +101,16 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         .bind(key, JSON.stringify(merged), now)
         .run();
     }
+
+    const changedKeys = KEYS.filter(k => body[k] !== undefined);
+    context.waitUntil(
+      logActivityAsync(env, auth, {
+        module: 'settings',
+        action: 'Updated settings',
+        targetType: 'settings',
+        description: `Updated: ${changedKeys.join(', ')}`,
+      }).catch(() => {})
+    );
 
     return jsonOk({ success: true, data: await loadAll(env) });
   } catch {

@@ -921,17 +921,57 @@ export interface ActivityEntry {
   userId?: string;
   userName?: string;
   userRole?: string;
+  module?: string;
   action: string;
+  description?: string;
   targetType?: string;
   targetId?: string;
+  targetName?: string;
+  propertyId?: string;
+  unitId?: string;
+  tenantId?: string;
+  previousValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
   method: string;
   statusCode?: number;
   createdAt: number;
 }
 
+export interface ActivityFilter {
+  limit?: number;
+  offset?: number;
+  module?: string;
+  userId?: string;
+  propertyId?: string;
+  tenantId?: string;
+  targetType?: string;
+  targetId?: string;
+  search?: string;
+  dateFrom?: number;
+  dateTo?: number;
+}
+
+export interface ActivityResponse {
+  data: ActivityEntry[];
+  total: number;
+}
+
 export const activityApi = {
-  list: (limit = 100, offset = 0): Promise<ActivityEntry[]> =>
-    apiRequest(`/activity?limit=${limit}&offset=${offset}`),
+  list: (filter: ActivityFilter = {}): Promise<ActivityResponse> => {
+    const params = new URLSearchParams();
+    if (filter.limit) params.set('limit', String(filter.limit));
+    if (filter.offset) params.set('offset', String(filter.offset));
+    if (filter.module) params.set('module', filter.module);
+    if (filter.userId) params.set('userId', filter.userId);
+    if (filter.propertyId) params.set('propertyId', filter.propertyId);
+    if (filter.tenantId) params.set('tenantId', filter.tenantId);
+    if (filter.targetType) params.set('targetType', filter.targetType);
+    if (filter.targetId) params.set('targetId', filter.targetId);
+    if (filter.search) params.set('search', filter.search);
+    if (filter.dateFrom) params.set('dateFrom', String(filter.dateFrom));
+    if (filter.dateTo) params.set('dateTo', String(filter.dateTo));
+    return apiRequest(`/activity?${params.toString()}`);
+  },
 };
 
 export const handymenApi = {
