@@ -16,6 +16,13 @@ import { PropertyNotes } from '../components/PropertyNotes';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 
 const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Notes', 'Activity'] as const;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  maintenance: 'Maintenance', utilities: 'Utilities', insurance: 'Insurance',
+  taxes: 'Taxes', mortgage: 'Mortgage', hoa: 'HOA', repairs: 'Repairs',
+  cleaning: 'Cleaning', landscaping: 'Landscaping', management: 'Management',
+  realtor_commission: 'Realtor Commission', other: 'Other',
+};
 type Tab = typeof tabs[number];
 
 const maintenanceStatusBadge: Record<string, 'success' | 'warning' | 'secondary' | 'destructive'> = {
@@ -82,6 +89,21 @@ export function PropertyProfile() {
     if (!data) return [];
     return data.rentPayments.filter(rp => String(rp.year) === financialYear && rp.status === 'paid');
   }, [data, financialYear]);
+
+  /** Expense breakdown by category for the selected year. */
+  const categoryBreakdown = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const e of yearExpenses) {
+      totals[e.category] = (totals[e.category] || 0) + e.amount;
+    }
+    return Object.entries(totals)
+      .map(([cat, total]) => ({ category: cat, label: CATEGORY_LABELS[cat] || cat, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [yearExpenses]);
+
+  /** HOA expenses for the selected year. */
+  const hoaExpenses = useMemo(() => yearExpenses.filter(e => e.category === 'hoa'), [yearExpenses]);
+  const hoaTotal = useMemo(() => hoaExpenses.reduce((sum, e) => sum + e.amount, 0), [hoaExpenses]);
 
   const totalMonthlyRent = useMemo(() => {
     return activeLeases.reduce((sum, l) => sum + (l.monthlyRent || 0), 0);
@@ -267,7 +289,7 @@ export function PropertyProfile() {
                         {ev.startDate && <div className="text-xs text-muted">{formatDate(ev.startDate)}</div>}
                       </div>
                       {ev.category && (
-                        <Badge variant="secondary">{ev.category.replace(/_/g, ' ')}</Badge>
+                        <Badge variant="secondary">{ev.category === 'hoa' ? 'HOA' : ev.category.replace(/_/g, ' ')}</Badge>
                       )}
                     </div>
                   ))}
@@ -359,6 +381,80 @@ export function PropertyProfile() {
             </Card>
           )}
 
+          {/* Expense Breakdown by Category */}
+          {categoryBreakdown.length > 0 && (
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <h2 className="font-semibold text-ink">Operating Expenses ({financialYear})</h2>
+                <div className="space-y-2">
+                  {categoryBreakdown.map(({ category, label, total }) => {
+                    const totalExpenses = data.financialSummary[financialYear]?.expenses || 1;
+                    const pct = totalExpenses > 0 ? Math.round((total / totalExpenses) * 100) : 0;
+                    return (
+                      <div key={category} className="flex items-center gap-3">
+                        <div className="w-32 text-sm font-medium text-ink truncate">{label}</div>
+                        <div className="flex-1 bg-canvas rounded-full h-3 overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="w-24 text-right text-sm tnum font-medium text-ink">{formatCurrency(total)}</div>
+                        <div className="w-10 text-right text-xs text-muted tnum">{pct}%</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* HOA Summary */}
+          {hoaExpenses.length > 0 && (
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <h2 className="font-semibold text-ink flex items-center gap-2">
+                  <Home className="h-4 w-4 text-faint" /> HOA Dues ({financialYear})
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <div>
+                    <p className="eyebrow mb-1">Annual Total</p>
+                    <p className="text-lg font-bold font-display text-danger tnum">{formatCurrency(hoaTotal)}</p>
+                  </div>
+                  <div>
+                    <p className="eyebrow mb-1">Monthly Average</p>
+                    <p className="text-lg font-bold font-display text-ink tnum">
+                      {formatCurrency(hoaTotal / (hoaExpenses.length > 0 ? hoaExpenses.length : 1))}
+                    </p>
+                    <p className="text-xs text-muted">{hoaExpenses.length} payment{hoaExpenses.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line">
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
+                        <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hoaExpenses.map(e => (
+                        <tr key={e.id} className="border-b border-line last:border-0">
+                          <td className="py-2 px-3">{formatDate(e.date)}</td>
+                          <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
+                          <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
+                          <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Rent payments for selected year */}
           <Card>
             <CardContent className="p-5 space-y-4">
@@ -416,7 +512,7 @@ export function PropertyProfile() {
                       {yearExpenses.map(e => (
                         <tr key={e.id} className="border-b border-line last:border-0">
                           <td className="py-2 px-3">{formatDate(e.date)}</td>
-                          <td className="py-2 px-3 capitalize">{e.category.replace(/_/g, ' ')}</td>
+                          <td className="py-2 px-3">{CATEGORY_LABELS[e.category] || e.category.replace(/_/g, ' ')}</td>
                           <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
                           <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
                           <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>

@@ -78,6 +78,7 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   supplies: { label: 'Supplies', description: 'Office and maintenance supplies' },
   taxes: { label: 'Taxes', description: 'Property and real estate taxes' },
   utilities: { label: 'Utilities', description: 'Electric, water, gas, etc.' },
+  hoa: { label: 'HOA Dues', description: 'Homeowners association fees and assessments' },
   depreciation: { label: 'Depreciation', description: 'Property depreciation' },
   other: { label: 'Other', description: 'Other deductible expenses' },
 };
@@ -90,7 +91,7 @@ function mapToTaxCategory(expenseCategory: string): string {
     insurance: 'insurance',
     taxes: 'taxes',
     mortgage: 'mortgage_interest',
-    hoa: 'other',
+    hoa: 'hoa',
     repairs: 'repairs',
     cleaning: 'cleaning_maintenance',
     landscaping: 'cleaning_maintenance',
