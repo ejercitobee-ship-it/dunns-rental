@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail } from '../types';
 
 const API_BASE = '/api';
 
@@ -987,6 +987,33 @@ export const vendorMessagesApi = {
     postMessageForm(`/handyman-messages/${handymanId}`, body, file),
 };
 
+export const expenseImportApi = {
+  list: (): Promise<ExpenseImport[]> => apiRequest('/expense-imports'),
+  upload: async (file: File): Promise<{ id: string; fileName: string; totalRows: number; validRows: number; errorRows: number; duplicateRows: number; columnMapping: Record<string, string> }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/expense-imports`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    return json.data ?? json;
+  },
+  get: (id: string): Promise<ExpenseImportDetail> => apiRequest(`/expense-imports/${id}`),
+  delete: (id: string): Promise<void> => apiRequest(`/expense-imports/${id}`, { method: 'DELETE' }),
+  updateRows: (importId: string, rows: Array<{ id: string; [k: string]: unknown }>): Promise<{ updatedCount: number }> =>
+    apiRequest(`/expense-imports/${importId}/rows`, { method: 'PUT', body: JSON.stringify({ rows }) }),
+  merge: (id: string): Promise<{ mergedRows: number }> =>
+    apiRequest(`/expense-imports/${id}/merge`, { method: 'POST' }),
+  rollback: (id: string): Promise<{ removedExpenses: number }> =>
+    apiRequest(`/expense-imports/${id}/rollback`, { method: 'POST' }),
+};
+
 export const calendarApi = {
   list: (): Promise<CalendarEvent[]> => apiRequest('/calendar'),
   get: (id: string): Promise<CalendarEvent> => apiRequest(`/calendar/${id}`),
@@ -995,4 +1022,35 @@ export const calendarApi = {
   update: (id: string, event: Partial<CalendarEvent>): Promise<CalendarEvent> =>
     apiRequest(`/calendar/${id}`, { method: 'PUT', body: JSON.stringify(event) }),
   delete: (id: string): Promise<void> => apiRequest(`/calendar/${id}`, { method: 'DELETE' }),
+};
+
+// ---------------------------------------------------------------------------
+// Capital Expense Projects
+// ---------------------------------------------------------------------------
+
+export const capitalProjectsApi = {
+  list: (): Promise<CapitalProject[]> => apiRequest('/capital-projects'),
+  get: (id: string): Promise<CapitalProjectDetail> => apiRequest(`/capital-projects/${id}`),
+  create: (data: Partial<CapitalProject>): Promise<CapitalProject> =>
+    apiRequest('/capital-projects', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<CapitalProject>): Promise<CapitalProject> =>
+    apiRequest(`/capital-projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string): Promise<void> =>
+    apiRequest(`/capital-projects/${id}`, { method: 'DELETE' }),
+  linkExpenses: (id: string, expenseIds: string[]): Promise<{ linked: number; totalCost: number; expenseCount: number }> =>
+    apiRequest(`/capital-projects/${id}/expenses`, { method: 'POST', body: JSON.stringify({ expenseIds }) }),
+  unlinkExpenses: (id: string, expenseIds: string[]): Promise<{ unlinked: number }> =>
+    apiRequest(`/capital-projects/${id}/expenses`, { method: 'DELETE', body: JSON.stringify({ expenseIds }) }),
+  uploadReceipt: async (id: string, file: File): Promise<{ driveFileId: string; name: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/capital-projects/${id}/receipt`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    const json = await res.json() as { success?: boolean; error?: string; data?: { driveFileId: string; name: string } };
+    if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed');
+    return json.data!;
+  },
 };

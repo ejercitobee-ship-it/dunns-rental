@@ -182,6 +182,8 @@ export interface Expense {
   /** For a mortgage expense: the deductible interest portion of the payment.
    * The remainder (principal) is not tax-deductible. */
   interestAmount?: number;
+  /** When this expense belongs to a capital improvement project. */
+  capitalProjectId?: string;
 }
 
 export type TaxDeductibleCategory =
@@ -514,4 +516,96 @@ export interface PropertyNote {
   updatedBy?: string;
   updatedByName?: string;
   attachments: NoteAttachment[];
+}
+
+// ---------------------------------------------------------------------------
+// Expense Import (staging)
+// ---------------------------------------------------------------------------
+
+export type ImportStatus = 'staged' | 'validated' | 'merged' | 'rolled_back';
+export type ImportRowStatus = 'pending' | 'valid' | 'error' | 'duplicate' | 'skipped';
+
+export interface ExpenseImport {
+  id: string;
+  fileName: string;
+  fileDriveId?: string;
+  uploadedBy: string;
+  uploadedByName?: string;
+  uploadedAt: number;
+  status: ImportStatus;
+  totalRows: number;
+  validRows: number;
+  errorRows: number;
+  duplicateRows: number;
+  mergedRows: number;
+  mergedAt?: number;
+  mergedByName?: string;
+  rolledBackAt?: number;
+  rolledBackByName?: string;
+  notes?: string;
+}
+
+export interface ImportRowError {
+  field: string;
+  message: string;
+}
+
+export interface ExpenseImportRow {
+  id: string;
+  importId: string;
+  rowNumber: number;
+  originalData: Record<string, string>;
+  propertyId?: string;
+  propertyName?: string;
+  unitId?: string;
+  unitName?: string;
+  category?: string;
+  amount?: number;
+  date?: string;
+  description?: string;
+  vendor?: string;
+  notes?: string;
+  taxCategory?: string;
+  taxDeductible: boolean;
+  isRecurring: boolean;
+  recurringFrequency?: string;
+  interestAmount?: number;
+  status: ImportRowStatus;
+  errors: ImportRowError[];
+  createdExpenseId?: string;
+  edited: boolean;
+}
+
+export interface ExpenseImportDetail extends ExpenseImport {
+  rows: ExpenseImportRow[];
+}
+
+// ---------------------------------------------------------------------------
+// Capital Expense Projects
+// ---------------------------------------------------------------------------
+
+export type CapitalProjectStatus = 'in_progress' | 'completed' | 'cancelled';
+
+export interface CapitalProject {
+  id: string;
+  name: string;
+  propertyId: string;
+  unitId?: string;
+  description?: string;
+  status: CapitalProjectStatus;
+  startDate?: string;
+  completionDate?: string;
+  budget?: number;
+  driveFolderId?: string;
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Rolled-up total of all linked expenses (server-computed). */
+  totalCost: number;
+  /** Count of linked expenses (server-computed). */
+  expenseCount: number;
+}
+
+export interface CapitalProjectDetail extends CapitalProject {
+  expenses: Expense[];
 }

@@ -202,6 +202,27 @@ export function serializeExpense(r: Row) {
     interestAmount: r.interest_amount ?? undefined,
     // Receipt image (served from Drive via the photo route), null when none.
     receiptUrl: r.receipt_drive_id ? `/api/photo/${r.receipt_drive_id}` : null,
+    capitalProjectId: r.capital_project_id ?? undefined,
+  };
+}
+
+export function serializeCapitalProject(r: Row, totalCost = 0, expenseCount = 0) {
+  return {
+    id: r.id,
+    name: r.name,
+    propertyId: r.property_id,
+    unitId: r.unit_id ?? undefined,
+    description: r.description ?? undefined,
+    status: r.status,
+    startDate: r.start_date ?? undefined,
+    completionDate: r.completion_date ?? undefined,
+    budget: r.budget ?? undefined,
+    driveFolderId: r.drive_folder_id ?? undefined,
+    createdBy: r.created_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    totalCost,
+    expenseCount,
   };
 }
 

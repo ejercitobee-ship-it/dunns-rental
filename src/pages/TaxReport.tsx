@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileText, Download, Calculator, TrendingDown, TrendingUp,
   DollarSign, Home, Percent, AlertCircle, ChevronDown, ChevronRight
@@ -9,6 +9,8 @@ import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
+import { capitalProjectsApi } from '../lib/api';
+import type { CapitalProject } from '../types';
 import {
   depreciationForYear,
   accumulatedDepreciation,
@@ -45,6 +47,8 @@ interface CapitalItem {
   categoryLabel: string;
   description?: string;
   propertyName?: string;
+  capitalProjectId?: string;
+  capitalProjectName?: string;
 }
 
 interface DepreciationRow {
@@ -110,6 +114,12 @@ export function TaxReport() {
   const [cQuarter, setCQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
   const [cMonth, setCMonth] = useState(now.getMonth() + 1);
   const [drilldown, setDrilldown] = useState<string | null>(null);
+
+  // Capital projects lookup
+  const [capitalProjects, setCapitalProjects] = useState<CapitalProject[]>([]);
+  useEffect(() => {
+    capitalProjectsApi.list().then(setCapitalProjects).catch(() => {});
+  }, []);
   const [drilldownProp, setDrilldownProp] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
@@ -199,6 +209,7 @@ export function TaxReport() {
           // be capitalized and depreciated over its useful life. Track it
           // separately for reference but do NOT add it to totalDeductibleExpenses.
           capitalExpenses += e.amount;
+          const proj = e.capitalProjectId ? capitalProjects.find(cp => cp.id === e.capitalProjectId) : undefined;
           capitalItems.push({
             id: e.id,
             date: e.date,
@@ -206,6 +217,8 @@ export function TaxReport() {
             categoryLabel: TAX_CATEGORIES[taxCat]?.label || taxCat,
             description: e.description,
             propertyName: e.propertyId ? propertyNameById.get(e.propertyId) : undefined,
+            capitalProjectId: e.capitalProjectId,
+            capitalProjectName: proj?.name,
           });
         } else {
           expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + deductible;
@@ -274,7 +287,8 @@ export function TaxReport() {
     });
 
     return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
-  }, [expenses, incomes, properties, rentPayments, leases]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses, incomes, properties, rentPayments, leases, capitalProjects]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
   const comp = useMemo(() => (compare ? periodData(cYear, monthsFor(scope, cQuarter, cMonth)) : null), [compare, periodData, cYear, scope, cQuarter, cMonth]);
@@ -775,32 +789,72 @@ export function TaxReport() {
             </div>
           </div>
 
-          {main.capitalItems.length > 0 && (
-            <div className="mt-5 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-2.5 px-4 font-medium">Date</th>
-                    <th className="text-left py-2.5 px-4 font-medium">Category</th>
-                    <th className="text-left py-2.5 px-4 font-medium">Item</th>
-                    <th className="text-left py-2.5 px-4 font-medium">Property</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {main.capitalItems.map(item => (
-                    <tr key={item.id} className="border-b border-line last:border-0">
-                      <td className="py-2.5 px-4 whitespace-nowrap">{formatDate(item.date)}</td>
-                      <td className="py-2.5 px-4">{item.categoryLabel}</td>
-                      <td className="py-2.5 px-4 text-muted">{item.description || '—'}</td>
-                      <td className="py-2.5 px-4 text-muted">{item.propertyName || '—'}</td>
-                      <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(item.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {main.capitalItems.length > 0 && (() => {
+            // Group items by capital project (null = standalone)
+            const projectGroups = new Map<string | null, { name: string; items: typeof main.capitalItems; total: number }>();
+            for (const item of main.capitalItems) {
+              const key = item.capitalProjectId || null;
+              if (!projectGroups.has(key)) {
+                projectGroups.set(key, {
+                  name: item.capitalProjectName || 'Individual Capital Expenses',
+                  items: [],
+                  total: 0,
+                });
+              }
+              const g = projectGroups.get(key)!;
+              g.items.push(item);
+              g.total += item.amount;
+            }
+            // Projects first, standalone last
+            const groups = [...projectGroups.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || b[1].total - a[1].total);
+
+            return (
+              <div className="mt-5 space-y-4">
+                {groups.map(([key, group]) => (
+                  <div key={key || '__standalone'}>
+                    {key && (
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="font-medium text-ink">{group.name}</span>
+                        <span className="font-semibold tnum">{formatCurrency(group.total)}</span>
+                      </div>
+                    )}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-line bg-canvas">
+                            <th className="text-left py-2.5 px-4 font-medium">Date</th>
+                            <th className="text-left py-2.5 px-4 font-medium">Category</th>
+                            <th className="text-left py-2.5 px-4 font-medium">Item</th>
+                            <th className="text-left py-2.5 px-4 font-medium">Property</th>
+                            <th className="text-right py-2.5 px-4 font-medium">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.items.map(item => (
+                            <tr key={item.id} className="border-b border-line last:border-0">
+                              <td className="py-2.5 px-4 whitespace-nowrap">{formatDate(item.date)}</td>
+                              <td className="py-2.5 px-4">{item.categoryLabel}</td>
+                              <td className="py-2.5 px-4 text-muted">{item.description || '—'}</td>
+                              <td className="py-2.5 px-4 text-muted">{item.propertyName || '—'}</td>
+                              <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(item.amount)}</td>
+                            </tr>
+                          ))}
+                          {group.items.length > 1 && (
+                            <tr className="bg-canvas font-semibold">
+                              <td colSpan={4} className="py-2 px-4 text-right text-xs text-muted uppercase">
+                                {key ? 'Project Total' : 'Subtotal'}
+                              </td>
+                              <td className="py-2 px-4 text-right tnum">{formatCurrency(group.total)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </CardContent>}
       </Card>
 

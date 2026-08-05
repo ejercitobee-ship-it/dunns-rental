@@ -26,6 +26,8 @@ const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Rep
 const Expenses = lazy(() => import('./pages/Expenses').then(m => ({ default: m.Expenses })));
 const TaxReport = lazy(() => import('./pages/TaxReport').then(m => ({ default: m.TaxReport })));
 const DataMigration = lazy(() => import('./pages/DataMigration').then(m => ({ default: m.DataMigration })));
+const ExpenseImport = lazy(() => import('./pages/ExpenseImport').then(m => ({ default: m.ExpenseImportPage })));
+const CapitalProjects = lazy(() => import('./pages/CapitalProjects').then(m => ({ default: m.CapitalProjects })));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
 const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
@@ -312,6 +314,18 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/capital-projects" element={
+        <ProtectedRoute requiredPermission="finances_view">
+          <Layout><CapitalProjects /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/expense-imports" element={
+        <ProtectedRoute requiredPermission="settings_edit">
+          <Layout><ExpenseImport /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/data-migration" element={
         <ProtectedRoute requiredPermission="settings_edit">
           <Layout><DataMigration /></Layout>
