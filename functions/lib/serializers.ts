@@ -268,6 +268,18 @@ export function serializeMaintenance(r: Row) {
     completionPhotoUrl: r.completion_photo_drive_id ? `/api/photo/${r.completion_photo_drive_id}` : null,
     workReportDriveId: r.work_report_drive_id ?? undefined,
     workReportUrl: r.work_report_drive_id ? `/api/documents/download/${r.work_report_drive_id}` : null,
+    // Invoice workflow fields.
+    invoiceNumber: r.invoice_number ?? undefined,
+    invoiceDate: r.invoice_date ?? undefined,
+    invoiceLaborAmount: r.invoice_labor_amount ?? undefined,
+    invoiceMaterialAmount: r.invoice_material_amount ?? undefined,
+    invoiceTotalAmount: r.invoice_total_amount ?? undefined,
+    invoiceNotes: r.invoice_notes ?? undefined,
+    invoiceDriveIds: parseJsonArray<{ id: string; name: string; contentType: string }>(r.invoice_drive_ids),
+    invoiceSubmittedAt: r.invoice_submitted_at ?? undefined,
+    invoiceApprovedAt: r.invoice_approved_at ?? undefined,
+    invoiceApprovedBy: r.invoice_approved_by ?? undefined,
+    invoiceRejectionReason: r.invoice_rejection_reason ?? undefined,
   };
 }
 

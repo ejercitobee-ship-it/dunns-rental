@@ -2,6 +2,8 @@
 // React app's src/lib/maintenance.ts because the functions build has its own
 // tsconfig and cannot import from src.
 
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+
 export const MAINTENANCE_TRADES = [
   'plumbing',
   'electrical',
@@ -18,6 +20,10 @@ export const MAINTENANCE_STATUSES = [
   'scheduled',
   'in_progress',
   'completed',
+  // Invoice workflow statuses (after admin approves completed work).
+  'approved_for_invoicing',
+  'invoice_submitted',
+  'invoice_approved',
   'paid',
   'cancelled',
 ] as const;
@@ -33,6 +39,22 @@ export type MaintenanceStatus = (typeof MAINTENANCE_STATUSES)[number];
  */
 export function maintenanceExpenseId(requestId: string): string {
   return `maint-${requestId}`;
+}
+
+/** Log a status transition to maintenance_status_log. Best-effort; never blocks the caller. */
+export function logStatusChange(
+  db: D1Database,
+  requestId: string,
+  fromStatus: string | null,
+  toStatus: string,
+  userId?: string | null,
+  userName?: string | null,
+  notes?: string | null
+): D1PreparedStatement {
+  return db.prepare(
+    `INSERT INTO maintenance_status_log (id, request_id, from_status, to_status, changed_by_id, changed_by_name, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).bind(crypto.randomUUID(), requestId, fromStatus, toStatus, userId ?? null, userName ?? null, notes ?? null);
 }
 
 /**

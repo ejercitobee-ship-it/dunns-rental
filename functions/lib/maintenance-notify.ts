@@ -153,3 +153,27 @@ export async function notifyOffice(env: Env, heading: string, rows: [string, str
     text: textBlock(c.companyName, heading, rows),
   });
 }
+
+/**
+ * Email a handyman by their handyman record id. Best-effort. The optional CTA
+ * sends them straight to the portal so they can act on the notification.
+ */
+export async function notifyHandyman(
+  env: Env,
+  handymanId: string,
+  heading: string,
+  rows: [string, string][],
+  cta?: { url: string; label: string }
+): Promise<void> {
+  const h = await env.DB.prepare('SELECT email FROM handymen WHERE id = ?')
+    .bind(handymanId)
+    .first<{ email: string | null }>();
+  if (!h?.email) return;
+  const c = await companySettings(env);
+  await sendEmail(env, {
+    to: h.email,
+    subject: heading,
+    html: shell(c.companyName, heading, rows, cta),
+    text: textBlock(c.companyName, heading, rows, cta?.url),
+  });
+}

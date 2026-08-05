@@ -7,6 +7,9 @@ export const STATUS_LABEL: Record<MaintenanceStatus, string> = {
   scheduled: 'Scheduled',
   in_progress: 'In progress',
   completed: 'Completed',
+  approved_for_invoicing: 'Awaiting invoice',
+  invoice_submitted: 'Invoice submitted',
+  invoice_approved: 'Invoice approved',
   paid: 'Paid',
   cancelled: 'Cancelled',
 };
@@ -19,6 +22,9 @@ export const STATUS_BADGE: Record<MaintenanceStatus, BadgeVariant> = {
   scheduled: 'default',
   in_progress: 'default',
   completed: 'success',
+  approved_for_invoicing: 'warning',
+  invoice_submitted: 'default',
+  invoice_approved: 'success',
   paid: 'success',
   cancelled: 'secondary',
 };
@@ -39,9 +45,9 @@ export function tradeLabel(slug?: string): string {
   return TRADE_LABEL[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1);
 }
 
-/** Statuses that are still open work (not paid or cancelled). */
+/** Statuses that are still open work (not paid, invoice_approved, or cancelled). */
 export function isActiveStatus(status: MaintenanceStatus): boolean {
-  return status !== 'paid' && status !== 'cancelled';
+  return status !== 'paid' && status !== 'invoice_approved' && status !== 'cancelled';
 }
 
 /**
@@ -53,6 +59,9 @@ export function approvalBadge(
   m: { needsApproval?: boolean; approvedAt?: string; status: MaintenanceStatus }
 ): { label: string; variant: BadgeVariant } | null {
   if (m.status === 'paid') return { label: 'Paid', variant: 'success' };
+  if (m.status === 'invoice_approved') return { label: 'Invoice approved', variant: 'success' };
+  if (m.status === 'invoice_submitted') return { label: 'Invoice submitted', variant: 'default' };
+  if (m.status === 'approved_for_invoicing') return { label: 'Awaiting invoice', variant: 'warning' };
   if (m.needsApproval) return { label: 'Pending approval', variant: 'warning' };
   if (m.approvedAt) return { label: 'Approved', variant: 'default' };
   return null;

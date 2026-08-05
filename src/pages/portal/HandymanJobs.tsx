@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Wrench, MapPin, User, Phone, Calendar, Clock, CheckCircle2, Plus } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Wrench, MapPin, User, Phone, Calendar, Clock, CheckCircle2, Plus, Upload, FileText, X } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -7,12 +7,20 @@ import { Modal } from '../../components/ui/Modal';
 import { portalApi, type PortalMaintenanceRequest, type HandymanJobsResponse } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { STATUS_BADGE, STATUS_LABEL, tradeLabel, approvalBadge } from '../../lib/maintenance';
-import { formatDate, todayLocalDate } from '../../lib/utils';
+import { formatDate, formatCurrency, todayLocalDate } from '../../lib/utils';
 import { MAINTENANCE_TRADES } from '../../types';
 import { HandymanProfileCard } from '../../components/HandymanProfileCard';
 
 type Places = { properties: { id: string; name: string; address: string }[]; units: { id: string; propertyId: string; unitNumber: string }[] };
 const emptyReport = { propertyId: '', unitId: '', title: '', description: '', category: 'general', cost: '', date: todayLocalDate() };
+
+const emptyInvoice = {
+  invoiceNumber: '',
+  invoiceDate: todayLocalDate(),
+  laborAmount: '',
+  materialAmount: '',
+  notes: '',
+};
 
 function formatSchedule(s?: string): string {
   if (!s) return '';
@@ -37,6 +45,7 @@ function JobCard({
   onSchedule,
   onStart,
   onComplete,
+  onUploadInvoice,
 }: {
   job: PortalMaintenanceRequest;
   mine: boolean;
@@ -45,6 +54,7 @@ function JobCard({
   onSchedule: (when: string) => void;
   onStart: () => void;
   onComplete: () => void;
+  onUploadInvoice: () => void;
 }) {
   const [when, setWhen] = useState('');
   return (
@@ -101,6 +111,27 @@ function JobCard({
           </div>
         )}
 
+        {/* Invoice rejection feedback */}
+        {mine && job.status === 'approved_for_invoicing' && job.invoiceRejectionReason && (
+          <div className="mt-3 rounded-lg border border-warning-line bg-warning-soft p-3">
+            <p className="text-xs font-medium text-warning-ink">Revision requested</p>
+            <p className="text-xs text-warning-ink mt-1">{job.invoiceRejectionReason}</p>
+          </div>
+        )}
+
+        {/* Approved cost display */}
+        {mine && job.status === 'approved_for_invoicing' && job.cost != null && (
+          <p className="text-sm text-muted mt-2">Approved cost: {formatCurrency(job.cost)}</p>
+        )}
+
+        {/* Invoice submitted info */}
+        {mine && job.status === 'invoice_submitted' && job.invoiceNumber && (
+          <div className="mt-3 text-sm text-muted space-y-0.5">
+            <p>Invoice #{job.invoiceNumber} submitted {job.invoiceSubmittedAt ? formatDate(job.invoiceSubmittedAt) : ''}</p>
+            {job.invoiceTotalAmount != null && <p>Total: {formatCurrency(job.invoiceTotalAmount)}</p>}
+          </div>
+        )}
+
         {/* Actions */}
         <div className="mt-4">
           {!mine && (
@@ -143,16 +174,32 @@ function JobCard({
             </Button>
           )}
 
-          {mine && (job.status === 'completed' || job.status === 'paid') && (
+          {mine && job.status === 'approved_for_invoicing' && (
+            <Button onClick={onUploadInvoice}>
+              <Upload className="h-4 w-4 mr-1.5" />Upload invoice
+            </Button>
+          )}
+
+          {mine && job.status === 'invoice_submitted' && (
+            <p className="text-sm text-muted">Invoice submitted. Waiting for the office to review.</p>
+          )}
+
+          {mine && job.status === 'invoice_approved' && (
+            <p className="text-sm text-positive">Invoice approved. Payment will follow.</p>
+          )}
+
+          {mine && job.status === 'completed' && (
             <p className="text-sm text-muted">
-              {job.status === 'paid'
-                ? 'Paid. Thank you.'
-                : job.needsApproval
-                  ? 'Reported. Waiting for the office to approve.'
-                  : job.approvedAt
-                    ? 'Approved. Awaiting payment.'
-                    : 'Completed. Awaiting payment.'}
+              {job.needsApproval
+                ? 'Reported. Waiting for the office to approve.'
+                : job.approvedAt
+                  ? 'Approved. Awaiting payment.'
+                  : 'Completed. Awaiting review.'}
             </p>
+          )}
+
+          {mine && job.status === 'paid' && (
+            <p className="text-sm text-muted">Paid. Thank you.</p>
           )}
         </div>
       </CardContent>
@@ -171,6 +218,13 @@ export function HandymanJobs() {
   const [reportBusy, setReportBusy] = useState(false);
   const [places, setPlaces] = useState<Places>({ properties: [], units: [] });
   const [report, setReport] = useState(emptyReport);
+
+  // Invoice upload state.
+  const [invoiceJob, setInvoiceJob] = useState<PortalMaintenanceRequest | null>(null);
+  const [invoice, setInvoice] = useState(emptyInvoice);
+  const [invoiceFiles, setInvoiceFiles] = useState<File[]>([]);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
     portalApi
@@ -215,6 +269,58 @@ export function HandymanJobs() {
     }
   };
 
+  const openInvoice = (job: PortalMaintenanceRequest) => {
+    setInvoiceJob(job);
+    setInvoice(emptyInvoice);
+    setInvoiceFiles([]);
+  };
+
+  const addInvoiceFiles = (fileList: FileList | null) => {
+    if (!fileList) return;
+    const newFiles = Array.from(fileList);
+    setInvoiceFiles(prev => [...prev, ...newFiles].slice(0, 10));
+  };
+
+  const removeInvoiceFile = (index: number) => {
+    setInvoiceFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const submitInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (invoiceBusy || !invoiceJob) return;
+
+    if (invoiceFiles.length === 0) { showToast('Attach at least one invoice file.', 'error'); return; }
+    if (!invoice.invoiceNumber.trim()) { showToast('Enter your invoice number.', 'error'); return; }
+    if (!invoice.invoiceDate) { showToast('Enter the invoice date.', 'error'); return; }
+
+    const labor = Number(invoice.laborAmount) || 0;
+    const material = Number(invoice.materialAmount) || 0;
+    const total = labor + material;
+    if (total <= 0) { showToast('Enter the labor or material amount.', 'error'); return; }
+
+    setInvoiceBusy(true);
+    try {
+      await portalApi.submitInvoice(invoiceJob.id, {
+        files: invoiceFiles,
+        invoiceNumber: invoice.invoiceNumber.trim(),
+        invoiceDate: invoice.invoiceDate,
+        laborAmount: labor,
+        materialAmount: material,
+        totalAmount: total,
+        notes: invoice.notes.trim() || undefined,
+      });
+      showToast('Invoice submitted. The office will review it.', 'success');
+      setInvoiceJob(null);
+      setInvoice(emptyInvoice);
+      setInvoiceFiles([]);
+      load();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not submit the invoice.', 'error');
+    } finally {
+      setInvoiceBusy(false);
+    }
+  };
+
   const run = (id: string, action: Promise<unknown>, ok: string) => {
     setBusyId(id);
     action
@@ -238,7 +344,11 @@ export function HandymanJobs() {
   const inProgress = data.mine.filter(
     (j) => j.status === 'assigned' || j.status === 'scheduled' || j.status === 'in_progress'
   );
-  const completed = data.mine.filter((j) => j.status === 'completed' || j.status === 'paid');
+  const completed = data.mine.filter(
+    (j) => j.status === 'completed' || j.status === 'paid'
+      || j.status === 'approved_for_invoicing' || j.status === 'invoice_submitted'
+      || j.status === 'invoice_approved'
+  );
 
   const TABS = [
     { key: 'available' as const, label: 'Available', jobs: data.available, mine: false, empty: 'No open jobs in your trades right now. Check back soon.' },
@@ -301,6 +411,7 @@ export function HandymanJobs() {
               onSchedule={(when) => run(job.id, portalApi.scheduleJob(job.id, when), 'Time confirmed, the tenant was notified')}
               onStart={() => run(job.id, portalApi.jobStatus(job.id, 'in_progress'), 'Marked in progress')}
               onComplete={() => run(job.id, portalApi.jobStatus(job.id, 'completed'), 'Marked complete')}
+              onUploadInvoice={() => openInvoice(job)}
             />
           ))}
         </div>
@@ -399,6 +510,138 @@ export function HandymanJobs() {
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setReportOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={reportBusy}>{reportBusy ? 'Submitting...' : 'Submit for approval'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Invoice upload modal */}
+      <Modal isOpen={!!invoiceJob} onClose={() => setInvoiceJob(null)} title="Submit invoice" size="md">
+        <form onSubmit={submitInvoice} className="space-y-4">
+          <p className="text-sm text-muted">
+            Upload your invoice for <span className="font-medium text-ink">{invoiceJob?.title}</span>.
+            {invoiceJob?.cost != null && <> Approved cost: {formatCurrency(invoiceJob.cost)}.</>}
+          </p>
+
+          {invoiceJob?.invoiceRejectionReason && (
+            <div className="rounded-lg border border-warning-line bg-warning-soft p-3">
+              <p className="text-xs font-medium text-warning-ink">Previous feedback</p>
+              <p className="text-xs text-warning-ink mt-1">{invoiceJob.invoiceRejectionReason}</p>
+            </div>
+          )}
+
+          {/* File upload */}
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Invoice files *</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              multiple
+              onChange={(e) => addInvoiceFiles(e.target.files)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-line rounded-lg text-sm text-muted hover:border-primary hover:text-primary transition-colors"
+            >
+              <Upload className="h-4 w-4" />
+              {invoiceFiles.length === 0 ? 'Choose files (PDF, JPG, PNG)' : 'Add more files'}
+            </button>
+            {invoiceFiles.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {invoiceFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-ink bg-muted/5 rounded-md px-3 py-1.5">
+                    <FileText className="h-3.5 w-3.5 text-faint flex-shrink-0" />
+                    <span className="truncate flex-1">{f.name}</span>
+                    <span className="text-xs text-muted flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                    <button type="button" onClick={() => removeInvoiceFile(i)} className="text-muted hover:text-danger flex-shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted mt-1">Up to 10 files, 15 MB each. Include your invoice and any receipts.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Invoice # *</label>
+              <input
+                type="text"
+                value={invoice.invoiceNumber}
+                onChange={(e) => setInvoice({ ...invoice, invoiceNumber: e.target.value })}
+                placeholder="e.g. INV-001"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Invoice date *</label>
+              <input
+                type="date"
+                value={invoice.invoiceDate}
+                onChange={(e) => setInvoice({ ...invoice, invoiceDate: e.target.value })}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Labor</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={invoice.laborAmount}
+                  onChange={(e) => setInvoice({ ...invoice, laborAmount: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Materials</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={invoice.materialAmount}
+                  onChange={(e) => setInvoice({ ...invoice, materialAmount: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Computed total */}
+          <div className="flex items-center justify-between text-sm px-1">
+            <span className="text-muted">Total</span>
+            <span className="font-medium text-ink">
+              {formatCurrency((Number(invoice.laborAmount) || 0) + (Number(invoice.materialAmount) || 0))}
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Notes (optional)</label>
+            <textarea
+              rows={2}
+              value={invoice.notes}
+              onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
+              placeholder="Anything the office should know about this invoice"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={() => setInvoiceJob(null)}>Cancel</Button>
+            <Button type="submit" disabled={invoiceBusy}>{invoiceBusy ? 'Uploading...' : 'Submit invoice'}</Button>
           </div>
         </form>
       </Modal>

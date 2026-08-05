@@ -236,6 +236,10 @@ export type MaintenanceStatus =
   | 'scheduled'
   | 'in_progress'
   | 'completed'
+  // Invoice workflow statuses (after admin approves completed work).
+  | 'approved_for_invoicing'
+  | 'invoice_submitted'
+  | 'invoice_approved'
   | 'paid'
   | 'cancelled';
 export type MaintenancePriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -287,6 +291,19 @@ export interface MaintenanceRequest {
   approvedAt?: string;
   /** The cost the handyman proposed when reporting the work. */
   reportedCost?: number;
+  // Invoice workflow fields.
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  invoiceLaborAmount?: number;
+  invoiceMaterialAmount?: number;
+  invoiceTotalAmount?: number;
+  invoiceNotes?: string;
+  /** Drive file references: { id, name, contentType } for each uploaded file. */
+  invoiceDriveIds?: { id: string; name: string; contentType: string }[];
+  invoiceSubmittedAt?: string;
+  invoiceApprovedAt?: string;
+  invoiceApprovedBy?: string;
+  invoiceRejectionReason?: string;
 }
 
 export interface Handyman {

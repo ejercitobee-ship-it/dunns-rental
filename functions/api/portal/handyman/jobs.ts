@@ -32,7 +32,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         ORDER BY
           CASE m.status
             WHEN 'assigned' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'in_progress' THEN 2
-            WHEN 'completed' THEN 3 WHEN 'paid' THEN 4 ELSE 5 END,
+            WHEN 'completed' THEN 3 WHEN 'approved_for_invoicing' THEN 4
+            WHEN 'invoice_submitted' THEN 5 WHEN 'invoice_approved' THEN 6
+            WHEN 'paid' THEN 7 ELSE 8 END,
           m.scheduled_for IS NULL, m.scheduled_for`
     )
       .bind(handyman.id)

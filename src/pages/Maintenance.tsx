@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Wrench, Search, Edit2, Trash2, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -43,15 +43,18 @@ const emptyForm = {
   notes: '',
 };
 
+type FilterStatus = MaintenanceStatus | 'all' | 'pending_approval' | 'needs_invoice_review';
+
 export function Maintenance() {
   const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance, dispatch, refreshData } = useApp();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   // Maintenance create/edit map to properties_edit; delete to properties_delete.
   const canEditMaintenance = hasPermission('properties_edit');
+  const canApproveMaintenance = hasPermission('maintenance_approve');
   const canDeleteMaintenance = hasPermission('properties_delete');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<MaintenanceStatus | 'all' | 'pending_approval'>('all');
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -61,6 +64,11 @@ export function Maintenance() {
   const [approveTarget, setApproveTarget] = useState<MaintenanceRequest | null>(null);
   const [approveCost, setApproveCost] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Invoice review state.
+  const [invoiceTarget, setInvoiceTarget] = useState<MaintenanceRequest | null>(null);
+  const [invoiceAction, setInvoiceAction] = useState<'approve' | 'reject' | 'revision'>('approve');
+  const [invoiceReason, setInvoiceReason] = useState('');
 
   useEffect(() => {
     handymenApi.getAll().then(setHandymen).catch(() => setHandymen([]));
@@ -122,13 +130,51 @@ export function Maintenance() {
     try {
       const updated = await maintenanceApi.approve(approveTarget.id, cost);
       dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
-      // The approval writes the expense server-side; refresh so it appears in
-      // Finances and the Dashboard right away.
       await refreshData();
-      showToast('Approved. It now counts as an expense on the property.', 'success');
+      // Show different message depending on whether it went to invoicing flow.
+      if (updated.status === 'approved_for_invoicing') {
+        showToast('Approved. The handyman has been notified to submit their invoice.', 'success');
+      } else {
+        showToast('Approved. It now counts as an expense on the property.', 'success');
+      }
       setApproveTarget(null);
     } catch (err) {
       showToast((err as Error).message || 'Could not approve', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Invoice review actions.
+  const openInvoiceReview = (m: MaintenanceRequest) => {
+    setInvoiceTarget(m);
+    setInvoiceAction('approve');
+    setInvoiceReason('');
+  };
+
+  const confirmInvoiceReview = async () => {
+    if (!invoiceTarget) return;
+    if (invoiceAction !== 'approve' && !invoiceReason.trim()) {
+      showToast('Provide a reason for the rejection or revision.', 'error');
+      return;
+    }
+    setBusyId(invoiceTarget.id);
+    try {
+      const updated = await maintenanceApi.invoiceReview(
+        invoiceTarget.id,
+        invoiceAction,
+        invoiceAction !== 'approve' ? invoiceReason.trim() : undefined
+      );
+      dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      await refreshData();
+      if (invoiceAction === 'approve') {
+        showToast('Invoice approved. The expense has been recorded.', 'success');
+      } else {
+        showToast('Invoice sent back for revision. The handyman has been notified.', 'success');
+      }
+      setInvoiceTarget(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not review invoice', 'error');
     } finally {
       setBusyId(null);
     }
@@ -139,10 +185,11 @@ export function Maintenance() {
 
   const stats = useMemo(() => {
     const pendingApproval = maintenance.filter(m => m.needsApproval && m.status !== 'cancelled').length;
+    const invoicesSubmitted = maintenance.filter(m => m.status === 'invoice_submitted').length;
     const inProgress = maintenance.filter(m => m.status === 'in_progress').length;
-    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'cancelled').length;
-    const spend = maintenance.filter(m => m.status === 'paid').reduce((s, m) => s + (m.cost || 0), 0);
-    return { pendingApproval, inProgress, urgent, spend };
+    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'invoice_approved' && m.status !== 'cancelled').length;
+    const spend = maintenance.filter(m => m.status === 'paid' || m.status === 'invoice_approved').reduce((s, m) => s + (m.cost || 0), 0);
+    return { pendingApproval, invoicesSubmitted, inProgress, urgent, spend };
   }, [maintenance]);
 
   const filtered = useMemo(() => {
@@ -150,6 +197,7 @@ export function Maintenance() {
       const matchesStatus =
         statusFilter === 'all' ? true
         : statusFilter === 'pending_approval' ? !!m.needsApproval
+        : statusFilter === 'needs_invoice_review' ? m.status === 'invoice_submitted'
         : m.status === statusFilter;
       const q = search.toLowerCase();
       const matchesSearch =
@@ -232,11 +280,20 @@ export function Maintenance() {
     }
   };
 
+  // Helper: is this request in the active invoice workflow (not just needsApproval).
+  const isInvoiceStatus = (s: MaintenanceStatus) =>
+    s === 'approved_for_invoicing' || s === 'invoice_submitted' || s === 'invoice_approved';
+
+  // Helper: can the quick Start/Complete buttons show.
+  const showQuickToggle = (m: MaintenanceRequest) =>
+    !m.needsApproval && !isInvoiceStatus(m.status) &&
+    m.status !== 'paid' && m.status !== 'cancelled';
+
   const statCards = [
     { label: 'Pending approval', value: stats.pendingApproval, icon: <Clock /> },
+    { label: 'Invoices to review', value: stats.invoicesSubmitted, icon: <FileText /> },
     { label: 'In progress', value: stats.inProgress, icon: <Wrench /> },
     { label: 'Urgent', value: stats.urgent, icon: <AlertTriangle /> },
-    { label: 'Paid spend', value: formatCurrency(stats.spend), icon: <CheckCircle2 /> },
   ];
 
   return (
@@ -284,15 +341,19 @@ export function Maintenance() {
         <select
           className="px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as MaintenanceStatus | 'all' | 'pending_approval')}
+          onChange={e => setStatusFilter(e.target.value as FilterStatus)}
         >
           <option value="all">All Statuses</option>
           <option value="pending_approval">Pending approval</option>
+          <option value="needs_invoice_review">Invoices to review</option>
           <option value="submitted">Submitted</option>
           <option value="assigned">Assigned</option>
           <option value="scheduled">Scheduled</option>
           <option value="in_progress">In progress</option>
           <option value="completed">Completed</option>
+          <option value="approved_for_invoicing">Awaiting invoice</option>
+          <option value="invoice_submitted">Invoice submitted</option>
+          <option value="invoice_approved">Invoice approved</option>
           <option value="paid">Paid</option>
           <option value="cancelled">Cancelled</option>
         </select>
@@ -348,9 +409,12 @@ export function Maintenance() {
                       {m.createdBy === 'handyman' && (
                         <span className="block text-[11px] text-muted mt-0.5">Reported by handyman</span>
                       )}
+                      {m.status === 'invoice_submitted' && m.invoiceNumber && (
+                        <span className="block text-[11px] text-muted mt-0.5">Invoice #{m.invoiceNumber}</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
-                      {m.status === 'paid' || m.status === 'cancelled' ? (
+                      {m.status === 'paid' || m.status === 'cancelled' || isInvoiceStatus(m.status) ? (
                         <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || '—'}</span>
                       ) : (
                         <select
@@ -371,14 +435,15 @@ export function Maintenance() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-ink tnum">
-                      {m.cost ? formatCurrency(m.cost) : '—'}
+                      {m.invoiceTotalAmount ? formatCurrency(m.invoiceTotalAmount) : m.cost ? formatCurrency(m.cost) : '—'}
                     </td>
                     <td className="py-3 px-4 text-sm text-muted">
                       {m.reportedDate ? formatDate(m.reportedDate) : '—'}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-1">
-                        {canEditMaintenance && m.needsApproval && m.status !== 'cancelled' && (
+                        {/* Approve: for needsApproval OR completed jobs with a handyman */}
+                        {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && (
                           <button
                             onClick={() => openApprove(m)}
                             className="text-xs font-semibold text-white bg-primary hover:bg-primary-hover px-2.5 py-1 rounded-md transition-colors"
@@ -386,7 +451,17 @@ export function Maintenance() {
                             Approve
                           </button>
                         )}
-                        {!m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
+                        {/* Review submitted invoice */}
+                        {canApproveMaintenance && m.status === 'invoice_submitted' && (
+                          <button
+                            onClick={() => openInvoiceReview(m)}
+                            className="text-xs font-semibold text-white bg-primary hover:bg-primary-hover px-2.5 py-1 rounded-md transition-colors"
+                          >
+                            Review invoice
+                          </button>
+                        )}
+                        {/* Quick start/complete toggle */}
+                        {showQuickToggle(m) && (
                           <button
                             onClick={() => quickStatus(m, m.status === 'in_progress' ? 'completed' : 'in_progress')}
                             className="text-xs font-medium text-primary hover:text-primary-hover px-2 py-1 rounded-md hover:bg-primary-soft transition-colors"
@@ -394,7 +469,9 @@ export function Maintenance() {
                             {m.status === 'in_progress' ? 'Complete' : 'Start'}
                           </button>
                         )}
-                        {canEditMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
+                        {/* Mark paid: skip for invoice_submitted (goes through invoice flow) */}
+                        {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled'
+                          && m.status !== 'invoice_submitted' && m.status !== 'approved_for_invoicing' && (
                           <button
                             onClick={() => openPay(m)}
                             className="text-xs font-medium text-positive hover:opacity-80 px-2 py-1 rounded-md hover:bg-positive-soft transition-colors"
@@ -469,8 +546,11 @@ export function Maintenance() {
           <p className="text-sm text-muted">
             Approve <span className="font-medium text-ink">{approveTarget?.title}</span>
             {approveTarget?.assignedHandymanId && <> by <span className="font-medium text-ink">{handymanName(approveTarget.assignedHandymanId)}</span></>}.
-            This records it as an expense on {propertyName(approveTarget?.propertyId)}
-            {unitNumber(approveTarget?.unitId) && <> · {unitNumber(approveTarget?.unitId)}</>}. It does not mark it paid.
+            {approveTarget?.assignedHandymanId
+              ? <> The handyman will be notified to submit their invoice.</>
+              : <> This records it as an expense on {propertyName(approveTarget?.propertyId)}
+                  {unitNumber(approveTarget?.unitId) && <> · {unitNumber(approveTarget?.unitId)}</>}.</>
+            }
           </p>
           {approveTarget?.reportedCost != null && (
             <p className="text-xs text-muted">Handyman proposed {formatCurrency(approveTarget.reportedCost)}. Adjust below if needed.</p>
@@ -492,6 +572,140 @@ export function Maintenance() {
             <Button onClick={confirmApprove} disabled={busyId === approveTarget?.id}>Approve</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Invoice review modal */}
+      <Modal isOpen={!!invoiceTarget} onClose={() => setInvoiceTarget(null)} title="Review invoice" size="md">
+        {invoiceTarget && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted">
+                Review the invoice from <span className="font-medium text-ink">{handymanName(invoiceTarget.assignedHandymanId) || 'the handyman'}</span> for{' '}
+                <span className="font-medium text-ink">{invoiceTarget.title}</span>.
+              </p>
+
+              {/* Invoice details */}
+              <div className="rounded-lg border border-line bg-canvas p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Invoice #</span>
+                  <span className="font-medium text-ink">{invoiceTarget.invoiceNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Invoice date</span>
+                  <span className="text-ink">{invoiceTarget.invoiceDate ? formatDate(invoiceTarget.invoiceDate) : '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Labor</span>
+                  <span className="text-ink tnum">{invoiceTarget.invoiceLaborAmount != null ? formatCurrency(invoiceTarget.invoiceLaborAmount) : '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Materials</span>
+                  <span className="text-ink tnum">{invoiceTarget.invoiceMaterialAmount != null ? formatCurrency(invoiceTarget.invoiceMaterialAmount) : '—'}</span>
+                </div>
+                <div className="flex justify-between border-t border-line pt-2">
+                  <span className="font-medium text-ink">Total</span>
+                  <span className="font-semibold text-ink tnum">{invoiceTarget.invoiceTotalAmount != null ? formatCurrency(invoiceTarget.invoiceTotalAmount) : '—'}</span>
+                </div>
+                {invoiceTarget.cost != null && invoiceTarget.invoiceTotalAmount != null && invoiceTarget.cost !== invoiceTarget.invoiceTotalAmount && (
+                  <p className="text-xs text-warning-ink">
+                    Note: the approved cost was {formatCurrency(invoiceTarget.cost)}, but the invoice total is {formatCurrency(invoiceTarget.invoiceTotalAmount)}.
+                  </p>
+                )}
+                {invoiceTarget.invoiceNotes && (
+                  <div className="pt-1">
+                    <span className="text-muted">Notes: </span>
+                    <span className="text-ink">{invoiceTarget.invoiceNotes}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Attached files */}
+              {invoiceTarget.invoiceDriveIds && invoiceTarget.invoiceDriveIds.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted">Attached files</p>
+                  {invoiceTarget.invoiceDriveIds.map((f, i) => (
+                    <a
+                      key={i}
+                      href={`/api/documents/download/${f.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 text-sm text-primary hover:text-primary-hover px-3 py-1.5 rounded-md hover:bg-primary-soft transition-colors"
+                    >
+                      {f.contentType?.startsWith('application/pdf') ? <FileText className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                      <span className="truncate">{f.name}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action selection */}
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Decision</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInvoiceAction('approve')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    invoiceAction === 'approve'
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-line bg-surface text-ink hover:bg-canvas'
+                  }`}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceAction('revision')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    invoiceAction === 'revision'
+                      ? 'border-warning bg-warning text-warning-ink'
+                      : 'border-line bg-surface text-ink hover:bg-canvas'
+                  }`}
+                >
+                  Request revision
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceAction('reject')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    invoiceAction === 'reject'
+                      ? 'border-danger bg-danger text-white'
+                      : 'border-line bg-surface text-ink hover:bg-canvas'
+                  }`}
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+
+            {invoiceAction !== 'approve' && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">
+                  Reason {invoiceAction === 'revision' ? 'for revision' : 'for rejection'} *
+                </label>
+                <textarea
+                  rows={2}
+                  value={invoiceReason}
+                  onChange={(e) => setInvoiceReason(e.target.value)}
+                  placeholder={invoiceAction === 'revision' ? 'What needs to be changed?' : 'Why is this invoice being rejected?'}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setInvoiceTarget(null)}>Cancel</Button>
+              <Button
+                onClick={confirmInvoiceReview}
+                disabled={busyId === invoiceTarget.id}
+                className={invoiceAction === 'reject' ? '!bg-danger hover:!bg-danger/90' : undefined}
+              >
+                {invoiceAction === 'approve' ? 'Approve invoice' : invoiceAction === 'revision' ? 'Request revision' : 'Reject invoice'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Add / Edit Modal */}
@@ -589,6 +803,9 @@ export function Maintenance() {
                 <option value="scheduled">Scheduled</option>
                 <option value="in_progress">In Progress</option>
                 <option value="completed">Completed</option>
+                <option value="approved_for_invoicing">Awaiting Invoice</option>
+                <option value="invoice_submitted">Invoice Submitted</option>
+                <option value="invoice_approved">Invoice Approved</option>
                 <option value="paid">Paid</option>
                 <option value="cancelled">Cancelled</option>
               </select>

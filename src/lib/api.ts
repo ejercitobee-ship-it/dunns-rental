@@ -778,6 +778,34 @@ export const portalApi = {
   // A handyman logs work they did; created as completed + pending admin approval.
   reportWork: (data: { propertyId: string; unitId?: string; title: string; description?: string; category: string; cost: number; date: string }): Promise<PortalMaintenanceRequest> =>
     apiRequest('/portal/handyman/report', { method: 'POST', body: JSON.stringify(data) }),
+  // Handyman uploads an invoice for a job approved for invoicing. Multipart form.
+  submitInvoice: async (jobId: string, data: {
+    files: File[];
+    invoiceNumber: string;
+    invoiceDate: string;
+    laborAmount: number;
+    materialAmount: number;
+    totalAmount: number;
+    notes?: string;
+  }): Promise<PortalMaintenanceRequest> => {
+    const fd = new FormData();
+    for (const f of data.files) fd.append('files[]', f);
+    fd.append('invoiceNumber', data.invoiceNumber);
+    fd.append('invoiceDate', data.invoiceDate);
+    fd.append('laborAmount', String(data.laborAmount));
+    fd.append('materialAmount', String(data.materialAmount));
+    fd.append('totalAmount', String(data.totalAmount));
+    if (data.notes) fd.append('notes', data.notes);
+    const res = await fetch(`${API_BASE}/portal/handyman/jobs/${jobId}/invoice`, {
+      method: 'POST', credentials: 'include', body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    return json.data !== undefined ? json.data : json;
+  },
   // Web push: register/unregister this device, and send a test to yourself.
   pushSubscribe: (sub: { endpoint?: string | null; keys?: { p256dh?: string; auth?: string } }): Promise<{ success: boolean }> =>
     apiRequest('/portal/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
@@ -853,10 +881,21 @@ export const maintenanceApi = {
   // Record paying the handyman: sets the cost, stamps paid, counts in Finances.
   pay: (id: string, cost: number): Promise<MaintenanceRequest> =>
     apiRequest(`/maintenance/${id}/pay`, { method: 'POST', body: JSON.stringify({ cost }) }),
-  // Approve a handyman-reported job (and its cost): writes the expense, does not
-  // mark it paid.
-  approve: (id: string, cost: number): Promise<MaintenanceRequest> =>
-    apiRequest(`/maintenance/${id}/approve`, { method: 'POST', body: JSON.stringify({ cost }) }),
+  // Approve a handyman-reported job (and its cost). With an assigned handyman
+  // this transitions to approved_for_invoicing (no expense yet); without one
+  // it writes the expense immediately. Pass skipInvoice:true to force the
+  // direct expense path even when a handyman is assigned.
+  approve: (id: string, cost: number, skipInvoice?: boolean): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ cost, ...(skipInvoice ? { skipInvoice: true } : {}) }),
+    }),
+  // Admin reviews a submitted invoice: approve, reject, or request revision.
+  invoiceReview: (id: string, action: 'approve' | 'reject' | 'revision', reason?: string): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}/invoice-review`, {
+      method: 'POST',
+      body: JSON.stringify({ action, reason }),
+    }),
 };
 
 // Handymen roster API (admin side).
