@@ -957,7 +957,7 @@ export interface ActivityResponse {
 }
 
 export const activityApi = {
-  list: (filter: ActivityFilter = {}): Promise<ActivityResponse> => {
+  list: async (filter: ActivityFilter = {}): Promise<ActivityResponse> => {
     const params = new URLSearchParams();
     if (filter.limit) params.set('limit', String(filter.limit));
     if (filter.offset) params.set('offset', String(filter.offset));
@@ -970,7 +970,13 @@ export const activityApi = {
     if (filter.search) params.set('search', filter.search);
     if (filter.dateFrom) params.set('dateFrom', String(filter.dateFrom));
     if (filter.dateTo) params.set('dateTo', String(filter.dateTo));
-    return apiRequest(`/activity?${params.toString()}`);
+    // apiRequest unwraps { data } automatically, which drops `total`. Fetch the
+    // raw response so both data AND total reach the caller.
+    const url = `${API_BASE}/activity?${params.toString()}`;
+    const res = await fetch(url, { credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return { data: json.data ?? [], total: json.total ?? 0 };
   },
 };
 
