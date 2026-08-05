@@ -19,9 +19,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const cronOk = !!env.CRON_SECRET && presented === env.CRON_SECRET;
   if (!cronOk) {
     const user = await getSessionUser(env, request);
-    if (!user || !['super_admin', 'admin'].includes(user.role)) {
-      return jsonError('Not authorized', 401);
-    }
+    if (!user) return jsonError('Not authorized', 401);
+    const canTrigger = user.role === 'super_admin' ||
+      (user.permissions ? user.permissions.includes('settings_edit') : false);
+    if (!canTrigger) return jsonError('Not authorized', 401);
   }
 
   try {

@@ -315,13 +315,13 @@ function AppRoutes() {
       } />
       
       <Route path="/capital-projects" element={
-        <ProtectedRoute requiredPermission="finances_view">
+        <ProtectedRoute requiredPermission="finances_capital_projects">
           <Layout><CapitalProjects /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/expense-imports" element={
-        <ProtectedRoute requiredPermission="settings_edit">
+        <ProtectedRoute requiredPermission="finances_import">
           <Layout><ExpenseImport /></Layout>
         </ProtectedRoute>
       } />

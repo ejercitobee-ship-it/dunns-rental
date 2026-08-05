@@ -19,7 +19,7 @@ const emptyForm: HandymanInput = { name: '', phone: '', email: '', trades: [], i
  * onCountChange lets a host (the Vendors tab) keep its count in sync. */
 export function HandymenManager({ onCountChange }: { onCountChange?: (n: number) => void } = {}) {
   const { showToast } = useToast();
-  const { isSuperAdmin } = useAuth();
+  const { hasPermission } = useAuth();
   const [handymen, setHandymen] = useState<Handyman[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setModalOpen] = useState(false);
@@ -202,7 +202,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
                   >
                     {h.isActive ? <UserX className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
                   </button>
-                  {isSuperAdmin() && (
+                  {hasPermission('users_delete') && (
                     <button
                       onClick={() => handleDelete(h)}
                       className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"

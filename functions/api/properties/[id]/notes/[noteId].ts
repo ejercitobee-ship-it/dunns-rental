@@ -37,8 +37,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const title = body.title?.trim() || existing.title;
     const content = body.content !== undefined ? body.content : existing.content;
     const category = body.category || existing.category;
-    // Only super_admin / admin can pin/unpin
-    const isPinned = (auth.role === 'super_admin' || auth.role === 'admin')
+    // Pin/unpin requires the properties_history permission
+    const canPin = auth.role === 'super_admin' ||
+      (auth.permissions ? auth.permissions.includes('properties_history') : false);
+    const isPinned = canPin
       ? (body.isPinned !== undefined ? (body.isPinned ? 1 : 0) : existing.is_pinned)
       : existing.is_pinned;
 

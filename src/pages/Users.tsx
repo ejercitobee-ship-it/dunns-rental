@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Users as UsersIcon, Shield } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Users as UsersIcon, Shield, ShieldCheck } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -12,6 +12,7 @@ import { adminApi, realtorsApi, tenantsApi, handymenApi } from '../lib/api';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 import { HandymenManager } from '../components/HandymenManager';
+import { UserPermissions } from '../components/UserPermissions';
 
 export function Users() {
   const { user: currentUser, users, roles, addUser, updateUser, deleteUser, hasPermission, refreshTeam } = useAuth();
@@ -25,6 +26,7 @@ export function Users() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [tempPasswordInfo, setTempPasswordInfo] = useState<{ name: string; password: string } | null>(null);
   const [addTenantTarget, setAddTenantTarget] = useState<User | null>(null);
+  const [permissionsUser, setPermissionsUser] = useState<User | null>(null);
 
   const [userForm, setUserForm] = useState({
     firstName: '',
@@ -490,6 +492,16 @@ export function Users() {
                                 <KeyRound className="h-4 w-4 text-muted" />
                               </button>
                             )}
+                            {/* Per-user permission overrides (internal users only) */}
+                            {tab === 'internal' && hasPermission('users_permissions') && currentUser?.id !== user.id && (
+                              <button
+                                onClick={() => setPermissionsUser(user)}
+                                title="Manage permissions"
+                                className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
+                              >
+                                <ShieldCheck className="h-4 w-4 text-primary" />
+                              </button>
+                            )}
                             {/* Show delete to anyone who can delete users, for
                                 anyone but themselves. Tenants are the exception:
                                 they are deleted from their own profile (Tenants
@@ -913,6 +925,16 @@ export function Users() {
           </div>
         )}
       </Modal>
+
+      {/* Per-user permission overrides modal */}
+      {permissionsUser && (
+        <UserPermissions
+          user={permissionsUser}
+          isOpen={!!permissionsUser}
+          onClose={() => setPermissionsUser(null)}
+          onChanged={() => refreshTeam()}
+        />
+      )}
     </div>
   );
 }

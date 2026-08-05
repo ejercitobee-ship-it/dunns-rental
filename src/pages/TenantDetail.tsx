@@ -265,8 +265,8 @@ export function TenantDetail() {
     }
   };
 
-  // Super-admin inline editing of move-in fee date.
-  const isSuperAdmin = user?.roleId === 'super_admin';
+  // Inline editing of move-in fee date (requires leases_move_in permission).
+  const canEditMoveIn = hasPermission('leases_move_in');
   const [editingMoveInFeeLeaseId, setEditingMoveInFeeLeaseId] = useState<string | null>(null);
   const [editMoveInFeeDate, setEditMoveInFeeDate] = useState('');
   const [editMoveInFeeReason, setEditMoveInFeeReason] = useState('');
@@ -1464,7 +1464,7 @@ export function TenantDetail() {
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
                           {l.moveInFeePaidDate ? formatDate(l.moveInFeePaidDate) : '—'}
-                          {isSuperAdmin && (
+                          {canEditMoveIn && (
                             <button
                               onClick={() => { setEditingMoveInFeeLeaseId(l.id); setEditMoveInFeeDate(l.moveInFeePaidDate || ''); }}
                               className="text-faint hover:text-primary"

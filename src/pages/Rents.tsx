@@ -109,7 +109,7 @@ export function Rents() {
     properties, units, leases, rentPayments,
     getLeaseTenants, addRentPayment, deleteRentPayment, deleteLease, refreshData,
   } = useApp();
-  const { isSuperAdmin } = useAuth();
+  const { hasPermission } = useAuth();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
@@ -1048,7 +1048,7 @@ export function Rents() {
                             Record
                           </Button>
                         )}
-                        {isSuperAdmin() && (
+                        {hasPermission('leases_terminate') && (
                           <button
                             onClick={() => handleDeleteLease(group)}
                             disabled={deletingLeaseId === group.lease.id}
@@ -1102,7 +1102,7 @@ export function Rents() {
                                   Record
                                 </Button>
                               )}
-                              {isSuperAdmin() && mr.settlement.paid > 0 && (
+                              {hasPermission('rents_edit') && mr.settlement.paid > 0 && (
                                 <button
                                   onClick={() => handleDeleteRent(mr)}
                                   disabled={deletingRow === `${mr.lease.id}-${mr.month}-${mr.year}`}
@@ -1116,7 +1116,7 @@ export function Rents() {
                           );
                         })}
 
-                        {isSuperAdmin() && (
+                        {hasPermission('rents_edit') && (
                           <div className="flex justify-end pt-2 pb-1">
                             <button
                               type="button"

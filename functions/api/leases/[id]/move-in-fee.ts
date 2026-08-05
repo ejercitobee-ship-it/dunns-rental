@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requirePermission, requireSuperAdmin, jsonOk, jsonError, serverError } from '../../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { generateMoveInFeeReceipt } from '../../../lib/receipts';
 import { logLeaseChange } from '../../../lib/lease-audit';
 
@@ -81,7 +81,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
  */
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'leases_move_in');
   if (auth instanceof Response) return auth;
 
   try {

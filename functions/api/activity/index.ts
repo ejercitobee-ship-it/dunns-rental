@@ -1,17 +1,14 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, getSessionUser, jsonOk, jsonError, serverError } from '../../lib/session';
-
-const CAN_VIEW = new Set(['super_admin', 'admin']);
+import { type Env, requirePermission, jsonOk, serverError } from '../../lib/session';
 
 /**
- * GET /api/activity — the footprint feed, newest first. Admins and Super Admins
- * only, since it is oversight of the whole team. Paginated by ?limit & ?offset.
+ * GET /api/activity — the footprint feed, newest first. Requires the
+ * `activity_view` permission. Paginated by ?limit & ?offset.
  */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
-  const auth = await getSessionUser(env, request);
-  if (!auth) return jsonError('Not signed in', 401);
-  if (!CAN_VIEW.has(auth.role)) return jsonError('You do not have access to the activity log', 403);
+  const auth = await requirePermission(env, request, 'activity_view');
+  if (auth instanceof Response) return auth;
 
   try {
     const url = new URL(request.url);

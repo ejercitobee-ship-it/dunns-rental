@@ -1,10 +1,10 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requireSuperAdmin, jsonOk, jsonError, serverError } from '../../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 
 /** GET /api/expense-imports/:id — full import detail including all rows. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_import');
   if (auth instanceof Response) return auth;
 
   try {
@@ -31,7 +31,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 /** DELETE /api/expense-imports/:id — discard a staged (un-merged) import. */
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_import');
   if (auth instanceof Response) return auth;
 
   try {

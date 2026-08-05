@@ -144,8 +144,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('Invalid category', 400);
     }
 
-    // Only super_admin / admin can pin
-    const isPinned = body.isPinned && (auth.role === 'super_admin' || auth.role === 'admin') ? 1 : 0;
+    // Pin/unpin requires the properties_history permission
+    const canPin = auth.role === 'super_admin' ||
+      (auth.permissions ? auth.permissions.includes('properties_history') : false);
+    const isPinned = body.isPinned && canPin ? 1 : 0;
 
     const id = crypto.randomUUID();
     await env.DB.prepare(

@@ -114,9 +114,29 @@ export const adminApi = {
     apiRequest(`/admin/users/${id}`, { method: 'DELETE' }),
   resetUserPassword: (userId: string): Promise<{ tempPassword: string; message: string }> =>
     apiRequest('/admin/reset-user-password', { method: 'POST', body: JSON.stringify({ userId }) }),
-  // One-time: nest documents into Property/Unit -> Tenant folders (super admin).
+  // One-time: nest documents into Property/Unit -> Tenant folders.
   migrateDocFolders: (): Promise<{ moved: number; foldersNested: number }> =>
     apiRequest('/admin/migrate-doc-folders', { method: 'POST' }),
+  // Per-user permission overrides
+  getUserPermissions: (userId: string): Promise<{ permission: string; grantedBy: string; grantedAt: number }[]> =>
+    apiRequest(`/admin/users/${userId}/permissions`),
+  grantPermissions: (userId: string, permissions: string[]): Promise<{ granted: number }> =>
+    apiRequest(`/admin/users/${userId}/permissions`, { method: 'POST', body: JSON.stringify({ permissions }) }),
+  revokePermissions: (userId: string, permissions: string[]): Promise<{ revoked: number }> =>
+    apiRequest(`/admin/users/${userId}/permissions`, { method: 'DELETE', body: JSON.stringify({ permissions }) }),
+  // Permission audit log
+  getPermissionAudit: (params?: { userId?: string; limit?: number; offset?: number }): Promise<{
+    id: string; targetUserId: string; targetName: string; targetEmail: string;
+    changedById: string; changedByName: string; action: string;
+    permission?: string; oldRole?: string; newRole?: string; createdAt: number;
+  }[]> => {
+    const search = new URLSearchParams();
+    if (params?.userId) search.set('userId', params.userId);
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return apiRequest(`/admin/permission-audit${qs ? '?' + qs : ''}`);
+  },
 };
 
 // Roles API

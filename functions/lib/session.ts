@@ -114,6 +114,22 @@ export async function getSessionUser(
     }
   }
 
+  // Merge per-user permission overrides (grants beyond the role).
+  // These are additive: if a user's role doesn't include 'finances_import'
+  // but they have an override row for it, they get it.
+  try {
+    const { results: overrides } = await env.DB.prepare(
+      'SELECT permission FROM user_permission_overrides WHERE user_id = ?'
+    ).bind(row.id).all();
+    if (overrides && overrides.length > 0) {
+      const base = new Set(permissions || []);
+      for (const o of overrides) base.add(o.permission as string);
+      permissions = [...base];
+    }
+  } catch {
+    // Table may not exist yet (pre-migration). Silently proceed with role perms only.
+  }
+
   return {
     id: row.id,
     email: row.email,

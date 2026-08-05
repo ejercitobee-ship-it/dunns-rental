@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requirePermission, requireSuperAdmin, jsonOk, jsonError, serverError } from '../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeExpense } from '../../lib/serializers';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -20,8 +20,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  // Editing a recorded expense is reserved to the workspace owner.
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_history');
   if (auth instanceof Response) return auth;
 
   try {

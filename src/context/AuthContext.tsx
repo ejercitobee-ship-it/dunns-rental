@@ -56,6 +56,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function mapSessionUser(sessionUser: Record<string, unknown>, role: Role): User {
   const name = (sessionUser.name as string) || '';
   const parts = name.split(' ');
+
+  // The server returns a merged permissions array (role + per-user overrides).
+  // Capture it so hasPermission checks the real effective set rather than
+  // just the role's base permissions.
+  const serverPerms = sessionUser.permissions;
+  const effectivePermissions = Array.isArray(serverPerms)
+    ? (serverPerms as string[])
+    : undefined;
+
   return {
     id: sessionUser.id as string,
     firstName: (sessionUser.firstName as string) || parts[0] || '',
@@ -70,6 +79,7 @@ function mapSessionUser(sessionUser: Record<string, unknown>, role: Role): User 
     lastLogin: new Date().toISOString(),
     createdAt: (sessionUser.createdAt as string) || new Date().toISOString(),
     twoFactorEnabled: !!sessionUser.twoFactorEnabled,
+    effectivePermissions,
   };
 }
 
@@ -266,23 +276,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Super admin always has every permission, no matter what the super_admin
   // role's stored permissions say. This mirrors the server and makes it
   // impossible to lock the owner out by editing the super_admin role.
+  // For other users, check effectivePermissions (role + per-user overrides
+  // merged by the server) first, falling back to the role's base permissions.
   const hasPermission = (permissionId: string): boolean => {
     if (!user) return false;
     if (user.roleId === 'super_admin') return true;
-    return user.role.permissions.includes(permissionId);
+    const perms = user.effectivePermissions ?? user.role.permissions;
+    return perms.includes(permissionId);
   };
 
   const hasAnyPermission = (permissionIds: string[]): boolean => {
     if (!user) return false;
     if (user.roleId === 'super_admin') return true;
-    return permissionIds.some(id => user.role.permissions.includes(id));
+    const perms = user.effectivePermissions ?? user.role.permissions;
+    return permissionIds.some(id => perms.includes(id));
   };
 
   const hasModuleAccess = (module: string): boolean => {
     if (!user) return false;
     if (user.roleId === 'super_admin') return true;
+    const perms = user.effectivePermissions ?? user.role.permissions;
     return SYSTEM_PERMISSIONS.some(
-      p => p.module === module && user.role.permissions.includes(p.id)
+      p => p.module === module && perms.includes(p.id)
     );
   };
 

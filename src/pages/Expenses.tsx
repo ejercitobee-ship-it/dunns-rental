@@ -67,7 +67,7 @@ const categoryLabels: Record<ExpenseCategory, string> = {
 
 export function Expenses() {
   const { expenses, incomes, properties, units, rentPayments, leases, tenants, getLeaseTenants, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome, dispatch } = useApp();
-  const { isSuperAdmin, hasPermission } = useAuth();
+  const { hasPermission } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
   const canAddIncome = hasPermission('finances_income');
@@ -96,9 +96,9 @@ export function Expenses() {
     open: boolean; title: string; message: string; onConfirm: () => void;
     variant?: 'danger' | 'warning' | 'info'; confirmText?: string;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
-  const canDelete = isSuperAdmin();
-  // Editing a recorded expense is reserved to the workspace owner (super admin).
-  const canEditExpense = isSuperAdmin();
+  const canDelete = hasPermission('finances_expenses_delete');
+  // Editing a recorded expense requires the history permission.
+  const canEditExpense = hasPermission('finances_history');
 
   const accountMatch = useMemo(() => {
     const q = accountLookup.trim().toLowerCase();

@@ -39,7 +39,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, hasModuleAccess } = useAuth();
+  const { user, logout, hasModuleAccess, hasPermission } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -86,15 +86,15 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
     { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
     { name: 'Finances', path: '/finances', icon: Receipt, show: hasModuleAccess('finances'), badge: 0 },
-    { name: 'Capital Projects', path: '/capital-projects', icon: FolderKanban, show: hasModuleAccess('finances'), badge: 0 },
+    { name: 'Capital Projects', path: '/capital-projects', icon: FolderKanban, show: hasPermission('finances_capital_projects'), badge: 0 },
     { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },
-    { name: 'Expense Imports', path: '/expense-imports', icon: FileSpreadsheet, show: hasModuleAccess('settings'), badge: 0 },
+    { name: 'Expense Imports', path: '/expense-imports', icon: FileSpreadsheet, show: hasPermission('finances_import'), badge: 0 },
     { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings'), badge: 0 },
     { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users'), badge: 0 },
-    { name: 'Activity', path: '/activity', icon: ScrollText, show: user?.roleId === 'super_admin' || user?.roleId === 'admin', badge: 0 },
+    { name: 'Activity', path: '/activity', icon: ScrollText, show: hasPermission('activity_view'), badge: 0 },
   ].filter(item => item.show);
 
   return (

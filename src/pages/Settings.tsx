@@ -34,7 +34,7 @@ import { QRCodeSVG } from 'qrcode.react';
 
 export function Settings() {
   const { showToast } = useToast();
-  const { roles, updateRole, addRole, deleteRole, hasPermission, isSuperAdmin } = useAuth();
+  const { roles, updateRole, addRole, deleteRole, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState('company');
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
@@ -487,7 +487,7 @@ export function Settings() {
                 )}
               </div>
 
-              {isSuperAdmin() && (
+              {hasPermission('documents_drive') && (
                 <div className="flex items-center justify-between gap-4 p-4 border border-line rounded-lg bg-canvas">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center flex-shrink-0">

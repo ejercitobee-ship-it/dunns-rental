@@ -1,11 +1,11 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requireSuperAdmin, jsonOk, jsonError, serverError } from '../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { parseCSV, mapColumns, buildStagedRow, validateRow, duplicateKey } from '../../lib/expense-import';
 
 /** GET /api/expense-imports — list all imports, newest first. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_import');
   if (auth instanceof Response) return auth;
 
   try {
@@ -23,7 +23,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
  */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_import');
   if (auth instanceof Response) return auth;
 
   try {

@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requireSuperAdmin, jsonOk, jsonError, serverError } from '../../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 
 /**
  * POST /api/expense-imports/:id/rollback — remove all live expenses that
@@ -7,7 +7,7 @@ import { type Env, requireSuperAdmin, jsonOk, jsonError, serverError } from '../
  */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_import_rollback');
   if (auth instanceof Response) return auth;
 
   try {

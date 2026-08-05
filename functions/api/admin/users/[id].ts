@@ -58,16 +58,24 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       .bind(name, body.phone ?? null, body.department ?? null, isActive, now, id)
       .run();
 
-    if (body.roleId) {
+    if (body.roleId && body.roleId !== existing.role) {
       // Validate the role exists, then set it as the user's single role.
       const role = await env.DB.prepare('SELECT id FROM roles WHERE id = ?').bind(body.roleId).first();
       if (!role) return jsonError('Invalid role', 400);
-      await env.DB.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(id).run();
-      await env.DB.prepare(
-        'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-      )
-        .bind(crypto.randomUUID(), id, body.roleId, now, now)
-        .run();
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(id),
+        env.DB.prepare(
+          'INSERT INTO user_roles (id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+        ).bind(crypto.randomUUID(), id, body.roleId, now, now),
+      ]);
+      // Audit log the role change (best-effort, pre-migration safe)
+      try {
+        await env.DB.prepare(
+          `INSERT INTO permission_audit_log
+           (id, target_user_id, changed_by_id, action, old_role, new_role, created_at)
+           VALUES (?, ?, ?, 'role_change', ?, ?, ?)`
+        ).bind(crypto.randomUUID(), id, auth.id, existing.role, body.roleId, now).run();
+      } catch { /* table may not exist yet */ }
     }
 
     const updated = await loadUser(env, id);

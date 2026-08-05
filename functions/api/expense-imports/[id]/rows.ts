@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requireSuperAdmin, jsonOk, jsonError, serverError } from '../../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { normalizeCategory, parseDate, parseAmount, duplicateKey } from '../../../lib/expense-import';
 
 interface RowUpdate {
@@ -23,7 +23,7 @@ interface RowUpdate {
  */
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requireSuperAdmin(env, request);
+  const auth = await requirePermission(env, request, 'finances_import');
   if (auth instanceof Response) return auth;
 
   try {

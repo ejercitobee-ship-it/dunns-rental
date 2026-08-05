@@ -34,7 +34,7 @@ function formatWhen(createdAt: number): string {
 }
 
 export function Activity() {
-  const { user, users } = useAuth();
+  const { users, hasPermission } = useAuth();
   const { tenants, properties, units } = useApp();
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export function Activity() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const canView = user?.roleId === 'super_admin' || user?.roleId === 'admin';
+  const canView = hasPermission('activity_view');
 
   useEffect(() => {
     if (!canView) return;

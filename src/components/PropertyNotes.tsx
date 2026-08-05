@@ -60,7 +60,7 @@ interface Props {
 }
 
 export function PropertyNotes({ propertyId }: Props) {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
   const [notes, setNotes] = useState<PropertyNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,8 +84,8 @@ export function PropertyNotes({ propertyId }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
 
-  const isAdmin = user?.roleId === 'super_admin' || user?.roleId === 'admin';
-  const canEdit = isAdmin || user?.roleId === 'manager';
+  const canPin = hasPermission('properties_history');
+  const canEdit = hasPermission('properties_edit');
 
   // Debounce search
   useEffect(() => {
@@ -293,7 +293,7 @@ export function PropertyNotes({ propertyId }: Props) {
                     </div>
                     {/* Actions */}
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {isAdmin && (
+                      {canPin && (
                         <button
                           onClick={() => handleTogglePin(note)}
                           className="p-1.5 rounded-md hover:bg-canvas text-faint hover:text-primary"
@@ -311,7 +311,7 @@ export function PropertyNotes({ propertyId }: Props) {
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      {(user?.roleId === 'super_admin' || note.createdBy === user?.id) && (
+                      {(hasPermission('properties_history') || note.createdBy === user?.id) && (
                         <button
                           onClick={() => setDeleteNote(note)}
                           className="p-1.5 rounded-md hover:bg-canvas text-faint hover:text-destructive"
@@ -442,7 +442,7 @@ export function PropertyNotes({ propertyId }: Props) {
               className="w-full px-3 py-2 text-sm rounded-lg border border-line bg-surface text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
             />
           </div>
-          {isAdmin && (
+          {canPin && (
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
