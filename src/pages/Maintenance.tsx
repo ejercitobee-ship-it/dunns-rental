@@ -75,6 +75,7 @@ export function Maintenance() {
   }, []);
 
   const handymanName = (id?: string) => handymen.find(h => h.id === id)?.name;
+  const handymanCompany = (id?: string) => handymen.find(h => h.id === id)?.companyName;
 
   const assignHandyman = async (m: MaintenanceRequest, handymanId: string) => {
     setBusyId(m.id);
@@ -415,7 +416,12 @@ export function Maintenance() {
                     </td>
                     <td className="py-3 px-4">
                       {m.status === 'paid' || m.status === 'cancelled' || isInvoiceStatus(m.status) ? (
-                        <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || '—'}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || '—'}</span>
+                          {handymanCompany(m.assignedHandymanId) && (
+                            <span className="block text-[11px] text-faint">{handymanCompany(m.assignedHandymanId)}</span>
+                          )}
+                        </div>
                       ) : (
                         <select
                           value={m.assignedHandymanId || ''}
@@ -545,7 +551,12 @@ export function Maintenance() {
         <div className="space-y-4">
           <p className="text-sm text-muted">
             Approve <span className="font-medium text-ink">{approveTarget?.title}</span>
-            {approveTarget?.assignedHandymanId && <> by <span className="font-medium text-ink">{handymanName(approveTarget.assignedHandymanId)}</span></>}.
+            {approveTarget?.assignedHandymanId && <>
+              {' '}by <span className="font-medium text-ink">{handymanName(approveTarget.assignedHandymanId)}</span>
+              {handymanCompany(approveTarget.assignedHandymanId) && (
+                <span className="text-muted"> ({handymanCompany(approveTarget.assignedHandymanId)})</span>
+              )}
+            </>}.
             {approveTarget?.assignedHandymanId
               ? <> The handyman will be notified to submit their invoice.</>
               : <> This records it as an expense on {propertyName(approveTarget?.propertyId)}
@@ -580,7 +591,10 @@ export function Maintenance() {
           <div className="space-y-4">
             <div className="space-y-2">
               <p className="text-sm text-muted">
-                Review the invoice from <span className="font-medium text-ink">{handymanName(invoiceTarget.assignedHandymanId) || 'the handyman'}</span> for{' '}
+                Review the invoice from <span className="font-medium text-ink">{handymanName(invoiceTarget.assignedHandymanId) || 'the handyman'}</span>
+                {handymanCompany(invoiceTarget.assignedHandymanId) && (
+                  <span className="text-muted"> ({handymanCompany(invoiceTarget.assignedHandymanId)})</span>
+                )} for{' '}
                 <span className="font-medium text-ink">{invoiceTarget.title}</span>.
               </p>
 

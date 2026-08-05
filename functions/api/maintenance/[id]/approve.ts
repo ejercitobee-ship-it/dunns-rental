@@ -44,7 +44,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (req.status === 'cancelled') return jsonError('This request was cancelled', 400);
 
     const vendor = req.assigned_handyman_id
-      ? (await env.DB.prepare('SELECT name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
+      ? (await env.DB.prepare('SELECT COALESCE(company_name, name) AS name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
       : null;
 
     const today = new Date().toISOString().slice(0, 10);

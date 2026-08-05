@@ -57,7 +57,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const expenseAmount = req.invoice_total_amount ?? req.cost ?? 0;
 
       const vendor = req.assigned_handyman_id
-        ? (await env.DB.prepare('SELECT name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
+        ? (await env.DB.prepare('SELECT COALESCE(company_name, name) AS name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
         : null;
 
       const expenseId = maintenanceExpenseId(id);
