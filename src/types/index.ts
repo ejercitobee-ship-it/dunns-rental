@@ -209,6 +209,7 @@ export type ExpenseCategory =
   | 'insurance'
   | 'taxes'
   | 'mortgage'
+  | 'hoa'
   | 'repairs'
   | 'cleaning'
   | 'landscaping'
@@ -310,6 +311,7 @@ export interface Handyman {
   id: string;
   userId?: string;
   name: string;
+  companyName?: string;
   phone?: string;
   email?: string;
   address?: string;

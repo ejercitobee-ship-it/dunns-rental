@@ -26,6 +26,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const body = (await request.json()) as Record<string, unknown>;
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!name) return jsonError('A name is required', 400);
+    const companyName = typeof body.companyName === 'string' ? body.companyName.trim() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const trades = cleanTrades(body.trades);
@@ -50,10 +51,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     await env.DB.prepare(
-      `UPDATE handymen SET name = ?, phone = ?, email = ?, trades = ?, is_active = ?, updated_at = unixepoch()
+      `UPDATE handymen SET name = ?, company_name = ?, phone = ?, email = ?, trades = ?, is_active = ?, updated_at = unixepoch()
        WHERE id = ?`
     )
-      .bind(name, phone || null, email || null, JSON.stringify(trades), isActive, id)
+      .bind(name, companyName || null, phone || null, email || null, JSON.stringify(trades), isActive, id)
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM handymen WHERE id = ?').bind(id).first();

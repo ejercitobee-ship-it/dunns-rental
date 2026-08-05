@@ -45,6 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!name) return jsonError('A name is required', 400);
 
+    const companyName = typeof body.companyName === 'string' ? body.companyName.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const trades = cleanTrades(body.trades);
@@ -71,10 +72,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO handymen (id, user_id, name, phone, email, trades, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, 1)`
+      `INSERT INTO handymen (id, user_id, name, company_name, phone, email, trades, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
     )
-      .bind(id, userId, name, phone || null, email || null, JSON.stringify(trades))
+      .bind(id, userId, name, companyName || null, phone || null, email || null, JSON.stringify(trades))
       .run();
 
     const row = await env.DB.prepare('SELECT * FROM handymen WHERE id = ?').bind(id).first();

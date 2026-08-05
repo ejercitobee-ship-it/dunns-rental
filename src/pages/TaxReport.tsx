@@ -90,6 +90,7 @@ function mapToTaxCategory(expenseCategory: string): string {
     insurance: 'insurance',
     taxes: 'taxes',
     mortgage: 'mortgage_interest',
+    hoa: 'other',
     repairs: 'repairs',
     cleaning: 'cleaning_maintenance',
     landscaping: 'cleaning_maintenance',

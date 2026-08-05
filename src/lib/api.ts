@@ -901,6 +901,7 @@ export const maintenanceApi = {
 // Handymen roster API (admin side).
 export interface HandymanInput {
   name: string;
+  companyName?: string;
   phone?: string;
   email?: string;
   trades: string[];

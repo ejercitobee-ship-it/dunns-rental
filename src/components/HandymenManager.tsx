@@ -13,7 +13,7 @@ import { tradeLabel } from '../lib/maintenance';
 const inputClass =
   'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25';
 
-const emptyForm: HandymanInput = { name: '', phone: '', email: '', trades: [], isActive: true };
+const emptyForm: HandymanInput = { name: '', companyName: '', phone: '', email: '', trades: [], isActive: true };
 
 /** The admin roster of handymen: add, edit trades, invite/resend, deactivate.
  * onCountChange lets a host (the Vendors tab) keep its count in sync. */
@@ -50,7 +50,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
   };
 
   const openEdit = (h: Handyman) => {
-    setForm({ name: h.name, phone: h.phone || '', email: h.email || '', trades: h.trades, isActive: h.isActive });
+    setForm({ name: h.name, companyName: h.companyName || '', phone: h.phone || '', email: h.email || '', trades: h.trades, isActive: h.isActive });
     setEditingId(h.id);
     setModalOpen(true);
   };
@@ -106,7 +106,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
   const handleDeactivate = (h: Handyman) => {
     if (h.isActive && !confirm(`Deactivate ${h.name}? They stop receiving jobs but their record stays.`)) return;
     handymenApi
-      .update(h.id, { name: h.name, phone: h.phone, email: h.email, trades: h.trades, isActive: !h.isActive })
+      .update(h.id, { name: h.name, companyName: h.companyName, phone: h.phone, email: h.email, trades: h.trades, isActive: !h.isActive })
       .then(() => {
         showToast(h.isActive ? 'Handyman deactivated' : 'Handyman reactivated', 'success');
         load();
@@ -151,6 +151,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`font-medium ${h.isActive ? 'text-ink' : 'text-faint line-through'}`}>{h.name}</span>
+                    {h.companyName && <span className="text-xs text-muted">({h.companyName})</span>}
                     {!h.isActive && <Badge variant="secondary">Inactive</Badge>}
                     {h.hasLogin ? (
                       <Badge variant="success">Has login</Badge>
@@ -224,16 +225,28 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
         title={editingId ? 'Edit handyman' : 'Add handyman'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Name *</label>
-            <input
-              type="text"
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Mike Reyes"
-              className={inputClass}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Name *</label>
+              <input
+                type="text"
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Mike Reyes"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Company Name</label>
+              <input
+                type="text"
+                value={form.companyName || ''}
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+                placeholder="e.g. Reyes Plumbing LLC"
+                className={inputClass}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

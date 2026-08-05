@@ -23,7 +23,7 @@ import type {
 
 const CATEGORY_LABELS: Record<string, string> = {
   maintenance: 'Maintenance', utilities: 'Utilities', insurance: 'Insurance',
-  taxes: 'Taxes', mortgage: 'Mortgage', repairs: 'Repairs', cleaning: 'Cleaning',
+  taxes: 'Taxes', mortgage: 'Mortgage', hoa: 'HOA', repairs: 'Repairs', cleaning: 'Cleaning',
   landscaping: 'Landscaping', management: 'Management', realtor_commission: 'Realtor Commission',
   other: 'Other',
 };

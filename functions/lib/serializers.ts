@@ -288,6 +288,7 @@ export function serializeHandyman(r: Row) {
     id: r.id,
     userId: r.user_id ?? undefined,
     name: r.name,
+    companyName: r.company_name ?? undefined,
     phone: r.phone ?? undefined,
     email: r.email ?? undefined,
     address: r.address ?? undefined,

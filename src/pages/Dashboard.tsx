@@ -740,7 +740,7 @@ export function Dashboard() {
                           className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                         />
-                        <span className="capitalize text-muted">{cat.name}</span>
+                        <span className="capitalize text-muted">{cat.name === 'hoa' ? 'HOA' : cat.name === 'realtor_commission' ? 'Realtor Commission' : cat.name}</span>
                       </div>
                       <span className="font-semibold text-ink tnum">{formatCurrency(cat.value)}</span>
                     </div>
