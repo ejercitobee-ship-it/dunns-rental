@@ -151,18 +151,27 @@ export const CAPITAL_ELIGIBLE_CATEGORIES = new Set<string>([
 /**
  * Determine whether an expense should be treated as a capital improvement
  * for tax purposes. Returns true when:
- *  1. The category is in the capital-eligible set, AND
- *  2. The amount exceeds the IRS de minimis safe-harbor threshold ($2,500), OR
- *  3. The category is explicitly 'capital_improvements' or 'property_improvements'
+ *  1. The expense is linked to a Capital Project (capitalProjectId is set), OR
+ *  2. The category is explicitly 'capital_improvements', 'property_improvements',
+ *     or 'unit_improvements', OR
+ *  3. The category is in the capital-eligible set AND the amount exceeds the
+ *     IRS de minimis safe-harbor threshold ($2,500)
+ *
+ * Recurring costs (taxes, insurance, HOA, utilities, etc.) are NEVER capital,
+ * even if linked to a project or over the threshold.
  */
 export function isCapitalExpense(expense: Expense, threshold = 2500): boolean {
   const cat = expense.category;
+  // Categories that are always operating never cross into capital,
+  // even if accidentally linked to a project.
+  if (ALWAYS_OPERATING_CATEGORIES.has(cat)) return false;
+  // If the expense is linked to a Capital Project, it is capital.
+  // The user made a deliberate classification by linking it.
+  if (expense.capitalProjectId) return true;
   // These categories are always capital, regardless of amount.
   if (cat === 'capital_improvements' || cat === 'property_improvements' || cat === 'unit_improvements') {
     return true;
   }
-  // Categories that are always operating never cross into capital.
-  if (ALWAYS_OPERATING_CATEGORIES.has(cat)) return false;
   // For everything else, apply the de minimis threshold.
   return expense.amount > threshold;
 }
