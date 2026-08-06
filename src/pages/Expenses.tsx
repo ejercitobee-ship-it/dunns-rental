@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
-  Plus, Download, Home, Wrench, Zap, Shield, Receipt,
-  Paintbrush, Trees, Briefcase, MoreHorizontal, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy, Users
+  Plus, Download, Home, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy,
+  Zap, Receipt,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -14,8 +14,13 @@ import { rentIncomeForMonths } from '../lib/rent';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import type { ExpenseCategory, Expense } from '../types';
+import type { ExpenseCategory, Expense, Income } from '../types';
 import { expensesApi } from '../lib/api';
+import {
+  EXPENSE_TIERS, categoriesForTier,
+  expenseCategoryLabel, expenseCategoryIcon,
+  INCOME_SOURCES,
+} from '../lib/financials';
 import {
   BarChart,
   Bar,
@@ -36,36 +41,6 @@ function isInMonth(dateStr: string, month: number, year: number): boolean {
   if (!dateStr) return false;
   return monthOf(dateStr) === month && yearOf(dateStr) === year;
 }
-
-const categoryIcons: Record<ExpenseCategory, typeof Wrench> = {
-  maintenance: Wrench,
-  utilities: Zap,
-  insurance: Shield,
-  taxes: Receipt,
-  mortgage: DollarSign,
-  hoa: Home,
-  repairs: Wrench,
-  cleaning: Paintbrush,
-  landscaping: Trees,
-  management: Briefcase,
-  realtor_commission: Users,
-  other: MoreHorizontal,
-};
-
-const categoryLabels: Record<ExpenseCategory, string> = {
-  maintenance: 'Maintenance',
-  utilities: 'Utilities',
-  insurance: 'Insurance',
-  taxes: 'Taxes',
-  mortgage: 'Mortgage',
-  hoa: 'HOA',
-  repairs: 'Repairs',
-  cleaning: 'Cleaning',
-  landscaping: 'Landscaping',
-  management: 'Management',
-  realtor_commission: 'Realtor Commission',
-  other: 'Other',
-};
 
 export function Expenses() {
   const { expenses, incomes, properties, units, rentPayments, leases, tenants, getLeaseTenants, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome, dispatch } = useApp();
@@ -241,7 +216,7 @@ export function Expenses() {
       categories[e.category] = (categories[e.category] || 0) + e.amount;
     });
     return Object.entries(categories)
-      .map(([name, value]) => ({ name: categoryLabels[name as ExpenseCategory], value }))
+      .map(([name, value]) => ({ name: expenseCategoryLabel(name), value }))
       .sort((a, b) => b.value - a.value);
   }, [expenses]);
 
@@ -290,14 +265,9 @@ export function Expenses() {
   // The income list = rent collected (from paid rent_payments, read-only) PLUS
   // the manually-entered `incomes`, so the list matches the totals above and the
   // Dashboard. Rent rows come from the payment's lease for their property/unit.
-  const sourceLabels: Record<string, string> = {
-    rent: 'Rent',
-    late_fee: 'Late Fee',
-    deposit: 'Deposit',
-    move_in_fee: 'Move-In Fee',
-    utility_reimbursement: 'Utility Reimbursement',
-    other: 'Other',
-  };
+  const sourceLabels = Object.fromEntries(
+    Object.entries(INCOME_SOURCES).map(([k, v]) => [k, v.label])
+  ) as Record<string, string>;
   interface IncomeRow {
     id: string;
     date: string;
@@ -412,7 +382,7 @@ export function Expenses() {
         await addIncome({
           propertyId: formData.get('propertyId') as string,
           unitId: (formData.get('unitId') as string) || undefined,
-          source: formData.get('source') as 'rent' | 'late_fee' | 'deposit' | 'other',
+          source: (formData.get('source') || 'other') as Income['source'],
           amount: Number(formData.get('amount')),
           date: formData.get('date') as string,
           description: formData.get('description') as string,
@@ -594,8 +564,12 @@ export function Expenses() {
             onChange={(e) => setCategoryFilter(e.target.value as ExpenseCategory | 'all')}
           >
             <option value="all">All Categories</option>
-            {Object.entries(categoryLabels).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
+            {EXPENSE_TIERS.map(tier => (
+              <optgroup key={tier.value} label={tier.label}>
+                {categoriesForTier(tier.value).map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         )}
@@ -636,7 +610,7 @@ export function Expenses() {
                   filteredExpenses.map(expense => {
                     const property = getProperty(expense.propertyId);
                     const unit = getUnit(expense.unitId);
-                    const CategoryIcon = categoryIcons[expense.category];
+                    const CategoryIcon = expenseCategoryIcon(expense.category);
                     
                     return (
                       <tr key={expense.id} className="border-b last:border-0 hover:bg-black/[0.02]">
@@ -658,7 +632,7 @@ export function Expenses() {
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
                             <CategoryIcon className="h-4 w-4 text-muted" />
-                            <span className="text-sm capitalize">{categoryLabels[expense.category]}</span>
+                            <span className="text-sm">{expenseCategoryLabel(expense.category)}</span>
                             {expense.isRecurring && (
                               <Badge variant="secondary" className="text-xs">Recurring</Badge>
                             )}
@@ -693,7 +667,7 @@ export function Expenses() {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleDeleteExpense(expense.id, `${categoryLabels[expense.category]} — ${formatCurrency(expense.amount)}`)}
+                                  onClick={() => handleDeleteExpense(expense.id, `${expenseCategoryLabel(expense.category)} — ${formatCurrency(expense.amount)}`)}
                                   disabled={deletingId === expense.id}
                                   title="Delete this expense"
                                   className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
@@ -865,8 +839,12 @@ export function Expenses() {
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Select Category</option>
-                    {Object.entries(categoryLabels).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
+                    {EXPENSE_TIERS.map(tier => (
+                      <optgroup key={tier.value} label={tier.label}>
+                        {categoriesForTier(tier.value).map(c => (
+                          <option key={c.value} value={c.value}>{c.label}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -982,12 +960,9 @@ export function Expenses() {
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select Source</option>
-                <option value="rent">Rent</option>
-                <option value="move_in_fee">Move-In Fee</option>
-                <option value="deposit">Deposit</option>
-                <option value="late_fee">Late Fee</option>
-                <option value="utility_reimbursement">Utility Reimbursement</option>
-                <option value="other">Other</option>
+                {Object.entries(INCOME_SOURCES).map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.label}</option>
+                ))}
               </select>
             </div>
           )}

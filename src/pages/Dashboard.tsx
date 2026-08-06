@@ -9,11 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
+import { expenseCategoryLabel } from '../lib/financials';
+import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
 import { calendarApi } from '../lib/api';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
-import type { DashboardStats, Property, Tenant, Unit, CalendarEvent } from '../types';
+import type { DashboardStats, Expense, Property, Tenant, Unit, CalendarEvent } from '../types';
 import {
   BarChart,
   Bar,
@@ -96,6 +98,15 @@ export function Dashboard() {
   const { properties, units, leases, rentPayments, expenses, incomes, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
   const pastDueMonths = usePastDueMonths();
   const [expenseView, setExpenseView] = useState<'monthly' | 'annual'>('monthly');
+  const [drillTitle, setDrillTitle] = useState('');
+  const [drillExpenses, setDrillExpenses] = useState<Expense[]>([]);
+  const [drillOpen, setDrillOpen] = useState(false);
+
+  const openDrill = (title: string, exps: Expense[]) => {
+    setDrillTitle(title);
+    setDrillExpenses(exps);
+    setDrillOpen(true);
+  };
 
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
@@ -182,7 +193,7 @@ export function Dashboard() {
     });
   }, [rentPayments, incomes, expenses]);
 
-  const expenseByCategory = useMemo(() => {
+  const { expenseByCategory, filteredDashExpenses } = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -195,9 +206,12 @@ export function Dashboard() {
     filtered.forEach(e => {
       categories[e.category] = (categories[e.category] || 0) + e.amount;
     });
-    return Object.entries(categories)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    return {
+      expenseByCategory: Object.entries(categories)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value),
+      filteredDashExpenses: filtered,
+    };
   }, [expenses, expenseView]);
 
   const recentActivity = useMemo(() => {
@@ -734,16 +748,26 @@ export function Dashboard() {
                 </ResponsiveContainer>
                 <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
                   {expenseByCategory.map((cat, idx) => (
-                    <div key={cat.name} className="flex items-center justify-between text-sm">
+                    <button
+                      key={cat.name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDrill(
+                          `${expenseCategoryLabel(cat.name)} Expenses`,
+                          filteredDashExpenses.filter(ex => ex.category === cat.name)
+                        );
+                      }}
+                      className="flex items-center justify-between text-sm w-full text-left hover:bg-black/[0.02] rounded-lg px-2 py-1 -mx-2 transition-colors"
+                    >
                       <div className="flex items-center gap-2">
                         <div
                           className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                         />
-                        <span className="capitalize text-muted">{cat.name === 'hoa' ? 'HOA' : cat.name === 'realtor_commission' ? 'Realtor Commission' : cat.name}</span>
+                        <span className="text-muted">{expenseCategoryLabel(cat.name)}</span>
                       </div>
                       <span className="font-semibold text-ink tnum">{formatCurrency(cat.value)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </>
@@ -1019,6 +1043,17 @@ export function Dashboard() {
           )}
         </Card>
       )}
+
+      {/* Drill-down modal */}
+      <TransactionDrillDown
+        isOpen={drillOpen}
+        onClose={() => setDrillOpen(false)}
+        title={drillTitle}
+        expenses={drillExpenses}
+        properties={properties}
+        units={units}
+        forceTab="expenses"
+      />
     </div>
   );
 }

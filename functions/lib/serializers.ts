@@ -203,6 +203,7 @@ export function serializeExpense(r: Row) {
     // Receipt image (served from Drive via the photo route), null when none.
     receiptUrl: r.receipt_drive_id ? `/api/photo/${r.receipt_drive_id}` : null,
     capitalProjectId: r.capital_project_id ?? undefined,
+    tier: r.tier ?? undefined,
   };
 }
 
@@ -323,10 +324,12 @@ export function serializeIncome(r: Row) {
     id: r.id,
     propertyId: r.property_id,
     unitId: r.unit_id ?? undefined,
+    tenantId: r.tenant_id ?? undefined,
     source: r.source,
     amount: r.amount,
     date: r.date,
     description: r.description,
+    paymentMethod: r.payment_method ?? undefined,
     relatedPaymentId: r.related_payment_id ?? undefined,
   };
 }

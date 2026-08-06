@@ -13,6 +13,10 @@ import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { expenseImportApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import {
+  EXPENSE_TIERS, categoriesForTier,
+  expenseCategoryLabel,
+} from '../lib/financials';
 import type {
   ExpenseImport as ImportType,
   ExpenseImportDetail,
@@ -20,13 +24,6 @@ import type {
   ImportRowStatus,
   ExpenseCategory,
 } from '../types';
-
-const CATEGORY_LABELS: Record<string, string> = {
-  maintenance: 'Maintenance', utilities: 'Utilities', insurance: 'Insurance',
-  taxes: 'Taxes', mortgage: 'Mortgage', hoa: 'HOA', repairs: 'Repairs', cleaning: 'Cleaning',
-  landscaping: 'Landscaping', management: 'Management', realtor_commission: 'Realtor Commission',
-  other: 'Other',
-};
 
 const STATUS_CONFIG: Record<ImportRowStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   pending: { label: 'Pending', color: 'text-muted', icon: Eye },
@@ -354,7 +351,7 @@ export function ExpenseImportPage() {
                         </td>
                         <td className="py-3 px-4">
                           {row.category ? (
-                            <Badge variant="outline">{CATEGORY_LABELS[row.category] || row.category}</Badge>
+                            <Badge variant="outline">{expenseCategoryLabel(row.category || '')}</Badge>
                           ) : (
                             <span className="text-danger text-xs">Missing</span>
                           )}
@@ -476,7 +473,13 @@ export function ExpenseImportPage() {
                   onChange={e => setEditRow({ ...editRow, category: e.target.value as ExpenseCategory })}
                 >
                   <option value="">Select category...</option>
-                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  {EXPENSE_TIERS.map(tier => (
+                    <optgroup key={tier.value} label={tier.label}>
+                      {categoriesForTier(tier.value).map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
 

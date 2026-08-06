@@ -184,6 +184,9 @@ export interface Expense {
   interestAmount?: number;
   /** When this expense belongs to a capital improvement project. */
   capitalProjectId?: string;
+  /** Optional explicit tier (property / unit / business). When absent the
+   * frontend derives it from the category via `getExpenseTier()`. */
+  tier?: ExpenseTier;
 }
 
 export type TaxDeductibleCategory =
@@ -203,28 +206,84 @@ export type TaxDeductibleCategory =
   | 'depreciation'
   | 'other';
 
-export type ExpenseCategory =
-  | 'maintenance'
+// ---------------------------------------------------------------------------
+// Expense categories — organized into three tiers for financial reporting.
+// ---------------------------------------------------------------------------
+
+/** Property-level expense categories. */
+export type PropertyExpenseCategory =
   | 'utilities'
-  | 'insurance'
-  | 'taxes'
-  | 'mortgage'
   | 'hoa'
-  | 'repairs'
-  | 'cleaning'
+  | 'taxes'           // property taxes
+  | 'insurance'
+  | 'mortgage'
   | 'landscaping'
-  | 'management'
+  | 'snow_removal'
+  | 'pest_control'
+  | 'capital_improvements'
+  | 'repairs'
+  | 'maintenance'
+  | 'cleaning'
+  | 'common_area'
+  | 'property_improvements';
+
+/** Unit-level expense categories. */
+export type UnitExpenseCategory =
+  | 'tenant_repairs'
+  | 'appliance_replacement'
+  | 'turnover_costs'
+  | 'unit_maintenance'
+  | 'tenant_damage'
+  | 'unit_improvements';
+
+/** Business / management expense categories. */
+export type BusinessExpenseCategory =
+  | 'software'
+  | 'office_expenses'
+  | 'marketing'
+  | 'accounting'
+  | 'legal'
+  | 'payroll'
+  | 'administrative'
+  | 'banking_fees'
+  | 'other_business';
+
+/** All expense categories (union of the three tiers + legacy catch-all). */
+export type ExpenseCategory =
+  | PropertyExpenseCategory
+  | UnitExpenseCategory
+  | BusinessExpenseCategory
+  // Legacy categories still stored in older records.
   | 'realtor_commission'
+  | 'management'
+  | 'other';
+
+/** Which tier a category belongs to. */
+export type ExpenseTier = 'property' | 'unit' | 'business';
+
+/** All income source categories. */
+export type IncomeSource =
+  | 'rent'
+  | 'late_fee'
+  | 'deposit'            // security deposit received
+  | 'move_in_fee'
+  | 'utility_reimbursement'
+  | 'hoa_reimbursement'
+  | 'application_fee'
+  | 'pet_fee'
+  | 'parking_fee'
   | 'other';
 
 export interface Income {
   id: string;
   propertyId: string;
   unitId?: string;
-  source: 'rent' | 'late_fee' | 'deposit' | 'move_in_fee' | 'utility_reimbursement' | 'other';
+  tenantId?: string;
+  source: IncomeSource;
   amount: number;
   date: string;
   description: string;
+  paymentMethod?: PaymentMethod;
   relatedPaymentId?: string;
 }
 

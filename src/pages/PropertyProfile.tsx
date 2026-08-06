@@ -9,6 +9,8 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate } from '../lib/utils';
+import { expenseCategoryLabel } from '../lib/financials';
+import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { propertiesApi } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import type { PropertyProfile as ProfileData } from '../types';
@@ -16,13 +18,6 @@ import { PropertyNotes } from '../components/PropertyNotes';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 
 const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Notes', 'Activity'] as const;
-
-const CATEGORY_LABELS: Record<string, string> = {
-  maintenance: 'Maintenance', utilities: 'Utilities', insurance: 'Insurance',
-  taxes: 'Taxes', mortgage: 'Mortgage', hoa: 'HOA', repairs: 'Repairs',
-  cleaning: 'Cleaning', landscaping: 'Landscaping', management: 'Management',
-  realtor_commission: 'Realtor Commission', other: 'Other',
-};
 type Tab = typeof tabs[number];
 
 const maintenanceStatusBadge: Record<string, 'success' | 'warning' | 'secondary' | 'destructive'> = {
@@ -49,6 +44,9 @@ export function PropertyProfile() {
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()));
   const [expandedLeases, setExpandedLeases] = useState<Set<string>>(new Set());
+  const [drillTitle, setDrillTitle] = useState('');
+  const [drillExpenses, setDrillExpenses] = useState<ProfileData['expenses']>([]);
+  const [drillOpen, setDrillOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -97,7 +95,7 @@ export function PropertyProfile() {
       totals[e.category] = (totals[e.category] || 0) + e.amount;
     }
     return Object.entries(totals)
-      .map(([cat, total]) => ({ category: cat, label: CATEGORY_LABELS[cat] || cat, total }))
+      .map(([cat, total]) => ({ category: cat, label: expenseCategoryLabel(cat), total }))
       .sort((a, b) => b.total - a.total);
   }, [yearExpenses]);
 
@@ -391,7 +389,15 @@ export function PropertyProfile() {
                     const totalExpenses = data.financialSummary[financialYear]?.expenses || 1;
                     const pct = totalExpenses > 0 ? Math.round((total / totalExpenses) * 100) : 0;
                     return (
-                      <div key={category} className="flex items-center gap-3">
+                      <button
+                        key={category}
+                        className="flex items-center gap-3 w-full text-left hover:bg-black/[0.02] rounded-lg px-1 py-0.5 -mx-1 transition-colors"
+                        onClick={() => {
+                          setDrillTitle(`${label} Expenses`);
+                          setDrillExpenses(yearExpenses.filter(e => e.category === category));
+                          setDrillOpen(true);
+                        }}
+                      >
                         <div className="w-32 text-sm font-medium text-ink truncate">{label}</div>
                         <div className="flex-1 bg-canvas rounded-full h-3 overflow-hidden">
                           <div
@@ -401,7 +407,7 @@ export function PropertyProfile() {
                         </div>
                         <div className="w-24 text-right text-sm tnum font-medium text-ink">{formatCurrency(total)}</div>
                         <div className="w-10 text-right text-xs text-muted tnum">{pct}%</div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -512,7 +518,7 @@ export function PropertyProfile() {
                       {yearExpenses.map(e => (
                         <tr key={e.id} className="border-b border-line last:border-0">
                           <td className="py-2 px-3">{formatDate(e.date)}</td>
-                          <td className="py-2 px-3">{CATEGORY_LABELS[e.category] || e.category.replace(/_/g, ' ')}</td>
+                          <td className="py-2 px-3">{expenseCategoryLabel(e.category)}</td>
                           <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
                           <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
                           <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
@@ -727,6 +733,17 @@ export function PropertyProfile() {
           </CardContent>
         </Card>
       )}
+
+      {/* Drill-down modal */}
+      <TransactionDrillDown
+        isOpen={drillOpen}
+        onClose={() => setDrillOpen(false)}
+        title={drillTitle}
+        expenses={drillExpenses as any}
+        properties={data ? [data.property] as any : []}
+        units={data ? data.units as any : []}
+        forceTab="expenses"
+      />
     </div>
   );
 }

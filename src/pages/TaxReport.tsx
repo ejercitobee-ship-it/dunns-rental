@@ -83,24 +83,8 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   other: { label: 'Other', description: 'Other deductible expenses' },
 };
 
-/** Map an expense category to its IRS Schedule E tax category. */
-function mapToTaxCategory(expenseCategory: string): string {
-  const mapping: Record<string, string> = {
-    maintenance: 'cleaning_maintenance',
-    utilities: 'utilities',
-    insurance: 'insurance',
-    taxes: 'taxes',
-    mortgage: 'mortgage_interest',
-    hoa: 'hoa',
-    repairs: 'repairs',
-    cleaning: 'cleaning_maintenance',
-    landscaping: 'cleaning_maintenance',
-    management: 'management_fees',
-    realtor_commission: 'commissions',
-    other: 'other',
-  };
-  return mapping[expenseCategory] || 'other';
-}
+// Tax category mapping now lives in the central financial engine.
+import { mapToTaxCategory } from '../lib/financials';
 
 export function TaxReport() {
   const { expenses, incomes, properties, rentPayments, leases } = useApp();
