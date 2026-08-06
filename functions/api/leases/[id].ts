@@ -41,10 +41,13 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     // stamped in the SAME batch as the lease UPDATE below, so the batch needs
     // to know up front whether it is opening or closing one.
     const current = await env.DB.prepare(
-      'SELECT status, monthly_rent, start_date, end_date, unit_id, property_id, rent_due_day, notes FROM leases WHERE id = ?'
+      `SELECT status, monthly_rent, start_date, end_date, unit_id, property_id, rent_due_day, notes,
+              security_deposit, move_in_fee_paid, move_in_fee_paid_date
+         FROM leases WHERE id = ?`
     ).bind(id).first<{
       status: string; monthly_rent: number; start_date: string; end_date: string;
       unit_id: string; property_id: string; rent_due_day: number | null; notes: string | null;
+      security_deposit: number | null; move_in_fee_paid: number; move_in_fee_paid_date: string | null;
     }>();
     if (!current) return jsonError('Lease not found', 404);
 
@@ -140,6 +143,31 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         env.DB.prepare(
           'UPDATE lease_pauses SET resumed_at = ? WHERE lease_id = ? AND resumed_at IS NULL'
         ).bind(statusChangedOn, id)
+      );
+    }
+
+    // Sync move-in fee to the incomes table so it shows on the Finances page
+    // and Tax Report. The dedicated move-in-fee endpoint already does this,
+    // but the general lease edit also changes the amount, so keep them in sync.
+    const newDeposit = Number(body.securityDeposit) || 0;
+    const newPaid = body.moveInFeePaid !== false;
+    const incomeId = `movein-${id}`;
+    if (newPaid && newDeposit > 0) {
+      // Use the existing paid date, or fall back to the lease start date, or today.
+      const incomeDate = current.move_in_fee_paid_date || (body.startDate as string) || new Date().toISOString().slice(0, 10);
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO incomes (id, property_id, unit_id, source, amount, date, description, user_id)
+           VALUES (?, ?, ?, 'move_in_fee', ?, ?, 'Move-in fee', ?)
+           ON CONFLICT(id) DO UPDATE SET
+             amount = excluded.amount, date = excluded.date,
+             property_id = excluded.property_id, unit_id = excluded.unit_id`
+        ).bind(incomeId, body.propertyId ?? null, body.unitId ?? null, newDeposit, incomeDate, auth.id)
+      );
+    } else if (!newPaid || newDeposit <= 0) {
+      // Fee was removed or marked unpaid: delete the income record if it exists.
+      statements.push(
+        env.DB.prepare('DELETE FROM incomes WHERE id = ?').bind(incomeId)
       );
     }
 

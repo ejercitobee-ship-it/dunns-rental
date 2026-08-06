@@ -505,6 +505,7 @@ export function TenantDetail() {
         moveInFeePaid: approveForm.moveInFeePaid,
         needsReview: false,
       });
+      await refreshData();
       showToast('Tenancy approved. It is now active.', 'success');
       setApproveOpen(false);
     } catch (err) {
@@ -550,6 +551,9 @@ export function TenantDetail() {
         moveInFeePaid: tenancyForm.moveInFeePaid,
         rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
       });
+      // Refresh so the incomes table (move-in fee) is current on the Finances
+      // page and Tax Report without a full page reload.
+      await refreshData();
       showToast('Tenancy updated.', 'success');
       setTenancyOpen(false);
     } catch (err) {
