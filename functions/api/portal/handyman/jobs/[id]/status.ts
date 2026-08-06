@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../../lib/session';
 import { handymanForUser } from '../../../../../lib/portal';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
+import { logStatusChange } from '../../../../../lib/maintenance';
 import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../../../lib/push';
 import { generateAndSaveWorkReport } from '../../../../../lib/work-report';
@@ -43,12 +44,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Stamp resolved_date when the work is finished, for the admin's records.
     const setResolved = status === 'completed' ? ", resolved_date = date('now', 'localtime')" : '';
-    await env.DB.prepare(
-      `UPDATE maintenance_requests SET status = ?${setResolved}, updated_at = unixepoch()
-        WHERE id = ? AND assigned_handyman_id = ?`
-    )
-      .bind(status, jobId, handyman.id)
-      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE maintenance_requests SET status = ?${setResolved}, updated_at = unixepoch()
+          WHERE id = ? AND assigned_handyman_id = ?`
+      ).bind(status, jobId, handyman.id),
+      logStatusChange(env.DB, jobId, existing.status as string, status, auth.id, auth.name,
+        status === 'in_progress' ? 'Started work' : 'Work completed'),
+    ]);
 
     const row = await loadOwnedJob(env, jobId, handyman.id);
     if (!row) return serverError();

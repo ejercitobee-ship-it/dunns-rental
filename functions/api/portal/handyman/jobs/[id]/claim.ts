@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../../lib/session';
 import { handymanForUser } from '../../../../../lib/portal';
-import { tradeMatches } from '../../../../../lib/maintenance';
+import { tradeMatches, logStatusChange } from '../../../../../lib/maintenance';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
 import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../../../lib/push';
@@ -42,6 +42,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(handyman.id, jobId)
       .run();
     if (!res.meta.changes) return jsonError('This job was already taken', 409);
+
+    // Log after the guarded update so only successful claims are recorded.
+    await logStatusChange(env.DB, jobId, 'submitted', 'assigned', auth.id, auth.name, 'Claimed job').run();
 
     const row = await loadOwnedJob(env, jobId, handyman.id);
     if (!row) return serverError();

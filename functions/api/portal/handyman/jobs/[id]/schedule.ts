@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../../lib/session';
 import { handymanForUser } from '../../../../../lib/portal';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
+import { logStatusChange } from '../../../../../lib/maintenance';
 import { notifyTenant, prettyDay } from '../../../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../../../lib/push';
 
@@ -45,12 +46,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('This job cannot be scheduled from its current status', 409);
     }
 
-    await env.DB.prepare(
-      `UPDATE maintenance_requests SET scheduled_for = ?, status = 'scheduled', updated_at = unixepoch()
-        WHERE id = ? AND assigned_handyman_id = ?`
-    )
-      .bind(scheduledFor, jobId, handyman.id)
-      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE maintenance_requests SET scheduled_for = ?, status = 'scheduled', updated_at = unixepoch()
+          WHERE id = ? AND assigned_handyman_id = ?`
+      ).bind(scheduledFor, jobId, handyman.id),
+      logStatusChange(env.DB, jobId, existing.status as string, 'scheduled', auth.id, auth.name,
+        `Scheduled for ${scheduleLabel(scheduledFor)}`),
+    ]);
 
     const row = await loadOwnedJob(env, jobId, handyman.id);
     if (!row) return serverError();

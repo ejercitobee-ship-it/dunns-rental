@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeMaintenance } from '../../../lib/serializers';
-import { maintenanceExpenseId } from '../../../lib/maintenance';
+import { maintenanceExpenseId, logStatusChange } from '../../../lib/maintenance';
 
 /**
  * POST /api/maintenance/:id/pay — the admin records paying the handyman. Sets
@@ -64,6 +64,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         vendor,
         auth.id
       ),
+      logStatusChange(env.DB, id, req.status, 'paid', auth.id, auth.name, `Paid $${cost.toFixed(2)}`),
     ]);
 
     const row = await env.DB.prepare('SELECT * FROM maintenance_requests WHERE id = ?').bind(id).first();

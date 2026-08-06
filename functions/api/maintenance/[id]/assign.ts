@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeMaintenance } from '../../../lib/serializers';
+import { logStatusChange } from '../../../lib/maintenance';
 import { JOB_COLUMNS, JOB_JOINS, buildNotice, tenantEmail, type JobRow } from '../../../lib/handyman-jobs';
 import { availabilityText, notifyTenant } from '../../../lib/maintenance-notify';
 import { sendEmail } from '../../../lib/email';
@@ -43,11 +44,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!handymanId) newStatus = 'submitted';
     else if (existing.status === 'submitted') newStatus = 'assigned';
 
-    await env.DB.prepare(
-      `UPDATE maintenance_requests SET assigned_handyman_id = ?, status = ?, updated_at = unixepoch() WHERE id = ?`
-    )
-      .bind(handymanId, newStatus, id)
-      .run();
+    const stmts = [
+      env.DB.prepare(
+        `UPDATE maintenance_requests SET assigned_handyman_id = ?, status = ?, updated_at = unixepoch() WHERE id = ?`
+      ).bind(handymanId, newStatus, id),
+    ];
+    if (newStatus !== existing.status) {
+      const note = handyman ? `Assigned to ${handyman.name}` : 'Unassigned';
+      stmts.push(logStatusChange(env.DB, id, existing.status, newStatus, auth.id, auth.name, note));
+    }
+    await env.DB.batch(stmts);
 
     const row = await env.DB.prepare(`SELECT ${JOB_COLUMNS} ${JOB_JOINS} WHERE m.id = ?`).bind(id).first<JobRow>();
     if (!row) return serverError();

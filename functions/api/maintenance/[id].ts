@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeMaintenance } from '../../lib/serializers';
 import { deleteDriveFile } from '../../lib/google';
-import { maintenanceExpenseId } from '../../lib/maintenance';
+import { maintenanceExpenseId, logStatusChange } from '../../lib/maintenance';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -99,6 +99,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       stmts.push(
         env.DB.prepare('DELETE FROM expenses WHERE id = ?').bind(maintenanceExpenseId(id))
       );
+    }
+
+    // Log the status transition so the Work Order Details history stays complete.
+    if (newStatus !== prev.status) {
+      stmts.push(logStatusChange(env.DB, id, prev.status, newStatus, auth.id, auth.name));
     }
 
     await env.DB.batch(stmts);
