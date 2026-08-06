@@ -3,6 +3,7 @@ import {
   Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle,
   Trash2, ArrowLeft, Search, Pencil, SkipForward,
   Merge, RotateCcw, Eye, Filter, Home, DoorOpen,
+  Columns3,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -24,6 +25,91 @@ import type {
   ImportRowStatus,
   ExpenseCategory,
 } from '../types';
+
+// ---------------------------------------------------------------------------
+// Column mapping helpers (client-side auto-detection + field definitions)
+// ---------------------------------------------------------------------------
+
+const SYSTEM_FIELDS: { value: string; label: string; required: boolean }[] = [
+  { value: 'date', label: 'Date', required: true },
+  { value: 'amount', label: 'Amount', required: true },
+  { value: 'category', label: 'Category', required: false },
+  { value: 'description', label: 'Description', required: false },
+  { value: 'vendor', label: 'Vendor', required: false },
+  { value: 'property', label: 'Property', required: false },
+  { value: 'unit', label: 'Unit', required: false },
+  { value: 'taxCategory', label: 'Tax Category', required: false },
+  { value: 'recurring', label: 'Recurring', required: false },
+  { value: 'notes', label: 'Notes', required: false },
+];
+
+const COLUMN_ALIASES: Record<string, string[]> = {
+  date:        ['date', 'expense date', 'trans date', 'transaction date', 'payment date', 'paid date'],
+  amount:      ['amount', 'cost', 'total', 'price', 'expense amount', 'payment amount'],
+  category:    ['category', 'type', 'expense type', 'expense category'],
+  description: ['description', 'memo', 'notes', 'details', 'line item', 'item'],
+  vendor:      ['vendor', 'payee', 'paid to', 'supplier', 'merchant'],
+  property:    ['property', 'property name', 'building', 'address', 'location'],
+  unit:        ['unit', 'unit number', 'apt', 'apartment', 'suite', 'unit #'],
+  taxCategory: ['tax category', 'tax type', 'deduction category', 'irs category'],
+  recurring:   ['recurring', 'is recurring', 'repeat', 'frequency'],
+  notes:       ['notes', 'comment', 'comments', 'remark', 'remarks'],
+};
+
+/** Auto-detect system field from a CSV header string. */
+function autoDetectField(header: string): string {
+  const lower = header.trim().toLowerCase().replace(/[_\-]/g, ' ');
+  for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+    if (aliases.includes(lower)) return field;
+  }
+  return 'skip';
+}
+
+/** Parse just the first row of a CSV string to get headers. */
+function parseCSVHeaders(text: string): string[] {
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  // Simple comma split that handles basic quoting
+  const headers: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < firstLine.length; i++) {
+    const ch = firstLine[i];
+    if (inQuotes) {
+      if (ch === '"' && firstLine[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else field += ch;
+    } else if (ch === '"') { inQuotes = true; }
+    else if (ch === ',') { headers.push(field.trim()); field = ''; }
+    else field += ch;
+  }
+  headers.push(field.trim());
+  return headers;
+}
+
+/** Parse a few sample rows to preview data under each column. */
+function parseCSVSampleRows(text: string, maxRows = 3): string[][] {
+  const lines = text.split(/\r?\n/).slice(1).filter(l => l.trim());
+  const rows: string[][] = [];
+  for (let r = 0; r < Math.min(maxRows, lines.length); r++) {
+    const line = lines[r];
+    const cells: string[] = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') { field += '"'; i++; }
+        else if (ch === '"') inQuotes = false;
+        else field += ch;
+      } else if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { cells.push(field.trim()); field = ''; }
+      else field += ch;
+    }
+    cells.push(field.trim());
+    rows.push(cells);
+  }
+  return rows;
+}
 
 const STATUS_CONFIG: Record<ImportRowStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   pending: { label: 'Pending', color: 'text-muted', icon: Eye },
@@ -50,6 +136,12 @@ export function ExpenseImportPage() {
 
   // Editing
   const [editRow, setEditRow] = useState<ExpenseImportRow | null>(null);
+
+  // Column mapping step
+  const [mappingFile, setMappingFile] = useState<File | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvSample, setCsvSample] = useState<string[][]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
 
   // Confirmations
   const [mergeConfirm, setMergeConfirm] = useState(false);
@@ -90,21 +182,65 @@ export function ExpenseImportPage() {
   // Upload
   // ------------------------------------------------------------------
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Read the file client-side to extract headers and preview rows
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const headers = parseCSVHeaders(text);
+      if (headers.length === 0 || headers.every(h => !h)) {
+        showToast('Could not read any column headers from this file.', 'error');
+        if (fileRef.current) fileRef.current.value = '';
+        return;
+      }
+      // Auto-detect mapping for each header
+      const autoMap: Record<string, string> = {};
+      const claimed = new Set<string>();
+      for (const h of headers) {
+        const detected = autoDetectField(h);
+        // Avoid mapping two columns to the same system field
+        if (detected !== 'skip' && !claimed.has(detected)) {
+          autoMap[h] = detected;
+          claimed.add(detected);
+        } else {
+          autoMap[h] = 'skip';
+        }
+      }
+      setCsvHeaders(headers);
+      setCsvSample(parseCSVSampleRows(text, 3));
+      setColumnMapping(autoMap);
+      setMappingFile(file);
+    };
+    reader.readAsText(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleConfirmMapping = async () => {
+    if (!mappingFile) return;
     setUploading(true);
     try {
-      const result = await expenseImportApi.upload(file);
+      const result = await expenseImportApi.upload(mappingFile, columnMapping);
       showToast(`Imported ${result.totalRows} rows from ${result.fileName}. ${result.validRows} ready, ${result.errorRows} need review.`, 'success');
+      setMappingFile(null);
+      setCsvHeaders([]);
+      setCsvSample([]);
+      setColumnMapping({});
       await loadDetail(result.id);
       await loadImports();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
+  };
+
+  const handleCancelMapping = () => {
+    setMappingFile(null);
+    setCsvHeaders([]);
+    setCsvSample([]);
+    setColumnMapping({});
   };
 
   // ------------------------------------------------------------------
@@ -205,6 +341,122 @@ export function ExpenseImportPage() {
       return true;
     });
   }, [detail, statusFilter, search]);
+
+  // ------------------------------------------------------------------
+  // Render: Column mapping step
+  // ------------------------------------------------------------------
+
+  if (mappingFile) {
+    const mappedValues = Object.values(columnMapping).filter(v => v !== 'skip');
+    const hasDate = mappedValues.includes('date');
+    const hasAmount = mappedValues.includes('amount');
+    const canProceed = hasDate && hasAmount;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" onClick={handleCancelMapping}><ArrowLeft className="h-4 w-4" /></Button>
+          <div className="flex-1">
+            <h1 className="text-[26px] sm:text-[32px] font-medium text-ink flex items-center gap-2">
+              <Columns3 className="h-7 w-7" />
+              Map Columns
+            </h1>
+            <p className="text-muted text-sm mt-0.5">
+              Match each column from <span className="font-medium text-ink">{mappingFile.name}</span> to the correct field.
+              {' '}Columns you don't need can be left as "Skip."
+            </p>
+          </div>
+        </div>
+
+        {!canProceed && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-warning-soft text-warning text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            At minimum, map the <span className="font-semibold">Date</span> and <span className="font-semibold">Amount</span> columns to continue.
+          </div>
+        )}
+
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-canvas text-left text-xs text-muted uppercase tracking-wider">
+                    <th className="py-3 px-4">CSV Column</th>
+                    <th className="py-3 px-4">Maps To</th>
+                    <th className="py-3 px-4">Sample Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvHeaders.map((header, idx) => (
+                    <tr key={idx} className="border-b last:border-0">
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-ink">{header || `(Column ${idx + 1})`}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <select
+                          className="px-3 py-2 border border-line rounded-lg bg-surface text-sm w-full max-w-[200px]"
+                          value={columnMapping[header] || 'skip'}
+                          onChange={e => {
+                            const newVal = e.target.value;
+                            setColumnMapping(prev => {
+                              const next = { ...prev };
+                              // If another column already maps to this field, clear it
+                              if (newVal !== 'skip') {
+                                for (const [k, v] of Object.entries(next)) {
+                                  if (v === newVal && k !== header) next[k] = 'skip';
+                                }
+                              }
+                              next[header] = newVal;
+                              return next;
+                            });
+                          }}
+                        >
+                          <option value="skip">Skip</option>
+                          {SYSTEM_FIELDS.map(f => (
+                            <option key={f.value} value={f.value}>
+                              {f.label}{f.required ? ' *' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-3 px-4 text-muted text-xs">
+                        {csvSample.map((row, ri) => (
+                          <div key={ri} className="truncate max-w-[250px]">{row[idx] || '(empty)'}</div>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Mapping summary */}
+        <div className="flex flex-wrap gap-2">
+          {SYSTEM_FIELDS.map(f => {
+            const mapped = Object.entries(columnMapping).find(([, v]) => v === f.value);
+            return (
+              <Badge
+                key={f.value}
+                variant={mapped ? 'success' : f.required ? 'destructive' : 'outline'}
+              >
+                {f.label}: {mapped ? mapped[0] : 'unmapped'}
+              </Badge>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button variant="default" disabled={!canProceed || uploading} onClick={handleConfirmMapping}>
+            <Upload className="h-4 w-4 mr-1.5" />
+            {uploading ? 'Uploading...' : 'Import with This Mapping'}
+          </Button>
+          <Button variant="ghost" onClick={handleCancelMapping}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
 
   // ------------------------------------------------------------------
   // Render: Detail view
@@ -558,7 +810,7 @@ export function ExpenseImportPage() {
           <p className="text-muted mt-1 text-sm">Upload, review, and merge historical expense data from CSV files.</p>
         </div>
         <div>
-          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleUpload} />
+          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileSelect} />
           <Button variant="default" onClick={() => fileRef.current?.click()} disabled={uploading}>
             <Upload className="h-4 w-4 mr-1.5" />
             {uploading ? 'Uploading...' : 'Upload CSV'}

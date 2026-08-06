@@ -1098,9 +1098,10 @@ export const vendorMessagesApi = {
 
 export const expenseImportApi = {
   list: (): Promise<ExpenseImport[]> => apiRequest('/expense-imports'),
-  upload: async (file: File): Promise<{ id: string; fileName: string; totalRows: number; validRows: number; errorRows: number; duplicateRows: number; columnMapping: Record<string, string> }> => {
+  upload: async (file: File, columnMapping?: Record<string, string>): Promise<{ id: string; fileName: string; totalRows: number; validRows: number; errorRows: number; duplicateRows: number; columnMapping: Record<string, string> }> => {
     const form = new FormData();
     form.append('file', file);
+    if (columnMapping) form.append('columnMapping', JSON.stringify(columnMapping));
     const res = await fetch(`${API_BASE}/expense-imports`, {
       method: 'POST',
       credentials: 'include',

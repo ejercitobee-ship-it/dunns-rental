@@ -39,14 +39,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (parsed.length < 2) return jsonError('The file must have a header row and at least one data row.', 400);
 
     const headers = parsed[0];
-    const colMap = mapColumns(headers);
+
+    // Accept optional user-provided column mapping (headerName → fieldName).
+    // If not supplied, fall back to the auto-detection heuristic.
+    let colMap: Record<number, string>;
+    const rawMapping = formData.get('columnMapping') as string | null;
+    if (rawMapping) {
+      const userMap: Record<string, string> = JSON.parse(rawMapping);
+      colMap = {};
+      for (const [headerName, field] of Object.entries(userMap)) {
+        if (!field || field === 'skip') continue;
+        const idx = headers.findIndex(h => h === headerName);
+        if (idx >= 0) colMap[idx] = field;
+      }
+    } else {
+      colMap = mapColumns(headers);
+    }
 
     // Check that we found at least date + amount
     const mappedFields = new Set(Object.values(colMap));
     if (!mappedFields.has('date') || !mappedFields.has('amount')) {
       return jsonError(
         `Could not detect required columns. Found: ${[...mappedFields].join(', ') || 'none'}. ` +
-        `Make sure the CSV has headers like Date, Amount, Category, Property, Description.`,
+        `Make sure you map at least the Date and Amount columns.`,
         400,
       );
     }
