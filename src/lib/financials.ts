@@ -161,13 +161,15 @@ export const CAPITAL_ELIGIBLE_CATEGORIES = new Set<string>([
  * even if linked to a project or over the threshold.
  */
 export function isCapitalExpense(expense: Expense, threshold = 2500): boolean {
-  const cat = expense.category;
-  // Categories that are always operating never cross into capital,
-  // even if accidentally linked to a project.
-  if (ALWAYS_OPERATING_CATEGORIES.has(cat)) return false;
-  // If the expense is linked to a Capital Project, it is capital.
-  // The user made a deliberate classification by linking it.
+  // If the expense is explicitly linked to a Capital Project, it is
+  // always capital. The user made a deliberate classification by
+  // linking it, which overrides every other rule.
   if (expense.capitalProjectId) return true;
+
+  const cat = expense.category;
+  // Categories that are always operating never cross into capital
+  // (unless overridden above by a project link).
+  if (ALWAYS_OPERATING_CATEGORIES.has(cat)) return false;
   // These categories are always capital, regardless of amount.
   if (cat === 'capital_improvements' || cat === 'property_improvements' || cat === 'unit_improvements') {
     return true;
