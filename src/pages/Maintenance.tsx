@@ -124,6 +124,7 @@ export function Maintenance() {
     try {
       const updated = await maintenanceApi.pay(payTarget.id, cost);
       dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      await refreshData();
       showToast('Recorded as paid. It now counts in Finances.', 'success');
       setPayTarget(null);
     } catch (err) {
@@ -269,6 +270,7 @@ export function Maintenance() {
       };
       if (editingId) {
         await updateMaintenance({ id: editingId, ...payload });
+        await refreshData();
         showToast('Request updated', 'success');
       } else {
         await addMaintenance(payload);
@@ -283,6 +285,7 @@ export function Maintenance() {
   const quickStatus = async (m: MaintenanceRequest, status: MaintenanceStatus) => {
     try {
       await updateMaintenance({ ...m, status });
+      await refreshData();
       showToast(`Marked ${STATUS_LABEL[status].toLowerCase()}`, 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not update', 'error');
