@@ -33,12 +33,11 @@ import type {
 const SYSTEM_FIELDS: { value: string; label: string; required: boolean }[] = [
   { value: 'date', label: 'Date', required: true },
   { value: 'amount', label: 'Amount', required: true },
+  { value: 'property', label: 'Property', required: false },
+  { value: 'unit', label: 'Unit', required: false },
   { value: 'category', label: 'Category', required: false },
   { value: 'description', label: 'Description', required: false },
   { value: 'vendor', label: 'Vendor', required: false },
-  { value: 'property', label: 'Property', required: false },
-  { value: 'unit', label: 'Unit', required: false },
-  { value: 'taxCategory', label: 'Tax Category', required: false },
   { value: 'recurring', label: 'Recurring', required: false },
   { value: 'notes', label: 'Notes', required: false },
 ];
@@ -46,12 +45,11 @@ const SYSTEM_FIELDS: { value: string; label: string; required: boolean }[] = [
 const COLUMN_ALIASES: Record<string, string[]> = {
   date:        ['date', 'expense date', 'trans date', 'transaction date', 'payment date', 'paid date'],
   amount:      ['amount', 'cost', 'total', 'price', 'expense amount', 'payment amount'],
-  category:    ['category', 'type', 'expense type', 'expense category'],
-  description: ['description', 'memo', 'notes', 'details', 'line item', 'item'],
-  vendor:      ['vendor', 'payee', 'paid to', 'supplier', 'merchant'],
   property:    ['property', 'property name', 'building', 'address', 'location'],
   unit:        ['unit', 'unit number', 'apt', 'apartment', 'suite', 'unit #'],
-  taxCategory: ['tax category', 'tax type', 'deduction category', 'irs category'],
+  category:    ['category', 'type', 'expense type', 'expense category'],
+  description: ['description', 'memo', 'details', 'line item', 'item'],
+  vendor:      ['vendor', 'payee', 'paid to', 'supplier', 'merchant'],
   recurring:   ['recurring', 'is recurring', 'repeat', 'frequency'],
   notes:       ['notes', 'comment', 'comments', 'remark', 'remarks'],
 };
