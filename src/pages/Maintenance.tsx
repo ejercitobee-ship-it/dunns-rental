@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download, User, MapPin, Calendar, ChevronRight, Image } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -9,8 +9,8 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
-import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus } from '../types';
-import { STATUS_BADGE, STATUS_LABEL, approvalBadge } from '../lib/maintenance';
+import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus, MaintenanceStatusLog } from '../types';
+import { STATUS_BADGE, STATUS_LABEL, approvalBadge, tradeLabel } from '../lib/maintenance';
 import { handymenApi, maintenanceApi } from '../lib/api';
 
 /** Which active handymen may take a job in this category (general sees all). */
@@ -46,7 +46,7 @@ const emptyForm = {
 type FilterStatus = MaintenanceStatus | 'all' | 'pending_approval' | 'needs_invoice_review';
 
 export function Maintenance() {
-  const { maintenance, properties, units, addMaintenance, updateMaintenance, deleteMaintenance, dispatch, refreshData } = useApp();
+  const { maintenance, properties, units, tenants, addMaintenance, updateMaintenance, deleteMaintenance, dispatch, refreshData } = useApp();
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   // Maintenance create/edit map to properties_edit; delete to properties_delete.
@@ -70,12 +70,30 @@ export function Maintenance() {
   const [invoiceAction, setInvoiceAction] = useState<'approve' | 'reject' | 'revision'>('approve');
   const [invoiceReason, setInvoiceReason] = useState('');
 
+  // Detail drawer state.
+  const [detailTarget, setDetailTarget] = useState<MaintenanceRequest | null>(null);
+  const [detailHistory, setDetailHistory] = useState<MaintenanceStatusLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   useEffect(() => {
     handymenApi.getAll().then(setHandymen).catch(() => setHandymen([]));
   }, []);
 
   const handymanName = (id?: string) => handymen.find(h => h.id === id)?.name;
   const handymanCompany = (id?: string) => handymen.find(h => h.id === id)?.companyName;
+  const tenantName = (id?: string) => {
+    const t = tenants.find(t => t.id === id);
+    return t ? `${t.firstName} ${t.lastName}` : undefined;
+  };
+
+  const openDetail = useCallback((m: MaintenanceRequest) => {
+    setDetailTarget(m);
+    setHistoryLoading(true);
+    maintenanceApi.getHistory(m.id)
+      .then(setDetailHistory)
+      .catch(() => setDetailHistory([]))
+      .finally(() => setHistoryLoading(false));
+  }, []);
 
   const assignHandyman = async (m: MaintenanceRequest, handymanId: string) => {
     setBusyId(m.id);
@@ -379,13 +397,13 @@ export function Maintenance() {
               </thead>
               <tbody>
                 {filtered.map(m => (
-                  <tr key={m.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
+                  <tr key={m.id} onClick={() => openDetail(m)} className="border-b border-line last:border-0 hover:bg-black/[0.02] cursor-pointer">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         {m.photoUrl && (
-                          <a href={m.photoUrl} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                          <div className="flex-shrink-0">
                             <img src={m.photoUrl} alt="" className="w-10 h-10 rounded object-cover border border-line" />
-                          </a>
+                          </div>
                         )}
                         <div className="min-w-0">
                           <p className="font-medium text-ink">{m.title}</p>
@@ -414,7 +432,7 @@ export function Maintenance() {
                         <span className="block text-[11px] text-muted mt-0.5">Invoice #{m.invoiceNumber}</span>
                       )}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                       {m.status === 'paid' || m.status === 'cancelled' || isInvoiceStatus(m.status) ? (
                         <div className="min-w-0">
                           <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || '—'}</span>
@@ -446,7 +464,7 @@ export function Maintenance() {
                     <td className="py-3 px-4 text-sm text-muted">
                       {m.reportedDate ? formatDate(m.reportedDate) : '—'}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {/* Approve: for needsApproval OR completed jobs with a handyman */}
                         {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && (
@@ -503,6 +521,7 @@ export function Maintenance() {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         )}
+                        <ChevronRight className="h-4 w-4 text-faint ml-1" />
                       </div>
                     </td>
                   </tr>
@@ -868,6 +887,251 @@ export function Maintenance() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Detail modal */}
+      <Modal isOpen={!!detailTarget} onClose={() => setDetailTarget(null)} title="Work Order Details" size="lg">
+        {detailTarget && (() => {
+          const m = detailTarget;
+          const ab = approvalBadge(m);
+          const createdDate = m.createdAt
+            ? new Date(m.createdAt * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+            : m.reportedDate ? formatDate(m.reportedDate) : '—';
+          const originLabel =
+            m.createdBy === 'handyman' ? `Reported by handyman${m.assignedHandymanId ? ` (${handymanName(m.assignedHandymanId) || 'Unknown'})` : ''}`
+            : m.createdBy === 'tenant' ? `Submitted by tenant${m.tenantId ? ` (${tenantName(m.tenantId) || 'Unknown'})` : ''}`
+            : 'Created by office';
+
+          return (
+            <div className="space-y-6">
+              {/* Header: status + priority */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {ab
+                  ? <Badge variant={ab.variant}>{ab.label}</Badge>
+                  : <Badge variant={STATUS_BADGE[m.status]}>{STATUS_LABEL[m.status]}</Badge>}
+                <Badge variant={priorityBadge[m.priority]} className="capitalize">{m.priority} priority</Badge>
+                {m.category && <Badge variant="secondary" className="capitalize">{tradeLabel(m.category)}</Badge>}
+              </div>
+
+              {/* Overview grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Left: request info */}
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">Request</p>
+                    <p className="text-ink font-medium mt-1">{m.title}</p>
+                    {m.description && <p className="text-sm text-muted mt-1">{m.description}</p>}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                    <MapPin className="h-4 w-4 text-faint flex-shrink-0" />
+                    <span>{propertyName(m.propertyId)}{unitNumber(m.unitId) ? ` · Unit ${unitNumber(m.unitId)}` : ''}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                    <Calendar className="h-4 w-4 text-faint flex-shrink-0" />
+                    <span>{createdDate}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                    <User className="h-4 w-4 text-faint flex-shrink-0" />
+                    <span>{originLabel}</span>
+                  </div>
+
+                  {m.notes && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted uppercase tracking-wider">Notes</p>
+                      <p className="text-sm text-ink mt-1">{m.notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: cost, handyman, photo */}
+                <div className="space-y-3">
+                  {/* Photo */}
+                  {m.photoUrl && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">Reported Photo</p>
+                      <a href={m.photoUrl} target="_blank" rel="noreferrer">
+                        <img src={m.photoUrl} alt="Reported issue" className="w-full max-w-[240px] rounded-lg border border-line object-cover" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Cost info */}
+                  <div className="rounded-lg border border-line bg-canvas p-3 space-y-2 text-sm">
+                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">Cost</p>
+                    {m.reportedCost != null && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Handyman proposed</span>
+                        <span className="text-ink tnum">{formatCurrency(m.reportedCost)}</span>
+                      </div>
+                    )}
+                    {m.cost > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Approved cost</span>
+                        <span className="font-medium text-ink tnum">{formatCurrency(m.cost)}</span>
+                      </div>
+                    )}
+                    {!m.cost && !m.reportedCost && (
+                      <p className="text-muted">No cost recorded yet.</p>
+                    )}
+                  </div>
+
+                  {/* Handyman info */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">Handyman</p>
+                    {m.assignedHandymanId ? (
+                      <div className="mt-1">
+                        <p className="text-sm font-medium text-ink">{handymanName(m.assignedHandymanId) || 'Unknown'}</p>
+                        {handymanCompany(m.assignedHandymanId) && (
+                          <p className="text-xs text-muted">{handymanCompany(m.assignedHandymanId)}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted mt-1">Not assigned yet.</p>
+                    )}
+                    {m.vendor && !m.assignedHandymanId && (
+                      <p className="text-sm text-ink mt-1">Vendor: {m.vendor}</p>
+                    )}
+                  </div>
+
+                  {m.scheduledFor && (
+                    <div className="flex items-center gap-2 text-sm text-ink">
+                      <Clock className="h-4 w-4 text-primary" />
+                      <span>Scheduled for {formatDate(m.scheduledFor.split(/[ T]/)[0])}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Invoice section (visible whenever invoice data exists) */}
+              {(m.invoiceNumber || (m.invoiceDriveIds && m.invoiceDriveIds.length > 0)) && (
+                <div>
+                  <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Invoice</p>
+                  <div className="rounded-lg border border-line bg-canvas p-4 space-y-2 text-sm">
+                    {m.invoiceNumber && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Invoice #</span>
+                        <span className="font-medium text-ink">{m.invoiceNumber}</span>
+                      </div>
+                    )}
+                    {m.invoiceDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Invoice date</span>
+                        <span className="text-ink">{formatDate(m.invoiceDate)}</span>
+                      </div>
+                    )}
+                    {m.invoiceLaborAmount != null && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Labor</span>
+                        <span className="text-ink tnum">{formatCurrency(m.invoiceLaborAmount)}</span>
+                      </div>
+                    )}
+                    {m.invoiceMaterialAmount != null && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Materials</span>
+                        <span className="text-ink tnum">{formatCurrency(m.invoiceMaterialAmount)}</span>
+                      </div>
+                    )}
+                    {m.invoiceTotalAmount != null && (
+                      <div className="flex justify-between border-t border-line pt-2">
+                        <span className="font-medium text-ink">Total</span>
+                        <span className="font-semibold text-ink tnum">{formatCurrency(m.invoiceTotalAmount)}</span>
+                      </div>
+                    )}
+                    {m.invoiceNotes && (
+                      <p className="text-muted pt-1">Notes: {m.invoiceNotes}</p>
+                    )}
+                    {m.invoiceRejectionReason && (
+                      <div className="rounded-md border border-warning-line bg-warning-soft p-2 mt-1">
+                        <p className="text-xs font-medium text-warning-ink">Revision requested</p>
+                        <p className="text-xs text-warning-ink mt-0.5">{m.invoiceRejectionReason}</p>
+                      </div>
+                    )}
+                    {m.invoiceApprovedAt && (
+                      <p className="text-xs text-positive">Approved on {formatDate(m.invoiceApprovedAt)}</p>
+                    )}
+
+                    {/* Attached files */}
+                    {m.invoiceDriveIds && m.invoiceDriveIds.length > 0 && (
+                      <div className="pt-2 space-y-1">
+                        <p className="text-xs font-medium text-muted">Attached files</p>
+                        {m.invoiceDriveIds.map((f, i) => (
+                          <a
+                            key={i}
+                            href={`/api/documents/download/${f.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 text-sm text-primary hover:text-primary-hover px-3 py-1.5 rounded-md hover:bg-primary-soft transition-colors"
+                          >
+                            {f.contentType?.startsWith('application/pdf') ? <FileText className="h-4 w-4" /> : <Image className="h-4 w-4" />}
+                            <span className="truncate">{f.name}</span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Status history timeline */}
+              <div>
+                <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">History</p>
+                {historyLoading ? (
+                  <div className="py-6 text-center text-sm text-muted animate-pulse">Loading history...</div>
+                ) : detailHistory.length === 0 ? (
+                  <p className="text-sm text-muted py-3">No status changes recorded yet.</p>
+                ) : (
+                  <div className="relative pl-5 space-y-0">
+                    {/* Timeline line */}
+                    <div className="absolute left-[7px] top-2 bottom-2 w-px bg-line" />
+                    {detailHistory.map((entry) => {
+                      const ts = new Date(entry.createdAt * 1000);
+                      const dateStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+                      const toLabel = STATUS_LABEL[entry.toStatus as MaintenanceStatus] || entry.toStatus;
+                      return (
+                        <div key={entry.id} className="relative pb-4 last:pb-0">
+                          {/* Dot */}
+                          <div className="absolute -left-5 top-1 w-[11px] h-[11px] rounded-full border-2 border-primary bg-surface" />
+                          <div className="ml-1">
+                            <p className="text-sm font-medium text-ink">{toLabel}</p>
+                            <p className="text-xs text-muted mt-0.5">
+                              {dateStr}
+                              {entry.changedByName && <> · {entry.changedByName}</>}
+                            </p>
+                            {entry.notes && (
+                              <p className="text-xs text-muted mt-0.5 italic">{entry.notes}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Quick actions from the detail view */}
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-line">
+                {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && (
+                  <Button onClick={() => { setDetailTarget(null); openApprove(m); }}>Approve</Button>
+                )}
+                {canApproveMaintenance && m.status === 'invoice_submitted' && (
+                  <Button onClick={() => { setDetailTarget(null); openInvoiceReview(m); }}>Review invoice</Button>
+                )}
+                {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled'
+                  && m.status !== 'invoice_submitted' && m.status !== 'approved_for_invoicing' && (
+                  <Button variant="secondary" onClick={() => { setDetailTarget(null); openPay(m); }}>Mark paid</Button>
+                )}
+                {canEditMaintenance && (
+                  <Button variant="outline" onClick={() => { setDetailTarget(null); openEdit(m); }}>
+                    <Edit2 className="h-4 w-4 mr-1.5" />Edit
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

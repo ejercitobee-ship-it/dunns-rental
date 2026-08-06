@@ -364,6 +364,20 @@ export interface MaintenanceRequest {
   invoiceApprovedAt?: string;
   invoiceApprovedBy?: string;
   invoiceRejectionReason?: string;
+  /** Unix epoch seconds when the request was created. */
+  createdAt?: number;
+}
+
+/** A single entry in the maintenance status history log. */
+export interface MaintenanceStatusLog {
+  id: string;
+  requestId: string;
+  fromStatus: string | null;
+  toStatus: string;
+  changedById?: string;
+  changedByName?: string;
+  notes?: string;
+  createdAt: number;
 }
 
 export interface Handyman {

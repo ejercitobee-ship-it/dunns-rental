@@ -281,6 +281,8 @@ export function serializeMaintenance(r: Row) {
     invoiceApprovedAt: r.invoice_approved_at ?? undefined,
     invoiceApprovedBy: r.invoice_approved_by ?? undefined,
     invoiceRejectionReason: r.invoice_rejection_reason ?? undefined,
+    // Timestamps (unix epoch).
+    createdAt: r.created_at ?? undefined,
   };
 }
 

@@ -896,6 +896,9 @@ export const maintenanceApi = {
       method: 'POST',
       body: JSON.stringify({ action, reason }),
     }),
+  // Fetch the status change history log for a request.
+  getHistory: (id: string): Promise<import('../types').MaintenanceStatusLog[]> =>
+    apiRequest(`/maintenance/${id}/history`),
 };
 
 // Handymen roster API (admin side).
