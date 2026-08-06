@@ -123,6 +123,50 @@ export const EXPENSE_TIERS: { value: ExpenseTier; label: string }[] = [
   { value: 'business', label: 'Business / Management' },
 ];
 
+/**
+ * Categories that are ALWAYS operating expenses regardless of dollar amount.
+ * These should never be classified as capital improvements even if they
+ * exceed the $2,500 de minimis threshold (e.g. a $12,000 property tax bill
+ * is an operating expense, not a capital improvement).
+ */
+export const ALWAYS_OPERATING_CATEGORIES = new Set<string>([
+  'taxes', 'insurance', 'hoa', 'mortgage', 'utilities',
+  'landscaping', 'snow_removal', 'pest_control', 'cleaning',
+  'software', 'office_expenses', 'marketing', 'accounting', 'legal',
+  'payroll', 'administrative', 'banking_fees', 'other_business',
+  'management', 'realtor_commission', 'common_area',
+]);
+
+/**
+ * Categories that represent capital improvements: physical improvements
+ * to the property that add value, extend useful life, or adapt to a new use.
+ * Only these are eligible for the de minimis capital threshold test.
+ */
+export const CAPITAL_ELIGIBLE_CATEGORIES = new Set<string>([
+  'capital_improvements', 'property_improvements', 'unit_improvements',
+  'appliance_replacement', 'repairs', 'tenant_repairs', 'maintenance',
+  'unit_maintenance', 'tenant_damage', 'turnover_costs', 'other',
+]);
+
+/**
+ * Determine whether an expense should be treated as a capital improvement
+ * for tax purposes. Returns true when:
+ *  1. The category is in the capital-eligible set, AND
+ *  2. The amount exceeds the IRS de minimis safe-harbor threshold ($2,500), OR
+ *  3. The category is explicitly 'capital_improvements' or 'property_improvements'
+ */
+export function isCapitalExpense(expense: Expense, threshold = 2500): boolean {
+  const cat = expense.category;
+  // These categories are always capital, regardless of amount.
+  if (cat === 'capital_improvements' || cat === 'property_improvements' || cat === 'unit_improvements') {
+    return true;
+  }
+  // Categories that are always operating never cross into capital.
+  if (ALWAYS_OPERATING_CATEGORIES.has(cat)) return false;
+  // For everything else, apply the de minimis threshold.
+  return expense.amount > threshold;
+}
+
 // ---------------------------------------------------------------------------
 // Income Category Metadata
 // ---------------------------------------------------------------------------

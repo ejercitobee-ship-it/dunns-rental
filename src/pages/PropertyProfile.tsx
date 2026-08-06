@@ -11,9 +11,10 @@ import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
-import { propertiesApi } from '../lib/api';
+import { propertiesApi, capitalProjectsApi } from '../lib/api';
+import { HardHat } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import type { PropertyProfile as ProfileData } from '../types';
+import type { PropertyProfile as ProfileData, CapitalProject } from '../types';
 import { PropertyNotes } from '../components/PropertyNotes';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 
@@ -47,6 +48,15 @@ export function PropertyProfile() {
   const [drillTitle, setDrillTitle] = useState('');
   const [drillExpenses, setDrillExpenses] = useState<ProfileData['expenses']>([]);
   const [drillOpen, setDrillOpen] = useState(false);
+  const [capitalProjects, setCapitalProjects] = useState<CapitalProject[]>([]);
+
+  // Fetch capital projects for this property.
+  useEffect(() => {
+    if (!id) return;
+    capitalProjectsApi.list()
+      .then(all => setCapitalProjects(all.filter(p => p.propertyId === id)))
+      .catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -456,6 +466,41 @@ export function PropertyProfile() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Capital Improvement History */}
+          {capitalProjects.length > 0 && (
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <h2 className="font-semibold text-ink flex items-center gap-2">
+                  <HardHat className="h-4 w-4 text-faint" /> Capital Improvements
+                </h2>
+                <div className="space-y-3">
+                  {capitalProjects
+                    .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+                    .map(proj => {
+                      const statusColor = proj.status === 'completed' ? 'success' : proj.status === 'in_progress' ? 'default' : 'destructive';
+                      return (
+                        <div key={proj.id} className="rounded-lg border border-line p-4 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-ink">{proj.name}</span>
+                            <Badge variant={statusColor as any}>
+                              {proj.status === 'in_progress' ? 'In Progress' : proj.status === 'completed' ? 'Completed' : 'Cancelled'}
+                            </Badge>
+                          </div>
+                          {proj.description && <p className="text-sm text-muted">{proj.description}</p>}
+                          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
+                            {proj.startDate && <span>Started: {formatDate(proj.startDate)}</span>}
+                            {proj.completionDate && <span>Completed: {formatDate(proj.completionDate)}</span>}
+                            <span className="font-semibold text-ink tnum">Total: {formatCurrency(proj.totalCost)}</span>
+                            <span>{proj.expenseCount} receipt{proj.expenseCount !== 1 ? 's' : ''}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </CardContent>
             </Card>

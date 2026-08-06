@@ -10,7 +10,8 @@ import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '.
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
 import { capitalProjectsApi } from '../lib/api';
-import type { CapitalProject } from '../types';
+import { TransactionDrillDown } from '../components/TransactionDrillDown';
+import type { CapitalProject, Expense, Income, RentPayment } from '../types';
 import {
   depreciationForYear,
   accumulatedDepreciation,
@@ -83,8 +84,8 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
   other: { label: 'Other', description: 'Other deductible expenses' },
 };
 
-// Tax category mapping now lives in the central financial engine.
-import { mapToTaxCategory } from '../lib/financials';
+// Tax category mapping and capital classification from the central engine.
+import { mapToTaxCategory, isCapitalExpense } from '../lib/financials';
 
 export function TaxReport() {
   const { expenses, incomes, properties, rentPayments, leases } = useApp();
@@ -107,6 +108,22 @@ export function TaxReport() {
     capitalProjectsApi.list().then(setCapitalProjects).catch(() => {});
   }, []);
   const [drilldownProp, setDrilldownProp] = useState<string | null>(null);
+  // TransactionDrillDown modal state
+  const [drillModalOpen, setDrillModalOpen] = useState(false);
+  const [drillModalTitle, setDrillModalTitle] = useState('');
+  const [drillModalExpenses, setDrillModalExpenses] = useState<Expense[]>([]);
+  const [drillModalIncomes, setDrillModalIncomes] = useState<Income[]>([]);
+  const [drillModalPayments, setDrillModalPayments] = useState<RentPayment[]>([]);
+  const [drillModalTab, setDrillModalTab] = useState<'expenses' | 'income' | 'rent' | undefined>(undefined);
+
+  const openDrillModal = (title: string, opts: { expenses?: Expense[]; incomes?: Income[]; payments?: RentPayment[]; tab?: 'expenses' | 'income' | 'rent' }) => {
+    setDrillModalTitle(title);
+    setDrillModalExpenses(opts.expenses || []);
+    setDrillModalIncomes(opts.incomes || []);
+    setDrillModalPayments(opts.payments || []);
+    setDrillModalTab(opts.tab);
+    setDrillModalOpen(true);
+  };
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       const raw = sessionStorage.getItem('tax_collapsed');
@@ -190,7 +207,7 @@ export function TaxReport() {
       }
 
       if (deductible > 0) {
-        if (e.amount > CAPITAL_THRESHOLD) {
+        if (isCapitalExpense(e, CAPITAL_THRESHOLD)) {
           // Capital improvement: NOT deductible in the current year. It should
           // be capitalized and depreciated over its useful life. Track it
           // separately for reference but do NOT add it to totalDeductibleExpenses.
@@ -262,10 +279,10 @@ export function TaxReport() {
       // Exclude deposits (non-taxable) and source==='rent' (already in mRent via rent_payments)
       const mOther = pIncome.filter(i => i.source !== 'rent' && i.source !== 'deposit' && monthOf(i.date) === m).reduce((s, i) => s + i.amount, 0);
       const mInc = mRent + mOther;
-      // Exclude capital items (over threshold) and non-deductible; use interest-only for mortgage
+      // Exclude capital items and non-deductible; use interest-only for mortgage
       const mExp = pExpenses.filter(e => monthOf(e.date) === m).reduce((s, e) => {
         if (e.taxDeductible === false) return s;
-        if (e.amount > CAPITAL_THRESHOLD && e.category !== 'mortgage') return s;
+        if (isCapitalExpense(e, CAPITAL_THRESHOLD)) return s;
         if (e.category === 'mortgage') return s + (e.interestAmount != null ? e.interestAmount : e.amount);
         return s + e.amount;
       }, 0);
@@ -484,8 +501,8 @@ export function TaxReport() {
                   {([
                     ['Total income', main.totalIncome, comp.totalIncome, true],
                     ['Deductible expenses', main.totalDeductibleExpenses, comp.totalDeductibleExpenses, false],
-                    ['— Operating (≤ $2,500)', main.operatingExpenses, comp.operatingExpenses, false],
-                    ['— Capital (> $2,500)', main.capitalExpenses, comp.capitalExpenses, false],
+                    ['— Operating', main.operatingExpenses, comp.operatingExpenses, false],
+                    ['— Capital Improvements', main.capitalExpenses, comp.capitalExpenses, false],
                     ['— Depreciation', main.depreciation, comp.depreciation, false],
                     ['Net income', main.netIncome, comp.netIncome, true],
                   ] as [string, number, number, boolean][]).map(([label, a, b, higherIsGood]) => {
@@ -617,42 +634,60 @@ export function TaxReport() {
         </CardHeader>
         {!collapsed.has('income') && <CardContent>
           <div className="space-y-4">
-            <div className="flex justify-between items-center py-2 border-b">
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Rent Income', { payments: main.pPaidRent, tab: 'rent' })}
+            >
               <span className="font-medium">Rent Income</span>
-              <span className="font-bold">{formatCurrency(main.rentIncome)}</span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b">
+              <span className="font-bold tnum">{formatCurrency(main.rentIncome)}</span>
+            </button>
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Late Fees', { incomes: main.pIncome.filter(i => i.source === 'late_fee'), tab: 'income' })}
+            >
               <span className="font-medium">Late Fees</span>
-              <span className="font-bold">{formatCurrency(main.lateFeeIncome)}</span>
-            </div>
+              <span className="font-bold tnum">{formatCurrency(main.lateFeeIncome)}</span>
+            </button>
             {main.moveInFeeIncome > 0 && (
-            <div className="flex justify-between items-center py-2 border-b">
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Move-In Fees', { incomes: main.pIncome.filter(i => i.source === 'move_in_fee'), tab: 'income' })}
+            >
               <span className="font-medium">Move-In Fees</span>
-              <span className="font-bold">{formatCurrency(main.moveInFeeIncome)}</span>
-            </div>
+              <span className="font-bold tnum">{formatCurrency(main.moveInFeeIncome)}</span>
+            </button>
             )}
             {main.utilityReimbursement > 0 && (
-            <div className="flex justify-between items-center py-2 border-b">
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Utility Reimbursements', { incomes: main.pIncome.filter(i => i.source === 'utility_reimbursement'), tab: 'income' })}
+            >
               <span className="font-medium">Utility Reimbursements</span>
-              <span className="font-bold">{formatCurrency(main.utilityReimbursement)}</span>
-            </div>
+              <span className="font-bold tnum">{formatCurrency(main.utilityReimbursement)}</span>
+            </button>
             )}
-            <div className="flex justify-between items-center py-2 border-b">
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Other Income', { incomes: main.pIncome.filter(i => i.source === 'other'), tab: 'income' })}
+            >
               <span className="font-medium">Other Income</span>
-              <span className="font-bold">{formatCurrency(main.otherIncome)}</span>
-            </div>
+              <span className="font-bold tnum">{formatCurrency(main.otherIncome)}</span>
+            </button>
             <div className="flex justify-between items-center py-2 text-lg">
               <span className="font-bold">Taxable Income</span>
-              <span className="font-bold text-positive">{formatCurrency(main.totalIncome)}</span>
+              <span className="font-bold text-positive tnum">{formatCurrency(main.totalIncome)}</span>
             </div>
             {main.depositsReceived > 0 && (
-              <div className="flex justify-between items-center py-2 border-t border-line">
+              <button
+                className="flex justify-between items-center py-2 border-t border-line w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+                onClick={() => openDrillModal('Security Deposits Received', { incomes: main.pIncome.filter(i => i.source === 'deposit'), tab: 'income' })}
+              >
                 <span className="text-sm text-muted">
                   Security deposits received
                   <span className="block text-xs text-muted">Not included in taxable income (refundable liability).</span>
                 </span>
                 <span className="text-sm text-muted tnum">{formatCurrency(main.depositsReceived)}</span>
-              </div>
+              </button>
             )}
           </div>
         </CardContent>}
@@ -700,7 +735,21 @@ export function TaxReport() {
                           {TAX_CATEGORIES[key]?.description || ''}
                         </td>
                         <td className="py-3 px-4 text-right font-semibold">
-                          {formatCurrency(value)}
+                          <button
+                            className="hover:text-primary transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDrillModal(
+                                `${TAX_CATEGORIES[key]?.label || key} Expenses`,
+                                {
+                                  expenses: main.pExpenses.filter(ex => (ex.taxCategory || mapToTaxCategory(ex.category)) === key),
+                                  tab: 'expenses',
+                                },
+                              );
+                            }}
+                          >
+                            {formatCurrency(value)}
+                          </button>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <Badge variant="secondary">
@@ -739,29 +788,39 @@ export function TaxReport() {
         </CardHeader>
         {!collapsed.has('opVsCap') && <CardContent>
           <p className="text-sm text-muted mb-4">
-            Anything over {formatCurrency(CAPITAL_THRESHOLD)} per item is generally a
-            capital improvement (capitalize and depreciate), not a same year deduction.
-            At or under it can be expensed this year under the IRS de minimis safe harbor.
-            Confirm the treatment of larger items with your accountant.
+            Recurring costs (property taxes, insurance, HOA, utilities, management) are always
+            operating expenses regardless of amount. Repairs and improvements over{' '}
+            {formatCurrency(CAPITAL_THRESHOLD)} per item are classified as capital improvements
+            (capitalize and depreciate). Confirm the treatment with your accountant.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-line p-4">
+            <button
+              className="rounded-xl border border-line p-4 text-left hover:border-line-strong hover:shadow-sm transition-all"
+              onClick={() => openDrillModal('Operating Expenses', {
+                expenses: main.pExpenses.filter(e => !isCapitalExpense(e, CAPITAL_THRESHOLD) && e.category !== 'mortgage'),
+                tab: 'expenses',
+              })}
+            >
               <div className="flex items-center justify-between">
-                <span className="eyebrow">Operating (≤ {formatCurrency(CAPITAL_THRESHOLD)})</span>
+                <span className="eyebrow">Operating Expenses</span>
                 <Badge variant="secondary">Deduct this year</Badge>
               </div>
               <div className="mt-2 text-[24px] leading-none font-semibold text-ink tnum">
                 {formatCurrency(main.operatingExpenses)}
               </div>
               <p className="mt-1.5 text-[13px] text-muted">
-                {main.totalDeductibleExpenses > 0
-                  ? `${((main.operatingExpenses / main.totalDeductibleExpenses) * 100).toFixed(0)}% of deductible expenses`
-                  : 'No deductible expenses'}
+                Property taxes, insurance, HOA, maintenance, and more.
               </p>
-            </div>
-            <div className="rounded-xl border border-line p-4">
+            </button>
+            <button
+              className="rounded-xl border border-line p-4 text-left hover:border-line-strong hover:shadow-sm transition-all"
+              onClick={() => openDrillModal('Capital Improvements', {
+                expenses: main.pExpenses.filter(e => isCapitalExpense(e, CAPITAL_THRESHOLD)),
+                tab: 'expenses',
+              })}
+            >
               <div className="flex items-center justify-between">
-                <span className="eyebrow">Capital (&gt; {formatCurrency(CAPITAL_THRESHOLD)})</span>
+                <span className="eyebrow">Capital Improvements</span>
                 <Badge variant="warning">Capitalize / depreciate</Badge>
               </div>
               <div className="mt-2 text-[24px] leading-none font-semibold text-ink tnum">
@@ -769,10 +828,10 @@ export function TaxReport() {
               </div>
               <p className="mt-1.5 text-[13px] text-muted">
                 {main.capitalItems.length > 0
-                  ? `${main.capitalItems.length} item${main.capitalItems.length === 1 ? '' : 's'} above the threshold`
-                  : 'No items above the threshold'}
+                  ? `${main.capitalItems.length} item${main.capitalItems.length === 1 ? '' : 's'}: improvements that add value or extend useful life.`
+                  : 'No capital improvements this period.'}
               </p>
-            </div>
+            </button>
           </div>
 
           {main.capitalItems.length > 0 && (() => {
@@ -1049,6 +1108,19 @@ export function TaxReport() {
           </div>
         </CardContent>}
       </Card>
+
+      {/* Drill-down modal */}
+      <TransactionDrillDown
+        isOpen={drillModalOpen}
+        onClose={() => setDrillModalOpen(false)}
+        title={drillModalTitle}
+        expenses={drillModalExpenses}
+        incomes={drillModalIncomes}
+        rentPayments={drillModalPayments}
+        properties={properties}
+        units={[]}
+        forceTab={drillModalTab}
+      />
     </div>
   );
 }
