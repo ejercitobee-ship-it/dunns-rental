@@ -340,14 +340,15 @@ export function HandymanJobs() {
   );
   if (error) return <Card><CardContent className="py-8 text-center text-sm text-danger">{error}</CardContent></Card>;
 
-  // Their own jobs split into work they are still on versus work they finished.
+  // Their own jobs split into work they still need to act on versus done.
+  // approved_for_invoicing = handyman still needs to upload their invoice.
   const inProgress = data.mine.filter(
-    (j) => j.status === 'assigned' || j.status === 'scheduled' || j.status === 'in_progress'
+    (j) => j.status === 'assigned' || j.status === 'scheduled'
+      || j.status === 'in_progress' || j.status === 'approved_for_invoicing'
   );
   const completed = data.mine.filter(
     (j) => j.status === 'completed' || j.status === 'paid'
-      || j.status === 'approved_for_invoicing' || j.status === 'invoice_submitted'
-      || j.status === 'invoice_approved'
+      || j.status === 'invoice_submitted' || j.status === 'invoice_approved'
   );
 
   const TABS = [
