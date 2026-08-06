@@ -78,6 +78,9 @@ export function Activity() {
 
   // Filter state.
   const [search, setSearch] = useState('');
+  // searchTerm is the "committed" value — only updated on Enter or Apply.
+  // This prevents every keystroke from firing an API call.
+  const [searchTerm, setSearchTerm] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [propertyFilter, setPropertyFilter] = useState('');
@@ -88,14 +91,14 @@ export function Activity() {
 
   const buildFilter = useCallback((): ActivityFilter => {
     const f: ActivityFilter = { limit: PAGE };
-    if (search.trim()) f.search = search.trim();
+    if (searchTerm) f.search = searchTerm;
     if (moduleFilter) f.module = moduleFilter;
     if (userFilter) f.userId = userFilter;
     if (propertyFilter) f.propertyId = propertyFilter;
     if (dateFrom) f.dateFrom = Math.floor(new Date(dateFrom + 'T00:00:00').getTime() / 1000);
     if (dateTo) f.dateTo = Math.floor(new Date(dateTo + 'T23:59:59').getTime() / 1000);
     return f;
-  }, [search, moduleFilter, userFilter, propertyFilter, dateFrom, dateTo]);
+  }, [searchTerm, moduleFilter, userFilter, propertyFilter, dateFrom, dateTo]);
 
   const load = useCallback(() => {
     if (!canView) return;
@@ -166,6 +169,7 @@ export function Activity() {
 
   const clearFilters = () => {
     setSearch('');
+    setSearchTerm('');
     setModuleFilter('');
     setUserFilter('');
     setPropertyFilter('');
@@ -173,7 +177,7 @@ export function Activity() {
     setDateTo('');
   };
 
-  const hasActiveFilters = !!(search || moduleFilter || userFilter || propertyFilter || dateFrom || dateTo);
+  const hasActiveFilters = !!(searchTerm || moduleFilter || userFilter || propertyFilter || dateFrom || dateTo);
 
   const exportCsv = () => {
     const header = 'Date,User,Role,Module,Action,Description,Target,Property,Changes\n';
@@ -234,7 +238,7 @@ export function Activity() {
           className="w-full pl-10 pr-4 py-2 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && load()}
+          onKeyDown={(e) => { if (e.key === 'Enter') setSearchTerm(search.trim()); }}
         />
       </div>
 
@@ -304,9 +308,9 @@ export function Activity() {
               </div>
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <Button size="sm" onClick={load}>Apply filters</Button>
+              <Button size="sm" onClick={() => setSearchTerm(search.trim())}>Apply filters</Button>
               {hasActiveFilters && (
-                <Button size="sm" variant="secondary" onClick={() => { clearFilters(); setTimeout(load, 0); }}>
+                <Button size="sm" variant="secondary" onClick={clearFilters}>
                   Clear all
                 </Button>
               )}
@@ -323,7 +327,7 @@ export function Activity() {
           return (
             <button
               key={key}
-              onClick={() => { setModuleFilter(isActive ? '' : key); setTimeout(load, 0); }}
+              onClick={() => setModuleFilter(isActive ? '' : key)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                 isActive
                   ? 'border-primary bg-primary-soft text-primary'
