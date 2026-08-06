@@ -16,7 +16,7 @@
  *   />
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Search } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -58,6 +58,13 @@ export function TransactionDrillDown({
   }, [expenses.length, incomes.length, rentPayments.length, forceTab]);
 
   const [activeTab, setActiveTab] = useState<'expenses' | 'income' | 'rent'>(tabs[0]);
+
+  // Reset the active tab whenever the modal opens or the forced tab changes,
+  // so stale state from a previous open doesn't show the wrong table.
+  useEffect(() => {
+    if (isOpen) setActiveTab(tabs[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, forceTab]);
 
   const filteredExpenses = useMemo(() => {
     if (!search) return expenses;
