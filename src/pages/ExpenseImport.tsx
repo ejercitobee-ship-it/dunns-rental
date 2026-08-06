@@ -118,7 +118,7 @@ const STATUS_CONFIG: Record<ImportRowStatus, { label: string; color: string; ico
 };
 
 export function ExpenseImportPage() {
-  const { properties, units } = useApp();
+  const { properties, units, refreshData } = useApp();
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -254,6 +254,9 @@ export function ExpenseImportPage() {
       showToast(`Successfully merged ${result.mergedRows} expense records into the system.`, 'success');
       await loadDetail(detail.id);
       await loadImports();
+      // Refresh global state so Finances, Dashboard, and Tax Report see the
+      // newly merged expenses immediately without a full page reload.
+      await refreshData();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Merge failed', 'error');
     } finally { setLoading(false); }
@@ -268,6 +271,7 @@ export function ExpenseImportPage() {
       showToast(`Rolled back ${result.removedExpenses} imported expenses.`, 'success');
       await loadDetail(detail.id);
       await loadImports();
+      await refreshData();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Rollback failed', 'error');
     } finally { setLoading(false); }
