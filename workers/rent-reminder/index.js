@@ -1,7 +1,7 @@
-// Scheduled trigger for the monthly rent reminder and calendar event reminders.
-// Runs daily (see the cron in wrangler.toml) and asks the app to send today's
-// reminders. All the real logic lives in the app's /api/cron/* endpoints; this
-// worker only wakes them up.
+// Scheduled trigger for the monthly rent reminder, calendar event reminders,
+// and recurring expense reminders. Runs daily (see the cron in wrangler.toml)
+// and asks the app to send today's reminders. All the real logic lives in the
+// app's /api/cron/* endpoints; this worker only wakes them up.
 export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(
@@ -23,6 +23,14 @@ export default {
           console.log(`calendar-reminders: HTTP ${res.status} ${body}`);
         } catch (err) {
           console.error(`calendar-reminders: request failed: ${err && err.message ? err.message : err}`);
+        }
+
+        try {
+          const res = await fetch(`${base}/expense-reminders`, { method: 'POST', headers });
+          const body = await res.text();
+          console.log(`expense-reminders: HTTP ${res.status} ${body}`);
+        } catch (err) {
+          console.error(`expense-reminders: request failed: ${err && err.message ? err.message : err}`);
         }
       })()
     );
