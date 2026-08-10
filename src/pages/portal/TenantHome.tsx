@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock, Megaphone } from 'lucide-react';
+import { Calendar, ChevronDown, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock, Megaphone } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
@@ -237,26 +237,7 @@ export function TenantHome() {
       })()}
 
       {announcements.length > 0 && (
-        <div className="space-y-3">
-          {announcements.map(a => (
-            <div
-              key={a.id}
-              className="rounded-2xl border border-primary/20 bg-primary/5 p-5 flex items-start gap-3"
-            >
-              <Megaphone className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-ink text-sm">{a.title}</p>
-                <p className="text-sm text-muted mt-1 whitespace-pre-line">{a.body}</p>
-                <p className="text-xs text-muted/60 mt-2">
-                  {new Date(a.created_at * 1000).toLocaleDateString(undefined, {
-                    month: 'short', day: 'numeric', year: 'numeric',
-                  })}
-                  {a.property_name ? ` · ${a.property_name}` : ''}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <AnnouncementsList announcements={announcements} />
       )}
 
       <QuickActions />
@@ -281,6 +262,61 @@ export function TenantHome() {
       <HouseholdCard hasLease={!!me?.lease} />
 
       <RealtorCard realtors={realtors} />
+    </div>
+  );
+}
+
+/** Collapsible announcement cards: title is always visible; tap to expand the
+ *  full message body. The newest announcement starts expanded so the tenant
+ *  sees the latest update immediately. */
+function AnnouncementsList({ announcements }: { announcements: PortalAnnouncement[] }) {
+  // Expand the first (newest) announcement by default.
+  const [expanded, setExpanded] = useState<Set<string>>(() =>
+    new Set(announcements.length > 0 ? [announcements[0].id] : [])
+  );
+
+  const toggle = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <div className="space-y-3">
+      {announcements.map(a => {
+        const open = expanded.has(a.id);
+        return (
+          <div
+            key={a.id}
+            className="rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden"
+          >
+            <button
+              type="button"
+              onClick={() => toggle(a.id)}
+              className="w-full flex items-center gap-3 p-4 text-left"
+            >
+              <Megaphone className="h-5 w-5 text-primary flex-shrink-0" />
+              <span className="flex-1 min-w-0 font-semibold text-ink text-sm truncate">{a.title}</span>
+              <ChevronDown
+                className={`h-4 w-4 text-muted flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {open && (
+              <div className="px-4 pb-4 pl-12">
+                <p className="text-sm text-muted whitespace-pre-line">{a.body}</p>
+                <p className="text-xs text-muted/60 mt-2">
+                  {new Date(a.created_at * 1000).toLocaleDateString(undefined, {
+                    month: 'short', day: 'numeric', year: 'numeric',
+                  })}
+                  {a.property_name ? ` · ${a.property_name}` : ''}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
