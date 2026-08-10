@@ -32,6 +32,14 @@ export default {
         } catch (err) {
           console.error(`expense-reminders: request failed: ${err && err.message ? err.message : err}`);
         }
+
+        try {
+          const res = await fetch(`${base}/lease-expirations`, { method: 'POST', headers });
+          const body = await res.text();
+          console.log(`lease-expirations: HTTP ${res.status} ${body}`);
+        } catch (err) {
+          console.error(`lease-expirations: request failed: ${err && err.message ? err.message : err}`);
+        }
       })()
     );
   },

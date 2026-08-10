@@ -89,9 +89,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.moveInFeePaid === false ? 0 : 1,
         status,
         body.notes ?? null,
-        status === 'ended' ? (body.endReason ?? null) : null,
-        status === 'ended' ? (body.endedPropertyLabel ?? null) : null,
-        status === 'ended' ? (body.endedUnitLabel ?? null) : null,
+        body.endReason ?? null,
+        body.endedPropertyLabel ?? null,
+        body.endedUnitLabel ?? null,
         typeof body.rentDueDay === 'number' && body.rentDueDay >= 1 && body.rentDueDay <= 31
           ? Math.floor(body.rentDueDay) : null,
         id

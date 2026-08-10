@@ -628,6 +628,9 @@ export function Tenants() {
                               ) : (
                                 <div className="inline-flex flex-col items-center gap-1">
                                   <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                                  {lease.status !== 'ended' && lease.endDate && lease.endReason && (
+                                    <Badge variant="warning">Leaving {formatDate(lease.endDate)}</Badge>
+                                  )}
                                   {lease.status === 'ended' && lease.endReason && (
                                     <span className="text-[11px] text-muted max-w-[160px] truncate" title={lease.endReason}>
                                       {lease.endReason}

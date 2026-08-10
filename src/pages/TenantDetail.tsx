@@ -391,19 +391,25 @@ export function TenantDetail() {
       return;
     }
     setTerminating(true);
+    const isFuture = termForm.date > todayLocalDate();
     try {
       await updateLease({
         ...lease,
-        status: 'ended',
+        // Future termination: keep active until the date arrives. The cron job
+        // will flip the status to 'ended' once the date passes.
+        status: isFuture ? lease.status : 'ended',
         endDate: termForm.date,
         endReason: termForm.reason.trim() || undefined,
-        // Snapshot where they lived so the history is kept even if the unit is
-        // later reassigned, renamed, or removed.
         endedPropertyLabel: property?.name || property?.address || undefined,
         endedUnitLabel: unit ? `Unit ${unit.unitNumber}` : undefined,
-        statusChangedOn: termForm.date,
+        statusChangedOn: isFuture ? undefined : termForm.date,
       });
-      showToast('Tenancy terminated.', 'success');
+      showToast(
+        isFuture
+          ? `Termination scheduled for ${termForm.date}. Tenancy stays active until then.`
+          : 'Tenancy terminated.',
+        'success',
+      );
       setTerminateOpen(false);
     } catch (err) {
       showToast((err as Error).message || 'Could not terminate the tenancy.', 'error');
@@ -875,7 +881,12 @@ export function TenantDetail() {
                 lease.needsReview ? (
                   <Badge variant="warning">Pending review</Badge>
                 ) : (
-                  <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                  <>
+                    <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                    {lease.status !== 'ended' && lease.endDate && lease.endReason && (
+                      <Badge variant="warning">Leaving {formatDate(lease.endDate)}</Badge>
+                    )}
+                  </>
                 )
               ) : (
                 <Badge variant="outline">No tenancy</Badge>
