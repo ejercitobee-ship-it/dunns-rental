@@ -270,10 +270,7 @@ export function TenantHome() {
  *  full message body. The newest announcement starts expanded so the tenant
  *  sees the latest update immediately. */
 function AnnouncementsList({ announcements }: { announcements: PortalAnnouncement[] }) {
-  // Expand the first (newest) announcement by default.
-  const [expanded, setExpanded] = useState<Set<string>>(() =>
-    new Set(announcements.length > 0 ? [announcements[0].id] : [])
-  );
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) =>
     setExpanded(prev => {
