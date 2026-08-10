@@ -48,6 +48,7 @@ type Action =
   | { type: 'UPDATE_EXPENSE'; payload: Expense }
   | { type: 'DELETE_EXPENSE'; payload: string }
   | { type: 'ADD_INCOME'; payload: Income }
+  | { type: 'UPDATE_INCOME'; payload: Income }
   | { type: 'DELETE_INCOME'; payload: string }
   | { type: 'ADD_RENT_PAYMENT'; payload: RentPayment }
   | { type: 'UPDATE_PAYMENT_STATUS'; payload: RentPayment }

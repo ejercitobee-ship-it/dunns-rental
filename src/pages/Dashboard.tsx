@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DollarSign, CreditCard, TrendingUp, TrendingDown,
+  DollarSign, CreditCard, TrendingUp,
   Activity, Building2, BarChart3, Users, AlertTriangle,
   Clock, CalendarCheck, Home, ChevronRight, ChevronDown,
   CalendarDays, ArrowRight, PieChart as PieChartIcon, Check,
@@ -16,7 +16,7 @@ import { useApp } from '../context/AppContext';
 import { calendarApi } from '../lib/api';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
-import type { DashboardStats, Expense, Property, Tenant, Unit, CalendarEvent } from '../types';
+import type { DashboardStats, Expense, Unit, CalendarEvent } from '../types';
 import {
   BarChart,
   Bar,
