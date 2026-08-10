@@ -43,7 +43,7 @@ function isInMonth(dateStr: string, month: number, year: number): boolean {
 }
 
 export function Expenses() {
-  const { expenses, incomes, properties, units, rentPayments, leases, tenants, getLeaseTenants, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, deleteExpense, deleteIncome, dispatch } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases, tenants, getLeaseTenants, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, updateIncome, deleteExpense, deleteIncome, dispatch } = useApp();
   const { hasPermission } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
@@ -57,8 +57,9 @@ export function Expenses() {
   // Tracked so the mortgage "interest portion" field can appear only for a
   // mortgage expense. The rest of the form stays uncontrolled (FormData).
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | ''>('');
-  // The expense currently being edited (null = the modal is adding a new one).
+  // The expense or income currently being edited (null = the modal is adding a new one).
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editingIncome, setEditingIncome] = useState<Income | null>(null);
   // The expense modal keeps property/unit/vendor in state (not just FormData) so
   // the utility-account lookup can auto-fill them from a pasted account number.
   const [expensePropertyId, setExpensePropertyId] = useState('');
@@ -78,8 +79,9 @@ export function Expenses() {
     variant?: 'danger' | 'warning' | 'info'; confirmText?: string;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const canDelete = hasPermission('finances_expenses_delete');
-  // Editing a recorded expense requires the history permission.
+  // Editing a recorded expense or income requires the history permission.
   const canEditExpense = hasPermission('finances_history');
+  const canEditIncome = hasPermission('finances_history');
 
   const accountMatch = useMemo(() => {
     const q = accountLookup.trim().toLowerCase();
@@ -109,6 +111,7 @@ export function Expenses() {
 
   const openExpenseModal = () => {
     setEditingExpense(null);
+    setEditingIncome(null);
     setExpenseCategory('');
     setExpensePropertyId('');
     setExpenseUnitId('');
@@ -123,6 +126,7 @@ export function Expenses() {
 
   const openEditExpense = (expense: Expense) => {
     setEditingExpense(expense);
+    setEditingIncome(null);
     setExpenseCategory(expense.category);
     setExpensePropertyId(expense.propertyId || '');
     setExpenseUnitId(expense.unitId || '');
@@ -135,9 +139,19 @@ export function Expenses() {
     setIsModalOpen(true);
   };
 
+  const openEditIncome = (income: Income) => {
+    setEditingIncome(income);
+    setEditingExpense(null);
+    setView('income');
+    setExpensePropertyId(income.propertyId || '');
+    setExpenseUnitId(income.unitId || '');
+    setIsModalOpen(true);
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingExpense(null);
+    setEditingIncome(null);
   };
 
   // Super admins can remove a mistaken manual entry. Derived rows are not
@@ -421,7 +435,7 @@ export function Expenses() {
             .catch(() => showToast('Receipt upload failed. Add it from the receipt icon on the row.', 'error'));
         }
       } else {
-        await addIncome({
+        const incomeFields = {
           propertyId: formData.get('propertyId') as string,
           unitId: (formData.get('unitId') as string) || undefined,
           tenantId: (formData.get('tenantId') as string) || undefined,
@@ -429,7 +443,12 @@ export function Expenses() {
           amount: Number(formData.get('amount')),
           date: formData.get('date') as string,
           description: formData.get('description') as string,
-        });
+        };
+        if (editingIncome) {
+          await updateIncome({ ...editingIncome, ...incomeFields });
+        } else {
+          await addIncome(incomeFields);
+        }
       }
       closeModal();
     } catch (error) {
@@ -761,25 +780,39 @@ export function Expenses() {
                         <td className="py-4 px-4 text-right font-semibold text-positive">
                           +{formatCurrency(income.amount)}
                         </td>
-                        {(canDelete || canAddExpense) && (
+                        {(canDelete || canAddExpense || canEditIncome) && (
                           <td className="py-4 px-4 text-right">
-                            {!canDelete ? null : income.id.startsWith('rent-') ? (
-                              <span
-                                className="text-xs text-muted"
-                                title="This rent came from a recorded payment. Delete it in Rent Management."
-                              >
-                                Rent Mgmt
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => handleDeleteIncome(income.id, `${income.description} — ${formatCurrency(income.amount)}`)}
-                                disabled={deletingId === income.id}
-                                title="Delete this income"
-                                className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
+                            <div className="flex items-center justify-end gap-1">
+                              {canEditIncome && !income.id.startsWith('rent-') && !income.id.startsWith('movein-') && (() => {
+                                const orig = incomes.find(i => i.id === income.id);
+                                return orig ? (
+                                  <button
+                                    onClick={() => openEditIncome(orig)}
+                                    title="Edit this income"
+                                    className="p-1.5 text-faint hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                ) : null;
+                              })()}
+                              {!canDelete ? null : income.id.startsWith('rent-') ? (
+                                <span
+                                  className="text-xs text-muted"
+                                  title="This rent came from a recorded payment. Delete it in Rent Management."
+                                >
+                                  Rent Mgmt
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleDeleteIncome(income.id, `${income.description} — ${formatCurrency(income.amount)}`)}
+                                  disabled={deletingId === income.id}
+                                  title="Delete this income"
+                                  className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -806,10 +839,10 @@ export function Expenses() {
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
-        title={editingExpense ? 'Edit Expense' : `Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
+        title={editingExpense ? 'Edit Expense' : editingIncome ? 'Edit Income' : `Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
         size="lg"
       >
-        <form key={editingExpense?.id || 'new'} onSubmit={handleSubmit} className="space-y-4">
+        <form key={editingExpense?.id || editingIncome?.id || 'new'} onSubmit={handleSubmit} className="space-y-4">
           {/* Split toggle — new expenses only, expense view only */}
           {view === 'expenses' && !editingExpense && properties.length > 1 && (
             <button
@@ -1065,6 +1098,7 @@ export function Expenses() {
                 <select
                   name="source"
                   required
+                  defaultValue={editingIncome?.source || ''}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select Source</option>
@@ -1077,6 +1111,7 @@ export function Expenses() {
                 <label className="text-sm font-medium">Tenant (Optional)</label>
                 <select
                   name="tenantId"
+                  defaultValue={editingIncome?.tenantId || ''}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select Tenant</option>
@@ -1102,7 +1137,7 @@ export function Expenses() {
                   min="0"
                   required
                   placeholder="0.00"
-                  defaultValue={editingExpense?.amount ?? ''}
+                  defaultValue={editingExpense?.amount ?? editingIncome?.amount ?? ''}
                   onChange={splitMode ? (e) => setSplitTotalAmount(Number(e.target.value) || 0) : undefined}
                   className="w-full pl-8 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -1120,7 +1155,7 @@ export function Expenses() {
                 type="date"
                 name="date"
                 required
-                defaultValue={editingExpense?.date || todayLocalDate()}
+                defaultValue={editingExpense?.date || editingIncome?.date || todayLocalDate()}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -1133,7 +1168,7 @@ export function Expenses() {
               required
               rows={3}
               placeholder={`Enter ${view} description...`}
-              defaultValue={editingExpense?.description || ''}
+              defaultValue={editingExpense?.description || editingIncome?.description || ''}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             />
           </div>
@@ -1152,7 +1187,7 @@ export function Expenses() {
               className="flex-1"
               disabled={splitMode && splitPropertyIds.size < 2}
             >
-              {editingExpense
+              {editingExpense || editingIncome
                 ? 'Save Changes'
                 : splitMode && splitPropertyIds.size > 1
                   ? `Add ${splitPropertyIds.size} Expenses (split)`

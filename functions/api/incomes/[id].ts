@@ -29,13 +29,14 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     await env.DB.prepare(
       `UPDATE incomes SET
-        property_id = ?, unit_id = ?, source = ?, amount = ?, date = ?, description = ?, related_payment_id = ?,
+        property_id = ?, unit_id = ?, tenant_id = ?, source = ?, amount = ?, date = ?, description = ?, related_payment_id = ?,
         updated_at = unixepoch()
        WHERE id = ?`
     )
       .bind(
         body.propertyId ?? null,
         body.unitId ?? null,
+        body.tenantId ?? null,
         body.source,
         body.amount,
         body.date,

@@ -141,6 +141,8 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'ADD_INCOME':
       return { ...state, incomes: [...state.incomes, action.payload] };
+    case 'UPDATE_INCOME':
+      return { ...state, incomes: state.incomes.map(i => i.id === action.payload.id ? action.payload : i) };
     case 'DELETE_INCOME':
       return { ...state, incomes: state.incomes.filter(i => i.id !== action.payload) };
     case 'ADD_RENT_PAYMENT':
@@ -210,6 +212,7 @@ interface AppContextType extends AppState {
   updateUtilityAccount: (account: UtilityAccount) => Promise<void>;
   deleteUtilityAccount: (id: string) => Promise<void>;
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
+  updateIncome: (income: Income) => Promise<void>;
   deleteIncome: (id: string) => Promise<void>;
   addRentPayment: (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
@@ -389,6 +392,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_UTILITY', payload: id });
   };
 
+  const updateIncome = async (income: Income) => {
+    const updated = await incomesApi.update(income.id, income);
+    dispatch({ type: 'UPDATE_INCOME', payload: updated });
+  };
+
   const deleteIncome = async (id: string) => {
     await incomesApi.delete(id);
     dispatch({ type: 'DELETE_INCOME', payload: id });
@@ -471,6 +479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateUtilityAccount,
         deleteUtilityAccount,
         addIncome,
+        updateIncome,
         deleteIncome,
         addRentPayment,
         updatePaymentStatus,
