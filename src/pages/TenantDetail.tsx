@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut, MessageSquare, Send, Clock,
+  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -415,6 +415,28 @@ export function TenantDetail() {
       showToast((err as Error).message || 'Could not terminate the tenancy.', 'error');
     } finally {
       setTerminating(false);
+    }
+  };
+
+  // Reactivate an ended tenancy (undo a termination).
+  const [reactivating, setReactivating] = useState(false);
+  const handleReactivate = async () => {
+    if (!endedLease || reactivating) return;
+    setReactivating(true);
+    try {
+      await updateLease({
+        ...endedLease,
+        status: 'active' as LeaseStatus,
+        endReason: undefined,
+        endedPropertyLabel: undefined,
+        endedUnitLabel: undefined,
+      });
+      await refreshData();
+      showToast('Tenancy reactivated.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not reactivate the tenancy.', 'error');
+    } finally {
+      setReactivating(false);
     }
   };
 
@@ -1106,6 +1128,12 @@ export function TenantDetail() {
                 </div>
                 {endedLease.endReason && <p className="text-muted">Reason for leaving: {endedLease.endReason}</p>}
                 <p className="text-xs text-faint">The unit is freed up. This record and payment history are kept.</p>
+                {canManagePortal && (
+                  <Button variant="outline" size="sm" onClick={handleReactivate} disabled={reactivating} className="mt-1">
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    {reactivating ? 'Reactivating...' : 'Reactivate tenancy'}
+                  </Button>
+                )}
               </div>
             ) : (
               <p className="text-sm text-faint">No active or paused lease on file.</p>
