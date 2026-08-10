@@ -1195,13 +1195,13 @@ export interface Announcement {
 export interface AnnouncementInput {
   title: string;
   body: string;
-  propertyId?: string;
+  propertyIds?: string[];
   expiresAt?: string;
 }
 
 export const announcementsApi = {
   list: (): Promise<Announcement[]> => apiRequest('/announcements'),
-  create: (data: AnnouncementInput): Promise<{ id: string; recipientCount: number }> =>
+  create: (data: AnnouncementInput): Promise<{ ids: string[]; recipientCount: number }> =>
     apiRequest('/announcements', { method: 'POST', body: JSON.stringify(data) }),
   remove: (id: string): Promise<void> => apiRequest(`/announcements/${id}`, { method: 'DELETE' }),
 };

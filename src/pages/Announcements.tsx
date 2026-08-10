@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone,
   Send,
@@ -6,6 +6,8 @@ import {
   Building2,
   CalendarClock,
   Users,
+  Check,
+  ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -37,9 +39,22 @@ export function Announcements() {
   // Form state
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [propertyId, setPropertyId] = useState('');
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [expiresAt, setExpiresAt] = useState('');
   const [sending, setSending] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click.
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const fetchList = useCallback(async () => {
     try {
@@ -54,23 +69,38 @@ export function Announcements() {
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
+  const toggleProperty = (id: string) => {
+    setSelectedPropertyIds(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  };
+
+  const selectAll = () => setSelectedPropertyIds([]);
+
+  /** Label for the dropdown trigger. */
+  const selectionLabel = useMemo(() => {
+    if (selectedPropertyIds.length === 0) return 'All Properties';
+    if (selectedPropertyIds.length === 1) {
+      const p = properties.find(pr => pr.id === selectedPropertyIds[0]);
+      return p?.name ?? '1 property';
+    }
+    return `${selectedPropertyIds.length} properties`;
+  }, [selectedPropertyIds, properties]);
+
   /** Count active tenants who will receive the announcement. */
   const recipientCount = useMemo(() => {
     const activeLeases = leases.filter(l => l.status === 'active');
     const tenantIds = new Set<string>();
     for (const lease of activeLeases) {
-      if (propertyId && lease.propertyId !== propertyId) continue;
-      // Count tenants on this lease.
+      if (selectedPropertyIds.length > 0 && (!lease.propertyId || !selectedPropertyIds.includes(lease.propertyId))) continue;
       for (const t of tenants) {
-        // Tenant is on this lease via lease_tenants. In the loaded data, each
-        // tenant belongs to its active lease via the leaseId field.
         if ((t as unknown as { leaseId?: string }).leaseId === lease.id) {
           tenantIds.add(t.id);
         }
       }
     }
     return tenantIds.size;
-  }, [leases, tenants, propertyId]);
+  }, [leases, tenants, selectedPropertyIds]);
 
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) {
@@ -82,7 +112,7 @@ export function Announcements() {
       const result = await announcementsApi.create({
         title: title.trim(),
         body: body.trim(),
-        propertyId: propertyId || undefined,
+        propertyIds: selectedPropertyIds.length > 0 ? selectedPropertyIds : undefined,
         expiresAt: expiresAt || undefined,
       });
       showToast(
@@ -91,7 +121,7 @@ export function Announcements() {
       );
       setTitle('');
       setBody('');
-      setPropertyId('');
+      setSelectedPropertyIds([]);
       setExpiresAt('');
       fetchList();
     } catch (err) {
@@ -158,21 +188,66 @@ export function Announcements() {
 
           {/* Property + Expiration row */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
+            <div className="flex-1" ref={dropdownRef}>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
                 <Building2 className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
-                Property
+                Properties
               </label>
-              <select
-                value={propertyId}
-                onChange={e => setPropertyId(e.target.value)}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">All Properties</option>
-                {properties.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setDropdownOpen(o => !o)}
+                  className="w-full flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <span className={selectedPropertyIds.length === 0 ? 'text-gray-500 dark:text-gray-400' : ''}>
+                    {selectionLabel}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute z-20 mt-1 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg max-h-60 overflow-y-auto">
+                    {/* All Properties option */}
+                    <button
+                      type="button"
+                      onClick={selectAll}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
+                    >
+                      <span className={`flex items-center justify-center w-4 h-4 rounded border ${
+                        selectedPropertyIds.length === 0
+                          ? 'bg-primary border-primary text-white'
+                          : 'border-gray-300 dark:border-gray-500'
+                      }`}>
+                        {selectedPropertyIds.length === 0 && <Check className="h-3 w-3" />}
+                      </span>
+                      All Properties
+                    </button>
+
+                    <div className="border-t border-gray-100 dark:border-gray-700" />
+
+                    {properties.map(p => {
+                      const checked = selectedPropertyIds.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => toggleProperty(p.id)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
+                        >
+                          <span className={`flex items-center justify-center w-4 h-4 rounded border ${
+                            checked
+                              ? 'bg-primary border-primary text-white'
+                              : 'border-gray-300 dark:border-gray-500'
+                          }`}>
+                            {checked && <Check className="h-3 w-3" />}
+                          </span>
+                          {p.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex-1">
@@ -188,6 +263,25 @@ export function Announcements() {
               />
             </div>
           </div>
+
+          {/* Selected property badges */}
+          {selectedPropertyIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedPropertyIds.map(pid => {
+                const p = properties.find(pr => pr.id === pid);
+                return (
+                  <Badge
+                    key={pid}
+                    variant="secondary"
+                    className="cursor-pointer hover:opacity-70"
+                    onClick={() => toggleProperty(pid)}
+                  >
+                    {p?.name ?? pid} ✕
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
 
           {/* Recipient count + Send */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
