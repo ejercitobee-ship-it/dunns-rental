@@ -14,10 +14,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     const { results } = await env.DB.prepare(
       `SELECT a.*, p.name AS property_name, u.email AS author_email,
-              u.first_name || ' ' || u.last_name AS author_name
+              u.name AS author_name
          FROM announcements a
          LEFT JOIN properties p ON p.id = a.property_id
-         LEFT JOIN users u ON u.id = a.created_by
+         LEFT JOIN user u ON u.id = a.created_by
         ORDER BY a.created_at DESC`
     ).all();
     return jsonOk({ success: true, data: results || [] });
