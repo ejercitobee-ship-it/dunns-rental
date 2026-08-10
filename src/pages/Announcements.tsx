@@ -22,6 +22,78 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { announcementsApi, type Announcement } from '../lib/api';
 
+// ---------------------------------------------------------------------------
+// Grouping: the DB stores one row per property, but the UI shows one card
+// per announcement with all tagged properties listed.
+// ---------------------------------------------------------------------------
+
+interface GroupedAnnouncement {
+  /** All DB row IDs that belong to this logical announcement. */
+  ids: string[];
+  title: string;
+  body: string;
+  /** Properties this announcement was sent to. Empty = all properties. */
+  properties: { id: string; name: string }[];
+  isAllProperties: boolean;
+  created_by: string;
+  author_name: string | null;
+  created_at: number;
+  expires_at: string | null;
+}
+
+/**
+ * Collapse per-property DB rows into one entry per announcement.
+ * Rows from the same send share identical title + body + created_by + created_at
+ * because they are batch-inserted in a single request.
+ */
+function groupAnnouncements(raw: Announcement[]): GroupedAnnouncement[] {
+  const map = new Map<string, GroupedAnnouncement>();
+
+  for (const a of raw) {
+    // Key on the combination that uniquely identifies a single send action.
+    const key = `${a.title}\x00${a.body}\x00${a.created_by}\x00${a.created_at}`;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        ids: [],
+        title: a.title,
+        body: a.body,
+        properties: [],
+        isAllProperties: false,
+        created_by: a.created_by,
+        author_name: a.author_name,
+        created_at: a.created_at,
+        expires_at: a.expires_at,
+      });
+    }
+
+    const group = map.get(key)!;
+    group.ids.push(a.id);
+
+    if (a.property_id && a.property_name) {
+      // Avoid duplicates (shouldn't happen, but defensive).
+      if (!group.properties.some(p => p.id === a.property_id)) {
+        group.properties.push({ id: a.property_id, name: a.property_name });
+      }
+    } else {
+      group.isAllProperties = true;
+    }
+
+    // Keep the latest expiry date across the group.
+    if (a.expires_at) {
+      if (!group.expires_at || a.expires_at > group.expires_at) {
+        group.expires_at = a.expires_at;
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function relativeTime(unixSeconds: number): string {
   const now = Date.now() / 1000;
   const diff = now - unixSeconds;
@@ -35,11 +107,15 @@ function relativeTime(unixSeconds: number): string {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function Announcements() {
   const { properties, leases, tenants } = useApp();
   const { showToast } = useToast();
 
-  const [list, setList] = useState<Announcement[]>([]);
+  const [rawList, setRawList] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form state
@@ -65,7 +141,7 @@ export function Announcements() {
   const fetchList = useCallback(async () => {
     try {
       const data = await announcementsApi.list();
-      setList(data);
+      setRawList(data);
     } catch {
       showToast('Could not load announcements.', 'error');
     } finally {
@@ -137,55 +213,68 @@ export function Announcements() {
     }
   };
 
-  // Past announcements state
+  // --- History section state ---
   const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('all');
   const [propertyFilter, setPropertyFilter] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GroupedAnnouncement | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = (key: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
-  const isExpired = (a: Announcement) =>
+  const isExpired = (a: GroupedAnnouncement) =>
     !!a.expires_at && a.expires_at < new Date().toISOString().slice(0, 10);
 
-  /** Filtered + categorized list. */
+  // Group raw rows into logical announcements, then filter.
+  const grouped = useMemo(() => groupAnnouncements(rawList), [rawList]);
+
   const { filtered, activeCount, expiredCount, uniqueProperties } = useMemo(() => {
     let active = 0;
     let expired = 0;
     const propSet = new Map<string, string>(); // id → name
-    for (const a of list) {
-      if (isExpired(a)) expired++;
+
+    for (const g of grouped) {
+      if (isExpired(g)) expired++;
       else active++;
-      if (a.property_id && a.property_name) propSet.set(a.property_id, a.property_name);
+      for (const p of g.properties) propSet.set(p.id, p.name);
     }
-    let result = list;
-    if (filter === 'active') result = result.filter(a => !isExpired(a));
-    if (filter === 'expired') result = result.filter(a => isExpired(a));
-    if (propertyFilter) result = result.filter(a => a.property_id === propertyFilter);
+
+    let result = grouped;
+    if (filter === 'active') result = result.filter(g => !isExpired(g));
+    if (filter === 'expired') result = result.filter(g => isExpired(g));
+    if (propertyFilter) {
+      result = result.filter(g =>
+        g.isAllProperties || g.properties.some(p => p.id === propertyFilter)
+      );
+    }
+
     return {
       filtered: result,
       activeCount: active,
       expiredCount: expired,
       uniqueProperties: Array.from(propSet.entries()).map(([id, name]) => ({ id, name })),
     };
-  }, [list, filter, propertyFilter]);
+  }, [grouped, filter, propertyFilter]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await announcementsApi.remove(deleteTarget.id);
-      setList(prev => prev.filter(a => a.id !== deleteTarget.id));
+      // Delete all DB rows that belong to this logical announcement.
+      await Promise.all(deleteTarget.ids.map(id => announcementsApi.remove(id)));
+      setRawList(prev => prev.filter(a => !deleteTarget.ids.includes(a.id)));
       showToast('Announcement deleted.', 'success');
     } catch {
       showToast('Could not delete the announcement.', 'error');
     } finally {
+      setDeleting(false);
       setDeleteTarget(null);
     }
   };
@@ -348,14 +437,14 @@ export function Announcements() {
         </CardContent>
       </Card>
 
-      {/* Past announcements */}
+      {/* Announcement history */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <CardTitle className="text-lg">Past Announcements</CardTitle>
-            {list.length > 0 && (
+            <CardTitle className="text-lg">Announcements</CardTitle>
+            {grouped.length > 0 && (
               <span className="text-xs text-muted">
-                {list.length} total · {activeCount} active · {expiredCount} expired
+                {grouped.length} total · {activeCount} active · {expiredCount} expired
               </span>
             )}
           </div>
@@ -363,7 +452,7 @@ export function Announcements() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted">Loading...</p>
-          ) : list.length === 0 ? (
+          ) : grouped.length === 0 ? (
             <div className="text-center py-8">
               <Megaphone className="h-10 w-10 text-faint mx-auto mb-3" />
               <p className="text-sm text-muted">No announcements have been sent yet.</p>
@@ -376,7 +465,7 @@ export function Announcements() {
                 {/* Status tabs */}
                 <div className="flex gap-1 bg-canvas rounded-lg p-1 border border-line">
                   {([
-                    { key: 'all' as const, label: 'All', count: list.length, icon: null },
+                    { key: 'all' as const, label: 'All', count: grouped.length, icon: null },
                     { key: 'active' as const, label: 'Active', count: activeCount, icon: CircleCheck },
                     { key: 'expired' as const, label: 'Expired', count: expiredCount, icon: CircleX },
                   ] as const).map(tab => {
@@ -445,17 +534,19 @@ export function Announcements() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filtered.map(a => {
-                    const expired = isExpired(a);
-                    const isLong = a.body.length > TRUNCATE_AT;
-                    const isExpanded = expandedIds.has(a.id);
+                  {filtered.map(g => {
+                    const expired = isExpired(g);
+                    const isLong = g.body.length > TRUNCATE_AT;
+                    // Use the first ID as a stable key for expand/collapse.
+                    const expandKey = g.ids[0];
+                    const isExpanded = expandedIds.has(expandKey);
                     const displayBody = isLong && !isExpanded
-                      ? a.body.slice(0, TRUNCATE_AT).trimEnd() + '...'
-                      : a.body;
+                      ? g.body.slice(0, TRUNCATE_AT).trimEnd() + '...'
+                      : g.body;
 
                     return (
                       <div
-                        key={a.id}
+                        key={expandKey}
                         className={`relative border rounded-xl p-4 transition-all ${
                           expired
                             ? 'border-line bg-canvas/50'
@@ -472,34 +563,40 @@ export function Announcements() {
                             {/* Title row */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`font-semibold text-sm ${expired ? 'text-muted' : 'text-ink'}`}>
-                                {a.title}
+                                {g.title}
                               </span>
-                              {a.property_name ? (
-                                <Badge variant="secondary">{a.property_name}</Badge>
-                              ) : (
-                                <Badge variant="default">All Properties</Badge>
-                              )}
                               {expired ? (
                                 <Badge variant="warning">Expired</Badge>
                               ) : (
-                                a.expires_at && (
+                                g.expires_at && (
                                   <span className="flex items-center gap-1 text-[10px] text-muted">
                                     <Clock className="h-3 w-3" />
-                                    Expires {a.expires_at}
+                                    Expires {g.expires_at}
                                   </span>
                                 )
                               )}
                             </div>
 
+                            {/* Property badges */}
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              {g.isAllProperties ? (
+                                <Badge variant="default">All Properties</Badge>
+                              ) : (
+                                g.properties.map(p => (
+                                  <Badge key={p.id} variant="secondary">{p.name}</Badge>
+                                ))
+                              )}
+                            </div>
+
                             {/* Body with truncation */}
-                            <p className={`text-sm mt-1.5 whitespace-pre-line leading-relaxed ${
+                            <p className={`text-sm mt-2 whitespace-pre-line leading-relaxed ${
                               expired ? 'text-faint' : 'text-muted'
                             }`}>
                               {displayBody}
                             </p>
                             {isLong && (
                               <button
-                                onClick={() => toggleExpand(a.id)}
+                                onClick={() => toggleExpand(expandKey)}
                                 className="flex items-center gap-1 mt-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
                               >
                                 {isExpanded ? (
@@ -514,12 +611,12 @@ export function Announcements() {
                             <div className="text-xs text-faint mt-2 flex items-center gap-2 flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {relativeTime(a.created_at)}
+                                {relativeTime(g.created_at)}
                               </span>
-                              {a.author_name && (
+                              {g.author_name && (
                                 <>
                                   <span className="text-line">·</span>
-                                  <span>{a.author_name}</span>
+                                  <span>{g.author_name}</span>
                                 </>
                               )}
                             </div>
@@ -527,7 +624,7 @@ export function Announcements() {
 
                           {/* Delete button */}
                           <button
-                            onClick={() => setDeleteTarget(a)}
+                            onClick={() => setDeleteTarget(g)}
                             className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-soft flex-shrink-0"
                             title="Delete announcement"
                           >
@@ -547,12 +644,13 @@ export function Announcements() {
       {/* Delete confirmation */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
         onConfirm={handleDelete}
         title="Delete Announcement"
         message={`This will permanently remove "${deleteTarget?.title ?? ''}". Tenants who already received it will keep their copy, but it will no longer appear in the portal.`}
         confirmText="Delete"
         variant="danger"
+        loading={deleting}
       />
     </div>
   );
