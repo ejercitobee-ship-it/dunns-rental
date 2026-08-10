@@ -160,13 +160,17 @@ export function TaxReport() {
     const lateFeeIncome = pIncome.filter(i => i.source === 'late_fee').reduce((s, i) => s + i.amount, 0);
     const moveInFeeIncome = pIncome.filter(i => i.source === 'move_in_fee').reduce((s, i) => s + i.amount, 0);
     const utilityReimbursement = pIncome.filter(i => i.source === 'utility_reimbursement').reduce((s, i) => s + i.amount, 0);
+    const hoaReimbursement = pIncome.filter(i => i.source === 'hoa_reimbursement').reduce((s, i) => s + i.amount, 0);
+    const applicationFeeIncome = pIncome.filter(i => i.source === 'application_fee').reduce((s, i) => s + i.amount, 0);
+    const petFeeIncome = pIncome.filter(i => i.source === 'pet_fee').reduce((s, i) => s + i.amount, 0);
+    const parkingFeeIncome = pIncome.filter(i => i.source === 'parking_fee').reduce((s, i) => s + i.amount, 0);
     const otherIncome = pIncome.filter(i => i.source === 'other').reduce((s, i) => s + i.amount, 0);
     // A refundable security deposit you are holding is a liability you owe back,
     // NOT taxable income. It becomes income only in the year you keep it (record
     // that as "Other" income). So deposits are tracked separately and excluded
     // from the taxable total.
     const depositsReceived = pIncome.filter(i => i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
-    const totalIncome = rentIncome + lateFeeIncome + moveInFeeIncome + utilityReimbursement + otherIncome;
+    const totalIncome = rentIncome + lateFeeIncome + moveInFeeIncome + utilityReimbursement + hoaReimbursement + applicationFeeIncome + petFeeIncome + parkingFeeIncome + otherIncome;
 
     const propertyNameById = new Map(properties.map(p => [p.id, p.name]));
     const expensesByCategory: Record<string, number> = {};
@@ -289,7 +293,7 @@ export function TaxReport() {
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
+    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenses, incomes, properties, rentPayments, leases, capitalProjects]);
 
@@ -326,7 +330,7 @@ export function TaxReport() {
     const report = {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
-      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, other: main.otherIncome },
+      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, hoaReimbursements: main.hoaReimbursement, applicationFees: main.applicationFeeIncome, petFees: main.petFeeIncome, parkingFees: main.parkingFeeIncome, other: main.otherIncome },
       securityDepositsReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
@@ -339,7 +343,7 @@ export function TaxReport() {
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
-        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, moveInFees: comp.moveInFeeIncome, utilityReimbursements: comp.utilityReimbursement, other: comp.otherIncome },
+        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, moveInFees: comp.moveInFeeIncome, utilityReimbursements: comp.utilityReimbursement, hoaReimbursements: comp.hoaReimbursement, applicationFees: comp.applicationFeeIncome, petFees: comp.petFeeIncome, parkingFees: comp.parkingFeeIncome, other: comp.otherIncome },
         deductibleExpenses: comp.expensesByCategory, totalDeductibleExpenses: comp.totalDeductibleExpenses,
         operatingExpenses: comp.operatingExpenses, capitalExpenses: comp.capitalExpenses, netIncome: comp.netIncome,
       } : undefined,
@@ -664,6 +668,42 @@ export function TaxReport() {
             >
               <span className="font-medium">Utility Reimbursements</span>
               <span className="font-bold tnum">{formatCurrency(main.utilityReimbursement)}</span>
+            </button>
+            )}
+            {main.hoaReimbursement > 0 && (
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('HOA Reimbursements', { incomes: main.pIncome.filter(i => i.source === 'hoa_reimbursement'), tab: 'income' })}
+            >
+              <span className="font-medium">HOA Reimbursements</span>
+              <span className="font-bold tnum">{formatCurrency(main.hoaReimbursement)}</span>
+            </button>
+            )}
+            {main.applicationFeeIncome > 0 && (
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Application Fees', { incomes: main.pIncome.filter(i => i.source === 'application_fee'), tab: 'income' })}
+            >
+              <span className="font-medium">Application Fees</span>
+              <span className="font-bold tnum">{formatCurrency(main.applicationFeeIncome)}</span>
+            </button>
+            )}
+            {main.petFeeIncome > 0 && (
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Pet Fees', { incomes: main.pIncome.filter(i => i.source === 'pet_fee'), tab: 'income' })}
+            >
+              <span className="font-medium">Pet Fees</span>
+              <span className="font-bold tnum">{formatCurrency(main.petFeeIncome)}</span>
+            </button>
+            )}
+            {main.parkingFeeIncome > 0 && (
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Parking Fees', { incomes: main.pIncome.filter(i => i.source === 'parking_fee'), tab: 'income' })}
+            >
+              <span className="font-medium">Parking Fees</span>
+              <span className="font-bold tnum">{formatCurrency(main.parkingFeeIncome)}</span>
             </button>
             )}
             <button
