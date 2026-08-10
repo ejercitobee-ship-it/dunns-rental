@@ -11,7 +11,7 @@ export const ALL_PERMISSIONS = [
   'rents_view', 'rents_record', 'rents_edit', 'rents_export',
   'finances_view', 'finances_expenses', 'finances_expenses_delete', 'finances_import',
   'finances_import_merge', 'finances_import_rollback', 'finances_history',
-  'finances_capital_projects', 'finances_income', 'finances_export',
+  'finances_capital_projects', 'finances_capital_projects_delete', 'finances_income', 'finances_export',
   'leases_generate', 'leases_renewals', 'leases_history', 'leases_move_in',
   'leases_terminate', 'leases_pause',
   'maintenance_approve', 'maintenance_close', 'maintenance_history',

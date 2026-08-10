@@ -84,6 +84,7 @@ export const SYSTEM_PERMISSIONS: Permission[] = [
   { id: 'finances_import_rollback', name: 'Roll Back Imported Data', description: 'Can roll back a merged import', module: 'finances', advanced: true },
   { id: 'finances_history', name: 'Edit Financial History', description: 'Can edit historical financial records', module: 'finances', advanced: true },
   { id: 'finances_capital_projects', name: 'Manage Capital Projects', description: 'Can create, edit, and manage capital improvement projects', module: 'finances', advanced: true },
+  { id: 'finances_capital_projects_delete', name: 'Delete Capital Projects', description: 'Can permanently delete capital improvement projects', module: 'finances', advanced: true },
   { id: 'finances_income', name: 'Manage Income', description: 'Can add and manage income', module: 'finances' },
   { id: 'finances_export', name: 'Export Financial Reports', description: 'Can export financial reports', module: 'finances' },
 

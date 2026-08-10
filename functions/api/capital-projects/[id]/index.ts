@@ -92,7 +92,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requirePermission(env, request, 'finances_expenses');
+  const auth = await requirePermission(env, request, 'finances_capital_projects_delete');
   if (auth instanceof Response) return auth;
 
   try {

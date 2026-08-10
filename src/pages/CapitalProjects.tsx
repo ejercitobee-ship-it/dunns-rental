@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef } from 'react';
 import {
   Plus, ArrowLeft, Search, Pencil, CheckCircle2,
   Clock, XCircle, Home, DoorOpen, Receipt, Upload,
-  ChevronDown, Link2, Unlink, FileSpreadsheet, FolderOpen,
+  ChevronDown, Link2, Unlink, FileSpreadsheet, FolderOpen, Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { capitalProjectsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type {
   CapitalProject,
@@ -27,7 +28,9 @@ const STATUS_CONFIG: Record<CapitalProjectStatus, { label: string; color: string
 
 export function CapitalProjects() {
   const { properties, units, expenses, refreshData } = useApp();
+  const { hasPermission } = useAuth();
   const { showToast } = useToast();
+  const canDelete = hasPermission('finances_capital_projects_delete');
 
   const [projects, setProjects] = useState<CapitalProject[]>([]);
   const [detail, setDetail] = useState<CapitalProjectDetail | null>(null);
@@ -258,7 +261,14 @@ export function CapitalProjects() {
               <Badge variant={cfg.badge}>{cfg.label}</Badge>
             </div>
           </div>
-          <Button variant="outline" onClick={openEdit}><Pencil className="h-4 w-4 mr-1.5" />Edit</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={openEdit}><Pencil className="h-4 w-4 mr-1.5" />Edit</Button>
+            {canDelete && (
+              <Button variant="outline" className="text-danger hover:bg-danger-soft" onClick={() => setDeleteConfirm(detail.id)}>
+                <Trash2 className="h-4 w-4 mr-1.5" />Delete
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Summary cards */}
@@ -452,6 +462,17 @@ export function CapitalProjects() {
           variant="warning"
           onConfirm={() => unlinkConfirm && handleUnlinkExpense(unlinkConfirm)}
           onClose={() => setUnlinkConfirm(null)}
+        />
+
+        {/* Delete project confirm */}
+        <ConfirmDialog
+          isOpen={!!deleteConfirm}
+          title="Delete Project"
+          message="This deletes the project. Linked expenses are preserved as regular expenses."
+          confirmText="Delete"
+          variant="danger"
+          onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
+          onClose={() => setDeleteConfirm(null)}
         />
       </div>
     );
