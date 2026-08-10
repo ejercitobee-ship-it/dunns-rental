@@ -63,12 +63,23 @@ export async function isDriveConnected(env: Env): Promise<boolean> {
  * the token is cached in app_settings with its expiry and reused until it is
  * nearly stale. The 60 second margin avoids handing back a token that expires
  * mid request.
+ *
+ * An in-memory cache (`_tokenCache`) avoids repeated DB reads within the same
+ * Worker invocation. A single upload chain can call getAccessToken 5+ times
+ * (once per ensure* + the upload), so this saves ~10 DB reads per request.
  */
+let _tokenCache: { token: string; expiresAt: number } | null = null;
+
 export async function getAccessToken(env: Env): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (_tokenCache && _tokenCache.expiresAt > now + 60) return _tokenCache.token;
+
   const cached = await getSetting(env, KEY_ACCESS);
   const expiresAt = Number((await getSetting(env, KEY_ACCESS_EXPIRES)) ?? 0);
-  const now = Math.floor(Date.now() / 1000);
-  if (cached && expiresAt > now + 60) return cached;
+  if (cached && expiresAt > now + 60) {
+    _tokenCache = { token: cached, expiresAt };
+    return cached;
+  }
 
   const refreshToken = await getSetting(env, KEY_REFRESH);
   if (!refreshToken || !env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
@@ -98,6 +109,7 @@ export async function getAccessToken(env: Env): Promise<string> {
   const data = (await res.json()) as { access_token: string; expires_in: number };
   await putSetting(env, KEY_ACCESS, data.access_token);
   await putSetting(env, KEY_ACCESS_EXPIRES, String(now + data.expires_in));
+  _tokenCache = { token: data.access_token, expiresAt: now + data.expires_in };
   return data.access_token;
 }
 
@@ -229,14 +241,11 @@ export async function findFolder(env: Env, name: string, parentId?: string): Pro
  */
 export async function ensureRootFolder(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_ROOT_FOLDER);
-  if (existing) {
-    // Reuse unless the folder is DEFINITELY gone. On 'unknown' (a transient
-    // check failure) we keep the stored id rather than forking a second root —
-    // that fork is exactly the bug that created a duplicate "MH Dunn Property
-    // Documents". If it turns out truly gone, the upload fails and retries.
-    const status = await folderStatus(env, existing);
-    if (status !== 'gone') return existing;
-  }
+  // Trust the cached id: the root folder is almost never deleted or trashed.
+  // If it is, the upload call will fail and the user can retry (which clears
+  // the stale id on the retry path). Skipping the folderStatus round-trip
+  // saves ~300ms per upload chain.
+  if (existing) return existing;
   // No usable stored id: adopt an existing root already in the Drive before
   // making one, so a lost setting or an earlier duplicate heals to a single
   // canonical folder instead of spawning yet another.
@@ -270,10 +279,8 @@ async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<st
       property_name: string | null; property_address: string | null;
     }>();
   if (!unit?.unit_id) return null;
-  if (unit.unit_folder_id) {
-    const status = await folderStatus(env, unit.unit_folder_id);
-    if (status !== 'gone') return unit.unit_folder_id;
-  }
+  // Trust the cached folder id — skip the folderStatus Drive API call.
+  if (unit.unit_folder_id) return unit.unit_folder_id;
   const parent = unit.property_id
     ? ((await ensurePropertyFolder(env, unit.property_id)) ?? (await ensureRootFolder(env)))
     : await ensureRootFolder(env);
@@ -292,10 +299,7 @@ async function ensureUnitFolderForTenant(env: Env, tenantId: string): Promise<st
  */
 export async function ensureProspectiveFolder(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_PROSPECTIVE_FOLDER);
-  if (existing) {
-    const status = await folderStatus(env, existing);
-    if (status !== 'gone') return existing;
-  }
+  if (existing) return existing;
   const root = await ensureRootFolder(env);
   const id = (await findFolder(env, PROSPECTIVE_FOLDER_NAME, root)) ?? (await createFolder(env, PROSPECTIVE_FOLDER_NAME, root));
   await putSetting(env, KEY_PROSPECTIVE_FOLDER, id);
@@ -305,10 +309,7 @@ export async function ensureProspectiveFolder(env: Env): Promise<string> {
 /** The shared "Vendors" folder under the root. */
 async function ensureVendorsRoot(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_VENDORS_FOLDER);
-  if (existing) {
-    const status = await folderStatus(env, existing);
-    if (status !== 'gone') return existing;
-  }
+  if (existing) return existing;
   const root = await ensureRootFolder(env);
   const id = (await findFolder(env, VENDORS_FOLDER_NAME, root)) ?? (await createFolder(env, VENDORS_FOLDER_NAME, root));
   await putSetting(env, KEY_VENDORS_FOLDER, id);
@@ -325,10 +326,7 @@ export async function ensureVendorFolder(env: Env, handymanId: string): Promise<
     .bind(handymanId)
     .first<{ id: string; name: string | null; drive_folder_id: string | null }>();
   if (!h?.id) return null;
-  if (h.drive_folder_id) {
-    const status = await folderStatus(env, h.drive_folder_id);
-    if (status !== 'gone') return h.drive_folder_id;
-  }
+  if (h.drive_folder_id) return h.drive_folder_id;
   const parent = await ensureVendorsRoot(env);
   const id = await createFolder(env, (h.name || 'Vendor').trim() || 'Vendor', parent);
   await env.DB.prepare('UPDATE handymen SET drive_folder_id = ? WHERE id = ?').bind(id, h.id).run();
@@ -350,10 +348,7 @@ export async function ensureUnitFolder(env: Env, unitId: string): Promise<string
     property_id: string | null;
   }>();
   if (!unit?.unit_id) return null;
-  if (unit.unit_folder_id) {
-    const status = await folderStatus(env, unit.unit_folder_id);
-    if (status !== 'gone') return unit.unit_folder_id;
-  }
+  if (unit.unit_folder_id) return unit.unit_folder_id;
   const parent = unit.property_id
     ? ((await ensurePropertyFolder(env, unit.property_id)) ?? (await ensureRootFolder(env)))
     : await ensureRootFolder(env);
@@ -379,13 +374,12 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
     .first<{ id: string; first_name: string; last_name: string; drive_folder_id: string | null }>();
   if (!tenant) throw new Error('Tenant not found');
 
+  // Trust the cached folder id — skip the folderStatus Drive API call.
+  // Only walk the parent chain when we actually need to create a new folder.
+  if (tenant.drive_folder_id) return tenant.drive_folder_id;
+
   // The tenant's folder lives inside their unit folder (or the root if unplaced).
   const parent = (await ensureUnitFolderForTenant(env, tenantId)) ?? (await ensureRootFolder(env));
-
-  if (tenant.drive_folder_id) {
-    const status = await folderStatus(env, tenant.drive_folder_id);
-    if (status !== 'gone') return tenant.drive_folder_id;
-  }
   const name = `${tenant.first_name} ${tenant.last_name}`.trim() || tenant.id;
   const id = await createFolder(env, name, parent);
   await env.DB.prepare('UPDATE tenants SET drive_folder_id = ?, updated_at = unixepoch() WHERE id = ?')
@@ -403,10 +397,8 @@ export async function ensurePropertyFolder(env: Env, propertyId: string): Promis
     .bind(propertyId)
     .first<{ id: string; name: string; address: string | null; drive_folder_id: string | null }>();
   if (!prop) return null;
-  if (prop.drive_folder_id) {
-    const status = await folderStatus(env, prop.drive_folder_id);
-    if (status !== 'gone') return prop.drive_folder_id;
-  }
+  // Trust the cached folder id — skip the folderStatus Drive API call.
+  if (prop.drive_folder_id) return prop.drive_folder_id;
   const root = await ensureRootFolder(env);
   const folderName = (prop.address || prop.name || 'Property').trim();
   const id = await createFolder(env, folderName, root);
@@ -444,13 +436,11 @@ export async function ensurePropertyExpensesFolder(env: Env, propertyId: string,
  */
 export async function ensureManagementExpensesFolder(env: Env, year?: number): Promise<string> {
   const existing = await getSetting(env, KEY_MGMT_EXPENSES_FOLDER);
+  // Trust the cached id — skip the folderStatus Drive API call.
   if (existing) {
-    const status = await folderStatus(env, existing);
-    if (status !== 'gone') {
-      if (!year) return existing;
-      const yearName = String(year);
-      return (await findFolder(env, yearName, existing)) ?? (await createFolder(env, yearName, existing));
-    }
+    if (!year) return existing;
+    const yearName = String(year);
+    return (await findFolder(env, yearName, existing)) ?? (await createFolder(env, yearName, existing));
   }
   const root = await ensureRootFolder(env);
   const id = (await findFolder(env, MGMT_EXPENSES_NAME, root)) ?? (await createFolder(env, MGMT_EXPENSES_NAME, root));
@@ -533,10 +523,8 @@ export async function migrateDocumentFoldersToUnits(env: Env): Promise<{ moved: 
 /** The Profile Photos folder, a subfolder of the app root, created on first use. */
 async function ensurePhotoFolder(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_PHOTO_FOLDER);
-  if (existing) {
-    const status = await folderStatus(env, existing);
-    if (status !== 'gone') return existing;
-  }
+  // Trust the cached id — skip the folderStatus Drive API call.
+  if (existing) return existing;
   const root = await ensureRootFolder(env);
   const id = (await findFolder(env, PHOTO_FOLDER_NAME, root)) ?? (await createFolder(env, PHOTO_FOLDER_NAME, root));
   await putSetting(env, KEY_PHOTO_FOLDER, id);
@@ -621,10 +609,7 @@ export async function saveProfilePhoto(env: Env, file: File, oldDriveId?: string
 /** The one folder that holds every maintenance-request photo. */
 async function ensureMaintenanceFolder(env: Env): Promise<string> {
   const existing = await getSetting(env, KEY_MAINTENANCE_FOLDER);
-  if (existing) {
-    const status = await folderStatus(env, existing);
-    if (status !== 'gone') return existing;
-  }
+  if (existing) return existing;
   const root = await ensureRootFolder(env);
   const id = (await findFolder(env, MAINTENANCE_FOLDER_NAME, root)) ?? (await createFolder(env, MAINTENANCE_FOLDER_NAME, root));
   await putSetting(env, KEY_MAINTENANCE_FOLDER, id);

@@ -361,8 +361,8 @@ export function Expenses() {
             ? Number(formData.get('interestAmount'))
             : undefined,
         };
-        // Create or update the expense, then attach the invoice/receipt if one
-        // was picked. Uploading updates the row's receipt, so reflect it locally.
+        // Save the expense to the DB first (fast), then upload the receipt
+        // in the background so the modal closes instantly.
         let savedId: string;
         if (editingExpense) {
           await updateExpense({ ...editingExpense, ...fields });
@@ -371,12 +371,16 @@ export function Expenses() {
           savedId = (await addExpense(fields)).id;
         }
         if (receiptFile) {
-          try {
-            const withReceipt = await expensesApi.uploadReceipt(savedId, receiptFile);
-            dispatch({ type: 'UPDATE_EXPENSE', payload: withReceipt });
-          } catch {
-            showToast('Expense saved, but the receipt upload failed. Add it from the receipt icon on the row.', 'error');
-          }
+          const pendingFile = receiptFile;
+          showToast('Expense saved. Uploading receipt...', 'success');
+          expensesApi.uploadReceipt(savedId, pendingFile)
+            .then(withReceipt => {
+              dispatch({ type: 'UPDATE_EXPENSE', payload: withReceipt });
+              showToast('Receipt uploaded.', 'success');
+            })
+            .catch(() => {
+              showToast('Receipt upload failed. Add it from the receipt icon on the row.', 'error');
+            });
         }
       } else {
         await addIncome({

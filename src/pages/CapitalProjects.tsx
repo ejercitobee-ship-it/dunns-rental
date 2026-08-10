@@ -200,18 +200,15 @@ export function CapitalProjects() {
     }
   };
 
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!detail) return;
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      await capitalProjectsApi.uploadReceipt(detail.id, file);
-      showToast(`Uploaded ${file.name} to Drive.`, 'success');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
-    } finally {
-      if (receiptRef.current) receiptRef.current.value = '';
-    }
+    if (receiptRef.current) receiptRef.current.value = '';
+    showToast(`Uploading ${file.name}...`, 'success');
+    capitalProjectsApi.uploadReceipt(detail.id, file)
+      .then(() => showToast(`${file.name} uploaded to Drive.`, 'success'))
+      .catch(err => showToast(err instanceof Error ? err.message : 'Upload failed', 'error'));
   };
 
   const resetForm = () => setForm({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress', startDate: '', completionDate: '', budget: '' });
