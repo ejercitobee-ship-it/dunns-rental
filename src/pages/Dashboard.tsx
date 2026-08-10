@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, TrendingUp,
-  TrendingDown, AlertCircle, Wallet, Building2, Percent, ArrowRight, DoorOpen, Home, CalendarClock,
-  ChevronDown, ChevronRight, CalendarDays,
+  DollarSign, CreditCard, TrendingUp, TrendingDown,
+  Activity, Building2, BarChart3, Users, AlertTriangle,
+  Clock, CalendarCheck, Home, ChevronRight, ChevronDown,
+  CalendarDays, ArrowRight, PieChart as PieChartIcon, Check,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -27,8 +28,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
 } from 'recharts';
 
 const COLORS = [
@@ -38,60 +37,71 @@ const COLORS = [
 ];
 const INCOME_COLOR = '#2c7a58';
 const EXPENSE_COLOR = '#b98a5e';
-const NET_COLOR = '#24503f';
 
-// Stat Card Component
+// ---------------------------------------------------------------------------
+// Stat Card
+// ---------------------------------------------------------------------------
 interface StatCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
   icon: React.ReactNode;
+  iconBg?: string;
+  valueColor?: string;
   onClick?: () => void;
-  trend?: { value: string; positive: boolean };
 }
 
-function StatCard({ title, value, subtitle, icon, onClick, trend }: StatCardProps) {
+function StatCard({ title, value, subtitle, icon, iconBg = 'bg-primary-soft text-primary', valueColor = 'text-ink', onClick }: StatCardProps) {
   return (
     <Card
-      className="cursor-pointer hover:border-line-strong hover:shadow-[0_2px_12px_rgba(27,26,23,0.07)]"
+      className="cursor-pointer hover:border-line-strong hover:shadow-[0_2px_12px_rgba(27,26,23,0.07)] transition-all"
       onClick={onClick}
     >
       <div className="p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-1">
           <span className="eyebrow">{title}</span>
-          <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
+          <span className={`w-[34px] h-[34px] rounded-[10px] grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${iconBg}`}>{icon}</span>
         </div>
-        <div className="mt-3.5 flex items-end gap-2">
-          <span className="text-[27px] leading-none font-semibold text-ink tnum">{value}</span>
-          {trend && (
-            <span className={`mb-1 text-xs font-medium ${trend.positive ? 'text-positive' : 'text-danger'}`}>
-              {trend.positive ? '↑' : '↓'} {trend.value}
-            </span>
-          )}
+        <div className="mt-3 flex items-end gap-2">
+          <span className={`font-display text-[24px] leading-none font-medium ${valueColor} tnum`}>{value}</span>
         </div>
-        {subtitle && <p className="mt-1.5 text-[13px] text-muted">{subtitle}</p>}
+        {subtitle && <p className="mt-1.5 text-[12px] text-muted">{subtitle}</p>}
       </div>
     </Card>
   );
 }
 
-// Clickable Card Component
-interface ClickableCardProps {
-  children: React.ReactNode;
+// ---------------------------------------------------------------------------
+// Context card (compact row under stat cards)
+// ---------------------------------------------------------------------------
+interface ContextCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
   onClick?: () => void;
-  className?: string;
 }
 
-function ClickableCard({ children, onClick, className = '' }: ClickableCardProps) {
+function ContextCard({ icon, label, value, onClick }: ContextCardProps) {
   return (
     <Card
-      className={`cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[0_10px_28px_-12px_rgba(27,26,23,0.18)] ${className}`}
+      className="cursor-pointer hover:border-line-strong transition-all"
       onClick={onClick}
     >
-      {children}
+      <div className="p-3 flex items-center gap-2.5">
+        <span className="w-[34px] h-[34px] rounded-[10px] bg-canvas text-muted grid place-items-center flex-shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
+        <div className="min-w-0">
+          <p className="eyebrow !text-[10px]">{label}</p>
+          <p className="text-[17px] font-medium text-ink mt-0.5">{value}</p>
+        </div>
+      </div>
     </Card>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Attention tab types
+// ---------------------------------------------------------------------------
+type AttentionTab = 'pastDue' | 'overdue' | 'expiring' | 'vacant';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -101,6 +111,7 @@ export function Dashboard() {
   const [drillTitle, setDrillTitle] = useState('');
   const [drillExpenses, setDrillExpenses] = useState<Expense[]>([]);
   const [drillOpen, setDrillOpen] = useState(false);
+  const [attentionTab, setAttentionTab] = useState<AttentionTab>('pastDue');
 
   const openDrill = (title: string, exps: Expense[]) => {
     setDrillTitle(title);
@@ -108,15 +119,13 @@ export function Dashboard() {
     setDrillOpen(true);
   };
 
+  // ---------------------------------------------------------------------------
+  // Data computations (unchanged logic)
+  // ---------------------------------------------------------------------------
   const stats: DashboardStats = useMemo(() => {
     const totalProperties = properties.length;
     const totalUnits = units.length;
-    // Occupied means the unit currently has a lease, active or paused: the
-    // people still live there even while collection is on hold. This is the
-    // same rule Properties.tsx uses, via getUnitLease.
     const occupiedUnits = units.filter(u => !!getUnitLease(u.id)).length;
-    // A person can be double counted here only if they are on two active
-    // leases at once, so dedupe by tenant id.
     const totalTenants = new Set(activeLeases(leases).flatMap(l => l.tenantIds)).size;
 
     const currentMonth = new Date().getMonth() + 1;
@@ -136,10 +145,6 @@ export function Dashboard() {
       .filter(e => monthOf(e.date) === currentMonth && yearOf(e.date) === currentYear)
       .reduce((sum, e) => sum + e.amount, 0);
 
-    // What's still owed across every elapsed month of the current year, one
-    // lease at a time. Terminated (ended) tenancies are excluded here: once the
-    // office ends a tenancy, its balance is closed out and no longer chased on
-    // the dashboard, though the history stays on the tenant's profile.
     const currentLeases = leases.filter(l => l.status !== 'ended');
     const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
     let totalOwed = 0;
@@ -149,7 +154,6 @@ export function Dashboard() {
       }
     }
 
-    // Projected yearly income counts each lease once, not each occupant.
     const projectedYearlyIncome = monthlyRevenue(leases) * 12;
 
     return {
@@ -173,23 +177,14 @@ export function Dashboard() {
       const rent = rentPayments
         .filter(r => r.status === 'paid' && r.month === month && r.year === currentYear)
         .reduce((sum, r) => sum + r.amount, 0);
-
       const other = incomes
         .filter(i => monthOf(i.date) === month && yearOf(i.date) === currentYear)
         .reduce((sum, i) => sum + i.amount, 0);
-
       const monthIncome = rent + other;
-
       const monthExpenses = expenses
         .filter(e => monthOf(e.date) === month && yearOf(e.date) === currentYear)
         .reduce((sum, e) => sum + e.amount, 0);
-
-      return {
-        name: getMonthName(month),
-        income: monthIncome,
-        expenses: monthExpenses,
-        net: monthIncome - monthExpenses,
-      };
+      return { name: getMonthName(month), income: monthIncome, expenses: monthExpenses, net: monthIncome - monthExpenses };
     });
   }, [rentPayments, incomes, expenses]);
 
@@ -214,84 +209,13 @@ export function Dashboard() {
     };
   }, [expenses, expenseView]);
 
-  const recentActivity = useMemo(() => {
-    const activities = [
-      ...rentPayments
-        .filter(r => r.status === 'paid' && r.paidDate)
-        .map(r => {
-          const lease = leases.find(l => l.id === r.leaseId);
-          const property = lease?.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
-          return {
-            type: 'payment' as const,
-            date: r.paidDate!,
-            description: `Rent payment received`,
-            amount: r.amount,
-            property: property?.name || '',
-          };
-        }),
-      ...incomes.map(i => ({
-        type: 'payment' as const,
-        date: i.date,
-        description: i.description || i.source.replace(/_/g, ' '),
-        amount: i.amount,
-        property: properties.find(p => p.id === i.propertyId)?.name || '',
-      })),
-      ...expenses.map(e => ({
-        type: 'expense' as const,
-        date: e.date,
-        description: e.description,
-        amount: -e.amount,
-        property: properties.find(p => p.id === e.propertyId)?.name || '',
-      })),
-    ]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10);
-
-    return activities;
-  }, [rentPayments, incomes, expenses, properties, leases]);
-
-  // Derived from settlement, not payment.status: nothing in the app ever
-  // writes the 'overdue' payment status, so filtering on it always found
-  // zero rows here while Rent Management (which settles each lease month
-  // instead) showed real overdue counts for the same data. A month is
-  // overdue when the lease owed it, the month has already elapsed, and
-  // settleMonth says it isn't paid, matching how Rents.tsx counts overdue.
-  const overduePayments = useMemo(() => {
+  // Monthly expense count for subtitle
+  const monthlyExpenseCount = useMemo(() => {
     const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
-    // Terminated tenancies are closed out and not chased on the dashboard.
-    const currentLeases = leases.filter(l => l.status !== 'ended');
+    return expenses.filter(e => monthOf(e.date) === now.getMonth() + 1 && yearOf(e.date) === now.getFullYear()).length;
+  }, [expenses]);
 
-    const rows: {
-      key: string;
-      property?: Property;
-      occupants: Tenant[];
-      month: number;
-      year: number;
-      amount: number;
-    }[] = [];
-
-    for (const month of elapsedMonths) {
-      for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        const settlement = settleMonth(lease, rentPayments, month, currentYear);
-        if (settlement.status === 'paid') continue;
-        const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
-        rows.push({
-          key: `${lease.id}-${currentYear}-${month}`,
-          property,
-          occupants: getLeaseTenants(lease.id),
-          month,
-          year: currentYear,
-          amount: settlement.balance,
-        });
-      }
-    }
-    return rows;
-  }, [leases, rentPayments, properties, getLeaseTenants]);
-
-  // Tenancies that owe two or more months of rent, the ones to chase first.
+  // Tenancies that owe two or more months of rent.
   const pastDue = useMemo(() => {
     const now = new Date();
     const month = now.getMonth() + 1;
@@ -308,51 +232,16 @@ export function Dashboard() {
       .sort((a, b) => b.months - a.months || b.balance - a.balance);
   }, [leases, rentPayments, properties, units, getLeaseTenants, pastDueMonths]);
 
-  // Leases coming up for renewal: end date within the next 60 days. Soonest
-  // first, so the most urgent renewal sits at the top.
-  const expiringSoon = useMemo(() => {
-    const today = todayLocalDate();
-    return activeLeases(leases)
-      .filter(lease => isLeaseExpiringSoon(lease, today))
-      .map(lease => ({
-        lease,
-        days: daysUntilLeaseEnd(lease, today) ?? 0,
-        property: lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined,
-        unit: lease.unitId ? units.find(u => u.id === lease.unitId) : undefined,
-        occupants: getLeaseTenants(lease.id),
-      }))
-      .sort((a, b) => a.days - b.days);
-  }, [leases, properties, units, getLeaseTenants]);
-
-  // Both danger lists are grouped by property so they stay tidy across a large
-  // portfolio: one collapsible row per address, expanding to the detail.
-  const pastDueByProperty = useMemo(() => {
-    const groups = new Map<string, { key: string; name: string; total: number; items: typeof pastDue }>();
-    for (const row of pastDue) {
-      const key = row.property?.id ?? 'unassigned';
-      const name = row.property?.name ?? row.property?.address ?? 'Unassigned';
-      let g = groups.get(key);
-      if (!g) { g = { key, name, total: 0, items: [] }; groups.set(key, g); }
-      g.items.push(row);
-      g.total += row.balance;
-    }
-    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
-  }, [pastDue]);
-
-  // Overdue rent as a Property → Unit tree. Each unit rolls its unpaid months
-  // into ONE summary (tenant, monthly rent, months missed, total owed) instead
-  // of a row per month, so a big portfolio stays readable.
+  // Overdue rent as a flat list: one row per overdue tenancy, most owed first.
   interface OverdueUnit {
     key: string; unitNumber: string; tenantNames: string; firstTenantId?: string;
-    monthlyRent: number; months: number; total: number;
+    monthlyRent: number; months: number; total: number; propertyName: string;
   }
-  interface OverdueProperty { key: string; name: string; total: number; units: OverdueUnit[] }
-  const overdueTree = useMemo<OverdueProperty[]>(() => {
+  const overdueList = useMemo<OverdueUnit[]>(() => {
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
     const elapsed = Array.from({ length: currentMonth }, (_, i) => i + 1);
-    // Terminated tenancies are closed out and not chased on the dashboard.
     const currentLeases = leases.filter(l => l.status !== 'ended');
 
     const perLease = new Map<string, { lease: ReturnType<typeof leasesOwingMonth>[number]; months: number; total: number }>();
@@ -367,47 +256,66 @@ export function Dashboard() {
       }
     }
 
-    const props = new Map<string, OverdueProperty>();
+    const rows: OverdueUnit[] = [];
     for (const { lease, months, total } of perLease.values()) {
       const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
       const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : undefined;
       const occupants = getLeaseTenants(lease.id);
-      const pkey = property?.id ?? 'unassigned';
-      let pg = props.get(pkey);
-      if (!pg) { pg = { key: pkey, name: property?.name ?? property?.address ?? 'Unassigned', total: 0, units: [] }; props.set(pkey, pg); }
-      pg.total = Math.round((pg.total + total) * 100) / 100;
-      pg.units.push({
+      rows.push({
         key: lease.id,
-        unitNumber: unit?.unitNumber ?? '—',
+        unitNumber: unit?.unitNumber ?? '',
         tenantNames: occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant',
         firstTenantId: occupants[0]?.id,
         monthlyRent: lease.monthlyRent || 0,
         months,
         total,
+        propertyName: property?.name ?? property?.address ?? 'Unassigned',
       });
     }
-    const out = Array.from(props.values()).sort((a, b) => b.total - a.total);
-    out.forEach(p => p.units.sort((a, b) => a.unitNumber.localeCompare(b.unitNumber)));
-    return out;
+    return rows.sort((a, b) => b.total - a.total);
   }, [leases, rentPayments, properties, units, getLeaseTenants]);
 
-  // A flat summary list for the dashboard: one row per overdue tenancy, most
-  // owed first. Just the tenant, months missed, and total, no property/unit
-  // grouping, since the dashboard is only a summary.
-  const overdueList = useMemo(
-    () => overdueTree.flatMap(p => p.units).sort((a, b) => b.total - a.total),
-    [overdueTree]
-  );
+  // Leases expiring within 60 days.
+  const expiringSoon = useMemo(() => {
+    const today = todayLocalDate();
+    return activeLeases(leases)
+      .filter(lease => isLeaseExpiringSoon(lease, today))
+      .map(lease => ({
+        lease,
+        days: daysUntilLeaseEnd(lease, today) ?? 0,
+        property: lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined,
+        unit: lease.unitId ? units.find(u => u.id === lease.unitId) : undefined,
+        occupants: getLeaseTenants(lease.id),
+      }))
+      .sort((a, b) => a.days - b.days);
+  }, [leases, properties, units, getLeaseTenants]);
 
-  const [expandedPastDue, setExpandedPastDue] = useState<Set<string>>(new Set());
-  const toggleIn = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
-    setter(prev => {
+  // Vacant units (no lease, not under maintenance).
+  const vacantUnits = useMemo(() => {
+    return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id));
+  }, [units, getUnitLease]);
+
+  const vacantByProperty = useMemo(() => {
+    const groups = new Map<string, { key: string; name: string; units: Unit[] }>();
+    for (const u of vacantUnits) {
+      const key = u.propertyId ?? 'unassigned';
+      const name = properties.find(p => p.id === u.propertyId)?.name ?? 'Unassigned';
+      if (!groups.has(key)) groups.set(key, { key, name, units: [] });
+      groups.get(key)!.units.push(u);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [vacantUnits, properties]);
+
+  const [expandedVacant, setExpandedVacant] = useState<Set<string>>(new Set());
+  const toggleVacant = (key: string) =>
+    setExpandedVacant(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
 
+  // Calendar
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const loadCalendar = useCallback(() => {
     calendarApi.list().then(setCalendarEvents).catch(() => {});
@@ -422,49 +330,43 @@ export function Dashboard() {
       .slice(0, 8);
   }, [calendarEvents]);
 
-  const [showExpiring, setShowExpiring] = useState(() => sessionStorage.getItem('dash_expiring') !== 'collapsed');
-  const [showOverdue, setShowOverdue] = useState(() => sessionStorage.getItem('dash_overdue') !== 'collapsed');
-  const toggleSection = (key: string, setter: (v: boolean) => void, current: boolean) => {
-    const next = !current;
-    setter(next);
-    sessionStorage.setItem(key, next ? 'expanded' : 'collapsed');
-  };
+  // Auto-select the first non-empty attention tab
+  const attentionCounts = useMemo(() => ({
+    pastDue: pastDue.length,
+    overdue: overdueList.length,
+    expiring: expiringSoon.length,
+    vacant: vacantUnits.length,
+  }), [pastDue, overdueList, expiringSoon, vacantUnits]);
 
-  // Vacant mirrors occupiedUnits: derived from whether the unit has a lease
-  // rather than the unit's own stored status field, so the two counts can
-  // never disagree (maintenance is the one status still set by hand).
-  // Every vacant unit (no lease, not under maintenance).
-  const vacantUnits = useMemo(() => {
-    return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id));
-  }, [units, getUnitLease]);
+  const totalAttention = attentionCounts.pastDue + attentionCounts.overdue + attentionCounts.expiring + attentionCounts.vacant;
 
-  // Vacant units grouped by their address (property), one entry per property,
-  // sorted by name. The dashboard shows one collapsible row per address.
-  const vacantByProperty = useMemo(() => {
-    const groups = new Map<string, { key: string; name: string; units: Unit[] }>();
-    for (const u of vacantUnits) {
-      const key = u.propertyId ?? 'unassigned';
-      const name = properties.find(p => p.id === u.propertyId)?.name ?? 'Unassigned';
-      if (!groups.has(key)) groups.set(key, { key, name, units: [] });
-      groups.get(key)!.units.push(u);
+  // On first render, pick the tab with the most items
+  useEffect(() => {
+    if (attentionCounts.pastDue > 0) setAttentionTab('pastDue');
+    else if (attentionCounts.overdue > 0) setAttentionTab('overdue');
+    else if (attentionCounts.expiring > 0) setAttentionTab('expiring');
+    else if (attentionCounts.vacant > 0) setAttentionTab('vacant');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Projected rent for collection rate
+  const projectedMonthlyRent = monthlyRevenue(leases);
+  const collectionRate = projectedMonthlyRent > 0
+    ? Math.round((stats.monthlyIncome / projectedMonthlyRent) * 100)
+    : 0;
+  const unitsPaid = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const currentLeases = leasesOwingMonth(leases.filter(l => l.status !== 'ended'), currentMonth, currentYear);
+    let paid = 0;
+    for (const lease of currentLeases) {
+      if (settleMonth(lease, rentPayments, currentMonth, currentYear).status === 'paid') paid++;
     }
-    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [vacantUnits, properties]);
+    return { paid, total: currentLeases.length };
+  }, [leases, rentPayments]);
 
-  // Which address rows are expanded to show their open units. Collapsed by
-  // default so the section stays a tidy one-line-per-address list.
-  const [expandedVacant, setExpandedVacant] = useState<Set<string>>(new Set());
-  const toggleVacant = (key: string) =>
-    setExpandedVacant(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
+  if (isLoading) return <DashboardSkeleton />;
 
   if (error) {
     return (
@@ -475,238 +377,108 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Dashboard</h1>
           <p className="text-muted mt-1 text-sm">
-            An overview of your properties, tenants, and cash flow.
+            Overview of your properties, tenants, and cash flow.
           </p>
         </div>
         <div className="flex items-center gap-2 text-[13px] text-muted">
-          <span className="w-1.5 h-1.5 bg-positive rounded-full"></span>
-          Updated {formatDate(new Date().toISOString())}
+          <span className="w-1.5 h-1.5 bg-positive rounded-full" />
+          {formatDate(new Date().toISOString())}
         </div>
       </div>
 
-      {/* Past due: tenancies 2+ months behind on rent */}
-      {pastDue.length > 0 && (
-        <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
-          <div className="flex items-center gap-2.5 mb-3">
-            <span className="w-9 h-9 rounded-xl bg-danger/10 text-danger grid place-items-center flex-shrink-0">
-              <AlertCircle className="h-5 w-5" />
-            </span>
-            <h2 className="font-semibold text-ink">
-              {pastDue.length} {pastDue.length === 1 ? 'tenancy is' : 'tenancies are'} {pastDueMonths} or more months past due
-            </h2>
-          </div>
-          <div className="divide-y divide-danger/15">
-            {pastDueByProperty.map(group => {
-              const isOpen = expandedPastDue.has(group.key);
-              return (
-                <div key={group.key}>
-                  <button
-                    type="button"
-                    onClick={() => toggleIn(setExpandedPastDue, group.key)}
-                    aria-expanded={isOpen}
-                    className="w-full flex items-center gap-3 py-2.5 text-left hover:opacity-80 transition-opacity"
-                  >
-                    {isOpen
-                      ? <ChevronDown className="h-4 w-4 text-danger/70 flex-shrink-0" />
-                      : <ChevronRight className="h-4 w-4 text-danger/70 flex-shrink-0" />}
-                    <span className="font-medium text-ink flex-1 truncate">{group.name}</span>
-                    <span className="text-xs text-muted whitespace-nowrap">
-                      {group.items.length} {group.items.length === 1 ? 'tenancy' : 'tenancies'}
-                    </span>
-                    <span className="text-sm font-semibold text-danger tnum whitespace-nowrap ml-2">{formatCurrency(group.total)}</span>
-                  </button>
-                  {isOpen && (
-                    <div className="pl-7 pb-1">
-                      {group.items.map(row => {
-                        const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
-                        const place = row.unit ? `Unit ${row.unit.unitNumber}` : '';
-                        const firstTenant = row.occupants[0];
-                        return (
-                          <button
-                            key={row.lease.id}
-                            onClick={() => firstTenant && navigate(`/tenants/${firstTenant.id}`)}
-                            className="w-full flex items-center justify-between gap-4 py-2 text-left hover:opacity-80 transition-opacity"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-ink truncate">{names}</p>
-                              {place && <p className="text-xs text-muted truncate">{place}</p>}
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-sm font-semibold text-danger tnum">{formatCurrency(row.balance)}</p>
-                              <p className="text-xs text-muted">{row.months} months behind</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Stats Grid - All Clickable */}
-      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
+      {/* ================================================================
+          ZONE 1: THIS MONTH SNAPSHOT
+          ================================================================ */}
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Properties"
-          value={stats.totalProperties}
-          subtitle={`${stats.totalUnits} total units`}
-          icon={<Building2 className="h-6 w-6" />}
-          onClick={() => navigate('/properties')}
+          title="Collected"
+          value={formatCurrency(stats.monthlyIncome)}
+          subtitle={`of ${formatCurrency(projectedMonthlyRent)} projected`}
+          icon={<DollarSign />}
+          onClick={() => navigate('/rents')}
         />
-
         <StatCard
-          title="Occupancy Rate"
-          value={`${stats.occupancyRate.toFixed(0)}%`}
-          subtitle={`${stats.occupiedUnits} of ${stats.totalUnits} units occupied`}
-          icon={<Percent className="h-6 w-6" />}
-          onClick={() => navigate('/properties')}
+          title="Expenses"
+          value={formatCurrency(stats.monthlyExpenses)}
+          subtitle={`${monthlyExpenseCount} transaction${monthlyExpenseCount !== 1 ? 's' : ''}`}
+          icon={<CreditCard />}
+          iconBg="bg-warning-soft text-warning"
+          onClick={() => navigate('/finances')}
         />
-
         <StatCard
-          title="Active Tenants"
-          value={stats.totalTenants}
-          subtitle="Across all properties"
-          icon={<Users className="h-6 w-6" />}
-          onClick={() => navigate('/tenants')}
+          title="Net cash flow"
+          value={`${stats.netIncome >= 0 ? '+' : ''}${formatCurrency(stats.netIncome)}`}
+          subtitle="Income minus expenses"
+          icon={<TrendingUp />}
+          valueColor={stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}
+          onClick={() => navigate('/finances')}
         />
-
         <StatCard
-          title="Projected Yearly"
-          value={formatCurrency(stats.projectedYearlyIncome || 0)}
-          subtitle="From active tenants"
-          icon={<TrendingUp className="h-6 w-6" />}
+          title="Collection rate"
+          value={`${collectionRate}%`}
+          subtitle={`${unitsPaid.paid} of ${unitsPaid.total} units paid`}
+          icon={<Activity />}
           onClick={() => navigate('/rents')}
         />
       </div>
 
-      {/* Monthly Financial Summary */}
-      <Card>
-        <CardContent className="p-5">
-          <h3 className="eyebrow mb-4">Monthly Financial Summary</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
-            {[
-              { label: 'Projected Rent', value: formatCurrency(monthlyRevenue(leases)), color: 'text-ink' },
-              { label: 'Actual Collections', value: formatCurrency(stats.monthlyIncome), color: 'text-positive' },
-              { label: 'Expenses (MTD)', value: formatCurrency(stats.monthlyExpenses), color: 'text-danger' },
-              { label: 'Outstanding', value: formatCurrency(stats.totalOwed), color: stats.totalOwed > 0 ? 'text-danger' : 'text-ink' },
-              { label: 'Collection %', value: monthlyRevenue(leases) > 0 ? `${Math.round((stats.monthlyIncome / monthlyRevenue(leases)) * 100)}%` : '—', color: 'text-ink' },
-              { label: 'Net Cash Flow', value: formatCurrency(stats.monthlyIncome - stats.monthlyExpenses), color: stats.monthlyIncome - stats.monthlyExpenses >= 0 ? 'text-positive' : 'text-danger' },
-            ].map(s => (
-              <div key={s.label} className="text-center">
-                <p className="text-[11px] text-muted uppercase tracking-wide">{s.label}</p>
-                <p className={`text-lg font-semibold tnum mt-1 ${s.color}`}>{s.value}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Context row: portfolio at a glance */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <ContextCard icon={<Building2 />} label="Properties" value={stats.totalProperties} onClick={() => navigate('/properties')} />
+        <ContextCard icon={<Home />} label="Units" value={stats.totalUnits} onClick={() => navigate('/properties')} />
+        <ContextCard icon={<Users />} label="Active tenants" value={stats.totalTenants} onClick={() => navigate('/tenants')} />
+        <ContextCard icon={<BarChart3 />} label="Occupancy" value={`${stats.occupancyRate.toFixed(0)}%`} onClick={() => navigate('/properties')} />
+      </div>
 
-      {/* Alerts - Clickable */}
-      {stats.totalOwed > 0 && (
-        <div 
-          className="bg-danger-soft border border-[#e8cdc8] rounded-xl p-5 flex items-start gap-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => navigate('/rents')}
-        >
-          <div className="p-2 bg-danger-soft rounded-lg">
-            <AlertCircle className="h-5 w-5 text-danger" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-red-900">Outstanding Payments</h3>
-            <p className="text-danger mt-1">
-              You have {formatCurrency(stats.totalOwed)} in unpaid rent so far this year.
-            </p>
-          </div>
-          <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2">
-            View Details
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Charts Row - Clickable */}
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-        <ClickableCard onClick={() => navigate('/finances')}>
+      {/* ================================================================
+          ZONE 2: TRENDS
+          ================================================================ */}
+      <h2 className="eyebrow mt-2">Trends</h2>
+      <div className="grid gap-4 md:grid-cols-[5fr_3fr]">
+        {/* Income vs Expenses bar chart */}
+        <Card className="cursor-pointer hover:border-line-strong transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <TrendingUp className="h-5 w-5 text-primary" />
-              </div>
-              Income vs Expenses
+              <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><BarChart3 /></span>
+              Income vs expenses
               <ArrowRight className="h-4 w-4 text-faint ml-auto" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <div className="flex gap-4 mb-2 text-[11px] text-muted">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{ background: INCOME_COLOR }} />Income</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{ background: EXPENSE_COLOR }} />Expenses</span>
+            </div>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e7e4dd" vertical={false} />
-                <XAxis dataKey="name" stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
+                <XAxis dataKey="name" stroke="#a6a29a" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#a6a29a" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip
                   formatter={(value) => formatCurrency(Number(value))}
                   cursor={{ fill: 'rgba(27,26,23,0.04)' }}
                   contentStyle={{ borderRadius: '10px', border: '1px solid #e7e4dd', boxShadow: '0 8px 30px -8px rgba(27,26,23,0.18)' }}
                 />
-                <Bar dataKey="income" fill={INCOME_COLOR} radius={[3, 3, 0, 0]} maxBarSize={22} />
-                <Bar dataKey="expenses" fill={EXPENSE_COLOR} radius={[3, 3, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="income" fill={INCOME_COLOR} radius={[3, 3, 0, 0]} maxBarSize={20} />
+                <Bar dataKey="expenses" fill={EXPENSE_COLOR} radius={[3, 3, 0, 0]} maxBarSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
-        </ClickableCard>
+        </Card>
 
-        <ClickableCard onClick={() => navigate('/finances')}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <Wallet className="h-5 w-5 text-primary" />
-              </div>
-              Net Income Trend
-              <ArrowRight className="h-4 w-4 text-faint ml-auto" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e4dd" vertical={false} />
-                <XAxis dataKey="name" stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#a6a29a" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip
-                  formatter={(value) => formatCurrency(Number(value))}
-                  contentStyle={{ borderRadius: '10px', border: '1px solid #e7e4dd', boxShadow: '0 8px 30px -8px rgba(27,26,23,0.18)' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="net"
-                  stroke={NET_COLOR}
-                  strokeWidth={2}
-                  dot={{ fill: NET_COLOR, strokeWidth: 0, r: 3 }}
-                  activeDot={{ r: 5, strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </ClickableCard>
-      </div>
-
-      {/* Bottom Row */}
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
-        {/* Expenses by Category - Clickable */}
-        <ClickableCard onClick={() => navigate('/finances')}>
+        {/* Expenses by Category */}
+        <Card className="cursor-pointer hover:border-line-strong transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <div className="p-2 bg-primary-soft rounded-lg">
-                  <TrendingDown className="h-5 w-5 text-primary" />
-                </div>
-                Expenses by Category
+                <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><PieChartIcon /></span>
+                By category
               </CardTitle>
               <div
                 className="flex rounded-lg border border-line overflow-hidden text-xs"
@@ -728,14 +500,14 @@ export function Dashboard() {
               <p className="text-center text-sm text-muted py-8">No expenses this {expenseView === 'monthly' ? 'month' : 'year'}</p>
             ) : (
               <>
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
                       data={expenseByCategory}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={70}
+                      innerRadius={45}
+                      outerRadius={65}
                       paddingAngle={5}
                       dataKey="value"
                     >
@@ -746,7 +518,7 @@ export function Dashboard() {
                     <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
+                <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto">
                   {expenseByCategory.map((cat, idx) => (
                     <button
                       key={cat.name}
@@ -760,80 +532,26 @@ export function Dashboard() {
                       className="flex items-center justify-between text-sm w-full text-left hover:bg-black/[0.02] rounded-lg px-2 py-1 -mx-2 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                        />
-                        <span className="text-muted">{expenseCategoryLabel(cat.name)}</span>
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                        <span className="text-muted text-[12px]">{expenseCategoryLabel(cat.name)}</span>
                       </div>
-                      <span className="font-semibold text-ink tnum">{formatCurrency(cat.value)}</span>
+                      <span className="font-semibold text-ink tnum text-[13px]">{formatCurrency(cat.value)}</span>
                     </button>
                   ))}
                 </div>
               </>
             )}
           </CardContent>
-        </ClickableCard>
-
-        {/* Recent Activity - Clickable items */}
-        <Card className="md:col-span-2 shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <TrendingUp className="h-5 w-5 text-primary" />
-              </div>
-              Recent Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentActivity.slice(0, 6).map((activity, idx) => (
-                <div 
-                  key={idx} 
-                  className="flex items-center justify-between py-3 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.03] rounded-lg px-2 -mx-2 transition-colors"
-                  onClick={() => activity.type === 'payment' ? navigate('/rents') : navigate('/finances')}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-lg ${
-                      activity.type === 'payment'
-                        ? 'bg-positive-soft text-positive'
-                        : 'bg-danger-soft text-danger'
-                    }`}>
-                      {activity.type === 'payment' ? (
-                        <TrendingUp className="h-4 w-4" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-ink">{activity.description}</p>
-                      <p className="text-sm text-muted">{activity.property}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-semibold tnum ${
-                      activity.amount > 0 ? 'text-positive' : 'text-danger'
-                    }`}>
-                      {activity.amount > 0 ? '+' : ''}{formatCurrency(activity.amount)}
-                    </p>
-                    <p className="text-xs text-faint">{formatDate(activity.date)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
         </Card>
       </div>
 
-      {/* Upcoming Activities from Calendar */}
+      {/* Upcoming Activities */}
       {upcomingActivities.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <CalendarDays className="h-5 w-5 text-primary" />
-              </div>
-              Upcoming Activities ({upcomingActivities.length})
+              <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><CalendarDays /></span>
+              Upcoming ({upcomingActivities.length})
               <button
                 type="button"
                 onClick={() => navigate('/calendar')}
@@ -853,13 +571,18 @@ export function Dashboard() {
                 const property = event.propertyId ? properties.find(p => p.id === event.propertyId) : null;
                 const catLabel = event.category.replace(/_/g, ' ');
                 const isUrgent = event.priority === 'urgent' || event.priority === 'high';
+                const eventMonth = new Date(event.eventDate + 'T00:00:00').toLocaleString('en-US', { month: 'short' });
+                const eventDay = new Date(event.eventDate + 'T00:00:00').getDate();
                 return (
                   <div
                     key={event.id}
                     className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-canvas/60 transition-colors"
                     onClick={() => navigate('/calendar')}
                   >
-                    <CalendarDays className={`h-4 w-4 flex-shrink-0 ${isUrgent ? 'text-danger' : 'text-faint'}`} />
+                    <div className="w-[38px] h-[38px] rounded-lg bg-canvas flex flex-col items-center justify-center flex-shrink-0">
+                      <span className="text-[9px] uppercase text-faint leading-none tracking-wide">{eventMonth}</span>
+                      <span className="text-[15px] font-semibold text-ink leading-none">{eventDay}</span>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-ink truncate">{event.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -868,10 +591,9 @@ export function Dashboard() {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <Badge variant={daysLeft <= 3 ? 'destructive' : daysLeft <= 7 ? 'warning' : 'default'}>
-                        {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`}
+                      <Badge variant={daysLeft <= 3 ? (isUrgent ? 'destructive' : 'warning') : 'default'}>
+                        {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `In ${daysLeft} days`}
                       </Badge>
-                      <p className="text-xs text-faint mt-0.5">{formatDate(event.eventDate)}</p>
                     </div>
                   </div>
                 );
@@ -881,103 +603,167 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Leases expiring soon, soonest first */}
-      {expiringSoon.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <button type="button" onClick={() => toggleSection('dash_expiring', setShowExpiring, showExpiring)} className="flex items-center gap-2">
-                {showExpiring ? <ChevronDown className="h-4 w-4 text-faint" /> : <ChevronRight className="h-4 w-4 text-faint" />}
-                <div className="p-2 bg-warning-soft rounded-lg">
-                  <CalendarClock className="h-5 w-5 text-warning" />
-                </div>
-                Leases Expiring Soon ({expiringSoon.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/tenants?expiring=1')}
-                title="View in Tenants"
-                className="ml-auto text-faint hover:text-ink transition-colors"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </CardTitle>
-          </CardHeader>
-          {showExpiring && (
+      {/* ================================================================
+          ZONE 3: NEEDS ATTENTION (bottom)
+          ================================================================ */}
+      <h2 className="eyebrow mt-2">Needs attention</h2>
+      <Card>
+        {/* Tab bar */}
+        <div className="flex border-b border-line bg-canvas/50 rounded-t-xl overflow-x-auto">
+          {([
+            { key: 'pastDue' as const, label: 'Past due', icon: <AlertTriangle className="h-3.5 w-3.5" />, count: attentionCounts.pastDue, color: 'danger' },
+            { key: 'overdue' as const, label: 'Overdue', icon: <Clock className="h-3.5 w-3.5" />, count: attentionCounts.overdue, color: 'danger' },
+            { key: 'expiring' as const, label: 'Expiring', icon: <CalendarCheck className="h-3.5 w-3.5" />, count: attentionCounts.expiring, color: 'warning' },
+            { key: 'vacant' as const, label: 'Vacant', icon: <Home className="h-3.5 w-3.5" />, count: attentionCounts.vacant, color: 'muted' },
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setAttentionTab(tab.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-semibold transition-colors relative whitespace-nowrap ${
+                attentionTab === tab.key ? 'text-ink' : 'text-faint hover:text-muted'
+              }`}
+            >
+              {tab.icon}
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className={`inline-flex items-center justify-center text-[10px] font-semibold min-w-[18px] h-[18px] px-1 rounded-full ${
+                tab.count === 0
+                  ? 'bg-positive-soft text-positive'
+                  : tab.color === 'danger'
+                    ? 'bg-danger-soft text-danger'
+                    : tab.color === 'warning'
+                      ? 'bg-warning-soft text-warning'
+                      : 'bg-canvas text-muted'
+              }`}>{tab.count}</span>
+              {attentionTab === tab.key && (
+                <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-t" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        {totalAttention === 0 ? (
+          // All clear state
+          <div className="py-10 text-center">
+            <span className="w-10 h-10 rounded-full bg-positive-soft text-positive inline-flex items-center justify-center mb-3">
+              <Check className="h-5 w-5" />
+            </span>
+            <p className="font-medium text-ink">Everything is running smoothly</p>
+            <p className="text-sm text-muted mt-1">No overdue payments, no expiring leases, no vacant units.</p>
+          </div>
+        ) : (
           <CardContent className="p-0">
-            <div className="border-t border-line">
-              {expiringSoon.map(row => {
+            <div className="divide-y divide-line">
+              {/* Past due tab */}
+              {attentionTab === 'pastDue' && (pastDue.length === 0 ? (
+                <p className="text-center text-sm text-muted py-8">No tenancies are {pastDueMonths}+ months past due.</p>
+              ) : pastDue.map(row => {
+                const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
+                const place = [row.property?.name, row.unit ? `Unit ${row.unit.unitNumber}` : null].filter(Boolean).join(' · ');
+                const firstTenant = row.occupants[0];
+                return (
+                  <button
+                    key={row.lease.id}
+                    type="button"
+                    onClick={() => firstTenant && navigate(`/tenants/${firstTenant.id}`)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas/60 transition-colors"
+                  >
+                    <span className="w-[30px] h-[30px] rounded-lg bg-danger-soft text-danger grid place-items-center flex-shrink-0">
+                      <AlertTriangle className="h-[15px] w-[15px]" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-ink truncate">{names}</p>
+                      {place && <p className="text-[11px] text-muted truncate">{place}</p>}
+                    </div>
+                    <Badge variant="destructive" className="whitespace-nowrap">{row.months} months</Badge>
+                    <span className="text-[13px] font-semibold text-danger tnum flex-shrink-0">{formatCurrency(row.balance)}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />
+                  </button>
+                );
+              }))}
+
+              {/* Overdue tab */}
+              {attentionTab === 'overdue' && (overdueList.length === 0 ? (
+                <p className="text-center text-sm text-muted py-8">No overdue payments.</p>
+              ) : overdueList.map(row => (
+                <button
+                  key={row.key}
+                  type="button"
+                  onClick={() => row.firstTenantId && navigate(`/tenants/${row.firstTenantId}`)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas/60 transition-colors"
+                >
+                  <span className="w-[30px] h-[30px] rounded-lg bg-danger-soft text-danger grid place-items-center flex-shrink-0">
+                    <Clock className="h-[15px] w-[15px]" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-ink truncate">{row.tenantNames}</p>
+                    <p className="text-[11px] text-muted truncate">{row.propertyName}{row.unitNumber ? ` · Unit ${row.unitNumber}` : ''}</p>
+                  </div>
+                  <Badge variant="destructive" className="whitespace-nowrap">
+                    {row.months} {row.months === 1 ? 'month' : 'months'}
+                  </Badge>
+                  <span className="text-[13px] font-semibold text-danger tnum flex-shrink-0">{formatCurrency(row.total)}</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />
+                </button>
+              )))}
+
+              {/* Expiring tab */}
+              {attentionTab === 'expiring' && (expiringSoon.length === 0 ? (
+                <p className="text-center text-sm text-muted py-8">No leases expiring soon.</p>
+              ) : expiringSoon.map(row => {
                 const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
                 const where = [row.property?.name ?? row.property?.address, row.unit ? `Unit ${row.unit.unitNumber}` : null]
                   .filter(Boolean).join(' · ');
                 return (
-                  <div
+                  <button
                     key={row.lease.id}
-                    className="flex items-center gap-3 px-4 py-3.5 border-b border-line last:border-0 cursor-pointer hover:bg-black/[0.02]"
+                    type="button"
                     onClick={() => row.occupants[0] && navigate(`/tenants/${row.occupants[0].id}`)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas/60 transition-colors"
                   >
-                    <CalendarClock className="h-4 w-4 text-faint flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-ink truncate">{names}</p>
-                      {where && <p className="text-xs text-muted truncate">{where}</p>}
+                    <span className="w-[30px] h-[30px] rounded-lg bg-warning-soft text-warning grid place-items-center flex-shrink-0">
+                      <CalendarCheck className="h-[15px] w-[15px]" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-ink truncate">{names}</p>
+                      {where && <p className="text-[11px] text-muted truncate">{where}</p>}
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <Badge variant="warning" className="whitespace-nowrap">
-                        {row.days === 0 ? 'Expires today' : `Expires in ${row.days} ${row.days === 1 ? 'day' : 'days'}`}
-                      </Badge>
-                      {row.lease.endDate && (
-                        <p className="text-xs text-faint mt-1">{formatDate(row.lease.endDate)}</p>
-                      )}
-                    </div>
-                  </div>
+                    <Badge variant="warning" className="whitespace-nowrap">
+                      {row.days === 0 ? 'Expires today' : `${row.days} day${row.days === 1 ? '' : 's'}`}
+                    </Badge>
+                    {row.lease.endDate && (
+                      <span className="text-xs text-faint flex-shrink-0">{formatDate(row.lease.endDate)}</span>
+                    )}
+                    <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />
+                  </button>
                 );
-              })}
-            </div>
-          </CardContent>
-          )}
-        </Card>
-      )}
+              }))}
 
-      {/* Vacant Units, one collapsible row per address */}
-      {vacantUnits.length > 0 && (
-        <Card className="border-dashed border-2 border-line-strong">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-muted">
-              <div className="p-2 bg-primary-soft rounded-lg">
-                <DoorOpen className="h-5 w-5 text-primary" />
-              </div>
-              Vacant Units ({vacantUnits.length})
-              <button
-                type="button"
-                onClick={() => navigate('/properties')}
-                title="Open Properties"
-                className="ml-auto text-faint hover:text-ink transition-colors"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="border-t border-line">
-              {vacantByProperty.map(group => {
+              {/* Vacant tab */}
+              {attentionTab === 'vacant' && (vacantUnits.length === 0 ? (
+                <p className="text-center text-sm text-muted py-8">No vacant units.</p>
+              ) : vacantByProperty.map(group => {
                 const isOpen = expandedVacant.has(group.key);
                 return (
-                  <div key={group.key} className="border-b border-line last:border-0">
+                  <div key={group.key}>
                     <button
                       type="button"
                       onClick={() => toggleVacant(group.key)}
                       aria-expanded={isOpen}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02] text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-canvas/60 text-left transition-colors"
                     >
-                      {isOpen
-                        ? <ChevronDown className="h-4 w-4 text-faint flex-shrink-0" />
-                        : <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />}
-                      <span className="text-sm font-medium text-ink flex-1 truncate">{group.name}</span>
+                      <span className="w-[30px] h-[30px] rounded-lg bg-canvas text-muted grid place-items-center flex-shrink-0">
+                        <Home className="h-[15px] w-[15px]" />
+                      </span>
+                      <span className="text-[13px] font-medium text-ink flex-1 truncate">{group.name}</span>
                       <Badge variant="warning" className="whitespace-nowrap">
-                        {group.units.length} {group.units.length === 1 ? 'unit' : 'units'} vacant
+                        {group.units.length} {group.units.length === 1 ? 'unit' : 'units'}
                       </Badge>
+                      {isOpen
+                        ? <ChevronDown className="h-3.5 w-3.5 text-faint flex-shrink-0" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />}
                     </button>
-
                     {isOpen && (
                       <div className="bg-canvas px-4 sm:px-6 pb-2">
                         {group.units.map(unit => (
@@ -998,53 +784,13 @@ export function Dashboard() {
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
           </CardContent>
-        </Card>
-      )}
+        )}
+      </Card>
 
-      {/* Overdue Payments Table - Clickable */}
-      {overduePayments.length > 0 && (
-        <Card className="shadow-lg border-[#e8cdc8]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-danger">
-              <button type="button" onClick={() => toggleSection('dash_overdue', setShowOverdue, showOverdue)} className="flex items-center gap-2">
-                {showOverdue ? <ChevronDown className="h-4 w-4 text-danger/70" /> : <ChevronRight className="h-4 w-4 text-danger/70" />}
-                <div className="p-2 bg-danger-soft rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-danger" />
-                </div>
-                Overdue Payments ({overdueList.length})
-              </button>
-              <button type="button" onClick={() => navigate('/rents')} className="ml-auto text-danger/60 hover:text-danger transition-colors">
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </CardTitle>
-          </CardHeader>
-          {showOverdue && (
-          <CardContent className="p-0">
-            <div className="border-t border-line">
-              {overdueList.map(row => (
-                <button
-                  key={row.key}
-                  type="button"
-                  onClick={() => row.firstTenantId && navigate(`/tenants/${row.firstTenantId}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-danger-soft/40 text-left transition-colors"
-                >
-                  <span className="text-sm font-medium text-ink flex-1 min-w-0 truncate">{row.tenantNames}</span>
-                  <span className="text-xs text-muted whitespace-nowrap w-24 text-right">
-                    {row.months} {row.months === 1 ? 'month' : 'months'}
-                  </span>
-                  <span className="text-sm font-semibold text-danger tnum whitespace-nowrap w-24 text-right">{formatCurrency(row.total)}</span>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-          )}
-        </Card>
-      )}
-
-      {/* Drill-down modal */}
+      {/* Drill-down modal for expense categories */}
       <TransactionDrillDown
         isOpen={drillOpen}
         onClose={() => setDrillOpen(false)}
@@ -1065,10 +811,13 @@ function DashboardSkeleton() {
         <Skeleton className="h-8 w-48" />
         <Skeleton className="mt-2 h-4 w-72" />
       </div>
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </div>
+      <div className="grid gap-6 md:grid-cols-[5fr_3fr]">
         <div className="rounded-xl border border-line bg-surface p-6">
           <Skeleton className="h-5 w-32 mb-4" />
           <Skeleton className="h-[200px] w-full rounded-lg" />
