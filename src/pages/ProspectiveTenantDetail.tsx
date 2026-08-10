@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { prospectiveApi, documentsApi, type ProspectiveTenant, type ProspectiveStatus } from '../lib/api';
 import type { AppDocument } from '../lib/api';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatDate } from '../lib/utils';
 
 const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25';
 const STAGE_STATUSES: ProspectiveStatus[] = ['applied', 'docs_sent', 'signed', 'rejected'];
@@ -57,8 +57,15 @@ export function ProspectiveTenantDetail() {
   }, [id]);
 
   const availableUnits = units
-    .filter(u => !getUnitLease(u.id))
-    .map(u => ({ unit: u, property: properties.find(p => p.id === u.propertyId) }));
+    .map(u => {
+      const currentLease = getUnitLease(u.id);
+      const property = properties.find(p => p.id === u.propertyId);
+      if (!currentLease) return { unit: u, property, leavingDate: undefined as string | undefined };
+      if (currentLease.status === 'active' && currentLease.endDate && currentLease.endReason)
+        return { unit: u, property, leavingDate: currentLease.endDate };
+      return null;
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
   const setStatus = async (status: ProspectiveStatus) => {
     if (!applicant || !id) return;
@@ -124,7 +131,13 @@ export function ProspectiveTenantDetail() {
 
   const handleUnit = (unitId: string) => {
     const u = units.find(x => x.id === unitId);
-    setConv(prev => ({ ...prev, unitId, monthlyRent: prev.monthlyRent || (u ? String(u.monthlyRent) : '') }));
+    const avail = availableUnits.find(a => a.unit.id === unitId);
+    setConv(prev => ({
+      ...prev,
+      unitId,
+      monthlyRent: prev.monthlyRent || (u ? String(u.monthlyRent) : ''),
+      startDate: avail?.leavingDate && !prev.startDate ? avail.leavingDate : prev.startDate,
+    }));
   };
 
   const handleConvert = async () => {
@@ -132,6 +145,11 @@ export function ProspectiveTenantDetail() {
     const rent = Number(conv.monthlyRent);
     if (!conv.unitId) { showToast('Choose a unit.', 'error'); return; }
     if (!Number.isFinite(rent) || rent <= 0) { showToast('Enter the monthly rent.', 'error'); return; }
+    const avail = availableUnits.find(a => a.unit.id === conv.unitId);
+    if (avail?.leavingDate) {
+      if (!conv.startDate) { showToast(`This unit is occupied until ${formatDate(avail.leavingDate)}. Set a start date on or after that.`, 'error'); return; }
+      if (conv.startDate < avail.leavingDate) { showToast(`Start date must be on or after ${formatDate(avail.leavingDate)}.`, 'error'); return; }
+    }
     setConverting(true);
     try {
       const { tenantId } = await prospectiveApi.convert(id, {
@@ -446,13 +464,20 @@ export function ProspectiveTenantDetail() {
             <label className="block text-sm font-medium text-ink mb-1.5">Unit *</label>
             <select className={inputClass} value={conv.unitId} onChange={e => handleUnit(e.target.value)}>
               <option value="">Select a unit</option>
-              {availableUnits.map(({ unit, property }) => (
+              {availableUnits.map(({ unit, property, leavingDate }) => (
                 <option key={unit.id} value={unit.id}>
                   {property?.name ? `${property.name}, ` : ''}Unit {unit.unitNumber} ({formatCurrency(unit.monthlyRent)})
+                  {leavingDate ? ` — available ${leavingDate}` : ''}
                 </option>
               ))}
             </select>
             {availableUnits.length === 0 && <p className="text-xs text-muted mt-1">No vacant units available.</p>}
+            {conv.unitId && availableUnits.find(a => a.unit.id === conv.unitId)?.leavingDate && (
+              <p className="text-xs text-amber-600 mt-1">
+                This unit has a tenant leaving on {formatDate(availableUnits.find(a => a.unit.id === conv.unitId)!.leavingDate!)}.
+                The new lease must start on or after that date.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

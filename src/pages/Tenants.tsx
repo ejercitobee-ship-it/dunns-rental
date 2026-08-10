@@ -345,16 +345,30 @@ export function Tenants() {
     { key: 'revenue', label: 'Monthly Revenue', value: formatCurrency(stats.revenue), icon: <DollarSign />, filter: false },
   ];
 
-  // A unit is only free for a brand new tenancy once its current lease has
-  // ended. A paused lease still has people living there (paused just means
-  // rent collection is on hold), so it must keep the unit off this list, or
-  // resuming that lease later would leave the unit double booked and
-  // monthlyRevenue would double count its rent. getUnitLease already excludes
-  // ended leases, so any lease it returns (active or paused) blocks the unit.
+  // A unit is free when its current lease has ended. A paused lease still has
+  // people living there (paused just means rent collection is on hold), so it
+  // stays blocked to avoid double-booking and double-counted revenue.
+  //
+  // ALSO include units whose current tenant has a scheduled termination (active
+  // lease with endDate + endReason set). These appear in the dropdown labelled
+  // with the date they free up, so Belle can pre-schedule a replacement tenant.
   const availableUnits = useMemo(() => {
     return units
-      .filter(unit => !getUnitLease(unit.id))
-      .map(unit => ({ unit, property: properties.find(p => p.id === unit.propertyId) }));
+      .map(unit => {
+        const currentLease = getUnitLease(unit.id);
+        const property = properties.find(p => p.id === unit.propertyId);
+        if (!currentLease) {
+          // Fully free right now.
+          return { unit, property, leavingDate: undefined as string | undefined };
+        }
+        // Scheduled termination: active lease with a future end date + reason.
+        if (currentLease.status === 'active' && currentLease.endDate && currentLease.endReason) {
+          return { unit, property, leavingDate: currentLease.endDate };
+        }
+        // Occupied (active or paused, no scheduled termination) — blocked.
+        return null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [units, leases, properties]);
 
@@ -383,12 +397,17 @@ export function Tenants() {
 
   const handleUnitChange = (unitId: string) => {
     const unit = units.find(u => u.id === unitId);
+    const avail = availableUnits.find(a => a.unit.id === unitId);
     setTenancyForm(prev => ({
       ...prev,
       unitId,
       // Prefill the unit's listed rent as a starting point, but never
       // overwrite a value the user already typed in.
       monthlyRent: prev.monthlyRent || (unit ? String(unit.monthlyRent) : ''),
+      // When picking a unit with a scheduled termination, auto-fill the start
+      // date to the day the current tenant leaves so the new lease begins when
+      // the old one ends. The user can still adjust it.
+      startDate: avail?.leavingDate && !prev.startDate ? avail.leavingDate : prev.startDate,
     }));
   };
 
@@ -405,6 +424,20 @@ export function Tenants() {
     if (!unit) {
       showToast('Please choose a unit.', 'error');
       return;
+    }
+
+    // If the unit has a current tenant leaving on a scheduled date, the new
+    // lease must start on or after that date to avoid overlap.
+    const avail = availableUnits.find(a => a.unit.id === unit.id);
+    if (avail?.leavingDate) {
+      if (!tenancyForm.startDate) {
+        showToast(`This unit is occupied until ${formatDate(avail.leavingDate)}. Please set a start date on or after that.`, 'error');
+        return;
+      }
+      if (tenancyForm.startDate < avail.leavingDate) {
+        showToast(`Start date must be on or after ${formatDate(avail.leavingDate)} (current tenant's move-out date).`, 'error');
+        return;
+      }
     }
 
     isSubmittingRef.current = true;
@@ -787,14 +820,21 @@ export function Tenants() {
                 onChange={(e) => handleUnitChange(e.target.value)}
               >
                 <option value="">Select a unit</option>
-                {availableUnits.map(({ unit, property }) => (
+                {availableUnits.map(({ unit, property, leavingDate }) => (
                   <option key={unit.id} value={unit.id}>
                     {property ? `${property.name}, Unit ${unit.unitNumber}` : `Unit ${unit.unitNumber}`}
+                    {leavingDate ? ` — available ${leavingDate}` : ''}
                   </option>
                 ))}
               </select>
               {availableUnits.length === 0 && (
                 <p className="text-xs text-muted mt-1.5">No units are free right now. Every unit already has an active tenancy.</p>
+              )}
+              {tenancyForm.unitId && availableUnits.find(a => a.unit.id === tenancyForm.unitId)?.leavingDate && (
+                <p className="text-xs text-amber-600 mt-1.5">
+                  This unit has a tenant leaving on {formatDate(availableUnits.find(a => a.unit.id === tenancyForm.unitId)!.leavingDate!)}.
+                  The new lease must start on or after that date.
+                </p>
               )}
             </div>
 
