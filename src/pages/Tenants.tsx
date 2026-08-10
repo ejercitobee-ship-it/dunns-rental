@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
-  Plus, Trash2, UserPlus, Check, X, ChevronDown,
+  Plus, Trash2, UserPlus, Check, X, ChevronDown, Download,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -14,7 +14,7 @@ import { tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { monthlyRevenue, isLeaseExpiringSoon } from '../lib/rent';
+import { monthlyRevenue, isLeaseExpiringSoon, leasesOwingMonth, settleMonth } from '../lib/rent';
 import type { Lease, LeaseStatus, Property, Unit, Tenant } from '../types';
 
 interface PersonRow {
@@ -59,7 +59,7 @@ const leaseStatusLabel: Record<LeaseStatus, string> = {
 
 export function Tenants() {
   const {
-    tenants, properties, units, leases,
+    tenants, properties, units, leases, rentPayments,
     getLeaseTenants, getTenantLeases, getUnitLease,
     addTenant, addLease,
   } = useApp();
@@ -243,6 +243,86 @@ export function Tenants() {
     });
   };
 
+  // Export active tenants to CSV with rent details for the current month.
+  const exportActiveCSV = () => {
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    const owingLeaseIds = new Set(
+      leasesOwingMonth(leases, curMonth, curYear).map(l => l.id)
+    );
+
+    const csvRows: string[][] = [];
+    csvRows.push([
+      'Tenant', 'Email', 'Phone', 'Property', 'Unit',
+      'Monthly Rent', 'Lease Start', 'Lease End', 'Status',
+      `${curMonth}/${curYear} Owed`, `${curMonth}/${curYear} Paid`,
+      `${curMonth}/${curYear} Balance`, `${curMonth}/${curYear} Status`,
+    ]);
+
+    // Walk active households and emit one row per tenant.
+    const activeHouseholds = households.filter(g => categoryOf(g) !== 'terminated');
+    for (const group of activeHouseholds) {
+      const { lease, property, unit, occupants } = group;
+      const propName = property?.name || '';
+      const unitNum = unit ? `Unit ${unit.unitNumber}` : '';
+      const rent = lease ? formatCurrency(lease.monthlyRent) : '';
+      const start = lease?.startDate || '';
+      const end = lease?.endDate || '';
+      const status = lease ? (lease.status === 'active' ? 'Active' : lease.status === 'paused' ? 'Paused' : lease.status) : 'No tenancy';
+
+      // Current month settlement
+      let owed = '', paid = '', balance = '', monthStatus = '';
+      if (lease && owingLeaseIds.has(lease.id)) {
+        const s = settleMonth(lease, rentPayments, curMonth, curYear);
+        owed = formatCurrency(s.due);
+        paid = formatCurrency(s.paid);
+        balance = formatCurrency(s.balance);
+        monthStatus = s.status === 'paid' ? 'Paid' : s.status === 'partial' ? 'Partial' : 'Unpaid';
+      } else if (lease) {
+        owed = '$0.00';
+        paid = '$0.00';
+        balance = '$0.00';
+        monthStatus = 'N/A';
+      }
+
+      for (const t of occupants) {
+        csvRows.push([
+          `${t.firstName} ${t.lastName}`,
+          t.email || '',
+          t.phone || '',
+          propName,
+          unitNum,
+          rent,
+          start,
+          end,
+          status,
+          owed,
+          paid,
+          balance,
+          monthStatus,
+        ]);
+      }
+    }
+
+    const escaped = csvRows.map(row =>
+      row.map(cell => {
+        const s = String(cell);
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? `"${s.replace(/"/g, '""')}"`
+          : s;
+      }).join(',')
+    ).join('\n');
+
+    const blob = new Blob([escaped], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `active-tenants-${curYear}-${String(curMonth).padStart(2, '0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const stats = useMemo(() => {
     const totalPeople = tenants.length;
     const housed = rows.filter(r => r.lease?.status === 'active').length;
@@ -400,12 +480,20 @@ export function Tenants() {
           <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tenants</h1>
           <p className="text-muted mt-1 text-sm">People, their households and where they live.</p>
         </div>
-        {canCreateTenant && view === 'active' && (
-          <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Tenancy
-          </Button>
-        )}
+        <div className="flex gap-2 w-full sm:w-auto">
+          {view === 'active' && (
+            <Button variant="outline" onClick={exportActiveCSV} className="w-full sm:w-auto">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          )}
+          {canCreateTenant && view === 'active' && (
+            <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Tenancy
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Current tenants vs terminated tenancies vs prospective applicants */}
