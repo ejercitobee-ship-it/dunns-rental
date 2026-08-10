@@ -8,10 +8,16 @@ import {
   Users,
   Check,
   ChevronDown,
+  ChevronUp,
+  Clock,
+  CircleCheck,
+  CircleX,
+  Filter,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { announcementsApi, type Announcement } from '../lib/api';
@@ -131,15 +137,61 @@ export function Announcements() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  // Past announcements state
+  const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('all');
+  const [propertyFilter, setPropertyFilter] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isExpired = (a: Announcement) =>
+    !!a.expires_at && a.expires_at < new Date().toISOString().slice(0, 10);
+
+  /** Filtered + categorized list. */
+  const { filtered, activeCount, expiredCount, uniqueProperties } = useMemo(() => {
+    let active = 0;
+    let expired = 0;
+    const propSet = new Map<string, string>(); // id → name
+    for (const a of list) {
+      if (isExpired(a)) expired++;
+      else active++;
+      if (a.property_id && a.property_name) propSet.set(a.property_id, a.property_name);
+    }
+    let result = list;
+    if (filter === 'active') result = result.filter(a => !isExpired(a));
+    if (filter === 'expired') result = result.filter(a => isExpired(a));
+    if (propertyFilter) result = result.filter(a => a.property_id === propertyFilter);
+    return {
+      filtered: result,
+      activeCount: active,
+      expiredCount: expired,
+      uniqueProperties: Array.from(propSet.entries()).map(([id, name]) => ({ id, name })),
+    };
+  }, [list, filter, propertyFilter]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await announcementsApi.remove(id);
-      setList(prev => prev.filter(a => a.id !== id));
+      await announcementsApi.remove(deleteTarget.id);
+      setList(prev => prev.filter(a => a.id !== deleteTarget.id));
       showToast('Announcement deleted.', 'success');
     } catch {
       showToast('Could not delete the announcement.', 'error');
+    } finally {
+      setDeleteTarget(null);
     }
   };
+
+  /** Body text truncation threshold (characters). */
+  const TRUNCATE_AT = 160;
 
   return (
     <div className="space-y-6">
@@ -299,55 +351,209 @@ export function Announcements() {
       {/* Past announcements */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Past Announcements</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-lg">Past Announcements</CardTitle>
+            {list.length > 0 && (
+              <span className="text-xs text-muted">
+                {list.length} total · {activeCount} active · {expiredCount} expired
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+            <p className="text-sm text-muted">Loading...</p>
           ) : list.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No announcements have been sent yet.</p>
+            <div className="text-center py-8">
+              <Megaphone className="h-10 w-10 text-faint mx-auto mb-3" />
+              <p className="text-sm text-muted">No announcements have been sent yet.</p>
+              <p className="text-xs text-faint mt-1">Compose one above to get started.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {list.map(a => {
-                const expired = a.expires_at && a.expires_at < new Date().toISOString().slice(0, 10);
-                return (
-                  <div
-                    key={a.id}
-                    className={`border rounded-lg p-4 ${expired ? 'opacity-60' : ''} border-gray-200 dark:border-gray-700`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm">{a.title}</span>
-                          {a.property_name ? (
-                            <Badge variant="secondary">{a.property_name}</Badge>
-                          ) : (
-                            <Badge variant="default">All Properties</Badge>
-                          )}
-                          {expired && <Badge variant="warning">Expired</Badge>}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 whitespace-pre-line">{a.body}</p>
-                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-2 flex items-center gap-3 flex-wrap">
-                          <span>Sent {relativeTime(a.created_at)}</span>
-                          {a.author_name && <span>by {a.author_name}</span>}
-                          {a.expires_at && <span>Expires {a.expires_at}</span>}
+            <div className="space-y-4">
+              {/* Filter bar */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Status tabs */}
+                <div className="flex gap-1 bg-canvas rounded-lg p-1 border border-line">
+                  {([
+                    { key: 'all' as const, label: 'All', count: list.length, icon: null },
+                    { key: 'active' as const, label: 'Active', count: activeCount, icon: CircleCheck },
+                    { key: 'expired' as const, label: 'Expired', count: expiredCount, icon: CircleX },
+                  ] as const).map(tab => {
+                    const isActive = filter === tab.key;
+                    const TabIcon = tab.icon;
+                    return (
+                      <button
+                        key={tab.key}
+                        onClick={() => setFilter(tab.key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          isActive
+                            ? 'bg-surface shadow-sm text-ink border border-line'
+                            : 'text-muted hover:text-ink'
+                        }`}
+                      >
+                        {TabIcon && <TabIcon className="h-3 w-3" />}
+                        {tab.label}
+                        <span className={`text-[10px] px-1.5 py-px rounded-full ${
+                          isActive ? 'bg-primary-soft text-primary' : 'bg-canvas text-faint'
+                        }`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Property filter */}
+                {uniqueProperties.length > 1 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Filter className="h-3.5 w-3.5 text-muted flex-shrink-0" />
+                    <button
+                      onClick={() => setPropertyFilter(null)}
+                      className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                        !propertyFilter
+                          ? 'bg-primary-soft text-primary font-medium'
+                          : 'text-muted hover:bg-canvas'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {uniqueProperties.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setPropertyFilter(p.id === propertyFilter ? null : p.id)}
+                        className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                          propertyFilter === p.id
+                            ? 'bg-primary-soft text-primary font-medium'
+                            : 'text-muted hover:bg-canvas'
+                        }`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Filtered results */}
+              {filtered.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted">
+                    No {filter === 'active' ? 'active' : filter === 'expired' ? 'expired' : ''} announcements
+                    {propertyFilter ? ' for this property' : ''}.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map(a => {
+                    const expired = isExpired(a);
+                    const isLong = a.body.length > TRUNCATE_AT;
+                    const isExpanded = expandedIds.has(a.id);
+                    const displayBody = isLong && !isExpanded
+                      ? a.body.slice(0, TRUNCATE_AT).trimEnd() + '...'
+                      : a.body;
+
+                    return (
+                      <div
+                        key={a.id}
+                        className={`relative border rounded-xl p-4 transition-all ${
+                          expired
+                            ? 'border-line bg-canvas/50'
+                            : 'border-line hover:border-primary-line bg-surface'
+                        }`}
+                      >
+                        {/* Status indicator bar */}
+                        <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full ${
+                          expired ? 'bg-faint' : 'bg-positive'
+                        }`} />
+
+                        <div className="flex items-start justify-between gap-3 pl-2">
+                          <div className="flex-1 min-w-0">
+                            {/* Title row */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-semibold text-sm ${expired ? 'text-muted' : 'text-ink'}`}>
+                                {a.title}
+                              </span>
+                              {a.property_name ? (
+                                <Badge variant="secondary">{a.property_name}</Badge>
+                              ) : (
+                                <Badge variant="default">All Properties</Badge>
+                              )}
+                              {expired ? (
+                                <Badge variant="warning">Expired</Badge>
+                              ) : (
+                                a.expires_at && (
+                                  <span className="flex items-center gap-1 text-[10px] text-muted">
+                                    <Clock className="h-3 w-3" />
+                                    Expires {a.expires_at}
+                                  </span>
+                                )
+                              )}
+                            </div>
+
+                            {/* Body with truncation */}
+                            <p className={`text-sm mt-1.5 whitespace-pre-line leading-relaxed ${
+                              expired ? 'text-faint' : 'text-muted'
+                            }`}>
+                              {displayBody}
+                            </p>
+                            {isLong && (
+                              <button
+                                onClick={() => toggleExpand(a.id)}
+                                className="flex items-center gap-1 mt-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                              >
+                                {isExpanded ? (
+                                  <>Show less <ChevronUp className="h-3 w-3" /></>
+                                ) : (
+                                  <>Show more <ChevronDown className="h-3 w-3" /></>
+                                )}
+                              </button>
+                            )}
+
+                            {/* Metadata */}
+                            <div className="text-xs text-faint mt-2 flex items-center gap-2 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {relativeTime(a.created_at)}
+                              </span>
+                              {a.author_name && (
+                                <>
+                                  <span className="text-line">·</span>
+                                  <span>{a.author_name}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Delete button */}
+                          <button
+                            onClick={() => setDeleteTarget(a)}
+                            className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-soft flex-shrink-0"
+                            title="Delete announcement"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDelete(a.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                        title="Delete announcement"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Announcement"
+        message={`This will permanently remove "${deleteTarget?.title ?? ''}". Tenants who already received it will keep their copy, but it will no longer appear in the portal.`}
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
