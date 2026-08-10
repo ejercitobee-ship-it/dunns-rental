@@ -905,6 +905,9 @@ export function TenantDetail() {
                 ) : (
                   <>
                     <Badge variant={leaseStatusBadge[lease.status]}>{leaseStatusLabel[lease.status]}</Badge>
+                    {lease.status !== 'ended' && lease.startDate && lease.startDate > todayLocalDate() && (
+                      <Badge variant="default">Moving in {formatDate(lease.startDate)}</Badge>
+                    )}
                     {lease.status !== 'ended' && lease.endDate && lease.endReason && (
                       <Badge variant="warning">Leaving {formatDate(lease.endDate)}</Badge>
                     )}
