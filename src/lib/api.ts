@@ -1205,3 +1205,46 @@ export const announcementsApi = {
     apiRequest('/announcements', { method: 'POST', body: JSON.stringify(data) }),
   remove: (id: string): Promise<void> => apiRequest(`/announcements/${id}`, { method: 'DELETE' }),
 };
+
+// AI Assistant
+// ---------------------------------------------------------------------------
+
+export interface AIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  toolsUsed?: string[];
+  createdAt?: number;
+}
+
+export interface AIConversation {
+  id: string;
+  title: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AIConversationDetail {
+  id: string;
+  title: string;
+  messages: AIMessage[];
+}
+
+export const aiApi = {
+  /** Send a message and get the AI response. */
+  chat: (data: { conversationId?: string; message: string }): Promise<{
+    conversationId: string;
+    message: AIMessage;
+  }> => apiRequest('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+
+  /** List recent conversations. */
+  conversations: (): Promise<AIConversation[]> => apiRequest('/ai/conversations'),
+
+  /** Load a conversation with all messages. */
+  conversation: (id: string): Promise<AIConversationDetail> => apiRequest(`/ai/conversations/${id}`),
+
+  /** Delete a conversation. */
+  deleteConversation: (id: string): Promise<void> =>
+    apiRequest(`/ai/conversations/${id}`, { method: 'DELETE' }),
+};

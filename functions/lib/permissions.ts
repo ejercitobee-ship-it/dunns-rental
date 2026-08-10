@@ -20,6 +20,7 @@ export const ALL_PERMISSIONS = [
   'users_view', 'users_create', 'users_edit', 'users_delete', 'users_roles', 'users_permissions',
   'settings_view', 'settings_edit', 'activity_view',
   'announcements_send',
+  'ai_assistant_use',
 ] as const;
 
 export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {

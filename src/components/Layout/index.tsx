@@ -25,6 +25,7 @@ import {
   FileSpreadsheet,
   FolderKanban,
   Megaphone,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -121,6 +122,7 @@ export function Layout({ children }: LayoutProps) {
   // Build navigation with groups.
   const navigation: NavEntry[] = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true, badge: 0 },
+    { name: 'AI Assistant', path: '/ai-assistant', icon: Bot, show: hasPermission('ai_assistant_use'), badge: 0 },
     { name: 'Properties', path: '/properties', icon: Building2, show: hasModuleAccess('properties'), badge: 0 },
     { name: 'Tenants', path: '/tenants', icon: Users, show: hasModuleAccess('tenants'), badge: 0 },
     { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },

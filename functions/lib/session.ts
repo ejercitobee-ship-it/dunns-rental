@@ -16,6 +16,8 @@ export interface Env {
   VAPID_PRIVATE_JWK?: string;
   /** Shared secret the scheduled rent-reminder worker presents to /api/cron/rent-due. */
   CRON_SECRET?: string;
+  /** Anthropic API key for the AI Assistant. */
+  ANTHROPIC_API_KEY?: string;
 }
 
 export interface SessionUser {

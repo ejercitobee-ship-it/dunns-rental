@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, Users, DollarSign, Receipt, FileText,
   Wrench, ClipboardList, ScrollText, MessageSquare, CalendarDays,
-  Settings, Shield, Upload, Search, Megaphone, User, Home,
+  Settings, Shield, Upload, Search, Megaphone, User, Home, Bot,
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -24,6 +24,7 @@ const ROUTES: { name: string; path: string; icon: LucideIcon; keywords: string }
   { name: 'Users', path: '/users', icon: Shield, keywords: 'team members roles permissions' },
   { name: 'Activity', path: '/activity', icon: ScrollText, keywords: 'log audit history' },
   { name: 'Announcements', path: '/announcements', icon: Megaphone, keywords: 'broadcast notice tenants' },
+  { name: 'AI Assistant', path: '/ai-assistant', icon: Bot, keywords: 'ai chat ask question intelligence' },
 ];
 
 interface SearchResult {
