@@ -199,19 +199,6 @@ export function folderStatusFrom(
   return 'unknown';
 }
 
-/** Whether a Drive folder still exists, is trashed/gone, or could not be checked. */
-async function folderStatus(env: Env, id: string): Promise<FolderStatus> {
-  const token = await getAccessToken(env);
-  const res = await fetch(`${DRIVE_API}/files/${id}?fields=id,trashed`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  let trashed: boolean | undefined;
-  if (res.ok) {
-    const data = (await res.json()) as { trashed?: boolean };
-    trashed = data.trashed === true;
-  }
-  return folderStatusFrom(res.ok, res.status, trashed);
-}
 
 /**
  * The id of an existing, non-trashed folder with this name that the app can
