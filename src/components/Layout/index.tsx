@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
   LogOut,
   Shield,
   FileText,
@@ -24,6 +25,7 @@ import {
   FileSpreadsheet,
   FolderKanban,
   Megaphone,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { messagesApi, vendorMessagesApi } from '../../lib/api';
@@ -32,6 +34,39 @@ import { Avatar } from '../ui/Avatar';
 import { ProfileModal } from '../ProfileModal';
 import { BackToTop } from '../BackToTop';
 import { CommandPalette } from '../CommandPalette';
+
+interface NavItem {
+  name: string;
+  path: string;
+  icon: LucideIcon;
+  show: boolean;
+  badge: number;
+}
+
+interface NavGroup {
+  label: string;
+  icon: LucideIcon;
+  show: boolean;
+  children: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry;
+}
+
+/** Persist which sidebar groups are open so collapsing survives navigation. */
+const STORAGE_KEY = 'sidebar-open-groups';
+function loadOpenGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function saveOpenGroups(state: Record<string, boolean>) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* noop */ }
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -44,15 +79,22 @@ export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(loadOpenGroups);
+
+  const toggleGroup = (label: string) => {
+    setOpenGroups(prev => {
+      const next = { ...prev, [label]: !prev[label] };
+      saveOpenGroups(next);
+      return next;
+    });
+  };
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  // Badge for unread tenant messages. Refresh on load, on navigation (opening a
-  // thread clears it), and when the window regains focus. Guarded to staff who
-  // can see tenants.
+  // Badge for unread tenant messages.
   const canSeeMessages = hasModuleAccess('tenants');
   useEffect(() => {
     if (!canSeeMessages) return;
@@ -64,8 +106,6 @@ export function Layout({ children }: LayoutProps) {
         })
         .catch(() => {});
     load();
-    // Keep the badge live without navigation: poll every 15s while visible, and
-    // refresh immediately on focus.
     const tick = () => {
       if (document.visibilityState === 'visible') load();
     };
@@ -78,26 +118,131 @@ export function Layout({ children }: LayoutProps) {
     };
   }, [canSeeMessages, location.pathname]);
 
-  // Build navigation based on permissions
-  const navigation = [
+  // Build navigation with groups.
+  const navigation: NavEntry[] = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true, badge: 0 },
     { name: 'Properties', path: '/properties', icon: Building2, show: hasModuleAccess('properties'), badge: 0 },
     { name: 'Tenants', path: '/tenants', icon: Users, show: hasModuleAccess('tenants'), badge: 0 },
     { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },
+    { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
     { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
-    { name: 'Finances', path: '/finances', icon: Receipt, show: hasModuleAccess('finances'), badge: 0 },
-    { name: 'Capital Projects', path: '/capital-projects', icon: FolderKanban, show: hasPermission('finances_capital_projects'), badge: 0 },
     { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
-    { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances'), badge: 0 },
-    { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
-    { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },
-    { name: 'Expense Imports', path: '/expense-imports', icon: FileSpreadsheet, show: hasPermission('finances_import'), badge: 0 },
-    { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
-    { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings'), badge: 0 },
-    { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users'), badge: 0 },
-    { name: 'Activity', path: '/activity', icon: ScrollText, show: hasPermission('activity_view'), badge: 0 },
-  ].filter(item => item.show);
+    // Finances group
+    {
+      label: 'Finances',
+      icon: Receipt,
+      show: hasModuleAccess('finances'),
+      children: [
+        { name: 'Expenses & Income', path: '/finances', icon: Receipt, show: hasModuleAccess('finances'), badge: 0 },
+        { name: 'Capital Projects', path: '/capital-projects', icon: FolderKanban, show: hasPermission('finances_capital_projects'), badge: 0 },
+        { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances'), badge: 0 },
+        { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
+        { name: 'Expense Imports', path: '/expense-imports', icon: FileSpreadsheet, show: hasPermission('finances_import'), badge: 0 },
+      ],
+    },
+    // Administration group
+    {
+      label: 'Administration',
+      icon: Settings,
+      show: hasModuleAccess('settings') || hasModuleAccess('users') || hasPermission('activity_view'),
+      children: [
+        { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings'), badge: 0 },
+        { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users'), badge: 0 },
+        { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },
+        { name: 'Activity', path: '/activity', icon: ScrollText, show: hasPermission('activity_view'), badge: 0 },
+      ],
+    },
+  ];
+
+  // Auto-expand a group if the current page is inside it.
+  useEffect(() => {
+    for (const entry of navigation) {
+      if (isGroup(entry) && entry.children.some(c => c.show && location.pathname === c.path)) {
+        if (!openGroups[entry.label]) {
+          setOpenGroups(prev => {
+            const next = { ...prev, [entry.label]: true };
+            saveOpenGroups(next);
+            return next;
+          });
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  // Render a single nav link.
+  const renderLink = (item: NavItem, indent = false) => {
+    const Icon = item.icon;
+    const isActive = location.pathname === item.path;
+    return (
+      <Link
+        key={item.name}
+        to={item.path}
+        onClick={() => setSidebarOpen(false)}
+        className={cn(
+          'relative w-full flex items-center gap-3 py-2.5 rounded-lg text-sm transition-colors duration-150 group',
+          indent ? 'pl-9 pr-3' : 'px-3',
+          isActive
+            ? 'bg-white/[0.07] text-white font-medium'
+            : 'text-sidebar-muted hover:bg-white/[0.04] hover:text-white'
+        )}
+      >
+        {isActive && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-[#8fbba8]" />
+        )}
+        <Icon className={cn(
+          'h-[18px] w-[18px] transition-colors flex-shrink-0',
+          isActive ? 'text-[#8fbba8]' : 'text-sidebar-muted group-hover:text-white'
+        )} />
+        <span className="flex-1 text-left truncate">{item.name}</span>
+        {item.badge > 0 && (
+          <span className="flex-shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#8fbba8] text-sidebar text-xs font-semibold flex items-center justify-center">
+            {item.badge}
+          </span>
+        )}
+        {isActive && <ChevronRight className="h-4 w-4 flex-shrink-0 text-white/40" />}
+      </Link>
+    );
+  };
+
+  // Render a collapsible group.
+  const renderGroup = (group: NavGroup) => {
+    const visibleChildren = group.children.filter(c => c.show);
+    if (visibleChildren.length === 0) return null;
+    const isOpen = !!openGroups[group.label];
+    const hasActivePage = visibleChildren.some(c => location.pathname === c.path);
+    const Icon = group.icon;
+
+    return (
+      <div key={group.label}>
+        <button
+          onClick={() => toggleGroup(group.label)}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 group',
+            hasActivePage
+              ? 'text-white font-medium'
+              : 'text-sidebar-muted hover:bg-white/[0.04] hover:text-white'
+          )}
+        >
+          <Icon className={cn(
+            'h-[18px] w-[18px] transition-colors flex-shrink-0',
+            hasActivePage ? 'text-[#8fbba8]' : 'text-sidebar-muted group-hover:text-white'
+          )} />
+          <span className="flex-1 text-left truncate">{group.label}</span>
+          <ChevronDown className={cn(
+            'h-4 w-4 flex-shrink-0 text-white/40 transition-transform duration-200',
+            isOpen && 'rotate-180'
+          )} />
+        </button>
+        {isOpen && (
+          <div className="mt-0.5 space-y-0.5">
+            {visibleChildren.map(child => renderLink(child, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -144,44 +289,16 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="p-3 space-y-0.5">
+        <nav className="p-3 space-y-0.5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           <p className="px-3 pt-3 pb-2 eyebrow text-sidebar-muted">Main Menu</p>
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  'relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 group',
-                  isActive
-                    ? 'bg-white/[0.07] text-white font-medium'
-                    : 'text-sidebar-muted hover:bg-white/[0.04] hover:text-white'
-                )}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-[#8fbba8]" />
-                )}
-                <Icon className={cn(
-                  'h-[18px] w-[18px] transition-colors flex-shrink-0',
-                  isActive ? 'text-[#8fbba8]' : 'text-sidebar-muted group-hover:text-white'
-                )} />
-                <span className="flex-1 text-left truncate">{item.name}</span>
-                {item.badge > 0 && (
-                  <span className="flex-shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#8fbba8] text-sidebar text-xs font-semibold flex items-center justify-center">
-                    {item.badge}
-                  </span>
-                )}
-                {isActive && <ChevronRight className="h-4 w-4 flex-shrink-0 text-white/40" />}
-              </Link>
-            );
+          {navigation.map(entry => {
+            if (!('show' in entry) || !entry.show) return null;
+            if (isGroup(entry)) return renderGroup(entry);
+            return renderLink(entry);
           })}
         </nav>
 
-        {/* User: one compact row — click to open your profile, plus a sign-out icon. */}
+        {/* User: one compact row */}
         <div className="absolute bottom-0 left-0 right-0 p-2.5 border-t border-sidebar-line">
           <div className="flex items-center gap-1">
             <button
