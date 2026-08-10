@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
   Plus, Download, Home, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy,
-  Zap, Receipt,
+  Zap, Receipt, Split,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -66,6 +66,10 @@ export function Expenses() {
   const [expenseVendor, setExpenseVendor] = useState('');
   // What the admin pasted into the "utility account #" lookup, and the match.
   const [accountLookup, setAccountLookup] = useState('');
+  // Split an expense equally across multiple properties.
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitPropertyIds, setSplitPropertyIds] = useState<Set<string>>(new Set());
+  const [splitTotalAmount, setSplitTotalAmount] = useState<number>(0);
   // An invoice/receipt file to attach when adding (or replacing on) the expense.
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -111,6 +115,9 @@ export function Expenses() {
     setExpenseVendor('');
     setAccountLookup('');
     setReceiptFile(null);
+    setSplitMode(false);
+    setSplitPropertyIds(new Set());
+    setSplitTotalAmount(0);
     setIsModalOpen(true);
   };
 
@@ -122,6 +129,9 @@ export function Expenses() {
     setExpenseVendor(expense.vendor || '');
     setAccountLookup('');
     setReceiptFile(null);
+    setSplitMode(false);
+    setSplitPropertyIds(new Set());
+    setSplitTotalAmount(0);
     setIsModalOpen(true);
   };
 
@@ -343,44 +353,68 @@ export function Expenses() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     try {
       if (view === 'expenses') {
-        const fields = {
-          propertyId: formData.get('propertyId') as string,
-          unitId: (formData.get('unitId') as string) || undefined,
-          category: formData.get('category') as ExpenseCategory,
-          amount: Number(formData.get('amount')),
-          date: formData.get('date') as string,
-          description: formData.get('description') as string,
-          vendor: (formData.get('vendor') as string) || undefined,
-          isRecurring: formData.get('isRecurring') === 'on',
-          recurringFrequency: (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined,
-          // Only a mortgage carries a deductible interest split.
-          interestAmount: formData.get('category') === 'mortgage' && formData.get('interestAmount')
-            ? Number(formData.get('interestAmount'))
-            : undefined,
-        };
-        // Save the expense to the DB first (fast), then upload the receipt
-        // in the background so the modal closes instantly.
-        let savedId: string;
-        if (editingExpense) {
-          await updateExpense({ ...editingExpense, ...fields });
-          savedId = editingExpense.id;
-        } else {
-          savedId = (await addExpense(fields)).id;
+        const totalAmount = Number(formData.get('amount'));
+        const category = formData.get('category') as ExpenseCategory;
+        const date = formData.get('date') as string;
+        const description = formData.get('description') as string;
+        const vendor = (formData.get('vendor') as string) || undefined;
+        const isRecurring = formData.get('isRecurring') === 'on';
+        const recurringFrequency = (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined;
+        const interestAmount = category === 'mortgage' && formData.get('interestAmount')
+          ? Number(formData.get('interestAmount'))
+          : undefined;
+
+        // Split mode: create one expense per selected property with an equal share.
+        const targetPropertyIds = splitMode && splitPropertyIds.size > 1
+          ? [...splitPropertyIds]
+          : [formData.get('propertyId') as string];
+        const perPropertyAmount = Math.round((totalAmount / targetPropertyIds.length) * 100) / 100;
+        // Distribute any rounding remainder onto the first property so the sum
+        // is exact: e.g., $100 / 3 = $33.34 + $33.33 + $33.33.
+        const remainder = Math.round((totalAmount - perPropertyAmount * targetPropertyIds.length) * 100) / 100;
+
+        const savedIds: string[] = [];
+        for (let idx = 0; idx < targetPropertyIds.length; idx++) {
+          const propId = targetPropertyIds[idx];
+          const amount = idx === 0 ? perPropertyAmount + remainder : perPropertyAmount;
+          const splitNote = targetPropertyIds.length > 1
+            ? `[Split ${idx + 1}/${targetPropertyIds.length}] ${description}`
+            : description;
+          const fields = {
+            propertyId: propId,
+            unitId: splitMode ? undefined : ((formData.get('unitId') as string) || undefined),
+            category,
+            amount,
+            date,
+            description: splitNote,
+            vendor,
+            isRecurring,
+            recurringFrequency,
+            interestAmount: interestAmount != null
+              ? Math.round((interestAmount / targetPropertyIds.length) * 100) / 100
+              : undefined,
+          };
+          if (editingExpense && idx === 0) {
+            await updateExpense({ ...editingExpense, ...fields });
+            savedIds.push(editingExpense.id);
+          } else {
+            savedIds.push((await addExpense(fields)).id);
+          }
         }
+        // Upload the receipt to every split expense in the background.
         if (receiptFile) {
           const pendingFile = receiptFile;
-          showToast('Expense saved. Uploading receipt...', 'success');
-          expensesApi.uploadReceipt(savedId, pendingFile)
-            .then(withReceipt => {
-              dispatch({ type: 'UPDATE_EXPENSE', payload: withReceipt });
-              showToast('Receipt uploaded.', 'success');
-            })
-            .catch(() => {
-              showToast('Receipt upload failed. Add it from the receipt icon on the row.', 'error');
-            });
+          const label = savedIds.length > 1 ? 'Expenses saved. Uploading receipt...' : 'Expense saved. Uploading receipt...';
+          showToast(label, 'success');
+          Promise.all(savedIds.map(id =>
+            expensesApi.uploadReceipt(id, pendingFile)
+              .then(withReceipt => dispatch({ type: 'UPDATE_EXPENSE', payload: withReceipt }))
+          ))
+            .then(() => showToast('Receipt uploaded.', 'success'))
+            .catch(() => showToast('Receipt upload failed. Add it from the receipt icon on the row.', 'error'));
         }
       } else {
         await addIncome({
@@ -771,40 +805,104 @@ export function Expenses() {
         size="lg"
       >
         <form key={editingExpense?.id || 'new'} onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Property *</label>
-              <select
-                name="propertyId"
-                required
-                value={expensePropertyId}
-                onChange={(e) => { setExpensePropertyId(e.target.value); setExpenseUnitId(''); }}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select Property</option>
-                {properties.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
+          {/* Split toggle — new expenses only, expense view only */}
+          {view === 'expenses' && !editingExpense && properties.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !splitMode;
+                setSplitMode(next);
+                if (next) { setExpensePropertyId(''); setExpenseUnitId(''); setSplitPropertyIds(new Set()); }
+                else { setSplitPropertyIds(new Set()); }
+              }}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                splitMode
+                  ? 'border-primary bg-primary-soft text-primary'
+                  : 'border-line text-muted hover:border-primary/40 hover:text-ink'
+              }`}
+            >
+              <Split className="h-4 w-4" />
+              Split across properties
+              {splitMode && <span className="ml-auto text-xs">({splitPropertyIds.size} selected)</span>}
+            </button>
+          )}
 
+          {splitMode && view === 'expenses' ? (
+            /* Multi-select property checkboxes for split mode */
             <div className="space-y-2">
-              <label className="text-sm font-medium">Unit (Optional)</label>
-              <select
-                name="unitId"
-                value={expenseUnitId}
-                onChange={(e) => setExpenseUnitId(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select Unit</option>
-                {units.filter(u => !expensePropertyId || u.propertyId === expensePropertyId).map(u => (
-                  <option key={u.id} value={u.id}>
-                    {getProperty(u.propertyId)?.name} - Unit {u.unitNumber}
-                  </option>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Select properties *</label>
+                <button
+                  type="button"
+                  onClick={() => setSplitPropertyIds(prev =>
+                    prev.size === properties.length ? new Set() : new Set(properties.map(p => p.id))
+                  )}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {splitPropertyIds.size === properties.length ? 'Deselect all' : 'Select all'}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 rounded-lg border border-line p-3 max-h-48 overflow-y-auto">
+                {properties.map(p => (
+                  <label key={p.id} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-black/[0.02] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={splitPropertyIds.has(p.id)}
+                      onChange={() => setSplitPropertyIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(p.id)) next.delete(p.id);
+                        else next.add(p.id);
+                        return next;
+                      })}
+                      className="rounded border-line text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm text-ink">{p.name}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
+              {splitPropertyIds.size < 2 && (
+                <p className="text-xs text-muted">Select at least 2 properties to split.</p>
+              )}
+              {/* Hidden input so the form validation doesn't require the single-property select */}
+              <input type="hidden" name="propertyId" value={[...splitPropertyIds][0] || ''} />
             </div>
-          </div>
+          ) : (
+            /* Standard single-property + unit selectors */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Property *</label>
+                <select
+                  name="propertyId"
+                  required
+                  value={expensePropertyId}
+                  onChange={(e) => { setExpensePropertyId(e.target.value); setExpenseUnitId(''); }}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Property</option>
+                  {properties.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Unit (Optional)</label>
+                <select
+                  name="unitId"
+                  value={expenseUnitId}
+                  onChange={(e) => setExpenseUnitId(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Unit</option>
+                  {units.filter(u => !expensePropertyId || u.propertyId === expensePropertyId).map(u => (
+                    <option key={u.id} value={u.id}>
+                      {getProperty(u.propertyId)?.name} - Unit {u.unitNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {view === 'expenses' ? (
             <>
@@ -973,7 +1071,7 @@ export function Expenses() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Amount *</label>
+              <label className="text-sm font-medium">{splitMode && splitPropertyIds.size > 1 ? 'Total amount *' : 'Amount *'}</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
                 <input
@@ -984,9 +1082,15 @@ export function Expenses() {
                   required
                   placeholder="0.00"
                   defaultValue={editingExpense?.amount ?? ''}
+                  onChange={splitMode ? (e) => setSplitTotalAmount(Number(e.target.value) || 0) : undefined}
                   className="w-full pl-8 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
+              {splitMode && splitPropertyIds.size > 1 && splitTotalAmount > 0 && (
+                <p className="text-xs text-primary font-medium">
+                  {formatCurrency(Math.round((splitTotalAmount / splitPropertyIds.size) * 100) / 100)} per property × {splitPropertyIds.size} properties
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -1022,8 +1126,16 @@ export function Expenses() {
             >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1">
-              {editingExpense ? 'Save Changes' : `Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={splitMode && splitPropertyIds.size < 2}
+            >
+              {editingExpense
+                ? 'Save Changes'
+                : splitMode && splitPropertyIds.size > 1
+                  ? `Add ${splitPropertyIds.size} Expenses (split)`
+                  : `Add ${view === 'expenses' ? 'Expense' : 'Income'}`}
             </Button>
           </div>
         </form>
