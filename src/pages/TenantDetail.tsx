@@ -23,6 +23,7 @@ import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod, LeaseAuditEntry, LeaseNotification } from '../types';
 import { ActivityTimeline } from '../components/ActivityTimeline';
+import { DepositReturnSection } from '../components/DepositReturnSection';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -1450,6 +1451,18 @@ export function TenantDetail() {
 
       {/* Email correspondence (outbound, logged here, backend only). */}
       {id && <EmailCard tenantId={id} tenantEmail={tenant.email} tenantName={`${tenant.firstName} ${tenant.lastName}`.trim()} canSend={canManagePortal} />}
+
+      {/* Security deposit return (shown for ended leases or existing returns) */}
+      {id && (lease || endedLease) && (
+        <DepositReturnSection
+          tenantId={id}
+          leaseId={(lease || endedLease)!.id}
+          propertyId={(lease || endedLease)!.propertyId}
+          unitId={(lease || endedLease)!.unitId}
+          depositAmount={(lease || endedLease)!.securityDeposit || 0}
+          leaseStatus={(lease || endedLease)!.status || 'active'}
+        />
+      )}
 
       {/* Payment history */}
       <Card>

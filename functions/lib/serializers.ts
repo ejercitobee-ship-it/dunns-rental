@@ -335,3 +335,35 @@ export function serializeIncome(r: Row) {
     relatedPaymentId: r.related_payment_id ?? undefined,
   };
 }
+
+export function serializeDepositReturn(r: Row) {
+  return {
+    id: r.id,
+    leaseId: r.lease_id,
+    tenantId: r.tenant_id ?? undefined,
+    propertyId: r.property_id ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    depositAmount: r.deposit_amount,
+    moveOutDate: r.move_out_date,
+    deadlineDate: r.deadline_date,
+    status: r.status,
+    totalDeductions: r.total_deductions,
+    refundAmount: r.refund_amount,
+    refundDate: r.refund_date ?? undefined,
+    refundMethod: r.refund_method ?? undefined,
+    notes: r.notes ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function serializeDepositDeduction(r: Row) {
+  return {
+    id: r.id,
+    depositReturnId: r.deposit_return_id,
+    category: r.category,
+    description: r.description,
+    amount: r.amount,
+    createdAt: r.created_at,
+  };
+}

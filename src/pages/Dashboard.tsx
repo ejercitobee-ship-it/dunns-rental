@@ -13,10 +13,10 @@ import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDa
 import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
-import { calendarApi } from '../lib/api';
+import { calendarApi, depositReturnsApi } from '../lib/api';
 import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
-import type { DashboardStats, Expense, Unit, CalendarEvent } from '../types';
+import type { DashboardStats, Expense, Unit, CalendarEvent, DepositReturn } from '../types';
 import {
   BarChart,
   Bar,
@@ -101,7 +101,7 @@ function ContextCard({ icon, label, value, onClick }: ContextCardProps) {
 // ---------------------------------------------------------------------------
 // Attention tab types
 // ---------------------------------------------------------------------------
-type AttentionTab = 'pastDue' | 'overdue' | 'expiring' | 'vacant';
+type AttentionTab = 'pastDue' | 'overdue' | 'expiring' | 'vacant' | 'deposits';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -322,6 +322,27 @@ export function Dashboard() {
   }, []);
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
+  // Deposit returns approaching deadline
+  const [pendingDeposits, setPendingDeposits] = useState<DepositReturn[]>([]);
+  useEffect(() => {
+    depositReturnsApi.getAll({ status: 'pending' }).then(setPendingDeposits).catch(() => {});
+    depositReturnsApi.getAll({ status: 'processing' }).then(more => {
+      setPendingDeposits(prev => [...prev, ...more]);
+    }).catch(() => {});
+  }, []);
+
+  const urgentDeposits = useMemo(() => {
+    const today = todayLocalDate();
+    return pendingDeposits
+      .filter(dr => {
+        const daysLeft = Math.ceil(
+          (new Date(dr.deadlineDate + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+        );
+        return daysLeft <= 14; // Show deposits due within 14 days or overdue
+      })
+      .sort((a, b) => a.deadlineDate.localeCompare(b.deadlineDate));
+  }, [pendingDeposits]);
+
   const upcomingActivities = useMemo(() => {
     const t = todayLocalDate();
     return calendarEvents
@@ -336,14 +357,16 @@ export function Dashboard() {
     overdue: overdueList.length,
     expiring: expiringSoon.length,
     vacant: vacantUnits.length,
-  }), [pastDue, overdueList, expiringSoon, vacantUnits]);
+    deposits: urgentDeposits.length,
+  }), [pastDue, overdueList, expiringSoon, vacantUnits, urgentDeposits]);
 
-  const totalAttention = attentionCounts.pastDue + attentionCounts.overdue + attentionCounts.expiring + attentionCounts.vacant;
+  const totalAttention = attentionCounts.pastDue + attentionCounts.overdue + attentionCounts.expiring + attentionCounts.vacant + attentionCounts.deposits;
 
   // On first render, pick the tab with the most items
   useEffect(() => {
     if (attentionCounts.pastDue > 0) setAttentionTab('pastDue');
     else if (attentionCounts.overdue > 0) setAttentionTab('overdue');
+    else if (attentionCounts.deposits > 0) setAttentionTab('deposits');
     else if (attentionCounts.expiring > 0) setAttentionTab('expiring');
     else if (attentionCounts.vacant > 0) setAttentionTab('vacant');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -613,6 +636,7 @@ export function Dashboard() {
           {([
             { key: 'pastDue' as const, label: 'Past due', icon: <AlertTriangle className="h-3.5 w-3.5" />, count: attentionCounts.pastDue, color: 'danger' },
             { key: 'overdue' as const, label: 'Overdue', icon: <Clock className="h-3.5 w-3.5" />, count: attentionCounts.overdue, color: 'danger' },
+            { key: 'deposits' as const, label: 'Deposits', icon: <DollarSign className="h-3.5 w-3.5" />, count: attentionCounts.deposits, color: 'warning' },
             { key: 'expiring' as const, label: 'Expiring', icon: <CalendarCheck className="h-3.5 w-3.5" />, count: attentionCounts.expiring, color: 'warning' },
             { key: 'vacant' as const, label: 'Vacant', icon: <Home className="h-3.5 w-3.5" />, count: attentionCounts.vacant, color: 'muted' },
           ]).map(tab => (
@@ -735,6 +759,41 @@ export function Dashboard() {
                     {row.lease.endDate && (
                       <span className="text-xs text-faint flex-shrink-0">{formatDate(row.lease.endDate)}</span>
                     )}
+                    <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />
+                  </button>
+                );
+              }))}
+
+              {/* Deposits tab */}
+              {attentionTab === 'deposits' && (urgentDeposits.length === 0 ? (
+                <p className="text-center text-sm text-muted py-8">No deposit returns approaching deadline.</p>
+              ) : urgentDeposits.map(dr => {
+                const daysLeft = Math.ceil(
+                  (new Date(dr.deadlineDate + 'T00:00:00').getTime() - new Date(todayLocalDate() + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+                );
+                const overdue = daysLeft < 0;
+                return (
+                  <button
+                    key={dr.id}
+                    type="button"
+                    onClick={() => dr.tenantId && navigate(`/tenants/${dr.tenantId}`)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas/60 transition-colors"
+                  >
+                    <span className={`w-[30px] h-[30px] rounded-lg grid place-items-center flex-shrink-0 ${
+                      overdue ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'
+                    }`}>
+                      <DollarSign className="h-[15px] w-[15px]" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-ink truncate">{dr.tenantName || 'Tenant'}</p>
+                      <p className="text-[11px] text-muted truncate">
+                        {dr.propertyName}{dr.unitNumber ? ` · Unit ${dr.unitNumber}` : ''}
+                      </p>
+                    </div>
+                    <Badge variant={overdue ? 'destructive' : 'warning'} className="whitespace-nowrap">
+                      {overdue ? `${Math.abs(daysLeft)} days overdue` : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+                    </Badge>
+                    <span className="text-[13px] font-semibold text-ink tnum flex-shrink-0">{formatCurrency(dr.depositAmount)}</span>
                     <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />
                   </button>
                 );

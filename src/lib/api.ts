@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn } from '../types';
 
 const API_BASE = '/api';
 
@@ -441,6 +441,43 @@ export const incomesApi = {
     apiRequest(`/incomes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/incomes/${id}`, { method: 'DELETE' }),
+};
+
+// Deposit Returns API (move-out security deposit accounting)
+export const depositReturnsApi = {
+  getAll: (filters?: { leaseId?: string; tenantId?: string; status?: string }): Promise<DepositReturn[]> => {
+    const params = new URLSearchParams();
+    if (filters?.leaseId) params.set('leaseId', filters.leaseId);
+    if (filters?.tenantId) params.set('tenantId', filters.tenantId);
+    if (filters?.status) params.set('status', filters.status);
+    const qs = params.toString();
+    return apiRequest(`/deposit-returns${qs ? `?${qs}` : ''}`);
+  },
+  getById: (id: string): Promise<DepositReturn> => apiRequest(`/deposit-returns/${id}`),
+  create: (data: {
+    leaseId: string;
+    tenantId?: string;
+    propertyId?: string;
+    unitId?: string;
+    depositAmount: number;
+    moveOutDate: string;
+    deadlineDate?: string;
+    notes?: string;
+  }): Promise<DepositReturn> =>
+    apiRequest('/deposit-returns', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: {
+    status?: string;
+    moveOutDate?: string;
+    deadlineDate?: string;
+    depositAmount?: number;
+    refundDate?: string;
+    refundMethod?: string;
+    notes?: string;
+    deductions?: Array<{ category: string; description: string; amount: number }>;
+  }): Promise<DepositReturn> =>
+    apiRequest(`/deposit-returns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/deposit-returns/${id}`, { method: 'DELETE' }),
 };
 
 // Documents API (files stored in R2)

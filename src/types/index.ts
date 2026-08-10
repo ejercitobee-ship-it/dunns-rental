@@ -701,3 +701,44 @@ export interface CapitalProject {
 export interface CapitalProjectDetail extends CapitalProject {
   expenses: Expense[];
 }
+
+// ---------------------------------------------------------------------------
+// Security deposit returns
+// ---------------------------------------------------------------------------
+
+export type DepositReturnStatus = 'pending' | 'processing' | 'completed' | 'forfeited';
+export type DeductionCategory = 'damage' | 'unpaid_rent' | 'cleaning' | 'repairs' | 'other';
+
+export interface DepositReturn {
+  id: string;
+  leaseId: string;
+  tenantId?: string;
+  propertyId?: string;
+  unitId?: string;
+  depositAmount: number;
+  moveOutDate: string;
+  deadlineDate: string;
+  status: DepositReturnStatus;
+  totalDeductions: number;
+  refundAmount: number;
+  refundDate?: string;
+  refundMethod?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Populated by the list endpoint. */
+  deductions?: DepositDeduction[];
+  /** Resolved on the client for display. */
+  tenantName?: string;
+  propertyName?: string;
+  unitNumber?: string;
+}
+
+export interface DepositDeduction {
+  id: string;
+  depositReturnId: string;
+  category: DeductionCategory;
+  description: string;
+  amount: number;
+  createdAt: number;
+}
