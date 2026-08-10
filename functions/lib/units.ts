@@ -1,8 +1,16 @@
 import type { Env } from './session';
 
+// A unit is available when it has no active/paused lease, OR when its only
+// active lease has a scheduled termination (end_date + end_reason set). A
+// paused lease always blocks: someone is still living there.
 const AVAILABLE_WHERE =
   `u.status != 'maintenance'
-     AND NOT EXISTS (SELECT 1 FROM leases l WHERE l.unit_id = u.id AND l.status IN ('active','paused'))`;
+     AND NOT EXISTS (
+       SELECT 1 FROM leases l
+        WHERE l.unit_id = u.id
+          AND l.status IN ('active','paused')
+          AND NOT (l.status = 'active' AND l.end_date IS NOT NULL AND l.end_reason IS NOT NULL)
+     )`;
 
 /** Vacant units (no active/paused lease, not in maintenance) with their property. */
 export async function availableUnits(env: Env) {
