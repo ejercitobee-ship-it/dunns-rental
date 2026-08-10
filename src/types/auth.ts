@@ -4,7 +4,7 @@ export interface Permission {
   id: string;
   name: string;
   description: string;
-  module: 'dashboard' | 'properties' | 'tenants' | 'rents' | 'finances' | 'leases' | 'maintenance' | 'documents' | 'reports' | 'users' | 'settings';
+  module: 'dashboard' | 'properties' | 'tenants' | 'rents' | 'finances' | 'leases' | 'maintenance' | 'documents' | 'reports' | 'users' | 'settings' | 'announcements';
   /** If true, this permission is only available for granular user grants, not
    * included in the basic role builder. Keeps the role editor clean. */
   advanced?: boolean;
@@ -122,6 +122,9 @@ export const SYSTEM_PERMISSIONS: Permission[] = [
   { id: 'settings_view', name: 'View Settings', description: 'Can view settings', module: 'settings' },
   { id: 'settings_edit', name: 'Edit Settings', description: 'Can modify system settings', module: 'settings' },
   { id: 'activity_view', name: 'Access Audit Logs', description: 'Can view the activity/audit log', module: 'settings', advanced: true },
+
+  // Announcements
+  { id: 'announcements_send', name: 'Send Announcements', description: 'Can create and send property announcements to tenants', module: 'announcements' },
 ];
 
 /** Permission module labels for the UI. */
@@ -137,6 +140,7 @@ export const PERMISSION_MODULES: Record<Permission['module'], string> = {
   reports: 'Reports',
   users: 'Administration',
   settings: 'System Settings',
+  announcements: 'Announcements',
 };
 
 // Default System Roles

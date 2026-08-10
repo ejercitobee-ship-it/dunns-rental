@@ -699,6 +699,15 @@ export function placeLabel(
   return [prop, unit].filter(Boolean).join(', ');
 }
 
+export interface PortalAnnouncement {
+  id: string;
+  title: string;
+  body: string;
+  created_at: number;
+  expires_at: string | null;
+  property_name: string | null;
+}
+
 export const portalApi = {
   me: (): Promise<PortalMeResponse> => apiRequest('/portal/me'),
   // The tenant's linked realtor(s), contact info only, always visible.
@@ -828,6 +837,7 @@ export const portalApi = {
   vendorMessagesUnread: (): Promise<{ count: number }> => apiRequest('/portal/handyman/messages?count=1'),
   sendVendorMessage: (body: string, file?: File | null): Promise<VendorMessage> =>
     postMessageForm('/portal/handyman/messages', body, file),
+  announcements: (): Promise<PortalAnnouncement[]> => apiRequest('/portal/announcements'),
 };
 
 export const photoApi = {
@@ -1163,4 +1173,35 @@ export const capitalProjectsApi = {
     if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed');
     return json.data!;
   },
+};
+
+// ---------------------------------------------------------------------------
+// Announcements
+// ---------------------------------------------------------------------------
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  property_id: string | null;
+  property_name: string | null;
+  created_by: string;
+  author_name: string | null;
+  author_email: string | null;
+  created_at: number;
+  expires_at: string | null;
+}
+
+export interface AnnouncementInput {
+  title: string;
+  body: string;
+  propertyId?: string;
+  expiresAt?: string;
+}
+
+export const announcementsApi = {
+  list: (): Promise<Announcement[]> => apiRequest('/announcements'),
+  create: (data: AnnouncementInput): Promise<{ id: string; recipientCount: number }> =>
+    apiRequest('/announcements', { method: 'POST', body: JSON.stringify(data) }),
+  remove: (id: string): Promise<void> => apiRequest(`/announcements/${id}`, { method: 'DELETE' }),
 };

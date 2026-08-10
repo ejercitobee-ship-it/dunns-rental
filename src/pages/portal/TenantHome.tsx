@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock } from 'lucide-react';
+import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock, Megaphone } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
-import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
+import { portalApi, type PortalMeResponse, type PortalLease, type PortalAnnouncement, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
@@ -38,13 +38,15 @@ export function TenantHome() {
   const [me, setMe] = useState<PortalMeResponse | null>(null);
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [realtors, setRealtors] = useState<RealtorContact[]>([]);
+  const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // The tenant's realtor(s), loaded independently so a failure here never
-  // blocks the rest of the dashboard.
+  // The tenant's realtor(s) and announcements, loaded independently so a
+  // failure in either never blocks the rest of the dashboard.
   useEffect(() => {
     portalApi.myRealtors().then(setRealtors).catch(() => {});
+    portalApi.announcements().then(setAnnouncements).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -233,6 +235,29 @@ export function TenantHome() {
           </div>
         );
       })()}
+
+      {announcements.length > 0 && (
+        <div className="space-y-3">
+          {announcements.map(a => (
+            <div
+              key={a.id}
+              className="rounded-2xl border border-primary/20 bg-primary/5 p-5 flex items-start gap-3"
+            >
+              <Megaphone className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-ink text-sm">{a.title}</p>
+                <p className="text-sm text-muted mt-1 whitespace-pre-line">{a.body}</p>
+                <p className="text-xs text-muted/60 mt-2">
+                  {new Date(a.created_at * 1000).toLocaleDateString(undefined, {
+                    month: 'short', day: 'numeric', year: 'numeric',
+                  })}
+                  {a.property_name ? ` · ${a.property_name}` : ''}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <QuickActions />
 

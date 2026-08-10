@@ -23,6 +23,7 @@ import {
   Search,
   FileSpreadsheet,
   FolderKanban,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { messagesApi, vendorMessagesApi } from '../../lib/api';
@@ -92,6 +93,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
     { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },
     { name: 'Expense Imports', path: '/expense-imports', icon: FileSpreadsheet, show: hasPermission('finances_import'), badge: 0 },
+    { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings'), badge: 0 },
     { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users'), badge: 0 },
     { name: 'Activity', path: '/activity', icon: ScrollText, show: hasPermission('activity_view'), badge: 0 },

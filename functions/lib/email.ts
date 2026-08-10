@@ -422,3 +422,45 @@ export function calendarEventEmail(opts: {
 
   return { subject: `${heading}: ${opts.title}`, html, text };
 }
+
+/** Email sent to every tenant when a property announcement is created. */
+export function announcementEmail(opts: {
+  title: string;
+  body: string;
+  propertyName?: string;
+  tenantName?: string;
+}) {
+  const greeting = opts.tenantName ? `Hi ${opts.tenantName},` : 'Hi,';
+  const propLine = opts.propertyName ? `\nProperty: ${opts.propertyName}` : '';
+  const text = [greeting, '', opts.title, '', opts.body, propLine, '', '— MH Dunn Property'].join('\n');
+
+  const bodyParas = opts.body
+    .split(/\n{2,}/)
+    .map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(p)}</p>`)
+    .join('');
+
+  const propertyBadge = opts.propertyName
+    ? `<div style="margin-bottom:18px;font-size:12px;color:#8a887f;">${escapeHtml(opts.propertyName)}</div>`
+    : '';
+
+  const html = `
+<div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;">
+    <div style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+      <div style="font-size:20px;font-weight:bold;color:#24503f;">MH Dunn Property</div>
+    </div>
+    <div style="padding:26px 32px 24px;">
+      <p style="margin:0 0 6px;font-size:15px;">${escapeHtml(greeting)}</p>
+      ${propertyBadge}
+      <div style="font-size:17px;font-weight:bold;color:#1c1a17;margin-bottom:14px;">${escapeHtml(opts.title)}</div>
+      ${bodyParas}
+      <a href="https://mhdunnproperty.net/portal" style="display:inline-block;margin-top:8px;padding:10px 24px;background:#24503f;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">View in Portal</a>
+    </div>
+    <div style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+      MH Dunn Property
+    </div>
+  </div>
+</div>`.trim();
+
+  return { subject: opts.title, html, text };
+}

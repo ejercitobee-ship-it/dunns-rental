@@ -19,6 +19,7 @@ export const ALL_PERMISSIONS = [
   'reports_tax', 'reports_export', 'reports_edit_data',
   'users_view', 'users_create', 'users_edit', 'users_delete', 'users_roles', 'users_permissions',
   'settings_view', 'settings_edit', 'activity_view',
+  'announcements_send',
 ] as const;
 
 export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
