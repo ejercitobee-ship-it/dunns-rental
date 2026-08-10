@@ -291,9 +291,13 @@ export function Expenses() {
   }
   const incomeRows = useMemo<IncomeRow[]>(() => {
     const manual: IncomeRow[] = incomes.map(i => {
-      // For move-in fee income, resolve tenant names from the lease.
       let tenantName: string | undefined;
-      if (i.source === 'move_in_fee' && i.id.startsWith('movein-')) {
+      // Resolve tenant name: first try the stored tenantId, then fall back
+      // to the lease lookup for system-generated move-in fee entries.
+      if (i.tenantId) {
+        const t = tenants.find(tt => tt.id === i.tenantId);
+        if (t) tenantName = `${t.firstName} ${t.lastName}`;
+      } else if (i.source === 'move_in_fee' && i.id.startsWith('movein-')) {
         const leaseId = i.id.replace('movein-', '');
         const names = getLeaseTenants(leaseId).map(t => `${t.firstName} ${t.lastName}`);
         if (names.length) tenantName = names.join(', ');
@@ -420,6 +424,7 @@ export function Expenses() {
         await addIncome({
           propertyId: formData.get('propertyId') as string,
           unitId: (formData.get('unitId') as string) || undefined,
+          tenantId: (formData.get('tenantId') as string) || undefined,
           source: (formData.get('source') || 'other') as Income['source'],
           amount: Number(formData.get('amount')),
           date: formData.get('date') as string,
@@ -1054,18 +1059,34 @@ export function Expenses() {
               </div>
             </>
           ) : (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Source *</label>
-              <select
-                name="source"
-                required
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select Source</option>
-                {Object.entries(INCOME_SOURCES).map(([key, meta]) => (
-                  <option key={key} value={key}>{meta.label}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Source *</label>
+                <select
+                  name="source"
+                  required
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Source</option>
+                  {Object.entries(INCOME_SOURCES).map(([key, meta]) => (
+                    <option key={key} value={key}>{meta.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tenant (Optional)</label>
+                <select
+                  name="tenantId"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Tenant</option>
+                  {tenants
+                    .filter(t => !expensePropertyId || leases.some(l => l.propertyId === expensePropertyId && l.tenantIds?.includes(t.id)))
+                    .map(t => (
+                      <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                    ))}
+                </select>
+              </div>
             </div>
           )}
 
