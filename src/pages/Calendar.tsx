@@ -96,6 +96,16 @@ function categoryLabel(cat: CalendarCategory): string {
   return cat.replace(/_/g, ' ');
 }
 
+/** Format "14:30" → "2:30 PM", "09:00" → "9:00 AM" */
+function formatTime12(time: string): string {
+  const [hStr, mStr] = time.split(':');
+  let h = parseInt(hStr, 10);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${mStr} ${ampm}`;
+}
+
 function daysFromNow(dateStr: string): number {
   const today = new Date(todayLocalDate() + 'T00:00:00');
   const target = new Date(dateStr + 'T00:00:00');
@@ -269,6 +279,7 @@ interface FormState {
   description: string;
   category: CalendarCategory;
   eventDate: string;
+  eventTime: string;
   priority: CalendarPriority;
   isRecurring: boolean;
   recurrenceRule: RecurrenceRule | '';
@@ -280,7 +291,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   title: '', description: '', category: 'custom',
-  eventDate: '', priority: 'medium',
+  eventDate: '', eventTime: '', priority: 'medium',
   isRecurring: false, recurrenceRule: '',
   propertyIds: new Set(), unitId: '', notes: '',
   reminderHours: '',
@@ -377,7 +388,7 @@ export function Calendar() {
 
   const openNew = (date?: string) => {
     setEditingEvent(null);
-    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate(), propertyIds: new Set() });
+    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate(), eventTime: '', propertyIds: new Set() });
     setShowModal(true);
   };
 
@@ -392,6 +403,7 @@ export function Calendar() {
       description: source.description || '',
       category: source.category,
       eventDate: source.eventDate,
+      eventTime: source.eventTime || '',
       priority: source.priority,
       isRecurring: source.isRecurring,
       recurrenceRule: source.recurrenceRule || '',
@@ -413,6 +425,7 @@ export function Calendar() {
         description: form.description || undefined,
         category: form.category,
         eventDate: form.eventDate,
+        eventTime: form.eventTime || undefined,
         priority: form.priority,
         isRecurring: form.isRecurring,
         recurrenceRule: form.isRecurring && form.recurrenceRule ? form.recurrenceRule : undefined,
@@ -647,7 +660,7 @@ export function Calendar() {
                               e.completed ? 'line-through opacity-50' : ''
                             } ${CATEGORY_COLORS[e.category] || 'bg-gray-100 text-gray-800'}`}
                           >
-                            {e.title}
+                            {e.eventTime ? `${formatTime12(e.eventTime)} ` : ''}{e.title}
                           </button>
                         ))}
                         {dayEvents.length > 3 && (
@@ -728,6 +741,7 @@ export function Calendar() {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
                           <span>{formatDate(event.eventDate)}</span>
+                          {event.eventTime && <span className="font-medium text-ink">{formatTime12(event.eventTime)}</span>}
                           {days === 0 && <span className="text-primary font-medium">Today</span>}
                           {days === 1 && <span className="text-primary font-medium">Tomorrow</span>}
                           {days > 1 && days <= 7 && <span className="text-warning font-medium">In {days} days</span>}
@@ -789,19 +803,30 @@ export function Calendar() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Category *</label>
-                  <select
-                    value={form.category}
-                    onChange={e => setForm(f => ({ ...f, category: e.target.value as CalendarCategory }))}
+                  <label className="block text-sm font-medium text-ink mb-1">Time</label>
+                  <input
+                    type="time"
+                    value={form.eventTime}
+                    onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
                     className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  >
-                    {CATEGORY_GROUPS.map(g => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.items.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                    placeholder="Optional"
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Category *</label>
+                <select
+                  value={form.category}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value as CalendarCategory }))}
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                >
+                  {CATEGORY_GROUPS.map(g => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.items.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
 
               <div>

@@ -438,6 +438,8 @@ export interface CalendarEvent {
   description?: string;
   category: CalendarCategory;
   eventDate: string;
+  /** Optional time of day, e.g. "09:00" or "14:30". */
+  eventTime?: string;
   priority: CalendarPriority;
   isRecurring: boolean;
   recurrenceRule?: RecurrenceRule;
