@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, List, Grid3X3,
-  Check, Trash2, Edit2, X, AlertCircle, Bell,
+  Check, Trash2, Edit2, X, AlertCircle, Bell, Clock, Sun, ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -302,7 +302,8 @@ export function Calendar() {
   const { showToast } = useToast();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'calendar' | 'agenda'>('calendar');
+  const [view, setView] = useState<'calendar' | 'agenda' | 'today'>('calendar');
+  const [showPastActivity, setShowPastActivity] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
   const [showModal, setShowModal] = useState(false);
@@ -376,6 +377,19 @@ export function Calendar() {
       .filter(e => !e.completed && !e.isRecurring && e.eventDate < today)
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate)),
   [filteredEvents, today]);
+
+  // Today's events: everything on today's date (including recurring occurrences).
+  const todayEvents = useMemo(() =>
+    expandedAgendaEvents
+      .filter(e => e.eventDate === today)
+      .sort((a, b) => {
+        // Sort by time if available, then by title
+        if (a.eventTime && b.eventTime) return a.eventTime.localeCompare(b.eventTime);
+        if (a.eventTime) return -1;
+        if (b.eventTime) return 1;
+        return a.title.localeCompare(b.title);
+      }),
+  [expandedAgendaEvents, today]);
 
   const formPropertyIds = form.propertyIds;
   const propertyUnits = useMemo(() => {
@@ -529,6 +543,10 @@ export function Calendar() {
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-line overflow-hidden text-xs">
             <button
+              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'today' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
+              onClick={() => setView('today')}
+            ><Sun className="h-3.5 w-3.5" /> Today</button>
+            <button
               className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'calendar' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
               onClick={() => setView('calendar')}
             ><Grid3X3 className="h-3.5 w-3.5" /> Calendar</button>
@@ -570,37 +588,154 @@ export function Calendar() {
         />
       </div>
 
-      {/* Overdue Banner */}
+      {/* Past Activity */}
       {overdueEvents.length > 0 && (
-        <div className="rounded-xl border border-danger/30 bg-danger-soft p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="h-5 w-5 text-danger" />
-            <span className="font-semibold text-ink">
-              {overdueEvents.length} overdue {overdueEvents.length === 1 ? 'event' : 'events'}
-            </span>
-          </div>
-          <div className="space-y-1.5">
-            {overdueEvents.slice(0, 5).map(e => (
-              <button
-                key={e.id}
-                onClick={() => openEdit(e)}
-                className="w-full flex items-center gap-3 text-left text-sm hover:opacity-80"
-              >
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${CATEGORY_COLORS[e.category] || 'bg-gray-100 text-gray-800'}`}>
-                  {categoryLabel(e.category)}
-                </span>
-                <span className="text-ink flex-1 truncate">{e.title}</span>
-                <span className="text-xs text-danger font-medium">{formatDate(e.eventDate)}</span>
-              </button>
-            ))}
-            {overdueEvents.length > 5 && (
-              <p className="text-xs text-muted">and {overdueEvents.length - 5} more</p>
-            )}
-          </div>
-        </div>
+        <Card className="border-danger/30">
+          <button
+            type="button"
+            onClick={() => setShowPastActivity(p => !p)}
+            className="w-full flex items-center justify-between px-5 py-3.5 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-danger" />
+              <span className="font-semibold text-ink">
+                Past Activity ({overdueEvents.length})
+              </span>
+              <span className="text-xs text-danger font-medium">
+                {overdueEvents.length} {overdueEvents.length === 1 ? 'task' : 'tasks'} to complete
+              </span>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-muted transition-transform ${showPastActivity ? 'rotate-180' : ''}`} />
+          </button>
+          {showPastActivity && (
+            <CardContent className="p-0 border-t border-line">
+              <div className="divide-y divide-line">
+                {overdueEvents.map(event => {
+                  const propNames = eventPropertyNames(event);
+                  return (
+                    <div key={event.id} className="flex items-center gap-3 px-5 py-3 hover:bg-canvas/60">
+                      <button
+                        onClick={() => handleToggleComplete(event as ExpandedEvent)}
+                        className="w-5 h-5 rounded border-2 border-line hover:border-primary flex-shrink-0 flex items-center justify-center transition-colors"
+                      >
+                        {event.completed && <Check className="h-3 w-3" />}
+                      </button>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(event as ExpandedEvent)}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-ink">{event.title}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
+                            {categoryLabel(event.category)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
+                          <span className="text-danger font-medium">{formatDate(event.eventDate)}</span>
+                          {event.eventTime && <span>{formatTime12(event.eventTime)}</span>}
+                          {propNames && <span>· {propNames}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => openEdit(event as ExpandedEvent)}
+                          className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
+                        ><Edit2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          )}
+        </Card>
       )}
 
-      {view === 'calendar' ? (
+      {view === 'today' ? (
+        /* Today View */
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-primary-soft rounded-lg">
+                <Sun className="h-5 w-5 text-primary" />
+              </div>
+              Today &mdash; {formatDate(today)}
+              {todayEvents.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-muted">({todayEvents.length} {todayEvents.length === 1 ? 'event' : 'events'})</span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {todayEvents.length === 0 ? (
+              <p className="text-center text-sm text-muted py-12">Nothing scheduled for today. Enjoy your day!</p>
+            ) : (
+              <div className="border-t border-line divide-y divide-line">
+                {todayEvents.map(event => {
+                  const propNames = eventPropertyNames(event);
+                  const pb = PRIORITY_BADGE[event.priority];
+                  const expanded = event as ExpandedEvent;
+                  return (
+                    <div key={event.id + (expanded.isVirtual ? `-v` : '')} className="flex items-center gap-3 px-5 py-4 hover:bg-canvas/60">
+                      <button
+                        onClick={() => handleToggleComplete(expanded)}
+                        disabled={expanded.isVirtual}
+                        className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                          event.completed
+                            ? 'bg-primary border-primary text-white'
+                            : expanded.isVirtual
+                              ? 'border-line/50 cursor-not-allowed'
+                              : 'border-line hover:border-primary'
+                        }`}
+                      >
+                        {event.completed && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(expanded)}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-base font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
+                            {event.title}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
+                            {categoryLabel(event.category)}
+                          </span>
+                          {event.priority !== 'medium' && (
+                            <Badge variant={pb.variant}>{pb.label}</Badge>
+                          )}
+                          {event.isRecurring && (
+                            <span className="text-[10px] text-muted bg-canvas rounded px-1.5 py-0.5">
+                              {event.recurrenceRule ? RECURRENCE_LABELS[event.recurrenceRule] : 'Recurring'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-sm text-muted">
+                          {event.eventTime ? (
+                            <span className="flex items-center gap-1 font-medium text-ink">
+                              <Clock className="h-3.5 w-3.5" />
+                              {formatTime12(event.eventTime)}
+                            </span>
+                          ) : (
+                            <span className="text-xs">All day</span>
+                          )}
+                          {propNames && <span className="text-xs">· {propNames}</span>}
+                          {event.notes && <span className="text-xs">· {event.notes}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => openEdit(expanded)}
+                          className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
+                        ><Edit2 className="h-4 w-4" /></button>
+                        {!expanded.isVirtual && (
+                          <button
+                            onClick={() => handleDelete(event.id)}
+                            className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                          ><Trash2 className="h-4 w-4" /></button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : view === 'calendar' ? (
         /* Calendar Grid */
         <Card>
           <CardHeader>
