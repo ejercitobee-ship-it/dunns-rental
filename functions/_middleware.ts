@@ -47,7 +47,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // forward by 15 minutes so active users never get logged out. The cookie is
   // set synchronously (before the response leaves); the DB update runs in the
   // background so it never slows the request.
-  if (pathname.startsWith('/api/') && response.ok) {
+  //
+  // IMPORTANT: skip auth endpoints that set their own Set-Cookie (sign-in,
+  // sign-out, sign-up, reset-password). If we append a second Set-Cookie with
+  // the OLD token from the incoming request, the browser may store the old
+  // (now-deleted) token instead of the fresh one, causing instant 401s.
+  const isAuthRoute = pathname.startsWith('/api/auth/');
+  if (pathname.startsWith('/api/') && response.ok && !isAuthRoute) {
     const sessionToken = parseCookies(request)['session'];
     if (sessionToken) {
       response.headers.append('Set-Cookie', sessionCookie(sessionToken));
