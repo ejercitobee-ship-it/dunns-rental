@@ -16,7 +16,7 @@ import { rentSheetApi, documentsApi, leasesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, type MonthSettlement } from '../lib/rent';
+import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -327,6 +327,13 @@ export function Rents() {
   // occupants) for the redesigned list. Pre-sort by property then unit so that
   // order holds within each attention bucket, since groupLeaseMonthRows sorts
   // attention-first with a stable sort.
+  //
+  // After grouping, merge renewal chains: when a renewal is approved the old
+  // lease (Jan–Aug) and new lease (Sep onward) both owe rent in the same year,
+  // which would make the tenant appear TWICE. We detect that the new lease's
+  // renewedFromLeaseId points to the old lease, merge their month rows into
+  // one group, and use the active/new lease as the primary so the tenant shows
+  // once with all 12 months.
   const tenantGroups = useMemo(() => {
     const byPropertyUnit = [...filteredRows].sort((a, b) =>
       (a.property?.name || '').localeCompare(b.property?.name || '') ||
@@ -334,7 +341,71 @@ export function Rents() {
       a.month - b.month
     );
     const today = new Date();
-    return groupLeaseMonthRows(byPropertyUnit, parseInt(yearFilter, 10), today.getFullYear(), today.getMonth() + 1);
+    const year = parseInt(yearFilter, 10);
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth() + 1;
+    const rawGroups = groupLeaseMonthRows(byPropertyUnit, year, todayYear, todayMonth);
+
+    // Build lookup: leaseId → group
+    const byId = new Map<string, TenantRentGroup<LeaseMonthRow>>();
+    for (const g of rawGroups) byId.set(g.lease.id, g);
+
+    // Follow renewedFromLeaseId to find the chain root (the oldest ancestor
+    // whose group is in this year's data).
+    function chainRoot(leaseId: string): string {
+      const g = byId.get(leaseId);
+      if (g?.lease.renewedFromLeaseId && byId.has(g.lease.renewedFromLeaseId)) {
+        return chainRoot(g.lease.renewedFromLeaseId);
+      }
+      return leaseId;
+    }
+
+    // Group by chain root
+    const chains = new Map<string, TenantRentGroup<LeaseMonthRow>[]>();
+    for (const g of rawGroups) {
+      const root = chainRoot(g.lease.id);
+      if (!chains.has(root)) chains.set(root, []);
+      chains.get(root)!.push(g);
+    }
+
+    // No renewals to merge? Return the raw groups as-is (fast path).
+    if ([...chains.values()].every(c => c.length === 1)) return rawGroups;
+
+    // Merge each chain into a single group
+    const isCurrentYear = year === todayYear;
+    const isPastYear = year < todayYear;
+    const elapsedThrough = isPastYear ? 12 : isCurrentYear ? todayMonth : 0;
+    const currentMonth = isCurrentYear ? todayMonth : 0;
+
+    const merged: TenantRentGroup<LeaseMonthRow>[] = [];
+    for (const chain of chains.values()) {
+      if (chain.length === 1) { merged.push(chain[0]); continue; }
+
+      // Use the active lease as the primary; fall back to newest by start date
+      const primary = chain.find(c => c.lease.status === 'active') ?? chain[chain.length - 1];
+      const allMonthRows = chain.flatMap(c => c.monthRows).sort((a, b) => a.month - b.month);
+
+      const thisMonth = currentMonth
+        ? allMonthRows.find(r => r.month === currentMonth) ?? null
+        : null;
+      let overdue = 0;
+      for (const r of allMonthRows) {
+        if (r.month <= elapsedThrough && r.month !== currentMonth) {
+          overdue = Math.round((overdue + r.settlement.balance) * 100) / 100;
+        }
+      }
+      const thisMonthOwing = thisMonth ? thisMonth.settlement.status !== 'paid' : false;
+
+      merged.push({
+        lease: primary.lease,
+        monthRows: allMonthRows,
+        thisMonth,
+        overdue,
+        needsAttention: overdue > 0.005 || thisMonthOwing,
+      });
+    }
+
+    return merged.sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
   }, [filteredRows, yearFilter]);
 
   // A future year has nothing due yet, so a fully-unowed row reads "Upcoming"
