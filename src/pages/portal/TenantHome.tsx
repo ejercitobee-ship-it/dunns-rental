@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, ChevronDown, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock, Megaphone } from 'lucide-react';
+import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
-import { portalApi, type PortalMeResponse, type PortalLease, type PortalAnnouncement, type HouseholdMember, type RealtorContact } from '../../lib/api';
+import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
@@ -38,7 +38,6 @@ export function TenantHome() {
   const [me, setMe] = useState<PortalMeResponse | null>(null);
   const [payments, setPayments] = useState<RentPayment[]>([]);
   const [realtors, setRealtors] = useState<RealtorContact[]>([]);
-  const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +45,6 @@ export function TenantHome() {
   // failure in either never blocks the rest of the dashboard.
   useEffect(() => {
     portalApi.myRealtors().then(setRealtors).catch(() => {});
-    portalApi.announcements().then(setAnnouncements).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -236,10 +234,6 @@ export function TenantHome() {
         );
       })()}
 
-      {announcements.length > 0 && (
-        <AnnouncementsList announcements={announcements} />
-      )}
-
       <QuickActions />
 
       {!lease ? (
@@ -262,58 +256,6 @@ export function TenantHome() {
       <HouseholdCard hasLease={!!me?.lease} />
 
       <RealtorCard realtors={realtors} />
-    </div>
-  );
-}
-
-/** Collapsible announcement cards: title is always visible; tap to expand the
- *  full message body. The newest announcement starts expanded so the tenant
- *  sees the latest update immediately. */
-function AnnouncementsList({ announcements }: { announcements: PortalAnnouncement[] }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const toggle = (id: string) =>
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  return (
-    <div className="space-y-3">
-      {announcements.map(a => {
-        const open = expanded.has(a.id);
-        return (
-          <div
-            key={a.id}
-            className="rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden"
-          >
-            <button
-              type="button"
-              onClick={() => toggle(a.id)}
-              className="w-full flex items-center gap-3 p-4 text-left"
-            >
-              <Megaphone className="h-5 w-5 text-primary flex-shrink-0" />
-              <span className="flex-1 min-w-0 font-semibold text-ink text-sm truncate">{a.title}</span>
-              <ChevronDown
-                className={`h-4 w-4 text-muted flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-              />
-            </button>
-            {open && (
-              <div className="px-4 pb-4 pl-12">
-                <p className="text-sm text-muted whitespace-pre-line">{a.body}</p>
-                <p className="text-xs text-muted/60 mt-2">
-                  {new Date(a.created_at * 1000).toLocaleDateString(undefined, {
-                    month: 'short', day: 'numeric', year: 'numeric',
-                  })}
-                  {a.property_name ? ` · ${a.property_name}` : ''}
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }

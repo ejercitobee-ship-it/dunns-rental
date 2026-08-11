@@ -43,6 +43,7 @@ const TenantDocuments = lazy(() => import('./pages/portal/TenantDocuments').then
 const HandymanJobs = lazy(() => import('./pages/portal/HandymanJobs').then(m => ({ default: m.HandymanJobs })));
 const HandymanMessages = lazy(() => import('./pages/portal/HandymanMessages').then(m => ({ default: m.HandymanMessages })));
 const InstallGuide = lazy(() => import('./pages/portal/InstallGuide').then(m => ({ default: m.InstallGuide })));
+const PortalAnnouncements = lazy(() => import('./pages/portal/Announcements').then(m => ({ default: m.Announcements })));
 const RealtorTenants = lazy(() => import('./pages/portal/RealtorTenants').then(m => ({ default: m.RealtorTenants })));
 const RealtorTenantDetail = lazy(() => import('./pages/portal/RealtorTenantDetail').then(m => ({ default: m.RealtorTenantDetail })));
 const RealtorDashboard = lazy(() => import('./pages/portal/RealtorDashboard').then(m => ({ default: m.RealtorDashboard })));
@@ -229,6 +230,12 @@ function AppRoutes() {
       <Route path="/portal/install" element={
         <PortalRoute>
           <PortalLayout><InstallGuide /></PortalLayout>
+        </PortalRoute>
+      } />
+
+      <Route path="/portal/announcements" element={
+        <PortalRoute>
+          <PortalLayout><PortalAnnouncements /></PortalLayout>
         </PortalRoute>
       } />
 

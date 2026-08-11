@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2, Smartphone, ChevronRight } from 'lucide-react';
+import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2, Smartphone, ChevronRight, Megaphone } from 'lucide-react';
 import logo from '../../assets/mh-dunn-logo.png';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useAutoEnablePush } from '../../lib/useAutoPush';
-import { portalApi } from '../../lib/api';
+import { portalApi, type PortalAnnouncement } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 // The portal shell for tenants and realtors. This is a separate world from
@@ -53,6 +53,13 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
   const isTenant = user?.roleId === 'tenant';
   const isHandyman = user?.roleId === 'handyman';
+
+  // Announcements: fetched once for tenants, shown as a slim banner at the top.
+  const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([]);
+  useEffect(() => {
+    if (!isTenant) return;
+    portalApi.announcements().then(setAnnouncements).catch(() => {});
+  }, [isTenant]);
 
   // Unread office replies drive the badge on the Messages tab (tenant thread for
   // a tenant, vendor thread for a handyman). Refresh on load, on navigation
@@ -109,6 +116,27 @@ export function PortalLayout({ children }: PortalLayoutProps) {
           </div>
         </div>
       </header>
+
+      {/* Announcement banner: visible on every portal page for tenants. */}
+      {isTenant && announcements.length > 0 && (
+        <div className="bg-primary/[0.06] border-b border-primary/15">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+            <Link
+              to="/portal/announcements"
+              className="flex items-center gap-3 py-3 group"
+            >
+              <Megaphone className="h-4 w-4 text-primary flex-shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
+                {announcements[0].title}
+                {announcements.length > 1 && (
+                  <span className="text-muted font-normal"> +{announcements.length - 1} more</span>
+                )}
+              </span>
+              <ChevronRight className="h-4 w-4 text-primary flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-28">
         <InstallPrompt />
