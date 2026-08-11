@@ -87,6 +87,19 @@ const CATEGORY_COLORS: Record<string, string> = {
   custom: 'bg-stone-100 text-stone-800',
 };
 
+/** Categories that represent date-based events (informational). They cannot be
+ *  marked complete and never appear in the overdue "Past Activity" section. */
+const EVENT_CATEGORIES = new Set<CalendarCategory>([
+  'birthday', 'move_in', 'move_out',
+  'lease_expiration', 'lease_renewal', 'lease_termination',
+]);
+
+/** Returns true when the item is an informational event rather than a
+ *  completable task. Auto-generated items are always events. */
+function isEventOnly(e: { category: CalendarCategory; isAuto?: boolean }): boolean {
+  return !!e.isAuto || EVENT_CATEGORIES.has(e.category);
+}
+
 const PRIORITY_BADGE: Record<CalendarPriority, { variant: 'default' | 'warning' | 'destructive'; label: string }> = {
   low: { variant: 'default', label: 'Low' },
   medium: { variant: 'default', label: 'Medium' },
@@ -386,7 +399,7 @@ export function Calendar() {
 
   const overdueEvents = useMemo(() =>
     filteredEvents
-      .filter(e => !e.completed && !e.isRecurring && e.eventDate < today)
+      .filter(e => !e.completed && !e.isRecurring && e.eventDate < today && !isEventOnly(e))
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate)),
   [filteredEvents, today]);
 
@@ -491,7 +504,7 @@ export function Calendar() {
   };
 
   const handleToggleComplete = async (event: ExpandedEvent) => {
-    if (event.isVirtual) return;
+    if (event.isVirtual || isEventOnly(event)) return;
     try {
       await calendarApi.update(event.id, { ...event, completed: !event.completed });
       showToast(event.completed ? 'Marked as incomplete' : 'Marked as complete', 'success');
@@ -689,8 +702,10 @@ export function Calendar() {
                   const expanded = event as ExpandedEvent;
                   return (
                     <div key={event.id + (expanded.isVirtual ? `-v` : '')} className="flex items-center gap-3 px-5 py-4 hover:bg-canvas/60">
-                      {event.isAuto ? (
-                        <div className="w-6 h-6 rounded-full bg-canvas flex-shrink-0 flex items-center justify-center text-muted text-xs">✦</div>
+                      {isEventOnly(event) ? (
+                        <div className="w-6 h-6 rounded-full bg-canvas flex-shrink-0 flex items-center justify-center text-muted">
+                          <CalendarIcon className="h-3.5 w-3.5" />
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleToggleComplete(expanded)}
@@ -714,10 +729,15 @@ export function Calendar() {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
                             {categoryLabel(event.category)}
                           </span>
+                          <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${
+                            isEventOnly(event)
+                              ? 'text-muted bg-canvas'
+                              : 'text-primary bg-primary-soft'
+                          }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
                           {event.isAuto && (
                             <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
                           )}
-                          {event.priority !== 'medium' && !event.isAuto && (
+                          {event.priority !== 'medium' && !isEventOnly(event) && (
                             <Badge variant={pb.variant}>{pb.label}</Badge>
                           )}
                           {event.isRecurring && (
@@ -866,8 +886,10 @@ export function Calendar() {
                   const expanded = event as ExpandedEvent;
                   return (
                     <div key={event.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-canvas/60">
-                      {event.isAuto ? (
-                        <div className="w-5 h-5 rounded bg-canvas flex-shrink-0 flex items-center justify-center text-muted text-[10px]">✦</div>
+                      {isEventOnly(event) ? (
+                        <div className="w-5 h-5 rounded bg-canvas flex-shrink-0 flex items-center justify-center text-muted">
+                          <CalendarIcon className="h-3 w-3" />
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleToggleComplete(expanded)}
@@ -891,10 +913,15 @@ export function Calendar() {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
                             {categoryLabel(event.category)}
                           </span>
+                          <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${
+                            isEventOnly(event)
+                              ? 'text-muted bg-canvas'
+                              : 'text-primary bg-primary-soft'
+                          }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
                           {event.isAuto && (
                             <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
                           )}
-                          {event.priority !== 'medium' && !event.isAuto && (
+                          {event.priority !== 'medium' && !isEventOnly(event) && (
                             <Badge variant={pb.variant}>{pb.label}</Badge>
                           )}
                           {event.isRecurring && (
