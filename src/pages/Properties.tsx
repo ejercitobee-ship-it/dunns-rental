@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Building2, Bed, Bath, Square, DollarSign, Home, DoorOpen, Users, Edit2, Trash2, Check, ChevronDown, ChevronRight, Droplet, Flame, Zap, Copy, ExternalLink } from 'lucide-react';
-import { Card, CardContent } from '../components/ui/Card';
+import { Plus, Search, Building2, DollarSign, Home, DoorOpen, Edit2, Trash2, Check, ChevronDown, Droplet, Flame, Zap, Copy, ExternalLink } from 'lucide-react';
+
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
@@ -399,299 +399,292 @@ export function Properties() {
   const occupiedUnits = units.filter(u => !!getUnitLease(u.id)).length;
   const totalMonthlyRent = units.reduce((sum, u) => sum + u.monthlyRent, 0);
 
+  const occupancyPct = totalUnits > 0 ? ((occupiedUnits / totalUnits) * 100).toFixed(0) : '0';
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Properties</h1>
-          <p className="text-muted mt-1 text-sm sm:text-base">Manage your rental properties and units</p>
+          <h1 className="text-[28px] sm:text-[36px] font-medium text-ink leading-tight">Properties</h1>
+          <p className="text-muted mt-1 text-sm">Your portfolio at a glance</p>
         </div>
-        {canCreateProperty && (
-          <Button onClick={() => setIsAddPropertyOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Property
-          </Button>
-        )}
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Properties</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Building2 /></span>
-            </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{properties.length}</div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-48 sm:w-56 pl-10 pr-4 py-2 border border-line rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 bg-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Units</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DoorOpen /></span>
-            </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{totalUnits}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Across all properties</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Occupied Units</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Home /></span>
-            </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-primary tnum">{occupiedUnits}</div>
-            <p className="mt-1.5 text-[13px] text-muted">{totalUnits > 0 ? ((occupiedUnits / totalUnits) * 100).toFixed(0) : 0}% occupancy</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Potential Rent</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
-            </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{formatCurrency(totalMonthlyRent)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Per month</p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
-          <input
-            type="text"
-            placeholder="Search properties..."
-            className="w-full pl-10 pr-4 py-2 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          {canCreateProperty && (
+            <Button onClick={() => setIsAddPropertyOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Property
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Properties List */}
+      {/* Portfolio Summary */}
+      <div className="grid gap-4 sm:gap-5 grid-cols-2 lg:grid-cols-4">
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center"><Building2 className="h-4 w-4" /></span>
+            <span className="text-xs font-medium text-muted uppercase tracking-wider">Properties</span>
+          </div>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum">{properties.length}</p>
+        </div>
+
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center"><DoorOpen className="h-4 w-4" /></span>
+            <span className="text-xs font-medium text-muted uppercase tracking-wider">Units</span>
+          </div>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum">{totalUnits}</p>
+        </div>
+
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-8 h-8 rounded-full bg-positive/10 text-positive grid place-items-center"><Home className="h-4 w-4" /></span>
+            <span className="text-xs font-medium text-muted uppercase tracking-wider">Occupancy</span>
+          </div>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-positive tnum">{occupancyPct}%</p>
+          <p className="text-xs text-muted mt-1">{occupiedUnits} of {totalUnits} occupied</p>
+        </div>
+
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center"><DollarSign className="h-4 w-4" /></span>
+            <span className="text-xs font-medium text-muted uppercase tracking-wider">Monthly Revenue</span>
+          </div>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum">{formatCurrency(totalMonthlyRent)}</p>
+          <p className="text-xs text-muted mt-1">Potential rent</p>
+        </div>
+      </div>
+
+      {/* Properties */}
       <div className="space-y-6">
         {filteredProperties.map(property => {
           const propertyUnits = getPropertyUnits(property.id);
           const occupiedCount = propertyUnits.filter(u => !!getUnitLease(u.id)).length;
+          const vacantCount = propertyUnits.length - occupiedCount;
           const propUtilTypes = [...new Set(utilityAccounts.filter(u => u.propertyId === property.id).map(u => u.type))];
           const open = expanded.has(property.id);
+          const propRent = propertyUnits.reduce((s, u) => s + u.monthlyRent, 0);
 
           return (
-            <Card key={property.id} className="overflow-hidden">
-              <div className="h-24 sm:h-32 bg-gradient-to-br from-[#2b5a48] to-[#1c4032] flex items-center justify-between px-4 sm:px-6 relative">
-                <button
-                  type="button"
-                  onClick={() => toggleProperty(property.id)}
-                  aria-expanded={open}
-                  className="flex items-center gap-2 sm:gap-3 min-w-0 text-left group/toggle"
-                >
-                  {open
-                    ? <ChevronDown className="h-5 w-5 text-white/70 flex-shrink-0" />
-                    : <ChevronRight className="h-5 w-5 text-white/70 flex-shrink-0" />}
-                  <Building2 className="h-8 w-8 sm:h-11 sm:w-11 text-white/50 flex-shrink-0" />
-                  <div className="text-white min-w-0">
-                    <h3 className="text-lg sm:text-xl font-bold truncate">{property.name}</h3>
-                    <p className="text-white/80 text-xs sm:text-sm truncate">{property.address}, {property.city}</p>
-                    <p className="text-white/70 text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
-                      <span>{propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'} · {occupiedCount} occupied · {propertyUnits.length - occupiedCount} vacant</span>
-                      {propUtilTypes.length > 0 && (
-                        <span className="inline-flex items-center gap-1 ml-1 px-1.5 py-px rounded-full bg-white/15 text-white/80 text-[10px]">
-                          {propUtilTypes.map(t => { const M = UTILITY_META[t]; return M ? <M.icon key={t} className="h-3 w-3" /> : null; })}
-                        </span>
+            <div key={property.id} className="bg-surface rounded-2xl border border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+              {/* Property Header */}
+              <div className="border-b border-line">
+                {/* Accent line */}
+                <div className="h-1 bg-gradient-to-r from-primary via-primary/60 to-transparent" />
+
+                <div className="px-5 sm:px-6 py-4 sm:py-5">
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Property info */}
+                    <button
+                      type="button"
+                      onClick={() => toggleProperty(property.id)}
+                      aria-expanded={open}
+                      className="flex items-start gap-3 sm:gap-4 min-w-0 text-left group/toggle"
+                    >
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-primary/8 text-primary grid place-items-center flex-shrink-0 mt-0.5">
+                        <Building2 className="h-5 w-5 sm:h-6 sm:w-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg sm:text-xl font-display font-semibold text-ink truncate">{property.name}</h3>
+                          <ChevronDown className={`h-4 w-4 text-muted flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                        </div>
+                        <p className="text-sm text-muted truncate mt-0.5">{property.address}, {property.city}, {property.state} {property.zipCode}</p>
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink bg-canvas rounded-full px-2.5 py-1">
+                            <DoorOpen className="h-3 w-3 text-muted" />
+                            {propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-positive bg-positive-soft rounded-full px-2.5 py-1">
+                            {occupiedCount} occupied
+                          </span>
+                          {vacantCount > 0 && (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warning bg-warning-soft rounded-full px-2.5 py-1">
+                              {vacantCount} vacant
+                            </span>
+                          )}
+                          {propRent > 0 && (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink bg-canvas rounded-full px-2.5 py-1 tnum">
+                              <DollarSign className="h-3 w-3 text-muted" />
+                              {formatCurrency(propRent)}/mo
+                            </span>
+                          )}
+                          {propUtilTypes.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted bg-canvas rounded-full px-2 py-1">
+                              {propUtilTypes.map(t => { const M = UTILITY_META[t]; return M ? <M.icon key={t} className="h-3 w-3" /> : null; })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Link to={`/properties/${property.id}`}>
+                        <Button size="sm" variant="outline" className="text-xs">
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Profile
+                        </Button>
+                      </Link>
+                      {canCreateUnit && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs"
+                          onClick={() => {
+                            setPropertyForUnit(property);
+                            setIsAddUnitOpen(true);
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Unit
+                        </Button>
                       )}
-                    </p>
+                      {canEditProperty && (
+                        <button
+                          onClick={() => handleEditProperty(property)}
+                          className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {canDeleteProperty && (
+                        <button
+                          onClick={() => setPropertyToDelete(property)}
+                          className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </button>
-                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                  <Link to={`/properties/${property.id}`}>
-                    <Button size="sm" variant="secondary">
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      Profile
-                    </Button>
-                  </Link>
-                  {canCreateUnit && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setPropertyForUnit(property);
-                        setIsAddUnitOpen(true);
-                      }}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Unit
-                    </Button>
-                  )}
-                  {canEditProperty && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-white hover:bg-white/20"
-                      onClick={() => handleEditProperty(property)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {canDeleteProperty && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-white hover:bg-white/20 hover:text-red-200"
-                      onClick={() => setPropertyToDelete(property)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
                 </div>
               </div>
-              
+
               {open && (
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold flex items-center gap-2 text-ink">
-                    <DoorOpen className="h-5 w-5" />
-                    Units ({propertyUnits.length})
-                  </h3>
-                  <div className="text-sm text-muted">
-                    <span className="text-positive font-semibold">{occupiedCount} occupied</span>
-                    <span className="mx-2">•</span>
-                    <span>{propertyUnits.length - occupiedCount} vacant</span>
-                  </div>
-                </div>
-                
+              <div className="p-5 sm:p-6">
+                {/* Units */}
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {propertyUnits.map(unit => {
                     const lease = getUnitLease(unit.id);
                     const occupants = lease ? getLeaseTenants(lease.id) : [];
-                    // Occupied and vacant are derived from whether the unit
-                    // currently has a lease, never read from the stored
-                    // field, so the badge below can never disagree with
-                    // reality. Maintenance is a real, separate fact a lease
-                    // cannot express, so it is the one piece of unit.status
-                    // still read directly.
                     const displayStatus: Unit['status'] = unit.status === 'maintenance'
                       ? 'maintenance'
                       : (lease ? 'occupied' : 'vacant');
+                    const accentColor = displayStatus === 'occupied'
+                      ? 'border-l-positive'
+                      : displayStatus === 'maintenance'
+                        ? 'border-l-danger'
+                        : 'border-l-warning';
                     return (
                       <div
                         key={unit.id}
-                        className="border border-line rounded-xl p-4 hover:shadow-lg transition-all bg-white group"
+                        className={`border border-line border-l-[3px] ${accentColor} rounded-xl bg-white hover:shadow-md transition-all group`}
                       >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <Home className="h-4 w-4 text-faint" />
-                            <span className="font-semibold text-ink">Unit {unit.unitNumber}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Badge variant={statusColors[displayStatus]} className="text-xs">
-                              {displayStatus}
-                            </Badge>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                              {canEditUnit && (
-                                <button
-                                  onClick={() => handleEditUnit(unit)}
-                                  className="p-1 hover:bg-black/[0.05] rounded"
-                                >
-                                  <Edit2 className="h-3 w-3 text-muted" />
-                                </button>
-                              )}
-                              {canDeleteUnit && (
-                                <button
-                                  onClick={() => setUnitToDelete(unit)}
-                                  className="p-1 hover:bg-danger-soft rounded"
-                                >
-                                  <Trash2 className="h-3 w-3 text-danger" />
-                                </button>
-                              )}
+                        <div className="p-4">
+                          {/* Unit header */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <span className="text-base font-semibold text-ink">Unit {unit.unitNumber}</span>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
+                                <span>{unit.bedrooms} bed</span>
+                                <span className="text-line">·</span>
+                                <span>{unit.bathrooms} bath</span>
+                                {unit.squareFeet > 0 && <>
+                                  <span className="text-line">·</span>
+                                  <span>{unit.squareFeet.toLocaleString()} sqft</span>
+                                </>}
+                              </div>
                             </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                          <div className="bg-canvas rounded-lg p-2">
-                            <Bed className="h-3 w-3 mx-auto mb-1 text-faint" />
-                            <p className="text-xs font-medium text-ink">{unit.bedrooms}</p>
-                          </div>
-                          <div className="bg-canvas rounded-lg p-2">
-                            <Bath className="h-3 w-3 mx-auto mb-1 text-faint" />
-                            <p className="text-xs font-medium text-ink">{unit.bathrooms}</p>
-                          </div>
-                          <div className="bg-canvas rounded-lg p-2">
-                            <Square className="h-3 w-3 mx-auto mb-1 text-faint" />
-                            <p className="text-xs font-medium text-ink">{unit.squareFeet}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-line">
-                          <div>
-                            <p className="text-xs text-muted">Rent</p>
-                            <p className="font-semibold text-positive">{formatCurrency(unit.monthlyRent)}</p>
-                          </div>
-                          <div className="text-right max-w-[170px]">
-                            {lease ? (
-                              <div className="flex items-center gap-1 text-xs justify-end flex-wrap">
-                                <Users className="h-3 w-3 flex-shrink-0 text-muted" />
-                                {occupants.length > 0 ? (
-                                  occupants.map((t, i) => (
-                                    <span key={t.id} className="whitespace-nowrap">
-                                      <Link to={`/tenants/${t.id}`} className="text-primary hover:underline">
-                                        {t.firstName} {t.lastName}
-                                      </Link>{i < occupants.length - 1 ? ',' : ''}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-muted">Occupant unknown</span>
+                            <div className="flex items-center gap-1">
+                              <Badge variant={statusColors[displayStatus]} className="text-[10px] px-2">
+                                {displayStatus}
+                              </Badge>
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                                {canEditUnit && (
+                                  <button onClick={() => handleEditUnit(unit)} className="p-1 hover:bg-canvas rounded">
+                                    <Edit2 className="h-3 w-3 text-muted" />
+                                  </button>
+                                )}
+                                {canDeleteUnit && (
+                                  <button onClick={() => setUnitToDelete(unit)} className="p-1 hover:bg-danger-soft rounded">
+                                    <Trash2 className="h-3 w-3 text-danger" />
+                                  </button>
                                 )}
                               </div>
-                            ) : (
-                              <span className="text-xs text-faint">Vacant</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {lease && (
-                          <div className="mt-3 pt-3 border-t border-line space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted">Current tenancy</span>
-                              <Badge variant={leaseStatusBadge[lease.status]} className="text-xs">
-                                {leaseStatusLabel[lease.status]}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted">Rent</span>
-                              <span className="font-medium text-ink tnum">{formatCurrency(lease.monthlyRent)}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted">Term</span>
-                              <span className="text-ink">
-                                {lease.startDate ? formatDate(lease.startDate) : '—'} to {lease.endDate ? formatDate(lease.endDate) : '—'}
-                              </span>
                             </div>
                           </div>
-                        )}
 
-                        {/* Maintenance is the only state here the owner sets
-                            by hand; occupied and vacant above always come
-                            from whether the unit has a lease. */}
-                        <div className="mt-3 pt-2 border-t border-line">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleMaintenance(unit)}
-                            className={`w-full py-1.5 px-2 text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                              unit.status === 'maintenance'
-                                ? 'bg-danger-soft text-danger font-medium'
-                                : 'bg-canvas text-muted hover:bg-black/[0.05]'
-                            }`}
-                          >
-                            {unit.status === 'maintenance' && <Check className="h-3 w-3" />}
-                            {unit.status === 'maintenance' ? 'Under maintenance' : 'Mark as under maintenance'}
-                          </button>
+                          {/* Rent + Tenant */}
+                          <div className="flex items-end justify-between pt-3 border-t border-line/60">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Rent</p>
+                              <p className="text-lg font-display font-semibold text-ink tnum">{formatCurrency(unit.monthlyRent)}</p>
+                            </div>
+                            <div className="text-right max-w-[150px]">
+                              {lease ? (
+                                <div className="flex items-center gap-1 text-xs justify-end flex-wrap">
+                                  {occupants.length > 0 ? (
+                                    occupants.map((t, i) => (
+                                      <span key={t.id} className="whitespace-nowrap">
+                                        <Link to={`/tenants/${t.id}`} className="text-primary hover:underline font-medium">
+                                          {t.firstName} {t.lastName}
+                                        </Link>{i < occupants.length - 1 ? ',' : ''}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-muted italic">Occupant unknown</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-faint italic">Available</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Lease details */}
+                          {lease && (
+                            <div className="mt-3 pt-3 border-t border-line/60 flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant={leaseStatusBadge[lease.status]} className="text-[10px]">
+                                  {leaseStatusLabel[lease.status]}
+                                </Badge>
+                                <span className="text-muted tnum">
+                                  {lease.startDate ? formatDate(lease.startDate) : '—'} to {lease.endDate ? formatDate(lease.endDate) : '—'}
+                                </span>
+                              </div>
+                              {lease.monthlyRent !== unit.monthlyRent && (
+                                <span className="font-medium text-ink tnum">{formatCurrency(lease.monthlyRent)}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Maintenance toggle */}
+                          <div className="mt-3 pt-2 border-t border-line/60">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMaintenance(unit)}
+                              className={`w-full py-1.5 px-2 text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                                unit.status === 'maintenance'
+                                  ? 'bg-danger-soft text-danger font-medium'
+                                  : 'bg-canvas text-muted hover:bg-black/[0.05]'
+                              }`}
+                            >
+                              {unit.status === 'maintenance' && <Check className="h-3 w-3" />}
+                              {unit.status === 'maintenance' ? 'Under maintenance' : 'Mark as under maintenance'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -701,8 +694,8 @@ export function Properties() {
                 {/* Utility accounts the landlord pays on this property */}
                 <div className="mt-6 pt-6 border-t border-line">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold flex items-center gap-2 text-ink">
-                      <Zap className="h-5 w-5" />
+                    <h3 className="font-semibold flex items-center gap-2 text-ink text-sm">
+                      <Zap className="h-4 w-4" />
                       Utilities
                     </h3>
                     {canEditProperty && (
@@ -768,9 +761,9 @@ export function Properties() {
                     );
                   })()}
                 </div>
-              </CardContent>
+              </div>
               )}
-            </Card>
+            </div>
           );
         })}
       </div>
