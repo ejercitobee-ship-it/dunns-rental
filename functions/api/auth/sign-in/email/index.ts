@@ -129,7 +129,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const sessionToken = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);
-    const expiresAt = now + 7 * 24 * 60 * 60;
+    const expiresAt = now + 15 * 60; // 15-minute idle timeout; renewed on every request
 
     await env.DB.batch([
       env.DB.prepare(

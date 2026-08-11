@@ -52,14 +52,29 @@ export function parseCookies(request: Request): Record<string, string> {
 }
 
 const SESSION_COOKIE = 'session';
-const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
+/** How long a session lives without activity. Every authenticated request
+ *  pushes the expiry forward by this amount, so active users stay signed in
+ *  indefinitely and idle users get logged out after 15 minutes. */
+const SESSION_IDLE_TIMEOUT = 15 * 60; // 15 minutes
 
 export function sessionCookie(token: string): string {
-  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_MAX_AGE}; Path=/`;
+  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_IDLE_TIMEOUT}; Path=/`;
 }
 
 export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/`;
+}
+
+/**
+ * Push the session's DB expiry forward by another idle-timeout window. Called
+ * in the middleware's waitUntil so the DB stays consistent with the cookie.
+ */
+export async function renewSessionDb(env: Env, token: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const newExpiry = now + SESSION_IDLE_TIMEOUT;
+  await env.DB.prepare('UPDATE session SET expires_at = ?, updated_at = ? WHERE token = ?')
+    .bind(newExpiry, now, token)
+    .run();
 }
 
 // ---------------------------------------------------------------------------

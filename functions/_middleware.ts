@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, getSessionUser } from './lib/session';
+import { type Env, getSessionUser, renewSessionDb, parseCookies, sessionCookie } from './lib/session';
 import { describeAction, logActivity } from './lib/activity';
 
 // The SPA and the API are served from the same Pages domain, so cross-origin
@@ -41,11 +41,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     response.headers.append('Vary', 'Origin');
   }
 
+  const pathname = new URL(request.url).pathname;
+
+  // Sliding session: every authenticated API request pushes the idle expiry
+  // forward by 15 minutes so active users never get logged out. The cookie is
+  // set synchronously (before the response leaves); the DB update runs in the
+  // background so it never slows the request.
+  if (pathname.startsWith('/api/') && response.ok) {
+    const sessionToken = parseCookies(request)['session'];
+    if (sessionToken) {
+      response.headers.append('Set-Cookie', sessionCookie(sessionToken));
+      context.waitUntil(
+        renewSessionDb(env, sessionToken).catch(() => { /* must never break a request */ })
+      );
+    }
+  }
+
   // Footprint: log every successful create/update/delete, by whoever did it.
   // Best-effort and out of band (waitUntil), so it never slows or fails the
   // request. Reads and failed attempts are not recorded.
   if (MUTATING.has(request.method) && response.ok) {
-    const pathname = new URL(request.url).pathname;
     const parsed = describeAction(request.method, pathname);
     if (parsed) {
       context.waitUntil(

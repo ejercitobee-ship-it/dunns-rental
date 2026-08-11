@@ -47,9 +47,10 @@ interface AuthContextType {
   isSuperAdmin: () => boolean;
 }
 
-// Auto-logout after 30 minutes of inactivity. Module-scoped so it is a stable
-// constant, not a value the effect/callback hooks have to list as a dependency.
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+// Auto-logout after 15 minutes of inactivity, matching the server's sliding
+// session timeout. Module-scoped so it is a stable constant, not a value the
+// effect/callback hooks have to list as a dependency.
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
