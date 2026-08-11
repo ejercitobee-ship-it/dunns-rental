@@ -259,72 +259,82 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-50 h-full w-72 bg-sidebar text-white border-r border-sidebar-line transform transition-transform duration-300 ease-in-out lg:translate-x-0',
+          'fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-white border-r border-sidebar-line transform transition-transform duration-300 ease-in-out lg:translate-x-0 flex flex-col',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* Logo Section */}
-        <div className="flex items-start justify-between gap-2 px-4 py-4 border-b border-sidebar-line">
-          <Link to="/" className="block flex-1 min-w-0">
-            <div className="bg-white rounded-xl px-4 py-3 ring-1 ring-white/10">
-              <img src={logo} alt="MH Dunn Property" className="mx-auto h-auto w-full max-w-[176px]" />
+        {/* Logo + close */}
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-sidebar-line flex-shrink-0">
+          <Link to="/" className="flex items-center gap-2.5 min-w-0" onClick={() => setSidebarOpen(false)}>
+            <div className="bg-white rounded-lg p-1.5 flex-shrink-0">
+              <img src={logo} alt="MH Dunn Property" className="h-7 w-auto" />
             </div>
+            <span className="text-sm font-semibold text-white tracking-tight truncate">MH Dunn Property</span>
           </Link>
           <button
-            className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="lg:hidden p-1.5 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Quick search hint */}
-        <div className="mx-3 mt-3 mb-1">
+        {/* Quick search */}
+        <div className="px-3 pt-3 pb-1 flex-shrink-0">
           <button
-            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-sidebar-muted hover:bg-white/[0.04] transition-colors border border-sidebar-line"
+            onClick={() => { setSidebarOpen(false); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true })); }}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-sidebar-muted hover:bg-white/[0.04] transition-colors border border-sidebar-line"
           >
-            <Search className="h-3.5 w-3.5" />
+            <Search className="h-3 w-3" />
             <span className="flex-1 text-left">Go to...</span>
             <kbd className="text-[10px] font-mono px-1 py-px rounded border border-sidebar-line">⌘K</kbd>
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="p-3 space-y-0.5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-          <p className="px-3 pt-3 pb-2 eyebrow text-sidebar-muted">Main Menu</p>
-          {navigation.map(entry => {
+        {/* Navigation — flex-1 fills remaining space, scrolls independently */}
+        <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5 sidebar-scroll">
+          {navigation.map((entry, idx) => {
             if (!('show' in entry) || !entry.show) return null;
-            if (isGroup(entry)) return renderGroup(entry);
+            // Insert a thin separator before first group (Finances)
+            if (isGroup(entry)) {
+              const prevEntry = navigation.slice(0, idx).reverse().find(e => ('show' in e) && e.show);
+              const needsSep = prevEntry && !isGroup(prevEntry);
+              return (
+                <div key={entry.label}>
+                  {needsSep && <div className="my-2 border-t border-sidebar-line" />}
+                  {renderGroup(entry)}
+                </div>
+              );
+            }
             return renderLink(entry);
           })}
         </nav>
 
-        {/* User: one compact row */}
-        <div className="absolute bottom-0 left-0 right-0 p-2.5 border-t border-sidebar-line">
+        {/* User footer — flex-shrink-0, always visible */}
+        <div className="flex-shrink-0 px-3 py-2 border-t border-sidebar-line">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setProfileOpen(true)}
               title="Your profile"
-              className="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+              className="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
             >
               <Avatar
                 photoUrl={user?.photoUrl}
                 initials={`${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`}
-                className="w-8 h-8 flex-shrink-0"
-                initialsClassName="text-xs"
+                className="w-7 h-7 flex-shrink-0"
+                initialsClassName="text-[10px]"
               />
               <span className="min-w-0 text-left">
                 <span className="block text-sm font-medium text-white truncate leading-tight">{user?.firstName} {user?.lastName}</span>
-                <span className="block text-[11px] text-sidebar-muted truncate leading-tight">{user?.role.name}</span>
+                <span className="block text-[10px] text-sidebar-muted truncate leading-tight">{user?.role.name}</span>
               </span>
             </button>
             <button
               onClick={handleLogout}
               title="Sign out"
-              className="p-2 rounded-lg text-sidebar-muted hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
+              className="p-1.5 rounded-lg text-sidebar-muted hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
             >
-              <LogOut className="h-[18px] w-[18px]" />
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -333,7 +343,7 @@ export function Layout({ children }: LayoutProps) {
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
 
       {/* Main content */}
-      <main className="lg:ml-72 min-h-screen">
+      <main className="lg:ml-64 min-h-screen">
         {/* Mobile header */}
         <header className="lg:hidden h-16 bg-surface/90 backdrop-blur-md border-b border-line flex items-center justify-between px-4 sticky top-0 z-30">
           <Link to="/" className="flex items-center">
