@@ -86,10 +86,11 @@ export function Expenses() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   // Pagination: show N rows at a time with a "Load More" button.
   const [visibleCount, setVisibleCount] = useState(10);
-  // Month filter: 'all' or 'YYYY-MM' string.
+  // Separate month and year filters.
   const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [yearFilter, setYearFilter] = useState<string>('all');
   // Reset pagination when any filter or view changes.
-  useEffect(() => { setVisibleCount(10); }, [searchTerm, categoryFilter, propertyFilter, sourceFilter, monthFilter, view]);
+  useEffect(() => { setVisibleCount(10); }, [searchTerm, categoryFilter, propertyFilter, sourceFilter, monthFilter, yearFilter, view]);
 
   const accountMatch = useMemo(() => {
     const q = accountLookup.trim().toLowerCase();
@@ -289,11 +290,12 @@ export function Expenses() {
       
       const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
       const matchesProperty = propertyFilter === 'all' || expense.propertyId === propertyFilter;
-      const matchesMonth = monthFilter === 'all' || expense.date.substring(0, 7) === monthFilter;
+      const matchesYear = yearFilter === 'all' || expense.date.substring(0, 4) === yearFilter;
+      const matchesMonth = monthFilter === 'all' || expense.date.substring(5, 7) === monthFilter;
 
-      return matchesSearch && matchesCategory && matchesProperty && matchesMonth;
+      return matchesSearch && matchesCategory && matchesProperty && matchesYear && matchesMonth;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [expenses, properties, units, searchTerm, categoryFilter, propertyFilter, monthFilter]);
+  }, [expenses, properties, units, searchTerm, categoryFilter, propertyFilter, yearFilter, monthFilter]);
 
   // The income list = rent collected (from paid rent_payments, read-only) PLUS
   // the manually-entered `incomes`, so the list matches the totals above and the
@@ -354,12 +356,12 @@ export function Expenses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomes, rentPayments, leases, tenants]);
 
-  // Unique year-month values across all data, sorted newest first.
-  const monthOptions = useMemo(() => {
-    const months = new Set<string>();
-    expenses.forEach(e => { if (e.date) months.add(e.date.substring(0, 7)); });
-    incomeRows.forEach(i => { if (i.date) months.add(i.date.substring(0, 7)); });
-    return [...months].sort((a, b) => b.localeCompare(a));
+  // Unique years present in the data, sorted newest first.
+  const yearOptions = useMemo(() => {
+    const years = new Set<string>();
+    expenses.forEach(e => { if (e.date) years.add(e.date.substring(0, 4)); });
+    incomeRows.forEach(i => { if (i.date) years.add(i.date.substring(0, 4)); });
+    return [...years].sort((a, b) => b.localeCompare(a));
   }, [expenses, incomeRows]);
 
   const filteredIncome = useMemo(() => {
@@ -377,11 +379,12 @@ export function Expenses() {
 
       const matchesProperty = propertyFilter === 'all' || income.propertyId === propertyFilter;
       const matchesSource = sourceFilter === 'all' || income.source === sourceFilter;
-      const matchesMonth = monthFilter === 'all' || income.date.substring(0, 7) === monthFilter;
+      const matchesYear = yearFilter === 'all' || income.date.substring(0, 4) === yearFilter;
+      const matchesMonth = monthFilter === 'all' || income.date.substring(5, 7) === monthFilter;
 
-      return matchesSearch && matchesProperty && matchesSource && matchesMonth;
+      return matchesSearch && matchesProperty && matchesSource && matchesYear && matchesMonth;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [incomeRows, properties, units, searchTerm, propertyFilter, sourceFilter, monthFilter]);
+  }, [incomeRows, properties, units, searchTerm, propertyFilter, sourceFilter, yearFilter, monthFilter]);
 
   const getProperty = (propertyId?: string) => propertyId ? properties.find(p => p.id === propertyId) : undefined;
   const getUnit = (unitId?: string) => unitId ? units.find(u => u.id === unitId) : null;
@@ -638,15 +641,32 @@ export function Expenses() {
         </select>
         <select
           className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+        >
+          <option value="all">All Years</option>
+          {yearOptions.map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        <select
+          className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
           value={monthFilter}
           onChange={(e) => setMonthFilter(e.target.value)}
         >
           <option value="all">All Months</option>
-          {monthOptions.map(m => (
-            <option key={m} value={m}>
-              {new Date(m + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </option>
-          ))}
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
         </select>
 
         {view === 'expenses' && (
