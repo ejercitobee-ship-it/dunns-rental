@@ -123,13 +123,28 @@ function monthIsPaused(pause: { pausedAt: string; resumedAt?: string }, target: 
 export function leasesOwingMonth(leases: Lease[], month: number, year: number): Lease[] {
   const target = year * 12 + month;
 
-  return leases.filter(lease => {
+  const owing = leases.filter(lease => {
     if (!leaseCoversMonth(lease, month, year)) return false;
     if (lease.status === 'ended' && !lease.endDate) return false;
     if (lease.status === 'paused' && lease.pauses.length === 0) return false;
     if (lease.pauses.some(p => monthIsPaused(p, target))) return false;
     return true;
   });
+
+  // When a renewal starts in the same month the old lease ends, both cover
+  // that month. Only the old lease should bill it (the tenant already owed at
+  // the old rate); the renewal starts billing the following month. Without
+  // this, the tenant sees two rent entries for the overlap month.
+  if (owing.length > 1) {
+    return owing.filter(renewal => {
+      if (!renewal.renewedFromLeaseId) return true;
+      // If the old lease is also in the owing list for this month, skip the
+      // renewal so the month is billed only once at the old rate.
+      return !owing.some(old => old.id === renewal.renewedFromLeaseId);
+    });
+  }
+
+  return owing;
 }
 
 /**
