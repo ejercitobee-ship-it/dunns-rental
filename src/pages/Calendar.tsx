@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, List, Grid3X3,
   Check, Trash2, Edit2, X, AlertCircle, Bell, Clock, Sun, ChevronDown,
+  Search, Copy, Eye,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -87,6 +88,19 @@ const CATEGORY_COLORS: Record<string, string> = {
   custom: 'bg-stone-100 text-stone-800',
 };
 
+/** Solid background colors for week-view blocks */
+const CATEGORY_BG: Record<string, string> = {
+  rent_due: '#d1fae5', utility_due: '#dbeafe', mortgage: '#e0e7ff',
+  hoa: '#ede9fe', property_tax: '#fef3c7', insurance: '#e0f2fe',
+  inspection: '#ffedd5', smoke_detector: '#fee2e2', hvac: '#cffafe',
+  pest_control: '#ecfccb', lawn_care: '#dcfce7', snow_removal: '#f1f5f9',
+  maintenance: '#fef9c3', lease_expiration: '#ffe4e6', lease_renewal: '#ccfbf1',
+  lease_termination: '#fee2e2', move_in: '#d1fae5', move_out: '#fce7f3',
+  birthday: '#fce7f3', personal: '#ede9fe', contractor: '#fae8ff',
+  vendor: '#f3e8ff', licensing: '#f3f4f6', city_inspection: '#fef3c7',
+  custom: '#f5f5f4',
+};
+
 /** Categories that represent date-based events (informational). They cannot be
  *  marked complete and never appear in the overdue "Past Activity" section. */
 const EVENT_CATEGORIES = new Set<CalendarCategory>([
@@ -144,6 +158,8 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 const RECURRENCE_LABELS: Record<RecurrenceRule, string> = {
   daily: 'Daily',
   weekly: 'Weekly',
@@ -168,6 +184,17 @@ function addRecurrenceInterval(date: Date, rule: RecurrenceRule): Date {
 
 function pad2(n: number) { return String(n).padStart(2, '0'); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+
+/** Get the week (Sun–Sat) containing a given date */
+function getWeekDates(d: Date): Date[] {
+  const start = new Date(d);
+  start.setDate(start.getDate() - start.getDay());
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    return day;
+  });
+}
 
 interface ExpandedEvent extends CalendarEvent {
   isVirtual?: boolean;
@@ -300,6 +327,7 @@ interface FormState {
   eventDate: string;
   endDate: string;
   eventTime: string;
+  endTime: string;
   priority: CalendarPriority;
   isRecurring: boolean;
   recurrenceRule: RecurrenceRule | '';
@@ -311,18 +339,27 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   title: '', description: '', category: 'custom',
-  eventDate: '', endDate: '', eventTime: '', priority: 'medium',
+  eventDate: '', endDate: '', eventTime: '', endTime: '', priority: 'medium',
   isRecurring: false, recurrenceRule: '',
   propertyIds: new Set(), unitId: '', notes: '',
   reminderHours: '',
 };
+
+/** WEEK VIEW: hours from 6 AM to 9 PM */
+const WEEK_HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6..21
+
+/** Parse "HH:MM" to fractional hours */
+function timeToHours(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h + m / 60;
+}
 
 export function Calendar() {
   const { properties, units } = useApp();
   const { showToast } = useToast();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'calendar' | 'agenda' | 'today'>('calendar');
+  const [view, setView] = useState<'calendar' | 'week' | 'agenda' | 'today'>('calendar');
   const [showPastActivity, setShowPastActivity] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
@@ -332,6 +369,12 @@ export function Calendar() {
   const [saving, setSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState<CalendarCategory | ''>('');
   const [filterProperties, setFilterProperties] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [previewEvent, setPreviewEvent] = useState<ExpandedEvent | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Week view state: the Date anchoring the week
+  const [weekAnchor, setWeekAnchor] = useState(() => new Date());
 
   const loadEvents = useCallback(async () => {
     try {
@@ -343,6 +386,17 @@ export function Calendar() {
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
+  // Close preview popup on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (previewRef.current && !previewRef.current.contains(e.target as Node)) {
+        setPreviewEvent(null);
+      }
+    };
+    if (previewEvent) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [previewEvent]);
+
   const filteredEvents = useMemo(() => {
     let result = events;
     if (filterCategory) result = result.filter(e => e.category === filterCategory);
@@ -353,8 +407,17 @@ export function Calendar() {
         return pids.some(pid => filterProperties.has(pid));
       });
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(e =>
+        e.title.toLowerCase().includes(q) ||
+        (e.description || '').toLowerCase().includes(q) ||
+        (e.notes || '').toLowerCase().includes(q) ||
+        categoryLabel(e.category).toLowerCase().includes(q)
+      );
+    }
     return result;
-  }, [events, filterCategory, filterProperties]);
+  }, [events, filterCategory, filterProperties, searchQuery]);
 
   const calendarWindowStart = useMemo(() =>
     `${currentYear}-${pad2(currentMonth + 1)}-01`,
@@ -379,6 +442,21 @@ export function Calendar() {
   [expandedCalendarEvents]);
 
   const today = todayLocalDate();
+
+  // Week view dates and events
+  const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
+  const weekStart = useMemo(() => toDateStr(weekDates[0]), [weekDates]);
+  const weekEnd = useMemo(() => toDateStr(weekDates[6]), [weekDates]);
+  const expandedWeekEvents = useMemo(() =>
+    expandRecurringEvents(filteredEvents, weekStart, weekEnd),
+  [filteredEvents, weekStart, weekEnd]);
+  const weekEventsForDate = useCallback((dateStr: string) =>
+    expandedWeekEvents.filter(e => {
+      if (e.eventDate === dateStr) return true;
+      if (e.endDate && dateStr > e.eventDate && dateStr <= e.endDate) return true;
+      return false;
+    }),
+  [expandedWeekEvents]);
 
   const agendaWindowEnd = useMemo(() => {
     const d = new Date(today + 'T00:00:00');
@@ -408,7 +486,6 @@ export function Calendar() {
     expandedAgendaEvents
       .filter(e => e.eventDate === today)
       .sort((a, b) => {
-        // Sort by time if available, then by title
         if (a.eventTime && b.eventTime) return a.eventTime.localeCompare(b.eventTime);
         if (a.eventTime) return -1;
         if (b.eventTime) return 1;
@@ -425,14 +502,21 @@ export function Calendar() {
     return [];
   }, [units, formPropertyIds]);
 
-  const openNew = (date?: string) => {
+  const openNew = (date?: string, time?: string) => {
     setEditingEvent(null);
-    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate(), endDate: '', eventTime: '', propertyIds: new Set() });
+    setForm({
+      ...EMPTY_FORM,
+      eventDate: date || todayLocalDate(),
+      endDate: '',
+      eventTime: time || '',
+      endTime: '',
+      propertyIds: new Set(),
+    });
     setShowModal(true);
+    setPreviewEvent(null);
   };
 
   const openEdit = (event: ExpandedEvent) => {
-    // Auto-generated events (birthdays, lease milestones) are read-only
     if (event.isAuto) return;
     const source = event.isVirtual
       ? events.find(e => e.id === event.sourceEventId) || event
@@ -446,6 +530,7 @@ export function Calendar() {
       eventDate: source.eventDate,
       endDate: source.endDate || '',
       eventTime: source.eventTime || '',
+      endTime: source.endTime || '',
       priority: source.priority,
       isRecurring: source.isRecurring,
       recurrenceRule: source.recurrenceRule || '',
@@ -455,6 +540,34 @@ export function Calendar() {
       reminderHours: source.reminderHours != null ? String(source.reminderHours) : '',
     });
     setShowModal(true);
+    setPreviewEvent(null);
+  };
+
+  /** Duplicate: pre-fill the create form with an existing event's data */
+  const openDuplicate = (event: ExpandedEvent) => {
+    const source = event.isVirtual
+      ? events.find(e => e.id === event.sourceEventId) || event
+      : event;
+    const pids = source.propertyIds ?? (source.propertyId ? [source.propertyId] : []);
+    setEditingEvent(null);
+    setForm({
+      title: source.title,
+      description: source.description || '',
+      category: source.category,
+      eventDate: todayLocalDate(),
+      endDate: '',
+      eventTime: source.eventTime || '',
+      endTime: source.endTime || '',
+      priority: source.priority,
+      isRecurring: source.isRecurring,
+      recurrenceRule: source.recurrenceRule || '',
+      propertyIds: new Set(pids),
+      unitId: source.unitId || '',
+      notes: source.notes || '',
+      reminderHours: source.reminderHours != null ? String(source.reminderHours) : '',
+    });
+    setShowModal(true);
+    setPreviewEvent(null);
   };
 
   const handleSave = async () => {
@@ -469,6 +582,7 @@ export function Calendar() {
         eventDate: form.eventDate,
         endDate: form.endDate || undefined,
         eventTime: form.eventTime || undefined,
+        endTime: form.endTime || undefined,
         priority: form.priority,
         isRecurring: form.isRecurring,
         recurrenceRule: form.isRecurring && form.recurrenceRule ? form.recurrenceRule : undefined,
@@ -497,6 +611,7 @@ export function Calendar() {
     try {
       await calendarApi.delete(id);
       showToast('Event deleted', 'success');
+      setPreviewEvent(null);
       await loadEvents();
     } catch {
       showToast('Failed to delete event', 'error');
@@ -526,7 +641,10 @@ export function Calendar() {
     const now = new Date();
     setCurrentMonth(now.getMonth());
     setCurrentYear(now.getFullYear());
+    setWeekAnchor(now);
   };
+  const prevWeek = () => setWeekAnchor(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; });
+  const nextWeek = () => setWeekAnchor(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; });
 
   const propertyOptions = useMemo(() =>
     properties.map(p => ({ id: p.id, name: p.name || p.address })),
@@ -559,6 +677,203 @@ export function Calendar() {
     );
   }
 
+  /** Event detail preview popup */
+  const renderPreviewPopup = () => {
+    if (!previewEvent) return null;
+    const event = previewEvent;
+    const propNames = eventPropertyNames(event);
+    const pb = PRIORITY_BADGE[event.priority];
+    return (
+      <div className="fixed inset-0 z-40" onClick={() => setPreviewEvent(null)}>
+        <div
+          ref={previewRef}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface border border-line rounded-xl shadow-2xl w-[340px] max-w-[90vw] overflow-hidden"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className={`h-2 ${CATEGORY_COLORS[event.category]?.split(' ')[0] || 'bg-gray-100'}`} />
+          <div className="p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-base font-semibold text-ink leading-tight">{event.title}</h3>
+              <button onClick={() => setPreviewEvent(null)} className="p-1 rounded hover:bg-canvas flex-shrink-0">
+                <X className="h-4 w-4 text-muted" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
+                {categoryLabel(event.category)}
+              </span>
+              <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${
+                isEventOnly(event) ? 'text-muted bg-canvas' : 'text-primary bg-primary-soft'
+              }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
+              {event.isAuto && (
+                <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
+              )}
+              {event.priority !== 'medium' && !isEventOnly(event) && (
+                <Badge variant={pb.variant}>{pb.label}</Badge>
+              )}
+            </div>
+
+            <div className="space-y-1.5 text-sm text-muted">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>{formatDate(event.eventDate)}</span>
+                {event.endDate && <span>to {formatDate(event.endDate)}</span>}
+              </div>
+              {event.eventTime && (
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="text-ink font-medium">{formatTime12(event.eventTime)}</span>
+                  {event.endTime && <span className="text-ink font-medium">to {formatTime12(event.endTime)}</span>}
+                </div>
+              )}
+              {propNames && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs">📍</span>
+                  <span>{propNames}</span>
+                </div>
+              )}
+              {event.isRecurring && event.recurrenceRule && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs">🔄</span>
+                  <span>{RECURRENCE_LABELS[event.recurrenceRule]}</span>
+                </div>
+              )}
+              {event.reminderHours != null && (
+                <div className="flex items-center gap-2">
+                  <Bell className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>{event.reminderHours}h before</span>
+                </div>
+              )}
+            </div>
+
+            {event.description && (
+              <p className="text-sm text-muted border-t border-line pt-2">{event.description}</p>
+            )}
+            {event.notes && (
+              <p className="text-xs text-muted italic">{event.notes}</p>
+            )}
+
+            <div className="flex items-center gap-2 pt-1 border-t border-line">
+              {!event.isAuto && (
+                <>
+                  <button
+                    onClick={() => openEdit(event)}
+                    className="flex-1 px-3 py-1.5 text-sm font-medium text-primary bg-primary-soft rounded-lg hover:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+                  ><Edit2 className="h-3.5 w-3.5" /> Edit</button>
+                  <button
+                    onClick={() => openDuplicate(event)}
+                    className="px-3 py-1.5 text-sm font-medium text-muted bg-canvas rounded-lg hover:bg-line transition-colors flex items-center gap-1.5"
+                  ><Copy className="h-3.5 w-3.5" /> Duplicate</button>
+                </>
+              )}
+              {!isEventOnly(event) && !event.isVirtual && (
+                <button
+                  onClick={() => { handleToggleComplete(event); setPreviewEvent(null); }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                    event.completed ? 'text-warning bg-warning/10' : 'text-emerald-700 bg-emerald-50'
+                  }`}
+                >{event.completed ? 'Undo' : <><Check className="h-3.5 w-3.5" /> Done</>}</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /** Show preview on single click, edit on double click */
+  const handleEventClick = (e: React.MouseEvent, event: ExpandedEvent) => {
+    e.stopPropagation();
+    setPreviewEvent(event);
+  };
+
+  /** Shared event row for Today/Agenda views */
+  const renderEventRow = (event: CalendarEvent, showDate = false) => {
+    const propNames = eventPropertyNames(event);
+    const pb = PRIORITY_BADGE[event.priority];
+    const expanded = event as ExpandedEvent;
+    const days = showDate ? daysFromNow(event.eventDate) : 0;
+    return (
+      <div key={event.id + (expanded.isVirtual ? `-v` : '')} className="flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-canvas/60">
+        {isEventOnly(event) ? (
+          <div className="w-5 h-5 rounded-full bg-canvas flex-shrink-0 flex items-center justify-center text-muted">
+            <CalendarIcon className="h-3 w-3" />
+          </div>
+        ) : (
+          <button
+            onClick={() => handleToggleComplete(expanded)}
+            disabled={expanded.isVirtual}
+            className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+              event.completed
+                ? 'bg-primary border-primary text-white'
+                : expanded.isVirtual
+                  ? 'border-line/50 cursor-not-allowed'
+                  : 'border-line hover:border-primary'
+            }`}
+          >
+            {event.completed && <Check className="h-3 w-3" />}
+          </button>
+        )}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={ev => handleEventClick(ev, expanded)}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-sm font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
+              {event.title}
+            </span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
+              {categoryLabel(event.category)}
+            </span>
+            <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${
+              isEventOnly(event) ? 'text-muted bg-canvas' : 'text-primary bg-primary-soft'
+            }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
+            {event.isAuto && (
+              <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
+            )}
+            {event.priority !== 'medium' && !isEventOnly(event) && (
+              <Badge variant={pb.variant}>{pb.label}</Badge>
+            )}
+            {event.isRecurring && (
+              <span className="text-[10px] text-muted bg-canvas rounded px-1.5 py-0.5">
+                {event.recurrenceRule ? RECURRENCE_LABELS[event.recurrenceRule] : 'Recurring'}
+              </span>
+            )}
+            {event.reminderHours != null && <Bell className="h-3 w-3 text-muted" />}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
+            {showDate && <span>{formatDate(event.eventDate)}</span>}
+            {event.endDate && <span>to {formatDate(event.endDate)}</span>}
+            {event.eventTime ? (
+              <span className="flex items-center gap-1 font-medium text-ink">
+                <Clock className="h-3 w-3" />
+                {formatTime12(event.eventTime)}
+                {event.endTime && <span>to {formatTime12(event.endTime)}</span>}
+              </span>
+            ) : !showDate ? (
+              <span className="text-xs">All day</span>
+            ) : null}
+            {showDate && days === 0 && <span className="text-primary font-medium">Today</span>}
+            {showDate && days === 1 && <span className="text-primary font-medium">Tomorrow</span>}
+            {showDate && days > 1 && days <= 7 && <span className="text-warning font-medium">In {days} days</span>}
+            {propNames && <span>· {propNames}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={ev => handleEventClick(ev, expanded)}
+            className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
+            title="Preview"
+          ><Eye className="h-3.5 w-3.5" /></button>
+          {!event.isAuto && !expanded.isVirtual && (
+            <button
+              onClick={() => handleDelete(event.id)}
+              className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+            ><Trash2 className="h-3.5 w-3.5" /></button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -576,25 +891,45 @@ export function Calendar() {
               onClick={() => setView('today')}
             ><Sun className="h-3.5 w-3.5" /> Today</button>
             <button
+              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'week' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
+              onClick={() => setView('week')}
+            ><List className="h-3.5 w-3.5" /> Week</button>
+            <button
               className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'calendar' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
               onClick={() => setView('calendar')}
-            ><Grid3X3 className="h-3.5 w-3.5" /> Calendar</button>
+            ><Grid3X3 className="h-3.5 w-3.5" /> Month</button>
             <button
               className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'agenda' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
               onClick={() => setView('agenda')}
-            ><List className="h-3.5 w-3.5" /> Agenda</button>
+            ><CalendarIcon className="h-3.5 w-3.5" /> Agenda</button>
           </div>
           <button
             onClick={() => openNew()}
             className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors flex items-center gap-2"
           >
-            <Plus className="h-4 w-4" /> New Event
+            <Plus className="h-4 w-4" /> New
           </button>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Search + Filters */}
       <div className="flex flex-wrap gap-3 items-start">
+        <div className="relative flex-1 min-w-[200px] max-w-[320px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search events..."
+            className="w-full pl-9 pr-3 py-1.5 text-sm border border-line rounded-lg bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-canvas"
+            ><X className="h-3.5 w-3.5 text-muted" /></button>
+          )}
+        </div>
+
         <select
           value={filterCategory}
           onChange={e => setFilterCategory(e.target.value as CalendarCategory | '')}
@@ -649,7 +984,7 @@ export function Calendar() {
                       >
                         {event.completed && <Check className="h-3 w-3" />}
                       </button>
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(event as ExpandedEvent)}>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={ev => handleEventClick(ev, event as ExpandedEvent)}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium text-ink">{event.title}</span>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
@@ -664,9 +999,9 @@ export function Calendar() {
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
-                          onClick={() => openEdit(event as ExpandedEvent)}
+                          onClick={ev => handleEventClick(ev, event as ExpandedEvent)}
                           className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
-                        ><Edit2 className="h-3.5 w-3.5" /></button>
+                        ><Eye className="h-3.5 w-3.5" /></button>
                       </div>
                     </div>
                   );
@@ -696,92 +1031,151 @@ export function Calendar() {
               <p className="text-center text-sm text-muted py-12">Nothing scheduled for today. Enjoy your day!</p>
             ) : (
               <div className="border-t border-line divide-y divide-line">
-                {todayEvents.map(event => {
-                  const propNames = eventPropertyNames(event);
-                  const pb = PRIORITY_BADGE[event.priority];
-                  const expanded = event as ExpandedEvent;
-                  return (
-                    <div key={event.id + (expanded.isVirtual ? `-v` : '')} className="flex items-center gap-3 px-5 py-4 hover:bg-canvas/60">
-                      {isEventOnly(event) ? (
-                        <div className="w-6 h-6 rounded-full bg-canvas flex-shrink-0 flex items-center justify-center text-muted">
-                          <CalendarIcon className="h-3.5 w-3.5" />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleToggleComplete(expanded)}
-                          disabled={expanded.isVirtual}
-                          className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                            event.completed
-                              ? 'bg-primary border-primary text-white'
-                              : expanded.isVirtual
-                                ? 'border-line/50 cursor-not-allowed'
-                                : 'border-line hover:border-primary'
-                          }`}
-                        >
-                          {event.completed && <Check className="h-3.5 w-3.5" />}
-                        </button>
-                      )}
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(expanded)}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-base font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
-                            {event.title}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
-                            {categoryLabel(event.category)}
-                          </span>
-                          <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${
-                            isEventOnly(event)
-                              ? 'text-muted bg-canvas'
-                              : 'text-primary bg-primary-soft'
-                          }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
-                          {event.isAuto && (
-                            <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
-                          )}
-                          {event.priority !== 'medium' && !isEventOnly(event) && (
-                            <Badge variant={pb.variant}>{pb.label}</Badge>
-                          )}
-                          {event.isRecurring && (
-                            <span className="text-[10px] text-muted bg-canvas rounded px-1.5 py-0.5">
-                              {event.recurrenceRule ? RECURRENCE_LABELS[event.recurrenceRule] : 'Recurring'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1 text-sm text-muted">
-                          {event.eventTime ? (
-                            <span className="flex items-center gap-1 font-medium text-ink">
-                              <Clock className="h-3.5 w-3.5" />
-                              {formatTime12(event.eventTime)}
-                            </span>
-                          ) : (
-                            <span className="text-xs">All day</span>
-                          )}
-                          {propNames && <span className="text-xs">· {propNames}</span>}
-                          {event.notes && <span className="text-xs">· {event.notes}</span>}
-                        </div>
-                      </div>
-                      {!event.isAuto && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => openEdit(expanded)}
-                            className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
-                          ><Edit2 className="h-4 w-4" /></button>
-                          {!expanded.isVirtual && (
-                            <button
-                              onClick={() => handleDelete(event.id)}
-                              className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                            ><Trash2 className="h-4 w-4" /></button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {todayEvents.map(event => renderEventRow(event, false))}
               </div>
             )}
           </CardContent>
         </Card>
+      ) : view === 'week' ? (
+        /* Week View */
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button onClick={prevWeek} className="p-1.5 rounded-lg hover:bg-canvas transition-colors">
+                  <ChevronLeft className="h-5 w-5 text-muted" />
+                </button>
+                <h2 className="text-lg font-semibold text-ink min-w-[260px] text-center">
+                  {MONTH_NAMES[weekDates[0].getMonth()]} {weekDates[0].getDate()} &ndash; {
+                    weekDates[0].getMonth() !== weekDates[6].getMonth()
+                      ? `${MONTH_NAMES[weekDates[6].getMonth()]} `
+                      : ''
+                  }{weekDates[6].getDate()}, {weekDates[6].getFullYear()}
+                </h2>
+                <button onClick={nextWeek} className="p-1.5 rounded-lg hover:bg-canvas transition-colors">
+                  <ChevronRight className="h-5 w-5 text-muted" />
+                </button>
+              </div>
+              <button onClick={goToday} className="text-xs text-primary font-medium hover:underline">Today</button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <div className="min-w-[700px]">
+              {/* Day headers */}
+              <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-line">
+                <div className="py-2" />
+                {weekDates.map((d, i) => {
+                  const dateStr = toDateStr(d);
+                  const isToday = dateStr === today;
+                  return (
+                    <div key={i} className={`py-2 text-center border-l border-line ${isToday ? 'bg-primary-soft' : ''}`}>
+                      <div className="text-xs font-medium text-muted uppercase">{DAY_NAMES[i]}</div>
+                      <div className={`text-sm font-semibold mt-0.5 ${isToday ? 'text-primary' : 'text-ink'}`}>{d.getDate()}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* All-day row */}
+              {(() => {
+                const allDayByDate = weekDates.map(d => {
+                  const dateStr = toDateStr(d);
+                  return weekEventsForDate(dateStr).filter(e => !e.eventTime);
+                });
+                const hasAnyAllDay = allDayByDate.some(arr => arr.length > 0);
+                if (!hasAnyAllDay) return null;
+                return (
+                  <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-line bg-canvas/40">
+                    <div className="py-1 px-1 text-[10px] text-muted flex items-start justify-end pr-2 pt-2">all day</div>
+                    {allDayByDate.map((dayEvents, i) => (
+                      <div
+                        key={i}
+                        className="border-l border-line p-0.5 min-h-[28px] cursor-pointer hover:bg-canvas/60"
+                        onClick={() => openNew(toDateStr(weekDates[i]))}
+                      >
+                        {dayEvents.slice(0, 3).map(e => (
+                          <button
+                            key={e.id}
+                            onClick={ev => { ev.stopPropagation(); handleEventClick(ev, e); }}
+                            className={`w-full text-left text-[10px] px-1.5 py-0.5 rounded truncate block mb-0.5 ${
+                              e.completed ? 'line-through opacity-50' : ''
+                            } ${e.isAuto ? 'border border-dashed border-current/30 ' : ''}${CATEGORY_COLORS[e.category] || 'bg-gray-100 text-gray-800'}`}
+                          >
+                            {e.isAuto ? '✦ ' : ''}{e.title}
+                          </button>
+                        ))}
+                        {dayEvents.length > 3 && (
+                          <span className="text-[9px] text-muted px-1">+{dayEvents.length - 3}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Time grid */}
+              <div className="relative">
+                {WEEK_HOURS.map(hour => (
+                  <div key={hour} className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-line/50 h-[48px]">
+                    <div className="text-[10px] text-muted text-right pr-2 -translate-y-2">
+                      {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                    </div>
+                    {weekDates.map((d, i) => {
+                      const dateStr = toDateStr(d);
+                      const isToday = dateStr === today;
+                      return (
+                        <div
+                          key={i}
+                          className={`border-l border-line/50 cursor-pointer hover:bg-primary/5 transition-colors ${isToday ? 'bg-primary/[0.02]' : ''}`}
+                          onClick={() => openNew(dateStr, `${pad2(hour)}:00`)}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+
+                {/* Positioned timed events */}
+                {weekDates.map((d, colIndex) => {
+                  const dateStr = toDateStr(d);
+                  const timedEvents = weekEventsForDate(dateStr).filter(e => e.eventTime);
+                  return timedEvents.map(e => {
+                    const startHour = timeToHours(e.eventTime!);
+                    const endHour = e.endTime ? timeToHours(e.endTime) : startHour + 1;
+                    const topOffset = (startHour - WEEK_HOURS[0]) * 48;
+                    const height = Math.max((endHour - startHour) * 48, 20);
+                    // Skip events outside visible range
+                    if (startHour >= WEEK_HOURS[WEEK_HOURS.length - 1] + 1 || endHour <= WEEK_HOURS[0]) return null;
+                    const leftPercent = ((colIndex + 1) / 8) * 100;
+                    const widthPercent = (1 / 8) * 100;
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={ev => handleEventClick(ev, e)}
+                        className="absolute rounded px-1.5 py-0.5 text-[10px] leading-tight overflow-hidden text-left border border-white/50 hover:opacity-90 transition-opacity"
+                        style={{
+                          top: `${topOffset}px`,
+                          height: `${height}px`,
+                          left: `calc(${leftPercent}% + 2px)`,
+                          width: `calc(${widthPercent}% - 4px)`,
+                          backgroundColor: CATEGORY_BG[e.category] || '#f5f5f4',
+                          zIndex: 10,
+                        }}
+                      >
+                        <span className="font-medium block truncate">{e.title}</span>
+                        <span className="text-[9px] opacity-70 block truncate">
+                          {formatTime12(e.eventTime!)}
+                          {e.endTime && ` – ${formatTime12(e.endTime)}`}
+                        </span>
+                      </button>
+                    );
+                  });
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       ) : view === 'calendar' ? (
-        /* Calendar Grid */
+        /* Calendar Grid (Month) */
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -801,7 +1195,7 @@ export function Calendar() {
           </CardHeader>
           <CardContent className="p-0 sm:p-2">
             <div className="grid grid-cols-7 border-b border-line">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+              {DAY_NAMES.map(d => (
                 <div key={d} className="py-2 text-center text-xs font-medium text-muted uppercase tracking-wide">{d}</div>
               ))}
             </div>
@@ -835,7 +1229,7 @@ export function Calendar() {
                         {dayEvents.slice(0, 3).map(e => (
                           <button
                             key={e.id}
-                            onClick={ev => { ev.stopPropagation(); if (!e.isAuto) openEdit(e); }}
+                            onClick={ev => { ev.stopPropagation(); handleEventClick(ev, e); }}
                             className={`w-full text-left text-[10px] sm:text-xs px-1.5 py-0.5 rounded truncate block ${
                               e.completed ? 'line-through opacity-50' : ''
                             } ${e.isAuto ? 'border border-dashed border-current/30 ' : ''}${CATEGORY_COLORS[e.category] || 'bg-gray-100 text-gray-800'}`}
@@ -876,95 +1270,18 @@ export function Calendar() {
           </CardHeader>
           <CardContent className="p-0">
             {upcomingEvents.length === 0 ? (
-              <p className="text-center text-sm text-muted py-12">No upcoming events. Click "New Event" to create one.</p>
+              <p className="text-center text-sm text-muted py-12">No upcoming events. Click "New" to create one.</p>
             ) : (
               <div className="border-t border-line divide-y divide-line">
-                {upcomingEvents.map(event => {
-                  const days = daysFromNow(event.eventDate);
-                  const propNames = eventPropertyNames(event);
-                  const pb = PRIORITY_BADGE[event.priority];
-                  const expanded = event as ExpandedEvent;
-                  return (
-                    <div key={event.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-canvas/60">
-                      {isEventOnly(event) ? (
-                        <div className="w-5 h-5 rounded bg-canvas flex-shrink-0 flex items-center justify-center text-muted">
-                          <CalendarIcon className="h-3 w-3" />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleToggleComplete(expanded)}
-                          disabled={expanded.isVirtual}
-                          className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                            event.completed
-                              ? 'bg-primary border-primary text-white'
-                              : expanded.isVirtual
-                                ? 'border-line/50 cursor-not-allowed'
-                                : 'border-line hover:border-primary'
-                          }`}
-                        >
-                          {event.completed && <Check className="h-3 w-3" />}
-                        </button>
-                      )}
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(expanded)}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
-                            {event.title}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
-                            {categoryLabel(event.category)}
-                          </span>
-                          <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${
-                            isEventOnly(event)
-                              ? 'text-muted bg-canvas'
-                              : 'text-primary bg-primary-soft'
-                          }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
-                          {event.isAuto && (
-                            <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
-                          )}
-                          {event.priority !== 'medium' && !isEventOnly(event) && (
-                            <Badge variant={pb.variant}>{pb.label}</Badge>
-                          )}
-                          {event.isRecurring && (
-                            <span className="text-[10px] text-muted bg-canvas rounded px-1.5 py-0.5">
-                              {event.recurrenceRule ? RECURRENCE_LABELS[event.recurrenceRule] : 'Recurring'}
-                            </span>
-                          )}
-                          {event.reminderHours != null && (
-                            <Bell className="h-3 w-3 text-muted" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
-                          <span>{formatDate(event.eventDate)}</span>
-                          {event.endDate && <span>to {formatDate(event.endDate)}</span>}
-                          {event.eventTime && <span className="font-medium text-ink">{formatTime12(event.eventTime)}</span>}
-                          {days === 0 && <span className="text-primary font-medium">Today</span>}
-                          {days === 1 && <span className="text-primary font-medium">Tomorrow</span>}
-                          {days > 1 && days <= 7 && <span className="text-warning font-medium">In {days} days</span>}
-                          {propNames && <span>· {propNames}</span>}
-                        </div>
-                      </div>
-                      {!event.isAuto && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => openEdit(expanded)}
-                            className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
-                          ><Edit2 className="h-3.5 w-3.5" /></button>
-                          {!expanded.isVirtual && (
-                            <button
-                              onClick={() => handleDelete(event.id)}
-                              className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                            ><Trash2 className="h-3.5 w-3.5" /></button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {upcomingEvents.map(event => renderEventRow(event, true))}
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      {/* Event Preview Popup */}
+      {renderPreviewPopup()}
 
       {/* Event Modal */}
       {showModal && (
@@ -1012,15 +1329,27 @@ export function Calendar() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Time</label>
-                <input
-                  type="time"
-                  value={form.eventTime}
-                  onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  placeholder="Optional"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={form.eventTime}
+                    onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
+                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={form.endTime}
+                    onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
+                    min={!form.endDate && form.eventTime ? form.eventTime : undefined}
+                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  />
+                  {!form.eventTime && <p className="text-xs text-muted mt-1">Set start time first.</p>}
+                </div>
               </div>
 
               <div>
@@ -1183,12 +1512,18 @@ export function Calendar() {
               </div>
             </div>
             <div className="flex items-center justify-between p-5 border-t border-line">
-              <div>
+              <div className="flex items-center gap-3">
                 {editingEvent && (
                   <button
                     onClick={() => { handleDelete(editingEvent.id); setShowModal(false); }}
                     className="text-sm text-danger hover:underline"
                   >Delete</button>
+                )}
+                {editingEvent && (
+                  <button
+                    onClick={() => { openDuplicate(editingEvent as ExpandedEvent); }}
+                    className="text-sm text-muted hover:text-ink flex items-center gap-1"
+                  ><Copy className="h-3.5 w-3.5" /> Duplicate</button>
                 )}
               </div>
               <div className="flex items-center gap-2">

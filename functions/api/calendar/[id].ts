@@ -14,6 +14,7 @@ function serializeEvent(r: Record<string, unknown>, propertyIds?: string[]) {
     eventDate: r.event_date,
     endDate: r.end_date ?? undefined,
     eventTime: r.event_time ?? undefined,
+    endTime: r.end_time ?? undefined,
     priority: r.priority ?? 'medium',
     isRecurring: !!r.is_recurring,
     recurrenceRule: r.recurrence_rule ?? undefined,
@@ -115,7 +116,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     await env.DB.prepare(
       `UPDATE calendar_events SET
         property_id = ?, unit_id = ?, title = ?, description = ?,
-        category = ?, event_date = ?, end_date = ?, event_time = ?, priority = ?,
+        category = ?, event_date = ?, end_date = ?, event_time = ?, end_time = ?, priority = ?,
         is_recurring = ?, recurrence_rule = ?,
         completed = ?, completed_at = ?, notes = ?,
         reminder_hours = ?,
@@ -130,6 +131,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.eventDate ?? null,
       body.endDate ?? null,
       body.eventTime ?? null,
+      body.endTime ?? null,
       body.priority ?? 'medium',
       body.isRecurring ? 1 : 0,
       body.recurrenceRule ?? null,

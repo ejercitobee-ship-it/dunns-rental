@@ -14,6 +14,7 @@ function serializeEvent(r: Record<string, unknown>, propertyIds?: string[]) {
     eventDate: r.event_date,
     endDate: r.end_date ?? undefined,
     eventTime: r.event_time ?? undefined,
+    endTime: r.end_time ?? undefined,
     priority: r.priority ?? 'medium',
     isRecurring: !!r.is_recurring,
     recurrenceRule: r.recurrence_rule ?? undefined,
@@ -215,8 +216,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO calendar_events (id, property_id, unit_id, title, description, category, event_date, end_date, event_time, priority, is_recurring, recurrence_rule, notes, user_id, reminder_hours)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO calendar_events (id, property_id, unit_id, title, description, category, event_date, end_date, event_time, end_time, priority, is_recurring, recurrence_rule, notes, user_id, reminder_hours)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       id,
       primaryPropertyId,
@@ -227,6 +228,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.eventDate,
       body.endDate ?? null,
       body.eventTime ?? null,
+      body.endTime ?? null,
       body.priority ?? 'medium',
       body.isRecurring ? 1 : 0,
       body.recurrenceRule ?? null,

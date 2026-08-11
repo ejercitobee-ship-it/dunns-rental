@@ -443,6 +443,8 @@ export interface CalendarEvent {
   endDate?: string;
   /** Optional time of day, e.g. "09:00" or "14:30". */
   eventTime?: string;
+  /** Optional end time for duration events, e.g. "11:00" or "17:30". */
+  endTime?: string;
   priority: CalendarPriority;
   isRecurring: boolean;
   recurrenceRule?: RecurrenceRule;
