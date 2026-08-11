@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
 
 const API_BASE = '/api';
 
@@ -517,6 +517,46 @@ export const inspectionsApi = {
     apiRequest(`/inspections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/inspections/${id}`, { method: 'DELETE' }),
+};
+
+// Notices API (tenant notices and letters)
+export const noticesApi = {
+  getAll: (filters?: { tenantId?: string; leaseId?: string; type?: string; status?: string }): Promise<Notice[]> => {
+    const params = new URLSearchParams();
+    if (filters?.tenantId) params.set('tenantId', filters.tenantId);
+    if (filters?.leaseId) params.set('leaseId', filters.leaseId);
+    if (filters?.type) params.set('type', filters.type);
+    if (filters?.status) params.set('status', filters.status);
+    const qs = params.toString();
+    return apiRequest(`/notices${qs ? `?${qs}` : ''}`);
+  },
+  getById: (id: string): Promise<Notice> => apiRequest(`/notices/${id}`),
+  create: (data: {
+    propertyId?: string;
+    unitId?: string;
+    leaseId?: string;
+    tenantId?: string;
+    type: string;
+    title: string;
+    body: string;
+    noticeDate: string;
+    deliveryMethod?: string;
+    status?: string;
+  }): Promise<Notice> =>
+    apiRequest('/notices', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: {
+    type?: string;
+    title?: string;
+    body?: string;
+    noticeDate?: string;
+    deliveryMethod?: string;
+    deliveredAt?: string;
+    status?: string;
+    driveFileId?: string;
+  }): Promise<Notice> =>
+    apiRequest(`/notices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/notices/${id}`, { method: 'DELETE' }),
 };
 
 // Documents API (files stored in R2)

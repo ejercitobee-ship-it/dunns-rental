@@ -25,6 +25,7 @@ import type { LeaseStatus, PaymentMethod, LeaseAuditEntry, LeaseNotification } f
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { DepositReturnSection } from '../components/DepositReturnSection';
 import { InspectionSection } from '../components/InspectionSection';
+import { NoticeSection } from '../components/NoticeSection';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -1472,6 +1473,21 @@ export function TenantDetail() {
           leaseId={(lease || endedLease)!.id}
           propertyId={(lease || endedLease)!.propertyId}
           unitId={(lease || endedLease)!.unitId}
+        />
+      )}
+
+      {/* Notices & Letters */}
+      {id && (lease || endedLease) && (
+        <NoticeSection
+          tenantId={id}
+          tenantName={`${tenant.firstName} ${tenant.lastName}`.trim()}
+          leaseId={(lease || endedLease)!.id}
+          propertyId={(lease || endedLease)!.propertyId}
+          unitId={(lease || endedLease)!.unitId}
+          propertyAddress={(property || endedProp)?.address}
+          unitNumber={(unit || endedUnitRow)?.unitNumber}
+          monthlyRent={(lease || endedLease)!.monthlyRent}
+          leaseEndDate={(lease || endedLease)!.endDate}
         />
       )}
 

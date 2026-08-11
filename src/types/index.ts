@@ -781,3 +781,33 @@ export interface InspectionItem {
   photoDriveId?: string;
   createdAt: number;
 }
+
+// ---------------------------------------------------------------------------
+// Notices / letters
+// ---------------------------------------------------------------------------
+export type NoticeType = 'late_rent' | 'violation' | 'non_renewal' | 'rent_increase' | 'custom';
+export type NoticeStatus = 'draft' | 'sent' | 'acknowledged';
+export type DeliveryMethod = 'hand_delivered' | 'posted' | 'email' | 'certified_mail';
+
+export interface Notice {
+  id: string;
+  propertyId?: string;
+  unitId?: string;
+  leaseId?: string;
+  tenantId?: string;
+  type: NoticeType;
+  title: string;
+  body: string;
+  noticeDate: string;
+  deliveryMethod?: DeliveryMethod;
+  deliveredAt?: string;
+  status: NoticeStatus;
+  driveFileId?: string;
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Resolved on the client for display. */
+  tenantName?: string;
+  propertyName?: string;
+  unitNumber?: string;
+}

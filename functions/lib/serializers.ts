@@ -398,3 +398,24 @@ export function serializeInspectionItem(r: Row) {
     createdAt: r.created_at,
   };
 }
+
+export function serializeNotice(r: Row) {
+  return {
+    id: r.id,
+    propertyId: r.property_id ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    leaseId: r.lease_id ?? undefined,
+    tenantId: r.tenant_id ?? undefined,
+    type: r.type,
+    title: r.title,
+    body: r.body,
+    noticeDate: r.notice_date,
+    deliveryMethod: r.delivery_method ?? undefined,
+    deliveredAt: r.delivered_at ?? undefined,
+    status: r.status,
+    driveFileId: r.drive_file_id ?? undefined,
+    createdBy: r.created_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
