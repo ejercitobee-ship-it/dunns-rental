@@ -335,6 +335,7 @@ interface FormState {
   unitId: string;
   notes: string;
   reminderHours: string;
+  visibility: 'shared' | 'personal';
 }
 
 const EMPTY_FORM: FormState = {
@@ -342,7 +343,7 @@ const EMPTY_FORM: FormState = {
   eventDate: '', endDate: '', eventTime: '', endTime: '', priority: 'medium',
   isRecurring: false, recurrenceRule: '',
   propertyIds: new Set(), unitId: '', notes: '',
-  reminderHours: '',
+  reminderHours: '', visibility: 'shared',
 };
 
 /** WEEK VIEW: hours from 6 AM to 9 PM */
@@ -511,6 +512,7 @@ export function Calendar() {
       eventTime: time || '',
       endTime: '',
       propertyIds: new Set(),
+      visibility: 'shared',
     });
     setShowModal(true);
     setPreviewEvent(null);
@@ -538,6 +540,7 @@ export function Calendar() {
       unitId: source.unitId || '',
       notes: source.notes || '',
       reminderHours: source.reminderHours != null ? String(source.reminderHours) : '',
+      visibility: source.visibility || 'shared',
     });
     setShowModal(true);
     setPreviewEvent(null);
@@ -565,6 +568,7 @@ export function Calendar() {
       unitId: source.unitId || '',
       notes: source.notes || '',
       reminderHours: source.reminderHours != null ? String(source.reminderHours) : '',
+      visibility: source.visibility || 'shared',
     });
     setShowModal(true);
     setPreviewEvent(null);
@@ -591,6 +595,7 @@ export function Calendar() {
         unitId: form.unitId || undefined,
         notes: form.notes || undefined,
         reminderHours: form.reminderHours ? Number(form.reminderHours) : undefined,
+        visibility: form.visibility,
       };
       if (editingEvent) {
         await calendarApi.update(editingEvent.id, payload);
@@ -708,6 +713,9 @@ export function Calendar() {
               }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
               {event.isAuto && (
                 <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
+              )}
+              {event.visibility === 'personal' && (
+                <span className="text-[10px] text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 font-medium">🔒 Personal</span>
               )}
               {event.priority !== 'medium' && !isEventOnly(event) && (
                 <Badge variant={pb.variant}>{pb.label}</Badge>
@@ -828,6 +836,9 @@ export function Calendar() {
             }`}>{isEventOnly(event) ? 'Event' : 'Task'}</span>
             {event.isAuto && (
               <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
+            )}
+            {event.visibility === 'personal' && (
+              <span className="text-[10px] text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 font-medium">🔒</span>
             )}
             {event.priority !== 'medium' && !isEventOnly(event) && (
               <Badge variant={pb.variant}>{pb.label}</Badge>
@@ -1356,7 +1367,15 @@ export function Calendar() {
                 <label className="block text-sm font-medium text-ink mb-1">Category *</label>
                 <select
                   value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value as CalendarCategory }))}
+                  onChange={e => {
+                    const cat = e.target.value as CalendarCategory;
+                    setForm(f => ({
+                      ...f,
+                      category: cat,
+                      // Auto-default personal category to personal visibility
+                      visibility: cat === 'personal' && !editingEvent ? 'personal' : f.visibility,
+                    }));
+                  }}
                   className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
                 >
                   {CATEGORY_GROUPS.map(g => (
@@ -1379,6 +1398,32 @@ export function Calendar() {
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
                 </select>
+              </div>
+
+              {/* Visibility */}
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Visibility</label>
+                <div className="flex rounded-lg border border-line overflow-hidden text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, visibility: 'shared' }))}
+                    className={`flex-1 px-3 py-2 text-center transition-colors ${
+                      form.visibility === 'shared' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'
+                    }`}
+                  >👥 Shared</button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, visibility: 'personal' }))}
+                    className={`flex-1 px-3 py-2 text-center transition-colors ${
+                      form.visibility === 'personal' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'
+                    }`}
+                  >🔒 Personal</button>
+                </div>
+                <p className="text-xs text-muted mt-1">
+                  {form.visibility === 'personal'
+                    ? 'Only you can see this event.'
+                    : 'All team members can see this event.'}
+                </p>
               </div>
 
               {/* Multi-property assignment */}

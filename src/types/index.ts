@@ -455,6 +455,10 @@ export interface CalendarEvent {
   createdAt?: number;
   /** True for auto-generated events (birthdays, lease milestones). Not editable. */
   isAuto?: boolean;
+  /** 'shared' (everyone sees) or 'personal' (only creator sees). */
+  visibility?: 'shared' | 'personal';
+  /** The user who created this event. */
+  userId?: string;
 }
 
 export interface PortalPayment {
