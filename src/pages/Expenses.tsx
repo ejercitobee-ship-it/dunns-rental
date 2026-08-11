@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, Search,
   Plus, Download, Home, Calendar, DoorOpen, Trash2, Upload, Pencil, Copy,
@@ -82,6 +82,14 @@ export function Expenses() {
   // Editing a recorded expense or income requires the history permission.
   const canEditExpense = hasPermission('finances_history');
   const canEditIncome = hasPermission('finances_history');
+  // Description truncation: track which rows are expanded.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // Pagination: show N rows at a time with a "Load More" button.
+  const [visibleCount, setVisibleCount] = useState(10);
+  // Month filter: 'all' or 'YYYY-MM' string.
+  const [monthFilter, setMonthFilter] = useState<string>('all');
+  // Reset pagination when any filter or view changes.
+  useEffect(() => { setVisibleCount(10); }, [searchTerm, categoryFilter, propertyFilter, sourceFilter, monthFilter, view]);
 
   const accountMatch = useMemo(() => {
     const q = accountLookup.trim().toLowerCase();
@@ -281,10 +289,11 @@ export function Expenses() {
       
       const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
       const matchesProperty = propertyFilter === 'all' || expense.propertyId === propertyFilter;
-      
-      return matchesSearch && matchesCategory && matchesProperty;
+      const matchesMonth = monthFilter === 'all' || expense.date.substring(0, 7) === monthFilter;
+
+      return matchesSearch && matchesCategory && matchesProperty && matchesMonth;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [expenses, properties, units, searchTerm, categoryFilter, propertyFilter]);
+  }, [expenses, properties, units, searchTerm, categoryFilter, propertyFilter, monthFilter]);
 
   // The income list = rent collected (from paid rent_payments, read-only) PLUS
   // the manually-entered `incomes`, so the list matches the totals above and the
@@ -345,6 +354,14 @@ export function Expenses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomes, rentPayments, leases, tenants]);
 
+  // Unique year-month values across all data, sorted newest first.
+  const monthOptions = useMemo(() => {
+    const months = new Set<string>();
+    expenses.forEach(e => { if (e.date) months.add(e.date.substring(0, 7)); });
+    incomeRows.forEach(i => { if (i.date) months.add(i.date.substring(0, 7)); });
+    return [...months].sort((a, b) => b.localeCompare(a));
+  }, [expenses, incomeRows]);
+
   const filteredIncome = useMemo(() => {
     return incomeRows.filter(income => {
       const property = properties.find(p => p.id === income.propertyId);
@@ -360,10 +377,11 @@ export function Expenses() {
 
       const matchesProperty = propertyFilter === 'all' || income.propertyId === propertyFilter;
       const matchesSource = sourceFilter === 'all' || income.source === sourceFilter;
+      const matchesMonth = monthFilter === 'all' || income.date.substring(0, 7) === monthFilter;
 
-      return matchesSearch && matchesProperty && matchesSource;
+      return matchesSearch && matchesProperty && matchesSource && matchesMonth;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [incomeRows, properties, units, searchTerm, propertyFilter, sourceFilter]);
+  }, [incomeRows, properties, units, searchTerm, propertyFilter, sourceFilter, monthFilter]);
 
   const getProperty = (propertyId?: string) => propertyId ? properties.find(p => p.id === propertyId) : undefined;
   const getUnit = (unitId?: string) => unitId ? units.find(u => u.id === unitId) : null;
@@ -618,7 +636,19 @@ export function Expenses() {
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        
+        <select
+          className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+        >
+          <option value="all">All Months</option>
+          {monthOptions.map(m => (
+            <option key={m} value={m}>
+              {new Date(m + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </option>
+          ))}
+        </select>
+
         {view === 'expenses' && (
           <select
             className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-auto"
@@ -669,7 +699,7 @@ export function Expenses() {
               </thead>
               <tbody>
                 {view === 'expenses' ? (
-                  filteredExpenses.map(expense => {
+                  filteredExpenses.slice(0, visibleCount).map(expense => {
                     const property = getProperty(expense.propertyId);
                     const unit = getUnit(expense.unitId);
                     const CategoryIcon = expenseCategoryIcon(expense.category);
@@ -700,7 +730,20 @@ export function Expenses() {
                             )}
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-sm">{expense.description}</td>
+                        <td className="py-4 px-4 text-sm max-w-[200px]">
+                          <div
+                            onClick={() => setExpandedIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(expense.id)) next.delete(expense.id);
+                              else next.add(expense.id);
+                              return next;
+                            })}
+                            className={`cursor-pointer ${expandedIds.has(expense.id) ? 'whitespace-normal break-words' : 'truncate'}`}
+                            title={expense.description}
+                          >
+                            {expense.description}
+                          </div>
+                        </td>
                         <td className="py-4 px-4 text-sm text-muted">
                           {expense.vendor || '-'}
                         </td>
@@ -744,7 +787,7 @@ export function Expenses() {
                     );
                   })
                 ) : (
-                  filteredIncome.map(income => {
+                  filteredIncome.slice(0, visibleCount).map(income => {
                     const property = getProperty(income.propertyId);
                     const unit = getUnit(income.unitId);
 
@@ -771,8 +814,19 @@ export function Expenses() {
                         <td className="py-4 px-4 text-sm text-ink">
                           {income.tenantName || <span className="text-faint">{'—'}</span>}
                         </td>
-                        <td className="py-4 px-4 text-sm">
-                          {income.description}
+                        <td className="py-4 px-4 text-sm max-w-[200px]">
+                          <div
+                            onClick={() => setExpandedIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(income.id)) next.delete(income.id);
+                              else next.add(income.id);
+                              return next;
+                            })}
+                            className={`cursor-pointer ${expandedIds.has(income.id) ? 'whitespace-normal break-words' : 'truncate'}`}
+                            title={income.description}
+                          >
+                            {income.description}
+                          </div>
                           {income.rentMonth && (
                             <span className="block text-xs text-muted">{income.rentMonth}</span>
                           )}
@@ -824,6 +878,21 @@ export function Expenses() {
           </div>
         </CardContent>
       </Card>
+
+      {(() => {
+        const total = (view === 'expenses' ? filteredExpenses : filteredIncome).length;
+        const remaining = total - visibleCount;
+        return remaining > 0 ? (
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              onClick={() => setVisibleCount(prev => prev + 10)}
+            >
+              Load More ({remaining} remaining)
+            </Button>
+          </div>
+        ) : null;
+      })()}
 
       {(view === 'expenses' ? filteredExpenses : filteredIncome).length === 0 && (
         <div className="text-center py-12">
