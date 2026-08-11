@@ -422,8 +422,9 @@ export function isPortalRole(roleId?: string): boolean {
 export type CalendarCategory =
   | 'rent_due' | 'utility_due' | 'mortgage' | 'hoa' | 'property_tax' | 'insurance'
   | 'inspection' | 'smoke_detector' | 'hvac' | 'pest_control' | 'lawn_care' | 'snow_removal' | 'maintenance'
-  | 'lease_expiration' | 'lease_renewal' | 'move_in' | 'move_out'
-  | 'contractor' | 'vendor' | 'licensing' | 'city_inspection' | 'custom';
+  | 'lease_expiration' | 'lease_renewal' | 'lease_termination' | 'move_in' | 'move_out'
+  | 'contractor' | 'vendor' | 'licensing' | 'city_inspection'
+  | 'birthday' | 'personal' | 'custom';
 
 export type CalendarPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type RecurrenceRule = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semi_annually' | 'annually';
@@ -438,6 +439,8 @@ export interface CalendarEvent {
   description?: string;
   category: CalendarCategory;
   eventDate: string;
+  /** Optional end date for multi-day events (blocks the range). */
+  endDate?: string;
   /** Optional time of day, e.g. "09:00" or "14:30". */
   eventTime?: string;
   priority: CalendarPriority;
@@ -448,6 +451,8 @@ export interface CalendarEvent {
   notes?: string;
   reminderHours?: number;
   createdAt?: number;
+  /** True for auto-generated events (birthdays, lease milestones). Not editable. */
+  isAuto?: boolean;
 }
 
 export interface PortalPayment {

@@ -14,6 +14,7 @@ function mapApiUser(apiUser: ApiUser, rolesList: Role[]): User {
     email: apiUser.email,
     phone: apiUser.phone,
     department: apiUser.department,
+    birthdate: apiUser.birthdate,
     roleId: apiUser.roleId,
     role,
     isActive: apiUser.isActive,
@@ -344,6 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleId: userData.roleId,
       phone: userData.phone,
       department: userData.department,
+      birthdate: userData.birthdate,
     });
     await refreshTeam();
     return { tempPassword: result?.tempPassword, emailed: result?.emailed };
@@ -355,6 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       lastName: updatedUser.lastName,
       phone: updatedUser.phone,
       department: updatedUser.department,
+      birthdate: updatedUser.birthdate,
       isActive: updatedUser.isActive,
       roleId: updatedUser.roleId,
     });

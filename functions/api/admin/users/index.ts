@@ -20,6 +20,7 @@ interface UserRow {
   is_active: number | null;
   phone: string | null;
   department: string | null;
+  birthdate: string | null;
   created_at: number | null;
   role: string | null;
   image: string | null;
@@ -35,6 +36,7 @@ export function serializeUser(r: UserRow) {
     email: r.email,
     phone: r.phone ?? undefined,
     department: r.department ?? undefined,
+    birthdate: r.birthdate ?? undefined,
     roleId: r.role || 'viewer',
     isActive: r.is_active !== 0,
     createdAt: r.created_at ? new Date(r.created_at * 1000).toISOString() : new Date().toISOString(),
@@ -63,7 +65,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const { results } = await env.DB.prepare(
-      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.created_at, u.image, r.role AS role
+      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate, u.created_at, u.image, r.role AS role
          FROM user u
          LEFT JOIN user_roles r ON r.user_id = u.id
         ORDER BY u.created_at DESC`
@@ -93,6 +95,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       roleId?: string;
       phone?: string;
       department?: string;
+      birthdate?: string;
     };
 
     const firstName = body.firstName?.trim();
@@ -128,9 +131,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const name = `${firstName} ${lastName}`;
 
     await env.DB.prepare(
-      'INSERT INTO user (id, name, email, email_verified, image, is_active, phone, department, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)'
+      'INSERT INTO user (id, name, email, email_verified, image, is_active, phone, department, birthdate, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)'
     )
-      .bind(userId, name, email, 0, null, body.phone ?? null, body.department ?? null, now, now)
+      .bind(userId, name, email, 0, null, body.phone ?? null, body.department ?? null, body.birthdate ?? null, now, now)
       .run();
 
     await env.DB.prepare(

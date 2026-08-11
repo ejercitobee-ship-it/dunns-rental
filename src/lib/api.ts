@@ -92,6 +92,7 @@ export interface ApiUser {
   email: string;
   phone?: string;
   department?: string;
+  birthdate?: string;
   roleId: string;
   isActive: boolean;
   createdAt: string;
@@ -102,12 +103,12 @@ export const adminApi = {
   listUsers: (): Promise<ApiUser[]> => apiRequest('/admin/users'),
   createUser: (data: {
     firstName: string; lastName: string; email: string; roleId: string;
-    phone?: string; department?: string;
+    phone?: string; department?: string; birthdate?: string;
   }): Promise<{ success: boolean; user: unknown; emailed?: boolean; tempPassword?: string; message?: string }> =>
     apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: {
     firstName: string; lastName: string; phone?: string; department?: string;
-    isActive: boolean; roleId: string;
+    birthdate?: string; isActive: boolean; roleId: string;
   }): Promise<ApiUser> =>
     apiRequest(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: string) =>

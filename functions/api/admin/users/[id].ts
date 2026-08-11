@@ -10,6 +10,7 @@ interface UserRow {
   is_active: number | null;
   phone: string | null;
   department: string | null;
+  birthdate: string | null;
   created_at: number | null;
   role: string | null;
   image: string | null;
@@ -17,7 +18,7 @@ interface UserRow {
 
 async function loadUser(env: Env, id: string) {
   return env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.created_at, u.image, r.role AS role
+    `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate, u.created_at, u.image, r.role AS role
        FROM user u
        LEFT JOIN user_roles r ON r.user_id = u.id
       WHERE u.id = ?`
@@ -42,6 +43,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       lastName?: string;
       phone?: string;
       department?: string;
+      birthdate?: string;
       isActive?: boolean;
       roleId?: string;
     };
@@ -53,9 +55,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const now = Math.floor(Date.now() / 1000);
 
     await env.DB.prepare(
-      'UPDATE user SET name = ?, phone = ?, department = ?, is_active = ?, updated_at = ? WHERE id = ?'
+      'UPDATE user SET name = ?, phone = ?, department = ?, birthdate = ?, is_active = ?, updated_at = ? WHERE id = ?'
     )
-      .bind(name, body.phone ?? null, body.department ?? null, isActive, now, id)
+      .bind(name, body.phone ?? null, body.department ?? null, body.birthdate ?? null, isActive, now, id)
       .run();
 
     if (body.roleId && body.roleId !== existing.role) {

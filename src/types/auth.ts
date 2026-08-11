@@ -31,6 +31,8 @@ export interface User {
   createdAt: string;
   phone?: string;
   department?: string;
+  /** YYYY-MM-DD birthdate for calendar birthday events. */
+  birthdate?: string;
   photoUrl?: string | null;
   twoFactorEnabled?: boolean;
   /** Merged permissions from the server: role permissions + per-user overrides.

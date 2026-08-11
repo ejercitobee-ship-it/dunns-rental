@@ -35,6 +35,7 @@ export function Users() {
     phone: '',
     roleId: '',
     department: '',
+    birthdate: '',
     isActive: true,
   });
 
@@ -166,6 +167,7 @@ export function Users() {
       phone: '',
       roleId: assignableRoles[0]?.id || '',
       department: '',
+      birthdate: '',
       isActive: true,
     });
   };
@@ -200,6 +202,7 @@ export function Users() {
       phone: user.phone || '',
       roleId: user.roleId,
       department: user.department || '',
+      birthdate: user.birthdate || '',
       isActive: user.isActive,
     });
     setIsEditUserOpen(true);
@@ -674,6 +677,13 @@ export function Users() {
               placeholder="e.g., Property Management" />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium mb-1">Birthdate</label>
+            <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={userForm.birthdate} onChange={(e) => setUserForm({...userForm, birthdate: e.target.value})} />
+            <p className="text-xs text-muted mt-1">Shows on the team calendar automatically.</p>
+          </div>
+
           <div className="flex items-center gap-2">
             <input type="checkbox" id="isActive" className="w-4 h-4 rounded border-line-strong"
               checked={userForm.isActive} onChange={(e) => setUserForm({...userForm, isActive: e.target.checked})} />
@@ -733,6 +743,12 @@ export function Users() {
             <label className="block text-sm font-medium mb-1">Department</label>
             <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
               value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Birthdate</label>
+            <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={userForm.birthdate} onChange={(e) => setUserForm({...userForm, birthdate: e.target.value})} />
           </div>
 
           <div className="flex items-center gap-2">

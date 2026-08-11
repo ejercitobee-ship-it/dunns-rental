@@ -40,13 +40,16 @@ const CATEGORY_GROUPS: { label: string; items: { value: CalendarCategory; label:
     items: [
       { value: 'lease_expiration', label: 'Lease Expiration' },
       { value: 'lease_renewal', label: 'Lease Renewal' },
+      { value: 'lease_termination', label: 'Lease Termination' },
       { value: 'move_in', label: 'Move In' },
       { value: 'move_out', label: 'Move Out' },
     ],
   },
   {
-    label: 'Administrative',
+    label: 'Personal & Administrative',
     items: [
+      { value: 'birthday', label: 'Birthday' },
+      { value: 'personal', label: 'Personal' },
       { value: 'contractor', label: 'Contractor' },
       { value: 'vendor', label: 'Vendor' },
       { value: 'licensing', label: 'Licensing' },
@@ -72,8 +75,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   maintenance: 'bg-yellow-100 text-yellow-800',
   lease_expiration: 'bg-rose-100 text-rose-800',
   lease_renewal: 'bg-teal-100 text-teal-800',
+  lease_termination: 'bg-red-100 text-red-800',
   move_in: 'bg-emerald-100 text-emerald-800',
   move_out: 'bg-pink-100 text-pink-800',
+  birthday: 'bg-pink-100 text-pink-800',
+  personal: 'bg-violet-100 text-violet-800',
   contractor: 'bg-fuchsia-100 text-fuchsia-800',
   vendor: 'bg-purple-100 text-purple-800',
   licensing: 'bg-gray-100 text-gray-800',
@@ -279,6 +285,7 @@ interface FormState {
   description: string;
   category: CalendarCategory;
   eventDate: string;
+  endDate: string;
   eventTime: string;
   priority: CalendarPriority;
   isRecurring: boolean;
@@ -291,7 +298,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   title: '', description: '', category: 'custom',
-  eventDate: '', eventTime: '', priority: 'medium',
+  eventDate: '', endDate: '', eventTime: '', priority: 'medium',
   isRecurring: false, recurrenceRule: '',
   propertyIds: new Set(), unitId: '', notes: '',
   reminderHours: '',
@@ -350,7 +357,12 @@ export function Calendar() {
   [filteredEvents, calendarWindowStart, calendarWindowEnd]);
 
   const eventsForDate = useCallback((dateStr: string) =>
-    expandedCalendarEvents.filter(e => e.eventDate === dateStr),
+    expandedCalendarEvents.filter(e => {
+      if (e.eventDate === dateStr) return true;
+      // Multi-day: show on every day between eventDate and endDate
+      if (e.endDate && dateStr > e.eventDate && dateStr <= e.endDate) return true;
+      return false;
+    }),
   [expandedCalendarEvents]);
 
   const today = todayLocalDate();
@@ -402,11 +414,13 @@ export function Calendar() {
 
   const openNew = (date?: string) => {
     setEditingEvent(null);
-    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate(), eventTime: '', propertyIds: new Set() });
+    setForm({ ...EMPTY_FORM, eventDate: date || todayLocalDate(), endDate: '', eventTime: '', propertyIds: new Set() });
     setShowModal(true);
   };
 
   const openEdit = (event: ExpandedEvent) => {
+    // Auto-generated events (birthdays, lease milestones) are read-only
+    if (event.isAuto) return;
     const source = event.isVirtual
       ? events.find(e => e.id === event.sourceEventId) || event
       : event;
@@ -417,6 +431,7 @@ export function Calendar() {
       description: source.description || '',
       category: source.category,
       eventDate: source.eventDate,
+      endDate: source.endDate || '',
       eventTime: source.eventTime || '',
       priority: source.priority,
       isRecurring: source.isRecurring,
@@ -439,6 +454,7 @@ export function Calendar() {
         description: form.description || undefined,
         category: form.category,
         eventDate: form.eventDate,
+        endDate: form.endDate || undefined,
         eventTime: form.eventTime || undefined,
         priority: form.priority,
         isRecurring: form.isRecurring,
@@ -673,19 +689,23 @@ export function Calendar() {
                   const expanded = event as ExpandedEvent;
                   return (
                     <div key={event.id + (expanded.isVirtual ? `-v` : '')} className="flex items-center gap-3 px-5 py-4 hover:bg-canvas/60">
-                      <button
-                        onClick={() => handleToggleComplete(expanded)}
-                        disabled={expanded.isVirtual}
-                        className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                          event.completed
-                            ? 'bg-primary border-primary text-white'
-                            : expanded.isVirtual
-                              ? 'border-line/50 cursor-not-allowed'
-                              : 'border-line hover:border-primary'
-                        }`}
-                      >
-                        {event.completed && <Check className="h-3.5 w-3.5" />}
-                      </button>
+                      {event.isAuto ? (
+                        <div className="w-6 h-6 rounded-full bg-canvas flex-shrink-0 flex items-center justify-center text-muted text-xs">✦</div>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleComplete(expanded)}
+                          disabled={expanded.isVirtual}
+                          className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                            event.completed
+                              ? 'bg-primary border-primary text-white'
+                              : expanded.isVirtual
+                                ? 'border-line/50 cursor-not-allowed'
+                                : 'border-line hover:border-primary'
+                          }`}
+                        >
+                          {event.completed && <Check className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(expanded)}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-base font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
@@ -694,7 +714,10 @@ export function Calendar() {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
                             {categoryLabel(event.category)}
                           </span>
-                          {event.priority !== 'medium' && (
+                          {event.isAuto && (
+                            <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
+                          )}
+                          {event.priority !== 'medium' && !event.isAuto && (
                             <Badge variant={pb.variant}>{pb.label}</Badge>
                           )}
                           {event.isRecurring && (
@@ -716,18 +739,20 @@ export function Calendar() {
                           {event.notes && <span className="text-xs">· {event.notes}</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => openEdit(expanded)}
-                          className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
-                        ><Edit2 className="h-4 w-4" /></button>
-                        {!expanded.isVirtual && (
+                      {!event.isAuto && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <button
-                            onClick={() => handleDelete(event.id)}
-                            className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                          ><Trash2 className="h-4 w-4" /></button>
-                        )}
-                      </div>
+                            onClick={() => openEdit(expanded)}
+                            className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
+                          ><Edit2 className="h-4 w-4" /></button>
+                          {!expanded.isVirtual && (
+                            <button
+                              onClick={() => handleDelete(event.id)}
+                              className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                            ><Trash2 className="h-4 w-4" /></button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -790,12 +815,12 @@ export function Calendar() {
                         {dayEvents.slice(0, 3).map(e => (
                           <button
                             key={e.id}
-                            onClick={ev => { ev.stopPropagation(); openEdit(e); }}
+                            onClick={ev => { ev.stopPropagation(); if (!e.isAuto) openEdit(e); }}
                             className={`w-full text-left text-[10px] sm:text-xs px-1.5 py-0.5 rounded truncate block ${
                               e.completed ? 'line-through opacity-50' : ''
-                            } ${CATEGORY_COLORS[e.category] || 'bg-gray-100 text-gray-800'}`}
+                            } ${e.isAuto ? 'border border-dashed border-current/30 ' : ''}${CATEGORY_COLORS[e.category] || 'bg-gray-100 text-gray-800'}`}
                           >
-                            {e.eventTime ? `${formatTime12(e.eventTime)} ` : ''}{e.title}
+                            {e.isAuto ? '✦ ' : ''}{e.eventTime ? `${formatTime12(e.eventTime)} ` : ''}{e.title}
                           </button>
                         ))}
                         {dayEvents.length > 3 && (
@@ -841,19 +866,23 @@ export function Calendar() {
                   const expanded = event as ExpandedEvent;
                   return (
                     <div key={event.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-canvas/60">
-                      <button
-                        onClick={() => handleToggleComplete(expanded)}
-                        disabled={expanded.isVirtual}
-                        className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                          event.completed
-                            ? 'bg-primary border-primary text-white'
-                            : expanded.isVirtual
-                              ? 'border-line/50 cursor-not-allowed'
-                              : 'border-line hover:border-primary'
-                        }`}
-                      >
-                        {event.completed && <Check className="h-3 w-3" />}
-                      </button>
+                      {event.isAuto ? (
+                        <div className="w-5 h-5 rounded bg-canvas flex-shrink-0 flex items-center justify-center text-muted text-[10px]">✦</div>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleComplete(expanded)}
+                          disabled={expanded.isVirtual}
+                          className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                            event.completed
+                              ? 'bg-primary border-primary text-white'
+                              : expanded.isVirtual
+                                ? 'border-line/50 cursor-not-allowed'
+                                : 'border-line hover:border-primary'
+                          }`}
+                        >
+                          {event.completed && <Check className="h-3 w-3" />}
+                        </button>
+                      )}
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(expanded)}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-sm font-medium ${event.completed ? 'line-through text-muted' : 'text-ink'}`}>
@@ -862,7 +891,10 @@ export function Calendar() {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${CATEGORY_COLORS[event.category] || 'bg-gray-100'}`}>
                             {categoryLabel(event.category)}
                           </span>
-                          {event.priority !== 'medium' && (
+                          {event.isAuto && (
+                            <span className="text-[10px] text-primary bg-primary-soft rounded px-1.5 py-0.5 font-medium">Auto</span>
+                          )}
+                          {event.priority !== 'medium' && !event.isAuto && (
                             <Badge variant={pb.variant}>{pb.label}</Badge>
                           )}
                           {event.isRecurring && (
@@ -876,6 +908,7 @@ export function Calendar() {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
                           <span>{formatDate(event.eventDate)}</span>
+                          {event.endDate && <span>to {formatDate(event.endDate)}</span>}
                           {event.eventTime && <span className="font-medium text-ink">{formatTime12(event.eventTime)}</span>}
                           {days === 0 && <span className="text-primary font-medium">Today</span>}
                           {days === 1 && <span className="text-primary font-medium">Tomorrow</span>}
@@ -883,18 +916,20 @@ export function Calendar() {
                           {propNames && <span>· {propNames}</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => openEdit(expanded)}
-                          className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
-                        ><Edit2 className="h-3.5 w-3.5" /></button>
-                        {!expanded.isVirtual && (
+                      {!event.isAuto && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <button
-                            onClick={() => handleDelete(event.id)}
-                            className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                          ><Trash2 className="h-3.5 w-3.5" /></button>
-                        )}
-                      </div>
+                            onClick={() => openEdit(expanded)}
+                            className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
+                          ><Edit2 className="h-3.5 w-3.5" /></button>
+                          {!expanded.isVirtual && (
+                            <button
+                              onClick={() => handleDelete(event.id)}
+                              className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                            ><Trash2 className="h-3.5 w-3.5" /></button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -929,7 +964,7 @@ export function Calendar() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Date *</label>
+                  <label className="block text-sm font-medium text-ink mb-1">Start Date *</label>
                   <input
                     type="date"
                     value={form.eventDate}
@@ -938,15 +973,27 @@ export function Calendar() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Time</label>
+                  <label className="block text-sm font-medium text-ink mb-1">End Date</label>
                   <input
-                    type="time"
-                    value={form.eventTime}
-                    onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
+                    type="date"
+                    value={form.endDate}
+                    onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                    min={form.eventDate || undefined}
                     className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                    placeholder="Optional"
                   />
+                  {!form.endDate && <p className="text-xs text-muted mt-1">Leave blank for a single day.</p>}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Time</label>
+                <input
+                  type="time"
+                  value={form.eventTime}
+                  onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  placeholder="Optional"
+                />
               </div>
 
               <div>
