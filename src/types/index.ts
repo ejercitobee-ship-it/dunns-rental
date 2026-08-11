@@ -742,3 +742,42 @@ export interface DepositDeduction {
   amount: number;
   createdAt: number;
 }
+
+// ---------------------------------------------------------------------------
+// Inspection reports
+// ---------------------------------------------------------------------------
+export type InspectionType = 'move_in' | 'move_out' | 'periodic';
+export type InspectionStatus = 'draft' | 'completed';
+export type ItemCondition = 'excellent' | 'good' | 'fair' | 'poor' | 'damaged' | 'na';
+
+export interface Inspection {
+  id: string;
+  propertyId?: string;
+  unitId?: string;
+  leaseId?: string;
+  tenantId?: string;
+  type: InspectionType;
+  inspectionDate: string;
+  inspectorName?: string;
+  status: InspectionStatus;
+  notes?: string;
+  driveFileId?: string;
+  createdAt: number;
+  updatedAt: number;
+  items?: InspectionItem[];
+  /** Resolved on the client for display. */
+  tenantName?: string;
+  propertyName?: string;
+  unitNumber?: string;
+}
+
+export interface InspectionItem {
+  id: string;
+  inspectionId: string;
+  room: string;
+  item: string;
+  condition: ItemCondition;
+  notes?: string;
+  photoDriveId?: string;
+  createdAt: number;
+}

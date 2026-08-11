@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection } from '../types';
 
 const API_BASE = '/api';
 
@@ -478,6 +478,45 @@ export const depositReturnsApi = {
     apiRequest(`/deposit-returns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/deposit-returns/${id}`, { method: 'DELETE' }),
+};
+
+// Inspections API (move-in / move-out / periodic property inspections)
+export const inspectionsApi = {
+  getAll: (filters?: { unitId?: string; leaseId?: string; tenantId?: string; type?: string }): Promise<Inspection[]> => {
+    const params = new URLSearchParams();
+    if (filters?.unitId) params.set('unitId', filters.unitId);
+    if (filters?.leaseId) params.set('leaseId', filters.leaseId);
+    if (filters?.tenantId) params.set('tenantId', filters.tenantId);
+    if (filters?.type) params.set('type', filters.type);
+    const qs = params.toString();
+    return apiRequest(`/inspections${qs ? `?${qs}` : ''}`);
+  },
+  getById: (id: string): Promise<Inspection> => apiRequest(`/inspections/${id}`),
+  create: (data: {
+    propertyId?: string;
+    unitId?: string;
+    leaseId?: string;
+    tenantId?: string;
+    type: string;
+    inspectionDate: string;
+    inspectorName?: string;
+    status?: string;
+    notes?: string;
+    items?: Array<{ room: string; item: string; condition: string; notes?: string }>;
+  }): Promise<Inspection> =>
+    apiRequest('/inspections', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: {
+    type?: string;
+    inspectionDate?: string;
+    inspectorName?: string;
+    status?: string;
+    notes?: string;
+    driveFileId?: string;
+    items?: Array<{ room: string; item: string; condition: string; notes?: string }>;
+  }): Promise<Inspection> =>
+    apiRequest(`/inspections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/inspections/${id}`, { method: 'DELETE' }),
 };
 
 // Documents API (files stored in R2)

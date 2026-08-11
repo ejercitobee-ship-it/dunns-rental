@@ -24,6 +24,7 @@ import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod, LeaseAuditEntry, LeaseNotification } from '../types';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { DepositReturnSection } from '../components/DepositReturnSection';
+import { InspectionSection } from '../components/InspectionSection';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -1461,6 +1462,16 @@ export function TenantDetail() {
           unitId={(lease || endedLease)!.unitId}
           depositAmount={(lease || endedLease)!.securityDeposit || 0}
           leaseStatus={(lease || endedLease)!.status || 'active'}
+        />
+      )}
+
+      {/* Inspection reports (move-in / move-out checklists) */}
+      {id && (lease || endedLease) && (
+        <InspectionSection
+          tenantId={id}
+          leaseId={(lease || endedLease)!.id}
+          propertyId={(lease || endedLease)!.propertyId}
+          unitId={(lease || endedLease)!.unitId}
         />
       )}
 

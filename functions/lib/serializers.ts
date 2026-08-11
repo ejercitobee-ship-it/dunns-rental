@@ -367,3 +367,34 @@ export function serializeDepositDeduction(r: Row) {
     createdAt: r.created_at,
   };
 }
+
+export function serializeInspection(r: Row) {
+  return {
+    id: r.id,
+    propertyId: r.property_id ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    leaseId: r.lease_id ?? undefined,
+    tenantId: r.tenant_id ?? undefined,
+    type: r.type,
+    inspectionDate: r.inspection_date,
+    inspectorName: r.inspector_name ?? undefined,
+    status: r.status,
+    notes: r.notes ?? undefined,
+    driveFileId: r.drive_file_id ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function serializeInspectionItem(r: Row) {
+  return {
+    id: r.id,
+    inspectionId: r.inspection_id,
+    room: r.room,
+    item: r.item,
+    condition: r.condition,
+    notes: r.notes ?? undefined,
+    photoDriveId: r.photo_drive_id ?? undefined,
+    createdAt: r.created_at,
+  };
+}
