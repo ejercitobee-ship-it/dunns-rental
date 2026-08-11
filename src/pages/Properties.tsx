@@ -431,38 +431,34 @@ export function Properties() {
 
       {/* Portfolio Summary */}
       <div className="grid gap-4 sm:gap-5 grid-cols-2 lg:grid-cols-4">
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center"><Building2 className="h-4 w-4" /></span>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Properties</span>
-          </div>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum">{properties.length}</p>
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.04] rounded-bl-[40px]" />
+          <span className="text-xs font-medium text-muted uppercase tracking-wider">Properties</span>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum mt-2">{properties.length}</p>
+          <div className="mt-3 w-8 h-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><Building2 className="h-4 w-4" /></div>
         </div>
 
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center"><DoorOpen className="h-4 w-4" /></span>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Units</span>
-          </div>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum">{totalUnits}</p>
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.04] rounded-bl-[40px]" />
+          <span className="text-xs font-medium text-muted uppercase tracking-wider">Total Units</span>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum mt-2">{totalUnits}</p>
+          <div className="mt-3 w-8 h-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><DoorOpen className="h-4 w-4" /></div>
         </div>
 
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-8 h-8 rounded-full bg-positive/10 text-positive grid place-items-center"><Home className="h-4 w-4" /></span>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Occupancy</span>
-          </div>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-positive tnum">{occupancyPct}%</p>
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-positive/[0.06] rounded-bl-[40px]" />
+          <span className="text-xs font-medium text-muted uppercase tracking-wider">Occupancy</span>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-positive tnum mt-2">{occupancyPct}%</p>
           <p className="text-xs text-muted mt-1">{occupiedUnits} of {totalUnits} occupied</p>
+          <div className="mt-2 w-8 h-8 rounded-xl bg-positive/10 text-positive grid place-items-center"><Home className="h-4 w-4" /></div>
         </div>
 
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center"><DollarSign className="h-4 w-4" /></span>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Monthly Revenue</span>
-          </div>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum">{formatCurrency(totalMonthlyRent)}</p>
+        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.04] rounded-bl-[40px]" />
+          <span className="text-xs font-medium text-muted uppercase tracking-wider">Monthly Revenue</span>
+          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum mt-2">{formatCurrency(totalMonthlyRent)}</p>
           <p className="text-xs text-muted mt-1">Potential rent</p>
+          <div className="mt-2 w-8 h-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><DollarSign className="h-4 w-4" /></div>
         </div>
       </div>
 
@@ -477,105 +473,102 @@ export function Properties() {
           const propRent = propertyUnits.reduce((s, u) => s + u.monthlyRent, 0);
 
           return (
-            <div key={property.id} className="bg-surface rounded-2xl border border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-              {/* Property Header */}
-              <div className="border-b border-line">
-                {/* Accent line */}
-                <div className="h-1 bg-gradient-to-r from-primary via-primary/60 to-transparent" />
+            <div key={property.id} className="rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow">
+              {/* Property Header — rich gradient */}
+              <div className="bg-gradient-to-br from-[#1e4a3a] via-[#24503f] to-[#2d6350] px-5 sm:px-6 py-5 sm:py-6 relative">
+                {/* Subtle pattern overlay */}
+                <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
 
-                <div className="px-5 sm:px-6 py-4 sm:py-5">
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Property info */}
-                    <button
-                      type="button"
-                      onClick={() => toggleProperty(property.id)}
-                      aria-expanded={open}
-                      className="flex items-start gap-3 sm:gap-4 min-w-0 text-left group/toggle"
-                    >
-                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-primary/8 text-primary grid place-items-center flex-shrink-0 mt-0.5">
-                        <Building2 className="h-5 w-5 sm:h-6 sm:w-6" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg sm:text-xl font-display font-semibold text-ink truncate">{property.name}</h3>
-                          <ChevronDown className={`h-4 w-4 text-muted flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-                        </div>
-                        <p className="text-sm text-muted truncate mt-0.5">{property.address}, {property.city}, {property.state} {property.zipCode}</p>
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink bg-canvas rounded-full px-2.5 py-1">
-                            <DoorOpen className="h-3 w-3 text-muted" />
-                            {propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-positive bg-positive-soft rounded-full px-2.5 py-1">
-                            {occupiedCount} occupied
-                          </span>
-                          {vacantCount > 0 && (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warning bg-warning-soft rounded-full px-2.5 py-1">
-                              {vacantCount} vacant
-                            </span>
-                          )}
-                          {propRent > 0 && (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink bg-canvas rounded-full px-2.5 py-1 tnum">
-                              <DollarSign className="h-3 w-3 text-muted" />
-                              {formatCurrency(propRent)}/mo
-                            </span>
-                          )}
-                          {propUtilTypes.length > 0 && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted bg-canvas rounded-full px-2 py-1">
-                              {propUtilTypes.map(t => { const M = UTILITY_META[t]; return M ? <M.icon key={t} className="h-3 w-3" /> : null; })}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <Link to={`/properties/${property.id}`}>
-                        <Button size="sm" variant="outline" className="text-xs">
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          Profile
-                        </Button>
-                      </Link>
-                      {canCreateUnit && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs"
-                          onClick={() => {
-                            setPropertyForUnit(property);
-                            setIsAddUnitOpen(true);
-                          }}
-                        >
-                          <Plus className="h-3 w-3 mr-1" />
-                          Unit
-                        </Button>
-                      )}
-                      {canEditProperty && (
-                        <button
-                          onClick={() => handleEditProperty(property)}
-                          className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {canDeleteProperty && (
-                        <button
-                          onClick={() => setPropertyToDelete(property)}
-                          className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                <div className="relative flex items-start justify-between gap-4">
+                  {/* Property info */}
+                  <button
+                    type="button"
+                    onClick={() => toggleProperty(property.id)}
+                    aria-expanded={open}
+                    className="flex items-start gap-3 sm:gap-4 min-w-0 text-left"
+                  >
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/15 backdrop-blur-sm grid place-items-center flex-shrink-0">
+                      <Building2 className="h-6 w-6 sm:h-7 sm:w-7 text-white/90" />
                     </div>
+                    <div className="min-w-0 pt-0.5">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl sm:text-2xl font-display font-semibold text-white truncate">{property.name}</h3>
+                        <ChevronDown className={`h-4 w-4 text-white/50 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                      </div>
+                      <p className="text-sm text-white/70 truncate mt-0.5">{property.address}, {property.city}, {property.state} {property.zipCode}</p>
+                      <div className="flex items-center gap-2 mt-3 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-white/15 rounded-full px-2.5 py-1">
+                          <DoorOpen className="h-3 w-3" />
+                          {propertyUnits.length} {propertyUnits.length === 1 ? 'unit' : 'units'}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-200 bg-emerald-400/20 rounded-full px-2.5 py-1">
+                          {occupiedCount} occupied
+                        </span>
+                        {vacantCount > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-200 bg-amber-400/20 rounded-full px-2.5 py-1">
+                            {vacantCount} vacant
+                          </span>
+                        )}
+                        {propRent > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/90 bg-white/10 rounded-full px-2.5 py-1 tnum">
+                            {formatCurrency(propRent)}/mo
+                          </span>
+                        )}
+                        {propUtilTypes.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-white/60 bg-white/10 rounded-full px-2 py-1">
+                            {propUtilTypes.map(t => { const M = UTILITY_META[t]; return M ? <M.icon key={t} className="h-3 w-3" /> : null; })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Link to={`/properties/${property.id}`}>
+                      <Button size="sm" variant="secondary" className="text-xs bg-white/15 border-white/20 text-white hover:bg-white/25">
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Profile
+                      </Button>
+                    </Link>
+                    {canCreateUnit && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="text-xs bg-white/15 border-white/20 text-white hover:bg-white/25"
+                        onClick={() => {
+                          setPropertyForUnit(property);
+                          setIsAddUnitOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Unit
+                      </Button>
+                    )}
+                    {canEditProperty && (
+                      <button
+                        onClick={() => handleEditProperty(property)}
+                        className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/15 transition-colors"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canDeleteProperty && (
+                      <button
+                        onClick={() => setPropertyToDelete(property)}
+                        className="p-1.5 rounded-lg text-white/60 hover:text-red-300 hover:bg-white/15 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               {open && (
-              <div className="p-5 sm:p-6">
+              <div className="bg-surface p-5 sm:p-6">
                 {/* Units */}
-                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {propertyUnits.map(unit => {
                     const lease = getUnitLease(unit.id);
                     const occupants = lease ? getLeaseTenants(lease.id) : [];
