@@ -285,6 +285,7 @@ export function Expenses() {
         !searchTerm ||
         expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         expense.vendor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        expense.paymentAccount?.includes(searchTerm) ||
         property?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         unit?.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -400,6 +401,7 @@ export function Expenses() {
         const date = formData.get('date') as string;
         const description = formData.get('description') as string;
         const vendor = (formData.get('vendor') as string) || undefined;
+        const paymentAccount = (formData.get('paymentAccount') as string)?.trim() || undefined;
         const isRecurring = formData.get('isRecurring') === 'on';
         const recurringFrequency = (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined;
         const interestAmount = category === 'mortgage' && formData.get('interestAmount')
@@ -430,6 +432,7 @@ export function Expenses() {
             date,
             description: splitNote,
             vendor,
+            paymentAccount,
             isRecurring,
             recurringFrequency,
             interestAmount: interestAmount != null
@@ -703,7 +706,7 @@ export function Expenses() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className={`w-full sm:min-w-0 ${view === 'income' ? 'min-w-[900px]' : 'min-w-[700px]'}`}>
+            <table className={`w-full sm:min-w-0 ${view === 'income' ? 'min-w-[900px]' : 'min-w-[780px]'}`}>
               <thead>
                 <tr className="border-b bg-canvas">
                   <th className="text-left py-3 px-4 font-medium">Date</th>
@@ -713,6 +716,7 @@ export function Expenses() {
                   {view === 'income' && <th className="text-left py-3 px-4 font-medium">Tenant</th>}
                   <th className="text-left py-3 px-4 font-medium">Description</th>
                   {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Vendor</th>}
+                  {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Acct</th>}
                   <th className="text-right py-3 px-4 font-medium">Amount</th>
                   {(canDelete || canAddExpense) && <th className="text-right py-3 px-4 font-medium">Actions</th>}
                 </tr>
@@ -766,6 +770,9 @@ export function Expenses() {
                         </td>
                         <td className="py-4 px-4 text-sm text-muted">
                           {expense.vendor || '-'}
+                        </td>
+                        <td className="py-4 px-4 text-sm text-muted font-mono">
+                          {expense.paymentAccount ? `···${expense.paymentAccount}` : '-'}
                         </td>
                         <td className="py-4 px-4 text-right font-semibold text-danger">
                           -{formatCurrency(expense.amount)}
@@ -1088,6 +1095,18 @@ export function Expenses() {
                     onChange={(e) => setExpenseVendor(e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Paid from (last 4 digits)</label>
+                  <input
+                    type="text"
+                    name="paymentAccount"
+                    placeholder="e.g., 4523"
+                    maxLength={4}
+                    defaultValue={editingExpense?.paymentAccount || ''}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+                  />
+                  <p className="text-xs text-muted">Bank account or card number (last few digits) so you can match the statement.</p>
                 </div>
               </div>
 

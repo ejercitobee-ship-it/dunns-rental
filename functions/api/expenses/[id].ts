@@ -42,7 +42,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       env.DB.prepare(
         `UPDATE expenses SET
           property_id = ?, unit_id = ?, category = ?, amount = ?, date = ?, description = ?, vendor = ?,
-          is_recurring = ?, recurring_frequency = ?, interest_amount = ?,
+          is_recurring = ?, recurring_frequency = ?, interest_amount = ?, payment_account = ?,
           updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
@@ -56,6 +56,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.isRecurring ? 1 : 0,
         body.recurringFrequency ?? null,
         body.interestAmount ?? null,
+        body.paymentAccount ?? null,
         id
       ),
       logActivityStmt(env.DB, auth, {

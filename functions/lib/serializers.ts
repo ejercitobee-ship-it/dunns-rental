@@ -204,6 +204,7 @@ export function serializeExpense(r: Row) {
     receiptUrl: r.receipt_drive_id ? `/api/photo/${r.receipt_drive_id}` : null,
     capitalProjectId: r.capital_project_id ?? undefined,
     tier: r.tier ?? undefined,
+    paymentAccount: r.payment_account ?? undefined,
   };
 }
 

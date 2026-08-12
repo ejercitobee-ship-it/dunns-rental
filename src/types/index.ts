@@ -187,6 +187,8 @@ export interface Expense {
   /** Optional explicit tier (property / unit / business). When absent the
    * frontend derives it from the category via `getExpenseTier()`. */
   tier?: ExpenseTier;
+  /** Last 3-4 digits of the bank/card account used to pay this expense. */
+  paymentAccount?: string;
 }
 
 export type TaxDeductibleCategory =

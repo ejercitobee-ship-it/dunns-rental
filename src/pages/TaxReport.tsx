@@ -352,13 +352,13 @@ export function TaxReport() {
   };
 
   const exportExpensesCSV = () => {
-    const header = 'Date,Category,Tax Category,Description,Amount,Property,Deductible';
+    const header = 'Date,Category,Tax Category,Description,Amount,Property,Deductible,Paid From';
     const rows = main.pExpenses
       .sort((a, b) => a.date.localeCompare(b.date))
       .map(e => {
         const taxCat = TAX_CATEGORIES[e.taxCategory || mapToTaxCategory(e.category)]?.label || e.category;
         const propName = properties.find(p => p.id === e.propertyId)?.name || '';
-        return [e.date, e.category, taxCat, csvEscape(e.description), e.amount.toFixed(2), csvEscape(propName), e.taxDeductible !== false ? 'Yes' : 'No'].join(',');
+        return [e.date, e.category, taxCat, csvEscape(e.description), e.amount.toFixed(2), csvEscape(propName), e.taxDeductible !== false ? 'Yes' : 'No', e.paymentAccount || ''].join(',');
       });
     downloadBlob([header, ...rows].join('\n'), `expenses-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
   };
