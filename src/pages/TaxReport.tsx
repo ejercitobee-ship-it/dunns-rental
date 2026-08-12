@@ -599,10 +599,12 @@ export function TaxReport() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      {/* ── Page header ─────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tax Report</h1>
-          <p className="text-muted mt-1 text-sm">
+          <p className="eyebrow">Tax preparation</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Tax Report</h1>
+          <p className="text-sm text-muted mt-1.5">
             Tax summary and deductible expenses for {mainLabel}{comp ? ` vs ${compLabel}` : ''}.
           </p>
         </div>
@@ -710,7 +712,7 @@ export function TaxReport() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-2.5 px-4 font-medium">Metric</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted text-xs uppercase tracking-wider">Metric</th>
                     <th className="text-right py-2.5 px-4 font-medium">{mainLabel}</th>
                     <th className="text-right py-2.5 px-4 font-medium">{compLabel}</th>
                     <th className="text-right py-2.5 px-4 font-medium">Change</th>
@@ -748,51 +750,23 @@ export function TaxReport() {
 
       {/* Summary Cards */}
       <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Income</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingUp /></span>
+        {[
+          { label: 'Total Income', value: formatCurrency(main.totalIncome), sub: 'Taxable rental income', color: 'text-positive', icon: <TrendingUp />, bg: 'bg-positive-soft text-positive' },
+          { label: 'Deductible Expenses', value: formatCurrency(main.totalDeductibleExpenses), sub: 'Includes depreciation', color: 'text-danger', icon: <TrendingDown />, bg: 'bg-danger-soft text-danger' },
+          { label: 'Net Income', value: formatCurrency(main.netIncome), sub: 'Income minus deductions', color: main.netIncome >= 0 ? 'text-positive' : 'text-danger', icon: <DollarSign />, bg: 'bg-primary-soft text-primary' },
+          { label: 'Expense Ratio', value: `${main.totalIncome > 0 ? ((main.totalDeductibleExpenses / main.totalIncome) * 100).toFixed(1) : 0}%`, sub: 'Expense to income ratio', color: 'text-ink', icon: <Percent />, bg: 'bg-primary-soft text-primary' },
+        ].map(s => (
+          <Card key={s.label}>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="eyebrow">{s.label}</span>
+                <span className={`w-9 h-9 rounded-xl grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${s.bg}`}>{s.icon}</span>
+              </div>
+              <div className={`mt-3 font-display text-[26px] leading-none font-semibold tnum ${s.color}`}>{s.value}</div>
+              <p className="mt-1.5 text-[12px] text-muted">{s.sub}</p>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-positive tnum">{formatCurrency(main.totalIncome)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Taxable rental income</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Deductible Expenses</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
-            </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-danger tnum">{formatCurrency(main.totalDeductibleExpenses)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Includes depreciation</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Net Income</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
-            </div>
-            <div className={`mt-3 text-[27px] leading-none font-semibold tnum ${main.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(main.netIncome)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Income minus deductions</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Expense Ratio</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Percent /></span>
-            </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">
-              {main.totalIncome > 0 ? ((main.totalDeductibleExpenses / main.totalIncome) * 100).toFixed(1) : 0}%
-            </div>
-            <p className="mt-1.5 text-[13px] text-muted">Expense to income ratio</p>
-          </div>
-        </Card>
+          </Card>
+        ))}
       </div>
 
       {/* Charts */}
@@ -845,9 +819,9 @@ export function TaxReport() {
       {/* Income Breakdown */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('income')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('income') && '-rotate-90')} />
-            <FileText className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-positive-soft text-positive grid place-items-center shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
             Income Breakdown
           </CardTitle>
         </CardHeader>
@@ -951,9 +925,9 @@ export function TaxReport() {
       {/* Expense Categories Table */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('expenses')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('expenses') && '-rotate-90')} />
-            <Calculator className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-danger-soft text-danger grid place-items-center shrink-0"><Calculator className="h-[18px] w-[18px]" /></span>
             Deductible Expenses by Category
           </CardTitle>
         </CardHeader>
@@ -1035,9 +1009,9 @@ export function TaxReport() {
       {/* Operating vs Capital Expenses (IRS $2,500 de minimis safe harbor) */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('opVsCap')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('opVsCap') && '-rotate-90')} />
-            <Calculator className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0"><Calculator className="h-[18px] w-[18px]" /></span>
             Operating vs Capital Expenses
           </CardTitle>
         </CardHeader>
@@ -1161,9 +1135,9 @@ export function TaxReport() {
       {/* Depreciation schedule */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('depreciation')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('depreciation') && '-rotate-90')} />
-            <Home className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Home className="h-[18px] w-[18px]" /></span>
             Depreciation ({year})
           </CardTitle>
         </CardHeader>
@@ -1233,9 +1207,9 @@ export function TaxReport() {
       {(main.mortgageInterestDeducted > 0 || main.mortgagePrincipalExcluded > 0 || main.mortgageNeedsSplit > 0) && (
         <Card>
           <CardHeader className="cursor-pointer select-none" onClick={() => toggle('mortgage')}>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2.5">
               <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('mortgage') && '-rotate-90')} />
-              <FileText className="h-5 w-5" />
+              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
               Mortgage Interest
             </CardTitle>
           </CardHeader>
@@ -1276,9 +1250,9 @@ export function TaxReport() {
       {/* Property Breakdown */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('property')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('property') && '-rotate-90')} />
-            <Home className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Home className="h-[18px] w-[18px]" /></span>
             Property Performance
           </CardTitle>
         </CardHeader>
@@ -1333,9 +1307,9 @@ export function TaxReport() {
       {/* Tax Tips */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('tips')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('tips') && '-rotate-90')} />
-            <AlertCircle className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0"><AlertCircle className="h-[18px] w-[18px]" /></span>
             Tax Tips & Reminders
           </CardTitle>
         </CardHeader>
@@ -1367,11 +1341,11 @@ export function TaxReport() {
       {/* ── #1: Schedule E Mapping ──────────────────────────────────────── */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('scheduleE')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('scheduleE') && '-rotate-90')} />
-            <FileText className="h-5 w-5" />
-            Schedule E (Form 1040)
-            <Badge variant="secondary" className="ml-auto text-xs">IRS Reference</Badge>
+            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
+            <span className="flex-1">Schedule E (Form 1040)</span>
+            <Badge variant="default" className="text-xs">IRS Reference</Badge>
           </CardTitle>
         </CardHeader>
         {!collapsed.has('scheduleE') && <CardContent>
@@ -1428,9 +1402,9 @@ export function TaxReport() {
       {/* ── #3: Estimated Tax Liability ──────────────────────────────────── */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('estTax')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('estTax') && '-rotate-90')} />
-            <Calculator className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-danger-soft text-danger grid place-items-center shrink-0"><Calculator className="h-[18px] w-[18px]" /></span>
             Estimated Tax Liability
           </CardTitle>
         </CardHeader>
@@ -1505,10 +1479,10 @@ export function TaxReport() {
       {main.vendors1099.length > 0 && (
         <Card>
           <CardHeader className="cursor-pointer select-none" onClick={() => toggle('vendors1099')}>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2.5">
               <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('vendors1099') && '-rotate-90')} />
-              <Users className="h-5 w-5" />
-              1099 Vendor Tracker
+              <span className="w-9 h-9 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0"><Users className="h-[18px] w-[18px]" /></span>
+              <span className="flex-1">1099 Vendor Tracker</span>
               {main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length > 0 && (
                 <Badge variant="warning" className="ml-auto">
                   {main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length} need{main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length === 1 ? 's' : ''} 1099
@@ -1559,9 +1533,9 @@ export function TaxReport() {
       {/* ── #5: Mileage Deduction Estimator ──────────────────────────────── */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('mileage')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('mileage') && '-rotate-90')} />
-            <Car className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Car className="h-[18px] w-[18px]" /></span>
             Mileage Deduction
           </CardTitle>
         </CardHeader>
@@ -1609,9 +1583,9 @@ export function TaxReport() {
       {/* ── #6: Tax Calendar ─────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('taxCalendar')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('taxCalendar') && '-rotate-90')} />
-            <Calendar className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Calendar className="h-[18px] w-[18px]" /></span>
             Tax Calendar ({year + 1} Filing)
           </CardTitle>
         </CardHeader>
@@ -1649,9 +1623,9 @@ export function TaxReport() {
       {/* ── #7: Multi-Year Trend ─────────────────────────────────────────── */}
       <Card>
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('multiYear')}>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('multiYear') && '-rotate-90')} />
-            <BarChart3 className="h-5 w-5" />
+            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><BarChart3 className="h-[18px] w-[18px]" /></span>
             Multi-Year Trend
           </CardTitle>
         </CardHeader>
