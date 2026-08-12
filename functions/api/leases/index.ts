@@ -224,6 +224,30 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       );
     }
 
+    // When the security deposit is marked collected at creation time, record it
+    // as a 'deposit' income row. This shows on Finances as cash received and on
+    // the Tax Report as a non-taxable liability (excluded from taxable income).
+    const depAmt = Number(body.depositAmount) || 0;
+    if (body.depositPaid && depAmt > 0) {
+      const depDate = (body.depositPaidDate as string) || (body.startDate as string) || new Date().toISOString().slice(0, 10);
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO incomes (id, property_id, unit_id, source, amount, date, description, user_id)
+           VALUES (?, ?, ?, 'deposit', ?, ?, 'Security deposit', ?)
+           ON CONFLICT(id) DO UPDATE SET
+             amount = excluded.amount, date = excluded.date,
+             property_id = excluded.property_id, unit_id = excluded.unit_id`
+        ).bind(
+          `deposit-${id}`,
+          body.propertyId ?? unit.property_id ?? null,
+          body.unitId,
+          depAmt,
+          depDate,
+          auth.id
+        )
+      );
+    }
+
     await env.DB.batch(statements);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();

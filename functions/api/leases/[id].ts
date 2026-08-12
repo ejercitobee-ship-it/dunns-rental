@@ -176,6 +176,28 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       );
     }
 
+    // Sync refundable security deposit to the incomes table so it appears on
+    // Finances (as cash received) and Tax Report (excluded from taxable income).
+    const depAmount = Number(body.depositAmount) || 0;
+    const depPaid = !!body.depositPaid;
+    const depIncomeId = `deposit-${id}`;
+    if (depPaid && depAmount > 0) {
+      const depDate = (body.depositPaidDate as string) || (body.startDate as string) || new Date().toISOString().slice(0, 10);
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO incomes (id, property_id, unit_id, source, amount, date, description, user_id)
+           VALUES (?, ?, ?, 'deposit', ?, ?, 'Security deposit', ?)
+           ON CONFLICT(id) DO UPDATE SET
+             amount = excluded.amount, date = excluded.date,
+             property_id = excluded.property_id, unit_id = excluded.unit_id`
+        ).bind(depIncomeId, body.propertyId ?? null, body.unitId ?? null, depAmount, depDate, auth.id)
+      );
+    } else if (!depPaid || depAmount <= 0) {
+      statements.push(
+        env.DB.prepare('DELETE FROM incomes WHERE id = ?').bind(depIncomeId)
+      );
+    }
+
     statements.push(
       logActivityStmt(env.DB, auth, {
         module: 'leases',

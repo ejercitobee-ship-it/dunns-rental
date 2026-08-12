@@ -136,7 +136,7 @@ export function Dashboard() {
       .reduce((sum, r) => sum + r.amount, 0);
 
     const monthlyOtherIncome = incomes
-      .filter(i => monthOf(i.date) === currentMonth && yearOf(i.date) === currentYear)
+      .filter(i => i.source !== 'deposit' && monthOf(i.date) === currentMonth && yearOf(i.date) === currentYear)
       .reduce((sum, i) => sum + i.amount, 0);
 
     const monthlyIncome = monthlyRentIncome + monthlyOtherIncome;
@@ -178,7 +178,7 @@ export function Dashboard() {
         .filter(r => r.status === 'paid' && r.month === month && r.year === currentYear)
         .reduce((sum, r) => sum + r.amount, 0);
       const other = incomes
-        .filter(i => monthOf(i.date) === month && yearOf(i.date) === currentYear)
+        .filter(i => i.source !== 'deposit' && monthOf(i.date) === month && yearOf(i.date) === currentYear)
         .reduce((sum, i) => sum + i.amount, 0);
       const monthIncome = rent + other;
       const monthExpenses = expenses

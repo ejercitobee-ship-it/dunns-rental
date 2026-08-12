@@ -232,7 +232,7 @@ export function Expenses() {
 
   const stats = useMemo(() => {
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const otherIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
+    const otherIncome = incomes.filter(i => i.source !== 'deposit').reduce((sum, i) => sum + i.amount, 0);
     const totalIncome = rentCollected + otherIncome;
     const netIncome = totalIncome - totalExpenses;
 
