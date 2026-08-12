@@ -36,6 +36,7 @@ import { Avatar } from '../ui/Avatar';
 import { ProfileModal } from '../ProfileModal';
 import { BackToTop } from '../BackToTop';
 import { CommandPalette } from '../CommandPalette';
+import { PageTransition } from '../PageTransition';
 
 interface NavItem {
   name: string;
@@ -510,7 +511,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page Content */}
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-          {children}
+          <PageTransition>{children}</PageTransition>
         </div>
       </main>
 

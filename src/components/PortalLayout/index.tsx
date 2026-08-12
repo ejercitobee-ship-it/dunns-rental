@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAutoEnablePush } from '../../lib/useAutoPush';
 import { portalApi, type PortalAnnouncement } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { PageTransition } from '../PageTransition';
 
 // The portal shell for tenants and realtors. This is a separate world from
 // the management app: it does not import Layout or AppContext, so a portal
@@ -140,7 +141,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-28">
         <InstallPrompt />
-        {children}
+        <PageTransition>{children}</PageTransition>
       </main>
 
       {/* Native app: fixed bottom tab bar for every portal role. */}

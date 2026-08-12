@@ -130,6 +130,21 @@
   100% { transform: translateX(400%); }
 }
 
+/* Page transition: fade + subtle upward slide on route change. */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-enter {
+  animation: page-enter 0.25s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
