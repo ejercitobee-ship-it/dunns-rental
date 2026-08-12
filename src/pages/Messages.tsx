@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MessageSquare, ArrowLeft, ExternalLink, Inbox } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { messagesApi, vendorMessagesApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread } from '../lib/api';
@@ -22,6 +22,7 @@ interface InboxRow {
 
 export function Messages() {
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [channel, setChannel] = useState<Channel>('tenant');
   const [tenantThreads, setTenantThreads] = useState<MessageThread[]>([]);
   const [vendorThreads, setVendorThreads] = useState<VendorThread[]>([]);
@@ -93,6 +94,21 @@ export function Messages() {
       .catch((err) => setError((err as Error).message || 'Could not load messages.'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Deep-link: ?tenant=<id> auto-opens that tenant's conversation.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (loading || deepLinkHandled.current) return;
+    const tid = searchParams.get('tenant');
+    if (tid) {
+      deepLinkHandled.current = true;
+      setChannel('tenant');
+      openThread(tid);
+      // Remove the query param so a browser refresh doesn't re-trigger.
+      setSearchParams({}, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   useEffect(() => {
     const tick = () => { if (document.visibilityState === 'visible') refreshThreads(); };
