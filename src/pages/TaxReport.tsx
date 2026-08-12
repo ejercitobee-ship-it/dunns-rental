@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileText, Download, Calculator, TrendingDown, TrendingUp,
-  DollarSign, Home, Percent, AlertCircle, ChevronDown, ChevronRight
+  DollarSign, Home, Percent, AlertCircle, ChevronDown, ChevronRight,
+  Calendar, Users, Car, BarChart3
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -19,6 +20,8 @@ import {
   landValueFor,
   canDepreciate,
 } from '../lib/depreciation';
+import { buildScheduleE, buildScheduleETotals, type ScheduleEProperty } from '../lib/schedule-e';
+import JSZip from 'jszip';
 import {
   BarChart,
   Bar,
@@ -30,9 +33,22 @@ import {
   PieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
+  Legend,
 } from 'recharts';
 
 const COLORS = ['#24503f', '#2c7a58', '#97671c', '#b98a5e', '#7e8b83', '#5a7d6c', '#a23429', '#c2a878'];
+
+// IRS 1099-NEC threshold: vendors paid ≥$600 in a calendar year need a 1099.
+const VENDOR_1099_THRESHOLD = 600;
+
+// IRS standard mileage rate for 2025 (cents per mile). Updated annually.
+const IRS_MILEAGE_RATE_CENTS = 70;
+
+// Default marginal tax rates for estimated liability (user can adjust).
+const DEFAULT_FEDERAL_RATE = 24;
+const DEFAULT_STATE_RATE = 4.95; // Illinois flat rate
 
 // IRS de minimis safe-harbor line: a single item at or under this can be
 // expensed (deducted this year); anything above it is generally a capital
@@ -293,7 +309,46 @@ export function TaxReport() {
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
     });
 
-    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent };
+    // ── 1099 vendor tracker ──────────────────────────────────────────────
+    // Aggregate payments per vendor name across ALL expenses in the period.
+    // Any vendor paid ≥$600 in a calendar year typically needs a 1099-NEC.
+    const vendorTotals = new Map<string, number>();
+    pExpenses.forEach(e => {
+      if (e.vendor) {
+        vendorTotals.set(e.vendor, (vendorTotals.get(e.vendor) || 0) + e.amount);
+      }
+    });
+    const vendors1099 = [...vendorTotals.entries()]
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+
+    // ── Schedule E mapping (per property) ─────────────────────────────
+    const depreciationByPropertyMap = new Map(
+      properties.map(p => [p.id, depreciationForYear(p, y)])
+    );
+    const leasePropertyIdMap = new Map(leases.map(l => [l.id, l.propertyId]));
+    const scheduleEPerProperty: ScheduleEProperty[] = properties.map(p => {
+      const propRent = pPaidRent
+        .filter(pmt => leasePropertyIdMap.get(pmt.leaseId) === p.id)
+        .reduce((s, pmt) => s + pmt.amount, 0);
+      // Add non-rent non-deposit income for this property
+      const propOtherInc = pIncome
+        .filter(i => i.propertyId === p.id && i.source !== 'deposit' && i.source !== 'rent')
+        .reduce((s, i) => s + i.amount, 0);
+      const propDepreciation = round2((depreciationByPropertyMap.get(p.id) || 0) * periodFactor);
+      return buildScheduleE({
+        property: p,
+        expenses: pExpenses,
+        rentIncome: propRent + propOtherInc,
+        depreciation: propDepreciation,
+        deductibleAmount,
+        capitalThreshold: CAPITAL_THRESHOLD,
+        isCapital: isCapitalExpense,
+      });
+    });
+    const scheduleETotals = buildScheduleETotals(scheduleEPerProperty);
+
+    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent, vendors1099, scheduleEPerProperty, scheduleETotals };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenses, incomes, properties, rentPayments, leases, capitalProjects]);
 
@@ -307,6 +362,53 @@ export function TaxReport() {
       .map(([key, value]) => ({ name: TAX_CATEGORIES[key]?.label || key, value }))
       .sort((a, b) => b.value - a.value);
   }, [main.expensesByCategory]);
+
+  // ── Estimated tax liability (configurable rates, persisted in localStorage) ──
+  const [fedRate, setFedRate] = useState(() => {
+    const saved = localStorage.getItem('tax_fed_rate');
+    return saved ? Number(saved) : DEFAULT_FEDERAL_RATE;
+  });
+  const [stateRate, setStateRate] = useState(() => {
+    const saved = localStorage.getItem('tax_state_rate');
+    return saved ? Number(saved) : DEFAULT_STATE_RATE;
+  });
+  useEffect(() => { localStorage.setItem('tax_fed_rate', String(fedRate)); }, [fedRate]);
+  useEffect(() => { localStorage.setItem('tax_state_rate', String(stateRate)); }, [stateRate]);
+
+  const estimatedFederal = Math.max(0, main.netIncome * (fedRate / 100));
+  const estimatedState = Math.max(0, main.netIncome * (stateRate / 100));
+  const estimatedSelfEmployment = 0; // Rental income generally not subject to SE tax
+  const estimatedTotal = estimatedFederal + estimatedState + estimatedSelfEmployment;
+
+  // ── Multi-year trend (5 years of data) ────────────────────────────────
+  const multiYearData = useMemo(() => {
+    const years = Array.from({ length: 5 }, (_, i) => year - 4 + i);
+    return years.map(y => {
+      const d = periodData(y, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      return {
+        year: String(y),
+        income: d.totalIncome,
+        expenses: d.totalDeductibleExpenses,
+        netIncome: d.netIncome,
+      };
+    });
+  }, [periodData, year]);
+
+  // ── Mileage state (persisted per year in localStorage) ──
+  const [mileage, setMileage] = useState(() => {
+    const saved = localStorage.getItem(`mileage_${year}`);
+    return saved ? Number(saved) : 0;
+  });
+  useEffect(() => {
+    const saved = localStorage.getItem(`mileage_${year}`);
+    setMileage(saved ? Number(saved) : 0);
+  }, [year]);
+  const saveMileage = (val: number) => {
+    const clamped = Math.max(0, Math.round(val));
+    setMileage(clamped);
+    localStorage.setItem(`mileage_${year}`, String(clamped));
+  };
+  const mileageDeduction = mileage * (IRS_MILEAGE_RATE_CENTS / 100);
 
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -368,6 +470,113 @@ export function TaxReport() {
     setTimeout(() => window.print(), 100);
   };
 
+  const exportScheduleECSV = () => {
+    // One row per line, columns for each property + totals
+    const props = main.scheduleEPerProperty.filter(p => p.lines.some(l => l.amount !== 0));
+    const headerCols = ['Line', 'Description', ...props.map(p => csvEscape(p.name)), 'Totals'];
+    const header = headerCols.join(',');
+    const rows = main.scheduleETotals.lines.map(tl => {
+      const perProp = props.map(p => {
+        const line = p.lines.find(l => l.line === tl.line);
+        return (line?.amount ?? 0).toFixed(2);
+      });
+      return [tl.line, csvEscape(tl.label), ...perProp, tl.amount.toFixed(2)].join(',');
+    });
+    downloadBlob([header, ...rows].join('\n'), `schedule-e-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
+  };
+
+  const export1099CSV = () => {
+    const header = 'Vendor,Total Paid,Needs 1099';
+    const rows = main.vendors1099.map(v =>
+      [csvEscape(v.name), v.total.toFixed(2), v.total >= VENDOR_1099_THRESHOLD ? 'Yes' : 'No'].join(',')
+    );
+    downloadBlob([header, ...rows].join('\n'), `vendor-1099-tracker-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
+  };
+
+  const exportTaxPacketZIP = async () => {
+    setExportOpen(false);
+    const zip = new JSZip();
+    const label = mainLabel.replace(/\s+/g, '-');
+
+    // 1) Schedule E summary
+    const seProps = main.scheduleEPerProperty.filter(p => p.lines.some(l => l.amount !== 0));
+    const seHeaderCols = ['Line', 'Description', ...seProps.map(p => p.name), 'Totals'];
+    const seRows = main.scheduleETotals.lines.map(tl => {
+      const perProp = seProps.map(p => {
+        const line = p.lines.find(l => l.line === tl.line);
+        return (line?.amount ?? 0).toFixed(2);
+      });
+      return [tl.line, tl.label, ...perProp, tl.amount.toFixed(2)].join(',');
+    });
+    zip.file(`schedule-e-${label}.csv`, [seHeaderCols.join(','), ...seRows].join('\n'));
+
+    // 2) Expenses CSV
+    const expHeader = 'Date,Category,Tax Category,Description,Amount,Property,Deductible,Paid From';
+    const expRows = main.pExpenses.sort((a, b) => a.date.localeCompare(b.date)).map(e => {
+      const taxCat = TAX_CATEGORIES[e.taxCategory || mapToTaxCategory(e.category)]?.label || e.category;
+      const propName = properties.find(p => p.id === e.propertyId)?.name || '';
+      return [e.date, e.category, taxCat, csvEscape(e.description), e.amount.toFixed(2), csvEscape(propName), e.taxDeductible !== false ? 'Yes' : 'No', e.paymentAccount || ''].join(',');
+    });
+    zip.file(`expenses-${label}.csv`, [expHeader, ...expRows].join('\n'));
+
+    // 3) Income CSV
+    const incHeader = 'Date,Source,Amount,Property';
+    const rentRows = main.pPaidRent.map(p => {
+      const lease = leases.find(l => l.id === p.leaseId);
+      const propName = lease ? properties.find(pr => pr.id === lease.propertyId)?.name || '' : '';
+      return [`${p.year}-${String(p.month).padStart(2, '0')}-01`, 'Rent', p.amount.toFixed(2), csvEscape(propName)].join(',');
+    });
+    const otherRows = main.pIncome.sort((a, b) => a.date.localeCompare(b.date)).map(i => {
+      const propName = properties.find(p => p.id === i.propertyId)?.name || '';
+      return [i.date, i.source, i.amount.toFixed(2), csvEscape(propName)].join(',');
+    });
+    zip.file(`income-${label}.csv`, [incHeader, ...rentRows, ...otherRows].join('\n'));
+
+    // 4) Depreciation schedule
+    if (main.depreciationSchedule.length > 0) {
+      const depHeader = 'Property,Placed In Service,Cost Basis,Land Value,Depreciable Basis,This Year,Accumulated';
+      const depRows = main.depreciationSchedule.map(d => [
+        csvEscape(d.name), d.placedInService || '', d.purchasePrice.toFixed(2), d.landValue.toFixed(2),
+        d.depreciableBasis.toFixed(2), d.currentYear.toFixed(2), d.accumulated.toFixed(2),
+      ].join(','));
+      zip.file(`depreciation-${label}.csv`, [depHeader, ...depRows].join('\n'));
+    }
+
+    // 5) 1099 vendor tracker
+    if (main.vendors1099.length > 0) {
+      const v1099Header = 'Vendor,Total Paid,Needs 1099';
+      const v1099Rows = main.vendors1099.map(v =>
+        [csvEscape(v.name), v.total.toFixed(2), v.total >= VENDOR_1099_THRESHOLD ? 'Yes' : 'No'].join(',')
+      );
+      zip.file(`vendor-1099-tracker-${label}.csv`, [v1099Header, ...v1099Rows].join('\n'));
+    }
+
+    // 6) Summary JSON
+    const report = {
+      generatedAt: new Date().toISOString(),
+      period: mainLabel,
+      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, hoaReimbursements: main.hoaReimbursement, applicationFees: main.applicationFeeIncome, petFees: main.petFeeIncome, parkingFees: main.parkingFeeIncome, other: main.otherIncome },
+      securityDepositsReceived: main.depositsReceived,
+      deductibleExpenses: main.expensesByCategory,
+      totalDeductibleExpenses: main.totalDeductibleExpenses,
+      operatingExpenses: main.operatingExpenses,
+      capitalExpenses: main.capitalExpenses,
+      depreciation: main.depreciation,
+      mortgage: { interestDeducted: main.mortgageInterestDeducted, principalExcluded: main.mortgagePrincipalExcluded },
+      netIncome: main.netIncome,
+      estimatedTax: { federal: round2(estimatedFederal), state: round2(estimatedState), total: round2(estimatedTotal), federalRate: fedRate, stateRate: stateRate },
+    };
+    zip.file(`tax-summary-${label}.json`, JSON.stringify(report, null, 2));
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tax-packet-${label}.zip`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const exportIncomeCSV = () => {
     const header = 'Date,Source,Amount,Property';
     const rentRows = main.pPaidRent.map(p => {
@@ -406,10 +615,16 @@ export function TaxReport() {
           {exportOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
-              <div className="absolute right-0 mt-1 z-50 w-52 rounded-lg border border-line bg-surface shadow-lg py-1 text-sm">
+              <div className="absolute right-0 mt-1 z-50 w-56 rounded-lg border border-line bg-surface shadow-lg py-1 text-sm">
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas font-medium text-primary" onClick={exportTaxPacketZIP}>
+                  📦 Tax Packet (ZIP)
+                </button>
+                <div className="border-t border-line my-1" />
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportPrintPdf}>Print / Save as PDF</button>
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleECSV}>Schedule E (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportExpensesCSV}>Expenses (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportIncomeCSV}>Income (CSV)</button>
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={export1099CSV}>1099 Vendor (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportJSON}>Full Report (JSON)</button>
               </div>
             </>
@@ -1145,6 +1360,345 @@ export function TaxReport() {
                 <li>Repairs and maintenance</li>
               </ul>
             </div>
+          </div>
+        </CardContent>}
+      </Card>
+
+      {/* ── #1: Schedule E Mapping ──────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('scheduleE')}>
+          <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('scheduleE') && '-rotate-90')} />
+            <FileText className="h-5 w-5" />
+            Schedule E (Form 1040)
+            <Badge variant="secondary" className="ml-auto text-xs">IRS Reference</Badge>
+          </CardTitle>
+        </CardHeader>
+        {!collapsed.has('scheduleE') && <CardContent>
+          <p className="text-sm text-muted mb-4">
+            Your data mapped to IRS Schedule E, Part I line numbers. Hand this to your accountant
+            or use it to fill out your return. Each property gets its own column, matching the
+            Schedule E format (Properties A, B, C…).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: Math.max(600, 200 + main.scheduleEPerProperty.length * 120) }}>
+              <thead>
+                <tr className="border-b border-line bg-canvas">
+                  <th className="text-left py-2.5 px-3 font-medium w-10">Line</th>
+                  <th className="text-left py-2.5 px-3 font-medium">Description</th>
+                  {main.scheduleEPerProperty.map(p => (
+                    <th key={p.name} className="text-right py-2.5 px-3 font-medium whitespace-nowrap">{p.name}</th>
+                  ))}
+                  <th className="text-right py-2.5 px-3 font-bold">Totals</th>
+                </tr>
+              </thead>
+              <tbody>
+                {main.scheduleETotals.lines.map(tl => {
+                  const isSummary = tl.line === 3 || tl.line === 20 || tl.line === 21;
+                  const cls = isSummary ? 'font-semibold bg-canvas/50' : '';
+                  return (
+                    <tr key={tl.line} className={cn('border-b border-line last:border-0', cls)}>
+                      <td className="py-2 px-3 text-muted">{tl.line}</td>
+                      <td className="py-2 px-3">{tl.label}</td>
+                      {main.scheduleEPerProperty.map(p => {
+                        const line = p.lines.find(l => l.line === tl.line);
+                        const amt = line?.amount ?? 0;
+                        return (
+                          <td key={p.name} className="py-2 px-3 text-right tnum">
+                            {amt !== 0 ? formatCurrency(amt) : <span className="text-muted">—</span>}
+                          </td>
+                        );
+                      })}
+                      <td className={cn('py-2 px-3 text-right tnum', isSummary && 'font-bold', tl.line === 21 && (tl.amount >= 0 ? 'text-positive' : 'text-danger'))}>
+                        {tl.amount !== 0 ? formatCurrency(tl.amount) : <span className="text-muted">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted mt-3">
+            Line 19 ("Other") includes HOA dues and miscellaneous expenses. List them individually
+            on the actual form. This is a reference mapping; confirm all figures with your tax preparer.
+          </p>
+        </CardContent>}
+      </Card>
+
+      {/* ── #3: Estimated Tax Liability ──────────────────────────────────── */}
+      <Card>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('estTax')}>
+          <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('estTax') && '-rotate-90')} />
+            <Calculator className="h-5 w-5" />
+            Estimated Tax Liability
+          </CardTitle>
+        </CardHeader>
+        {!collapsed.has('estTax') && <CardContent>
+          <p className="text-sm text-muted mb-4">
+            A rough estimate of the tax you might owe on this rental income. Adjust the rates to
+            match your tax bracket. This is NOT tax advice; your actual liability depends on your
+            full return, filing status, and other deductions.
+          </p>
+          <div className="flex flex-wrap gap-4 mb-5">
+            <div>
+              <label className="block text-xs text-muted mb-1">Federal marginal rate (%)</label>
+              <input
+                type="number" min={0} max={50} step={0.5}
+                value={fedRate}
+                onChange={(e) => setFedRate(Math.max(0, Math.min(50, Number(e.target.value))))}
+                className="w-28 px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">State rate (%)</label>
+              <input
+                type="number" min={0} max={20} step={0.1}
+                value={stateRate}
+                onChange={(e) => setStateRate(Math.max(0, Math.min(20, Number(e.target.value))))}
+                className="w-28 px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+          </div>
+          {main.netIncome <= 0 ? (
+            <div className="rounded-xl border border-line p-4 text-center">
+              <p className="text-lg font-semibold text-positive">No estimated tax</p>
+              <p className="text-sm text-muted mt-1">
+                Your net rental income is {formatCurrency(main.netIncome)}. A net loss may offset
+                other income on your return (subject to passive activity rules).
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-xl border border-line p-4">
+                <span className="eyebrow">Federal ({fedRate}%)</span>
+                <div className="mt-2 text-[22px] leading-none font-semibold text-ink tnum">
+                  {formatCurrency(estimatedFederal)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-line p-4">
+                <span className="eyebrow">State ({stateRate}%)</span>
+                <div className="mt-2 text-[22px] leading-none font-semibold text-ink tnum">
+                  {formatCurrency(estimatedState)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-4">
+                <span className="eyebrow">Estimated Total</span>
+                <div className="mt-2 text-[22px] leading-none font-bold text-primary tnum">
+                  {formatCurrency(estimatedTotal)}
+                </div>
+                <p className="text-xs text-muted mt-1.5">
+                  On {formatCurrency(main.netIncome)} net income
+                </p>
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-muted mt-3">
+            Rental income is generally passive and not subject to self-employment tax.
+            Your effective rate depends on your total taxable income. These rates are saved
+            for your next visit.
+          </p>
+        </CardContent>}
+      </Card>
+
+      {/* ── #4: 1099 Vendor Tracker ──────────────────────────────────────── */}
+      {main.vendors1099.length > 0 && (
+        <Card>
+          <CardHeader className="cursor-pointer select-none" onClick={() => toggle('vendors1099')}>
+            <CardTitle className="flex items-center gap-2">
+              <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('vendors1099') && '-rotate-90')} />
+              <Users className="h-5 w-5" />
+              1099 Vendor Tracker
+              {main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length > 0 && (
+                <Badge variant="warning" className="ml-auto">
+                  {main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length} need{main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length === 1 ? 's' : ''} 1099
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          {!collapsed.has('vendors1099') && <CardContent>
+            <p className="text-sm text-muted mb-4">
+              Any unincorporated vendor (individual, LLC, or partnership) you paid {formatCurrency(VENDOR_1099_THRESHOLD)} or more
+              in a calendar year needs a 1099-NEC by January 31 of the following year. Corporations are generally
+              exempt.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-canvas">
+                    <th className="text-left py-2.5 px-4 font-medium">Vendor</th>
+                    <th className="text-right py-2.5 px-4 font-medium">Total Paid</th>
+                    <th className="text-center py-2.5 px-4 font-medium">1099 Required?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {main.vendors1099.map(v => (
+                    <tr key={v.name} className="border-b border-line last:border-0">
+                      <td className="py-2.5 px-4 font-medium text-ink">{v.name}</td>
+                      <td className="py-2.5 px-4 text-right tnum font-semibold">{formatCurrency(v.total)}</td>
+                      <td className="py-2.5 px-4 text-center">
+                        {v.total >= VENDOR_1099_THRESHOLD ? (
+                          <Badge variant="warning">Yes</Badge>
+                        ) : (
+                          <span className="text-muted text-xs">Under threshold</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted mt-3">
+              Based on the vendor name on your expense records. Make sure the same vendor
+              uses a consistent name so payments are grouped correctly.
+            </p>
+          </CardContent>}
+        </Card>
+      )}
+
+      {/* ── #5: Mileage Deduction Estimator ──────────────────────────────── */}
+      <Card>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('mileage')}>
+          <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('mileage') && '-rotate-90')} />
+            <Car className="h-5 w-5" />
+            Mileage Deduction
+          </CardTitle>
+        </CardHeader>
+        {!collapsed.has('mileage') && <CardContent>
+          <p className="text-sm text-muted mb-4">
+            Track business miles driven for rental activities (property visits, supply runs, bank trips).
+            The IRS standard mileage rate for 2025 is ${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}/mile.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs text-muted mb-1">Total business miles ({year})</label>
+              <input
+                type="number" min={0} step={1}
+                value={mileage || ''}
+                placeholder="Enter miles"
+                onChange={(e) => saveMileage(Number(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+            </div>
+            <div className="rounded-xl border border-line p-4">
+              <span className="eyebrow">Rate</span>
+              <div className="mt-2 text-[18px] leading-none font-semibold text-ink tnum">
+                ${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}/mi
+              </div>
+              <p className="text-xs text-muted mt-1">IRS standard rate</p>
+            </div>
+            <div className="rounded-xl border border-line p-4">
+              <span className="eyebrow">Estimated deduction</span>
+              <div className="mt-2 text-[18px] leading-none font-semibold text-positive tnum">
+                {formatCurrency(mileageDeduction)}
+              </div>
+              <p className="text-xs text-muted mt-1">
+                {mileage > 0 ? `${mileage.toLocaleString()} miles × $${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}` : 'Enter miles above'}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted mt-3">
+            Keep a log of each trip (date, destination, purpose, miles). You can deduct either
+            standard mileage OR actual expenses (gas, maintenance, depreciation) for vehicle use,
+            not both. The mileage shown here is not included in the deductible expenses total above.
+          </p>
+        </CardContent>}
+      </Card>
+
+      {/* ── #6: Tax Calendar ─────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('taxCalendar')}>
+          <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('taxCalendar') && '-rotate-90')} />
+            <Calendar className="h-5 w-5" />
+            Tax Calendar ({year + 1} Filing)
+          </CardTitle>
+        </CardHeader>
+        {!collapsed.has('taxCalendar') && <CardContent>
+          <p className="text-sm text-muted mb-4">
+            Key filing deadlines for tax year {year}. Dates are general guidelines;
+            check the IRS website for exact dates, which can shift for weekends and holidays.
+          </p>
+          <div className="space-y-0">
+            {[
+              { date: `Jan 31, ${year + 1}`, label: '1099-NEC due to vendors/IRS', description: 'File 1099-NEC for any vendor paid $600+', icon: '📄', past: new Date() > new Date(year + 1, 0, 31) },
+              { date: `Apr 15, ${year + 1}`, label: 'Q1 estimated tax payment', description: `Federal + IL estimated payment for Q1 ${year + 1}`, icon: '💰', past: new Date() > new Date(year + 1, 3, 15) },
+              { date: `Apr 15, ${year + 1}`, label: 'Annual tax return due', description: `File Schedule E with your Form 1040 for ${year}`, icon: '📋', past: new Date() > new Date(year + 1, 3, 15) },
+              { date: `Jun 15, ${year + 1}`, label: 'Q2 estimated tax payment', description: `Federal + IL estimated payment for Q2 ${year + 1}`, icon: '💰', past: new Date() > new Date(year + 1, 5, 15) },
+              { date: `Sep 15, ${year + 1}`, label: 'Q3 estimated tax payment', description: `Federal + IL estimated payment for Q3 ${year + 1}`, icon: '💰', past: new Date() > new Date(year + 1, 8, 15) },
+              { date: `Oct 15, ${year + 1}`, label: 'Extended return due', description: `If you filed an extension for ${year}`, icon: '📋', past: new Date() > new Date(year + 1, 9, 15) },
+              { date: `Jan 15, ${year + 2}`, label: 'Q4 estimated tax payment', description: `Federal + IL estimated payment for Q4 ${year + 1}`, icon: '💰', past: new Date() > new Date(year + 2, 0, 15) },
+            ].map((item, i) => (
+              <div key={i} className={cn('flex items-start gap-3 py-3 border-b border-line last:border-0', item.past && 'opacity-50')}>
+                <span className="text-lg mt-0.5">{item.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-ink">{item.label}</span>
+                    {item.past && <Badge variant="secondary" className="text-xs">Past</Badge>}
+                  </div>
+                  <p className="text-sm text-muted">{item.description}</p>
+                </div>
+                <span className="text-sm font-medium text-ink whitespace-nowrap">{item.date}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>}
+      </Card>
+
+      {/* ── #7: Multi-Year Trend ─────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="cursor-pointer select-none" onClick={() => toggle('multiYear')}>
+          <CardTitle className="flex items-center gap-2">
+            <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('multiYear') && '-rotate-90')} />
+            <BarChart3 className="h-5 w-5" />
+            Multi-Year Trend
+          </CardTitle>
+        </CardHeader>
+        {!collapsed.has('multiYear') && <CardContent>
+          <p className="text-sm text-muted mb-4">
+            Five-year view of annual income, deductible expenses, and net income.
+            Helps you spot trends and plan ahead.
+          </p>
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart data={multiYearData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" />
+              <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <Legend />
+              <Line type="monotone" dataKey="income" stroke="#2c7a58" strokeWidth={2} name="Income" dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="expenses" stroke="#b98a5e" strokeWidth={2} name="Expenses" dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="netIncome" stroke="#24503f" strokeWidth={3} name="Net Income" dot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="overflow-x-auto mt-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-canvas">
+                  <th className="text-left py-2.5 px-4 font-medium">Year</th>
+                  <th className="text-right py-2.5 px-4 font-medium">Income</th>
+                  <th className="text-right py-2.5 px-4 font-medium">Expenses</th>
+                  <th className="text-right py-2.5 px-4 font-medium">Net Income</th>
+                  <th className="text-right py-2.5 px-4 font-medium">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {multiYearData.map(d => (
+                  <tr key={d.year} className={cn('border-b border-line last:border-0', d.year === String(year) && 'bg-primary-soft/20 font-medium')}>
+                    <td className="py-2.5 px-4 font-medium">{d.year}</td>
+                    <td className="py-2.5 px-4 text-right tnum text-positive">{formatCurrency(d.income)}</td>
+                    <td className="py-2.5 px-4 text-right tnum text-danger">{formatCurrency(d.expenses)}</td>
+                    <td className={cn('py-2.5 px-4 text-right tnum font-semibold', d.netIncome >= 0 ? 'text-positive' : 'text-danger')}>
+                      {formatCurrency(d.netIncome)}
+                    </td>
+                    <td className="py-2.5 px-4 text-right tnum text-muted">
+                      {d.income > 0 ? `${((d.netIncome / d.income) * 100).toFixed(1)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </CardContent>}
       </Card>
