@@ -636,8 +636,8 @@ export function DataMigration() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Data Migration</h1>
-          <p className="text-muted mt-1 text-sm">Import properties, units, tenants, leases, rent and expenses in one go from a CSV file.</p>
+          <p className="eyebrow">Administration</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Data Migration</h1>
         </div>
         <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
           <Download className="h-4 w-4 mr-2" />

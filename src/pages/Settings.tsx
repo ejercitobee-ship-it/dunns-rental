@@ -331,20 +331,18 @@ export function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Settings</h1>
-        <p className="text-muted mt-1">
-          Manage your application preferences
-        </p>
+        <p className="eyebrow">Administration</p>
+        <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Settings</h1>
       </div>
 
-      <div className="flex gap-2 border-b">
+      <div className="rounded-xl border border-line bg-surface p-1 inline-flex overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted hover:text-ink'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-muted hover:text-ink'
             }`}
             onClick={() => setActiveTab(tab.id)}
           >

@@ -260,7 +260,7 @@ export function ProspectiveTenantDetail() {
           </span>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-[24px] sm:text-[28px] font-medium text-ink leading-tight">{applicant.firstName} {applicant.lastName}</h1>
+              <h1 className="font-display text-[24px] sm:text-[28px] text-ink leading-tight">{applicant.firstName} {applicant.lastName}</h1>
               <Badge variant={s.variant}>{s.label}</Badge>
             </div>
             <p className="text-sm text-muted mt-0.5">Prospective tenant</p>

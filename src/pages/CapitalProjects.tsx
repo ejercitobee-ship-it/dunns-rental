@@ -254,7 +254,7 @@ export function CapitalProjects() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={() => setDetail(null)}><ArrowLeft className="h-4 w-4" /></Button>
           <div className="flex-1">
-            <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">{detail.name}</h1>
+            <h1 className="font-display text-[26px] sm:text-[32px] text-ink">{detail.name}</h1>
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted mt-1">
               {prop && <span className="flex items-center gap-1"><Home className="h-3.5 w-3.5" />{prop.name}</span>}
               {unit && <span className="flex items-center gap-1"><DoorOpen className="h-3.5 w-3.5" />Unit {unit.unitNumber}</span>}
@@ -486,8 +486,8 @@ export function CapitalProjects() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Capital Projects</h1>
-          <p className="text-muted mt-1 text-sm">Track capital improvement projects with multiple receipts and invoices.</p>
+          <p className="eyebrow">Finances</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Capital Projects</h1>
         </div>
         <Button variant="default" onClick={() => { resetForm(); setShowCreate(true); }}>
           <Plus className="h-4 w-4 mr-1.5" />

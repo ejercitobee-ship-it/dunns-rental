@@ -359,7 +359,7 @@ export function ExpenseImportPage() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={handleCancelMapping}><ArrowLeft className="h-4 w-4" /></Button>
           <div className="flex-1">
-            <h1 className="text-[26px] sm:text-[32px] font-medium text-ink flex items-center gap-2">
+            <h1 className="font-display text-[26px] sm:text-[32px] text-ink flex items-center gap-2">
               <Columns3 className="h-7 w-7" />
               Map Columns
             </h1>
@@ -478,7 +478,7 @@ export function ExpenseImportPage() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={() => setDetail(null)}><ArrowLeft className="h-4 w-4" /></Button>
           <div className="flex-1">
-            <h1 className="text-[26px] sm:text-[32px] font-medium text-ink flex items-center gap-2">
+            <h1 className="font-display text-[26px] sm:text-[32px] text-ink flex items-center gap-2">
               <FileSpreadsheet className="h-7 w-7" />
               {detail.fileName}
             </h1>
@@ -808,8 +808,8 @@ export function ExpenseImportPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Expense Imports</h1>
-          <p className="text-muted mt-1 text-sm">Upload, review, and merge historical expense data from CSV files.</p>
+          <p className="eyebrow">Finances</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Expense Imports</h1>
         </div>
         <div>
           <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileSelect} />

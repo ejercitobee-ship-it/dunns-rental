@@ -210,11 +210,9 @@ export function Activity() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Activity Log</h1>
-          <p className="text-muted mt-1 text-sm">
-            A record of who did what, across the whole app.
-            {total > 0 && <span className="text-ink"> {total.toLocaleString()} entries total.</span>}
-          </p>
+          <p className="eyebrow">Administration</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Activity Log</h1>
+          {total > 0 && <p className="text-sm text-muted mt-1">{total.toLocaleString()} entries total</p>}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>

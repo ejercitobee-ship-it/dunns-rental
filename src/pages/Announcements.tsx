@@ -285,9 +285,9 @@ export function Announcements() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Megaphone className="h-7 w-7 text-primary" />
-        <h1 className="text-2xl font-bold">Announcements</h1>
+      <div>
+        <p className="eyebrow">Communication</p>
+        <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Announcements</h1>
       </div>
 
       {/* Compose card */}

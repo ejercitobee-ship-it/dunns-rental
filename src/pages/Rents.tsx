@@ -835,8 +835,8 @@ export function Rents() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Rent Management</h1>
-          <p className="text-muted mt-1 text-sm">Track rent payments and outstanding balances, by lease.</p>
+          <p className="eyebrow">Rent collection</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Rent Management</h1>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="w-full sm:w-auto">
@@ -899,37 +899,20 @@ export function Rents() {
       )}
 
       {/* View Toggle */}
-      <div className="flex gap-2 border-b border-line overflow-x-auto">
-        <button
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            view === 'payments'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-ink'
-          }`}
-          onClick={() => setView('payments')}
-        >
-          Payments
-        </button>
-        <button
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            view === 'annual'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-ink'
-          }`}
-          onClick={() => setView('annual')}
-        >
-          Annual Overview
-        </button>
-        <button
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            view === 'tax'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-ink'
-          }`}
-          onClick={() => setView('tax')}
-        >
-          Tax Report
-        </button>
+      <div className="rounded-xl border border-line bg-surface p-1 inline-flex overflow-x-auto">
+        {([['payments', 'Payments'], ['annual', 'Annual Overview'], ['tax', 'Tax Report']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+              view === key
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-muted hover:text-ink'
+            }`}
+            onClick={() => setView(key)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Year Filter */}
@@ -966,7 +949,7 @@ export function Rents() {
                     <span className="eyebrow">{s.label}</span>
                     <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
                   </div>
-                  <div className={`mt-3 text-[27px] leading-none font-semibold tnum ${s.valueClass}`}>{s.value}</div>
+                  <div className={`mt-3 font-display text-[27px] leading-none font-semibold tnum ${s.valueClass}`}>{s.value}</div>
                 </div>
               </Card>
             ))}

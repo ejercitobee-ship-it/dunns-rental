@@ -510,8 +510,8 @@ export function Tenants() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Tenants</h1>
-          <p className="text-muted mt-1 text-sm">People, their households and where they live.</p>
+          <p className="eyebrow">People</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Tenants</h1>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           {view === 'active' && (
@@ -530,15 +530,15 @@ export function Tenants() {
       </div>
 
       {/* Current tenants vs terminated tenancies vs prospective applicants */}
-      <div className="flex gap-1 border-b border-line -mt-2">
+      <div className="rounded-xl border border-line bg-surface p-1 inline-flex -mt-2">
         {([['active', 'Current tenants'], ['terminated', 'Terminated'], ['prospective', 'Prospective']] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setView(key)}
             className={cn(
-              'px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors',
-              view === key ? 'border-primary text-ink font-medium' : 'border-transparent text-muted hover:text-ink'
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+              view === key ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'
             )}
           >
             {label}
@@ -562,7 +562,7 @@ export function Tenants() {
                 <span className="eyebrow">{s.label}</span>
                 <span className={`w-9 h-9 rounded-xl grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${active ? 'bg-primary text-white' : 'bg-primary-soft text-primary'}`}>{s.icon}</span>
               </div>
-              <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
+              <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
               {s.filter && (
                 <span className="mt-2 block text-[11px] text-muted">
                   {active ? 'Filtering · click to clear' : clickable ? 'Click to filter' : 'None expiring'}

@@ -304,8 +304,8 @@ export function Users() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Users</h1>
-          <p className="text-muted mt-1">Manage the people who can sign in and what they can do.</p>
+          <p className="eyebrow">Administration</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Users</h1>
         </div>
         {tab === 'internal' && canManageUsers && (
           <Button onClick={() => { resetForm(); setIsAddUserOpen(true); }}>
@@ -323,7 +323,7 @@ export function Users() {
               <span className="eyebrow">Total Members</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UsersIcon /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{users.length}</div>
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{users.length}</div>
           </div>
         </Card>
 
@@ -333,7 +333,7 @@ export function Users() {
               <span className="eyebrow">Active</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UserCheck /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-positive tnum">{users.filter(u => u.isActive).length}</div>
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-positive tnum">{users.filter(u => u.isActive).length}</div>
           </div>
         </Card>
 
@@ -343,7 +343,7 @@ export function Users() {
               <span className="eyebrow">Roles</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Shield /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{roles.length}</div>
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{roles.length}</div>
           </div>
         </Card>
 
@@ -353,7 +353,7 @@ export function Users() {
               <span className="eyebrow">Admins</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><KeyRound /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-primary tnum">
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-primary tnum">
               {users.filter(u => u.roleId === 'super_admin' || u.roleId === 'admin').length}
             </div>
           </div>
@@ -373,16 +373,16 @@ export function Users() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-line mb-4">
+      <div className="rounded-xl border border-line bg-surface p-1 inline-flex mb-4">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === t.key ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              tab === t.key ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'
             }`}
           >
-            {t.label} <span className="text-faint">({tabCount(t.key)})</span>
+            {t.label} <span className={tab === t.key ? 'text-white/70' : 'text-faint'}>({tabCount(t.key)})</span>
           </button>
         ))}
       </div>

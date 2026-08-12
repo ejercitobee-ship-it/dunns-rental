@@ -177,25 +177,27 @@ export function Messages() {
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Inbox</p>
-        <h1 className="font-display text-2xl text-ink mt-1">Messages</h1>
-        <p className="text-sm text-muted mt-1">Conversations with tenants and with your vendors.</p>
+        <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Messages</h1>
       </div>
 
       {/* Channel tabs */}
-      <div className="flex gap-1 border-b border-line -mt-2">
+      <div className="rounded-xl border border-line bg-surface p-1 inline-flex -mt-2">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => switchChannel(t.key)}
             className={cn(
-              'px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors inline-flex items-center gap-2',
-              channel === t.key ? 'border-primary text-ink font-medium' : 'border-transparent text-muted hover:text-ink'
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2',
+              channel === t.key ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'
             )}
           >
             {t.label}
             {t.count > 0 && (
-              <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold grid place-items-center">{t.count}</span>
+              <span className={cn(
+                'min-w-5 h-5 px-1.5 rounded-full text-xs font-semibold grid place-items-center',
+                channel === t.key ? 'bg-white/20 text-white' : 'bg-primary text-white'
+              )}>{t.count}</span>
             )}
           </button>
         ))}

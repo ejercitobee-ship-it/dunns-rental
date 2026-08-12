@@ -322,8 +322,8 @@ export function Maintenance() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Maintenance</h1>
-          <p className="text-muted mt-1 text-sm">Track repairs and work orders across your properties.</p>
+          <p className="eyebrow">Operations</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Maintenance</h1>
         </div>
         {canEditMaintenance && (
           <Button onClick={openNew}>
@@ -342,7 +342,7 @@ export function Maintenance() {
                 <span className="eyebrow">{s.label}</span>
                 <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
               </div>
-              <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
+              <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
             </div>
           </Card>
         ))}

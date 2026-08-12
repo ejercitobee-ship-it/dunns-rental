@@ -151,7 +151,8 @@ export function PropertyProfile() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">{property.name}</h1>
+          <p className="eyebrow !text-[10px]">Property</p>
+          <h1 className="font-display text-[26px] sm:text-[30px] text-ink">{property.name}</h1>
           <div className="flex items-center gap-2 mt-1 text-sm text-muted">
             <MapPin className="h-3.5 w-3.5" />
             <span>{property.address}, {property.city}, {property.state} {property.zipCode}</span>

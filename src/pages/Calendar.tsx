@@ -890,29 +890,18 @@ export function Calendar() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Calendar</h1>
-          <p className="text-muted mt-1 text-sm">
-            Property management events, deadlines, and reminders.
-          </p>
+          <p className="eyebrow">Schedule</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Calendar</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-line overflow-hidden text-xs">
-            <button
-              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'today' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
-              onClick={() => setView('today')}
-            ><Sun className="h-3.5 w-3.5" /> Today</button>
-            <button
-              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'week' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
-              onClick={() => setView('week')}
-            ><List className="h-3.5 w-3.5" /> Week</button>
-            <button
-              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'calendar' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
-              onClick={() => setView('calendar')}
-            ><Grid3X3 className="h-3.5 w-3.5" /> Month</button>
-            <button
-              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${view === 'agenda' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas'}`}
-              onClick={() => setView('agenda')}
-            ><CalendarIcon className="h-3.5 w-3.5" /> Agenda</button>
+          <div className="rounded-xl border border-line bg-surface p-1 inline-flex text-xs">
+            {([['today', 'Today', Sun], ['week', 'Week', List], ['calendar', 'Month', Grid3X3], ['agenda', 'Agenda', CalendarIcon]] as const).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all font-medium ${view === key ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'}`}
+                onClick={() => setView(key as typeof view)}
+              ><Icon className="h-3.5 w-3.5" /> {label}</button>
+            ))}
           </div>
           <button
             onClick={() => openNew()}

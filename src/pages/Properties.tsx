@@ -406,8 +406,8 @@ export function Properties() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-[28px] sm:text-[36px] font-medium text-ink leading-tight">Properties</h1>
-          <p className="text-muted mt-1 text-sm">Your portfolio at a glance</p>
+          <p className="eyebrow">Portfolio</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Properties</h1>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">

@@ -404,10 +404,8 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Dashboard</h1>
-          <p className="text-muted mt-1 text-sm">
-            Overview of your properties, tenants, and cash flow.
-          </p>
+          <p className="eyebrow">Portfolio overview</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Dashboard</h1>
         </div>
         <div className="flex items-center gap-2 text-[13px] text-muted">
           <span className="w-1.5 h-1.5 bg-positive rounded-full" />

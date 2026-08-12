@@ -218,8 +218,8 @@ export function AIAssistant() {
             <Bot className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-bold leading-tight">AI Assistant</h1>
-            <p className="text-xs text-muted">Ask anything about your properties, tenants, and finances</p>
+            <p className="eyebrow !text-[10px]">Intelligence</p>
+            <h1 className="font-display text-xl leading-tight text-ink">AI Assistant</h1>
           </div>
         </div>
 

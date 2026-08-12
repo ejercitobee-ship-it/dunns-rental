@@ -484,10 +484,8 @@ export function Expenses() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-[26px] sm:text-[32px] font-medium text-ink">Finances</h1>
-          <p className="text-muted mt-1 text-sm sm:text-base">
-            Track expenses and income across all properties
-          </p>
+          <p className="eyebrow">Money in, money out</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Finances</h1>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <Button variant="outline" className="w-full sm:w-auto">
@@ -511,7 +509,7 @@ export function Expenses() {
               <span className="eyebrow">Total Income</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingUp /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-positive tnum">{formatCurrency(stats.totalIncome)}</div>
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-positive tnum">{formatCurrency(stats.totalIncome)}</div>
             <p className="mt-1.5 text-[13px] text-muted">All time</p>
           </div>
         </Card>
@@ -522,7 +520,7 @@ export function Expenses() {
               <span className="eyebrow">Total Expenses</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-danger tnum">{formatCurrency(stats.totalExpenses)}</div>
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-danger tnum">{formatCurrency(stats.totalExpenses)}</div>
             <p className="mt-1.5 text-[13px] text-muted">All time</p>
           </div>
         </Card>
@@ -533,7 +531,7 @@ export function Expenses() {
               <span className="eyebrow">Net Income</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
             </div>
-            <div className={`mt-3 text-[27px] leading-none font-semibold tnum ${stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(stats.netIncome)}</div>
+            <div className={`mt-3 font-display text-[27px] leading-none font-semibold tnum ${stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(stats.netIncome)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Overall profit/loss</p>
           </div>
         </Card>
@@ -544,7 +542,7 @@ export function Expenses() {
               <span className="eyebrow">This Month</span>
               <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Calendar /></span>
             </div>
-            <div className="mt-3 text-[27px] leading-none font-semibold text-ink tnum">{formatCurrency(stats.monthlyExpenses)}</div>
+            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{formatCurrency(stats.monthlyExpenses)}</div>
             <p className="mt-1.5 text-[13px] text-muted">Expenses</p>
           </div>
         </Card>
@@ -597,27 +595,20 @@ export function Expenses() {
       </div>
 
       {/* View Toggle */}
-      <div className="flex gap-2 border-b overflow-x-auto">
-        <button
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            view === 'expenses' 
-              ? 'border-primary text-primary' 
-              : 'border-transparent text-muted hover:text-ink'
-          }`}
-          onClick={() => setView('expenses')}
-        >
-          Expenses
-        </button>
-        <button
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            view === 'income' 
-              ? 'border-primary text-primary' 
-              : 'border-transparent text-muted hover:text-ink'
-          }`}
-          onClick={() => setView('income')}
-        >
-          Income
-        </button>
+      <div className="rounded-xl border border-line bg-surface p-1 inline-flex">
+        {([['expenses', 'Expenses'], ['income', 'Income']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              view === key
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-muted hover:text-ink'
+            }`}
+            onClick={() => setView(key as 'expenses' | 'income')}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
