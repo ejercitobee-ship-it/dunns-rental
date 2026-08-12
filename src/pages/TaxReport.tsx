@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileText, Download, Calculator, TrendingDown, TrendingUp,
   DollarSign, Home, Percent, AlertCircle, ChevronDown, ChevronRight,
-  Calendar, Users, Car, BarChart3
+  Calendar, Users, Car, BarChart3, CalendarPlus, Check, Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -10,7 +10,8 @@ import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
-import { capitalProjectsApi } from '../lib/api';
+import { capitalProjectsApi, calendarApi } from '../lib/api';
+import { useToast } from '../context/ToastContext';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import type { CapitalProject, Expense, Income, RentPayment } from '../types';
 import {
@@ -105,6 +106,7 @@ import { mapToTaxCategory, isCapitalExpense } from '../lib/financials';
 
 export function TaxReport() {
   const { expenses, incomes, properties, rentPayments, leases } = useApp();
+  const { showToast } = useToast();
   const now = new Date();
   // Main period.
   const [scope, setScope] = useState<'year' | 'quarter' | 'month'>('year');
@@ -152,6 +154,56 @@ export function TaxReport() {
     sessionStorage.setItem('tax_collapsed', JSON.stringify([...next]));
     return next;
   });
+
+  // ── Tax Calendar → App Calendar sync ────────────────────────────────
+  const [calSyncing, setCalSyncing] = useState(false);
+  const [calSynced, setCalSynced] = useState(false);
+
+  const taxDeadlines = useMemo(() => [
+    { date: `${year + 1}-01-31`, title: `1099-NEC Due (Tax Year ${year})`, description: `File 1099-NEC for any vendor paid $600+ during ${year}`, category: 'property_tax' as const, priority: 'high' as const },
+    { date: `${year + 1}-04-15`, title: `Q1 Estimated Tax Payment (${year + 1})`, description: `Federal + IL estimated payment for Q1 ${year + 1}`, category: 'property_tax' as const, priority: 'high' as const },
+    { date: `${year + 1}-04-15`, title: `Annual Tax Return Due (${year})`, description: `File Schedule E with your Form 1040 for ${year}`, category: 'property_tax' as const, priority: 'urgent' as const },
+    { date: `${year + 1}-06-15`, title: `Q2 Estimated Tax Payment (${year + 1})`, description: `Federal + IL estimated payment for Q2 ${year + 1}`, category: 'property_tax' as const, priority: 'high' as const },
+    { date: `${year + 1}-09-15`, title: `Q3 Estimated Tax Payment (${year + 1})`, description: `Federal + IL estimated payment for Q3 ${year + 1}`, category: 'property_tax' as const, priority: 'high' as const },
+    { date: `${year + 1}-10-15`, title: `Extended Return Due (${year})`, description: `If you filed an extension for ${year}`, category: 'property_tax' as const, priority: 'medium' as const },
+    { date: `${year + 2}-01-15`, title: `Q4 Estimated Tax Payment (${year + 1})`, description: `Federal + IL estimated payment for Q4 ${year + 1}`, category: 'property_tax' as const, priority: 'high' as const },
+  ], [year]);
+
+  const addTaxDeadlinesToCalendar = useCallback(async () => {
+    setCalSyncing(true);
+    try {
+      // Fetch existing events so we don't create duplicates
+      const existing = await calendarApi.list();
+      const existingTitles = new Set(existing.map(e => e.title));
+
+      let created = 0;
+      for (const d of taxDeadlines) {
+        if (existingTitles.has(d.title)) continue;
+        await calendarApi.create({
+          title: d.title,
+          description: d.description,
+          eventDate: d.date,
+          category: d.category,
+          priority: d.priority,
+          isRecurring: false,
+          completed: false,
+          visibility: 'shared',
+        });
+        created++;
+      }
+
+      setCalSynced(true);
+      if (created > 0) {
+        showToast(`Added ${created} tax deadline${created === 1 ? '' : 's'} to your Calendar`, 'success');
+      } else {
+        showToast('All tax deadlines are already on your Calendar', 'success');
+      }
+    } catch (err) {
+      showToast((err as Error).message || 'Could not add deadlines to calendar', 'error');
+    } finally {
+      setCalSyncing(false);
+    }
+  }, [taxDeadlines, showToast]);
 
   // 1-12 months covered by a scope selection.
   const monthsFor = (sc: 'year' | 'quarter' | 'month', q: number, m: number): number[] =>
@@ -1492,9 +1544,12 @@ export function TaxReport() {
           </CardHeader>
           {!collapsed.has('vendors1099') && <CardContent>
             <p className="text-sm text-muted mb-4">
-              Any unincorporated vendor (individual, LLC, or partnership) you paid {formatCurrency(VENDOR_1099_THRESHOLD)} or more
-              in a calendar year needs a 1099-NEC by January 31 of the following year. Corporations are generally
-              exempt.
+              Any vendor you paid {formatCurrency(VENDOR_1099_THRESHOLD)} or more in a calendar year may need
+              a 1099-NEC by January 31 of the following year. <strong className="text-ink font-medium">LLCs
+              and partnerships: yes,</strong> unless the LLC has elected to be taxed as a C-corp or S-corp.
+              Sole proprietors and individuals: yes. <strong className="text-ink font-medium">Corporations
+              (C-corp/S-corp): generally exempt.</strong> When in doubt, request a W-9 from the vendor;
+              Box 3 shows their entity type.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1590,10 +1645,27 @@ export function TaxReport() {
           </CardTitle>
         </CardHeader>
         {!collapsed.has('taxCalendar') && <CardContent>
-          <p className="text-sm text-muted mb-4">
-            Key filing deadlines for tax year {year}. Dates are general guidelines;
-            check the IRS website for exact dates, which can shift for weekends and holidays.
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-muted">
+              Key filing deadlines for tax year {year}. Dates are general guidelines;
+              check the IRS website for exact dates, which can shift for weekends and holidays.
+            </p>
+            <Button
+              size="sm"
+              variant={calSynced ? 'outline' : 'default'}
+              disabled={calSyncing || calSynced}
+              onClick={addTaxDeadlinesToCalendar}
+              className="ml-4 shrink-0"
+            >
+              {calSyncing ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Adding...</>
+              ) : calSynced ? (
+                <><Check className="h-4 w-4 mr-1.5" /> Added</>
+              ) : (
+                <><CalendarPlus className="h-4 w-4 mr-1.5" /> Add to Calendar</>
+              )}
+            </Button>
+          </div>
           <div className="space-y-0">
             {[
               { date: `Jan 31, ${year + 1}`, label: '1099-NEC due to vendors/IRS', description: 'File 1099-NEC for any vendor paid $600+', icon: '📄', past: new Date() > new Date(year + 1, 0, 31) },
