@@ -46,11 +46,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
          VALUES (?, ?, ?, ?, ?, ?)`
       ).bind(tenantId, applicant.first_name, applicant.last_name, applicant.email ?? null, applicant.phone ?? null, applicant.notes ?? null),
       env.DB.prepare(
-        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent,
+        `INSERT INTO leases (id, unit_id, property_id, lease_type, start_date, end_date, monthly_rent,
            security_deposit, move_in_fee_paid, status, needs_review, user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)`
       ).bind(
-        leaseId, unitId, unit.property_id ?? null, startDate, leaseEndDate(startDate, endDate),
+        leaseId, unitId, unit.property_id ?? null,
+        body.leaseType === 'month_to_month' ? 'month_to_month' : 'fixed',
+        startDate, leaseEndDate(startDate, endDate, body.leaseType),
         monthlyRent, Number.isFinite(moveInFee) ? moveInFee : 0, body.moveInFeePaid === false ? 0 : 1, auth.id
       ),
       env.DB.prepare('INSERT OR IGNORE INTO lease_tenants (id, lease_id, tenant_id) VALUES (?, ?, ?)')

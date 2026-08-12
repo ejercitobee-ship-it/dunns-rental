@@ -535,11 +535,12 @@ export function TenantDetail() {
   // billing and shows Active). The unit was already occupied while pending.
   const [approveOpen, setApproveOpen] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', depositAmount: '', depositPaid: false, depositPaidDate: '', depositMethod: '' });
+  const [approveForm, setApproveForm] = useState({ leaseType: 'fixed' as 'fixed' | 'month_to_month', monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', depositAmount: '', depositPaid: false, depositPaidDate: '', depositMethod: '' });
 
   const openApprove = () => {
     if (!lease) return;
     setApproveForm({
+      leaseType: lease.leaseType || 'fixed',
       monthlyRent: lease.monthlyRent ? String(lease.monthlyRent) : '',
       startDate: lease.startDate || '',
       endDate: lease.endDate || '',
@@ -571,9 +572,10 @@ export function TenantDetail() {
       const feeAmount = approveForm.moveInFee ? Number(approveForm.moveInFee) : 0;
       await updateLease({
         ...lease,
+        leaseType: approveForm.leaseType,
         monthlyRent: rent,
         startDate: approveForm.startDate,
-        endDate: approveForm.endDate || undefined,
+        endDate: approveForm.leaseType === 'month_to_month' ? undefined : (approveForm.endDate || undefined),
         securityDeposit: feeAmount,
         moveInFeePaid: approveForm.moveInFeePaid,
         depositAmount: approveForm.depositAmount ? Number(approveForm.depositAmount) : 0,
@@ -605,11 +607,12 @@ export function TenantDetail() {
   // Edit an existing tenancy's rent, dates, and move-in fee (the Tenancy card).
   const [tenancyOpen, setTenancyOpen] = useState(false);
   const [savingTenancy, setSavingTenancy] = useState(false);
-  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', depositAmount: '', depositPaid: false, depositPaidDate: '', depositMethod: '', rentDueDay: '' });
+  const [tenancyForm, setTenancyForm] = useState({ leaseType: 'fixed' as 'fixed' | 'month_to_month', monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', depositAmount: '', depositPaid: false, depositPaidDate: '', depositMethod: '', rentDueDay: '' });
 
   const openEditTenancy = () => {
     if (!lease) return;
     setTenancyForm({
+      leaseType: lease.leaseType || 'fixed',
       monthlyRent: lease.monthlyRent ? String(lease.monthlyRent) : '',
       startDate: lease.startDate || '',
       endDate: lease.endDate || '',
@@ -642,9 +645,10 @@ export function TenantDetail() {
 
       await updateLease({
         ...lease,
+        leaseType: tenancyForm.leaseType,
         monthlyRent: rent,
         startDate: tenancyForm.startDate || undefined,
-        endDate: tenancyForm.endDate || undefined,
+        endDate: tenancyForm.leaseType === 'month_to_month' ? undefined : (tenancyForm.endDate || undefined),
         securityDeposit: feeAmount,
         moveInFeePaid: tenancyForm.moveInFeePaid,
         depositAmount: tenancyForm.depositAmount ? Number(tenancyForm.depositAmount) : 0,
@@ -1143,7 +1147,10 @@ export function TenantDetail() {
                 <div className="flex items-center gap-2 text-muted">
                   <Calendar className="h-3.5 w-3.5 text-faint" />
                   <span>
-                    {lease.startDate ? formatDate(lease.startDate) : '—'} to {lease.endDate ? formatDate(lease.endDate) : '—'}
+                    {lease.leaseType === 'month_to_month'
+                      ? `${lease.startDate ? formatDate(lease.startDate) : '—'} · Month to Month`
+                      : `${lease.startDate ? formatDate(lease.startDate) : '—'} to ${lease.endDate ? formatDate(lease.endDate) : '—'}`
+                    }
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-ink">
@@ -1215,7 +1222,10 @@ export function TenantDetail() {
                   <div className="flex items-center gap-2 text-muted">
                     <Calendar className="h-3.5 w-3.5 text-faint" />
                     <span>
-                      {endedLease.startDate ? formatDate(endedLease.startDate) : '—'} to {endedLease.endDate ? formatDate(endedLease.endDate) : '—'}
+                      {endedLease.leaseType === 'month_to_month'
+                        ? `${endedLease.startDate ? formatDate(endedLease.startDate) : '—'} · Month to Month`
+                        : `${endedLease.startDate ? formatDate(endedLease.startDate) : '—'} to ${endedLease.endDate ? formatDate(endedLease.endDate) : '—'}`
+                      }
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-muted">
@@ -1711,7 +1721,10 @@ export function TenantDetail() {
                       return (
                         <tr key={l.id} className="border-b border-line last:border-0">
                           <td className="py-3 px-4 text-sm text-ink">
-                            {l.startDate ? formatDate(l.startDate) : '—'} to {l.endDate ? formatDate(l.endDate) : '—'}
+                            {l.leaseType === 'month_to_month'
+                              ? `${l.startDate ? formatDate(l.startDate) : '—'} · Month to Month`
+                              : `${l.startDate ? formatDate(l.startDate) : '—'} to ${l.endDate ? formatDate(l.endDate) : '—'}`
+                            }
                           </td>
                           <td className="py-3 px-4 text-sm text-muted text-right tnum">{prev > 0 ? formatCurrency(prev) : '—'}</td>
                           <td className="py-3 px-4 text-sm text-ink text-right tnum font-medium">{formatCurrency(curr)}</td>
@@ -2024,7 +2037,26 @@ export function TenantDetail() {
             </div>
             <p className="text-xs text-muted mt-1">Saving this also sets the unit's current rent to match.</p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Lease Type</label>
+            <div className="flex rounded-lg border border-line overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setTenancyForm({ ...tenancyForm, leaseType: 'fixed' })}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${tenancyForm.leaseType === 'fixed' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+              >
+                Fixed Term
+              </button>
+              <button
+                type="button"
+                onClick={() => setTenancyForm({ ...tenancyForm, leaseType: 'month_to_month', endDate: '' })}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${tenancyForm.leaseType === 'month_to_month' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+              >
+                Month to Month
+              </button>
+            </div>
+          </div>
+          <div className={`grid gap-4 ${tenancyForm.leaseType === 'month_to_month' ? '' : 'grid-cols-2'}`}>
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Start Date</label>
               <input
@@ -2034,15 +2066,17 @@ export function TenantDetail() {
                 onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={tenancyForm.endDate}
-                onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
-              />
-            </div>
+            {tenancyForm.leaseType === 'fixed' && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={tenancyForm.endDate}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
+                />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Move-In Fee</label>
@@ -2195,7 +2229,26 @@ export function TenantDetail() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Lease Type</label>
+            <div className="flex rounded-lg border border-line overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setApproveForm({ ...approveForm, leaseType: 'fixed' })}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${approveForm.leaseType === 'fixed' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+              >
+                Fixed Term
+              </button>
+              <button
+                type="button"
+                onClick={() => setApproveForm({ ...approveForm, leaseType: 'month_to_month', endDate: '' })}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${approveForm.leaseType === 'month_to_month' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+              >
+                Month to Month
+              </button>
+            </div>
+          </div>
+          <div className={`grid gap-4 ${approveForm.leaseType === 'month_to_month' ? '' : 'grid-cols-2'}`}>
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Start Date *</label>
               <input
@@ -2205,15 +2258,17 @@ export function TenantDetail() {
                 onChange={(e) => setApproveForm({ ...approveForm, startDate: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={approveForm.endDate}
-                onChange={(e) => setApproveForm({ ...approveForm, endDate: e.target.value })}
-              />
-            </div>
+            {approveForm.leaseType === 'fixed' && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  value={approveForm.endDate}
+                  onChange={(e) => setApproveForm({ ...approveForm, endDate: e.target.value })}
+                />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Move-In Fee</label>
@@ -2518,7 +2573,7 @@ export function TenantDetail() {
                 <div><span className="text-muted">Property:</span> <span className="text-ink">{property?.name || '—'}</span></div>
                 <div><span className="text-muted">Unit:</span> <span className="text-ink">{unit ? `Unit ${unit.unitNumber}` : '—'}</span></div>
                 <div><span className="text-muted">Address:</span> <span className="text-ink">{property ? [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(', ') : '—'}</span></div>
-                <div><span className="text-muted">Term:</span> <span className="text-ink">{lease.startDate ? formatDate(lease.startDate) : '—'} to {lease.endDate ? formatDate(lease.endDate) : '—'}</span></div>
+                <div><span className="text-muted">Term:</span> <span className="text-ink">{lease.leaseType === 'month_to_month' ? `${lease.startDate ? formatDate(lease.startDate) : '—'} · Month to Month` : `${lease.startDate ? formatDate(lease.startDate) : '—'} to ${lease.endDate ? formatDate(lease.endDate) : '—'}`}</span></div>
                 <div><span className="text-muted">Current Rent:</span> <span className="text-ink font-semibold">{formatCurrency(lease.monthlyRent)}/mo</span></div>
               </div>
             </div>

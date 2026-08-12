@@ -71,10 +71,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       if (missing.length) return jsonError('One or more tenants could not be found', 400);
     }
 
+    const leaseTypeVal = body.leaseType === 'month_to_month' ? 'month_to_month' : 'fixed';
     const statements = [
       env.DB.prepare(
         `UPDATE leases SET
-          unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
+          unit_id = ?, property_id = ?, lease_type = ?, start_date = ?, end_date = ?, monthly_rent = ?,
           security_deposit = ?, move_in_fee_paid = ?, status = ?, needs_review = 0, notes = ?,
           end_reason = ?, ended_property_label = ?, ended_unit_label = ?, rent_due_day = ?,
           deposit_amount = ?, deposit_paid = ?, deposit_paid_date = ?, deposit_method = ?,
@@ -83,8 +84,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       ).bind(
         body.unitId ?? null,
         body.propertyId ?? null,
+        leaseTypeVal,
         body.startDate ?? null,
-        leaseEndDate(body.startDate, body.endDate),
+        leaseEndDate(body.startDate, body.endDate, leaseTypeVal),
         body.monthlyRent ?? 0,
         body.securityDeposit ?? 0,
         body.moveInFeePaid === false ? 0 : 1,
@@ -217,7 +219,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     const statusChanged = current.status !== status;
     const rentChanged = Number(current.monthly_rent) !== Number(body.monthlyRent);
-    const datesChanged = current.start_date !== (body.startDate ?? null) || current.end_date !== leaseEndDate(body.startDate, body.endDate);
+    const datesChanged = current.start_date !== (body.startDate ?? null) || current.end_date !== leaseEndDate(body.startDate, body.endDate, leaseTypeVal);
 
     let auditAction = 'Updated';
     if (statusChanged) {

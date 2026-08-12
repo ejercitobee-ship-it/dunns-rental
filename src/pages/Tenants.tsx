@@ -36,6 +36,7 @@ function createPersonRow(): PersonRow {
 
 const emptyTenancyForm = {
   unitId: '',
+  leaseType: 'fixed' as 'fixed' | 'month_to_month',
   startDate: '',
   endDate: '',
   monthlyRent: '',
@@ -274,7 +275,7 @@ export function Tenants() {
       const unitNum = unit ? `Unit ${unit.unitNumber}` : '';
       const rent = lease ? formatCurrency(lease.monthlyRent) : '';
       const start = lease?.startDate || '';
-      const end = lease?.endDate || '';
+      const end = lease?.leaseType === 'month_to_month' ? 'Month to Month' : (lease?.endDate || '');
       const status = lease ? (lease.status === 'active' ? 'Active' : lease.status === 'paused' ? 'Paused' : lease.status) : 'No tenancy';
 
       // Current month settlement
@@ -472,8 +473,9 @@ export function Tenants() {
       const newLease = await addLease({
         unitId: unit.id,
         propertyId: unit.propertyId,
+        leaseType: tenancyForm.leaseType,
         startDate: tenancyForm.startDate || undefined,
-        endDate: tenancyForm.endDate || undefined,
+        endDate: tenancyForm.leaseType === 'month_to_month' ? undefined : (tenancyForm.endDate || undefined),
         monthlyRent: Number(tenancyForm.monthlyRent) || 0,
         securityDeposit: feeAmount || undefined,
         moveInFeePaid: tenancyForm.moveInFeePaid,
@@ -865,7 +867,27 @@ export function Tenants() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Lease Type</label>
+              <div className="flex rounded-lg border border-line overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setTenancyForm({ ...tenancyForm, leaseType: 'fixed', endDate: tenancyForm.endDate })}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${tenancyForm.leaseType === 'fixed' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+                >
+                  Fixed Term
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTenancyForm({ ...tenancyForm, leaseType: 'month_to_month', endDate: '' })}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${tenancyForm.leaseType === 'month_to_month' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+                >
+                  Month to Month
+                </button>
+              </div>
+            </div>
+
+            <div className={`grid gap-4 ${tenancyForm.leaseType === 'month_to_month' ? '' : 'grid-cols-2'}`}>
               <div>
                 <label className="block text-sm font-medium text-ink mb-1.5">Start Date</label>
                 <input
@@ -875,15 +897,17 @@ export function Tenants() {
                   onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  value={tenancyForm.endDate}
-                  onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
-                />
-              </div>
+              {tenancyForm.leaseType === 'fixed' && (
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    value={tenancyForm.endDate}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

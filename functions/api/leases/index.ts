@@ -86,11 +86,13 @@ export function readLeaseStatus(value: unknown): string | null {
 }
 
 /**
- * The lease's end date: the caller's value when given, otherwise ONE YEAR after
- * the start date so every lease has a yearly expiration. Null only when there is
- * no start date yet (a realtor draft awaiting approval).
+ * The lease's end date. For a fixed-term lease the caller's value is used when
+ * given, otherwise ONE YEAR after the start date so every contract lease has a
+ * yearly expiration. Month-to-month leases have no end date (returns null).
+ * Null also when there is no start date yet (a realtor draft awaiting approval).
  */
-export function leaseEndDate(startDate: unknown, endDate: unknown): string | null {
+export function leaseEndDate(startDate: unknown, endDate: unknown, leaseType?: unknown): string | null {
+  if (leaseType === 'month_to_month') return null;
   if (isValidDateString(endDate)) return endDate;
   if (isValidDateString(startDate)) {
     const [y, m, d] = startDate.split('-');
@@ -151,17 +153,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const id = crypto.randomUUID();
+    const leaseTypeVal = body.leaseType === 'month_to_month' ? 'month_to_month' : 'fixed';
     const statements = [
       env.DB.prepare(
-        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, move_in_fee_paid, status, notes, user_id, rent_due_day,
+        `INSERT INTO leases (id, unit_id, property_id, lease_type, start_date, end_date, monthly_rent, security_deposit, move_in_fee_paid, status, notes, user_id, rent_due_day,
          deposit_amount, deposit_paid, deposit_paid_date, deposit_method)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id,
         body.unitId,
         body.propertyId ?? unit.property_id ?? null,
+        leaseTypeVal,
         body.startDate ?? null,
-        leaseEndDate(body.startDate, body.endDate),
+        leaseEndDate(body.startDate, body.endDate, leaseTypeVal),
         body.monthlyRent,
         body.securityDeposit ?? 0,
         body.moveInFeePaid === false ? 0 : 1,

@@ -399,7 +399,9 @@ function HomeCard({
           <Calendar className="h-4 w-4 text-faint flex-shrink-0" />
           <span className="truncate">
             {lease.startDate ? formatDate(lease.startDate) : 'Start date unknown'}
-            {lease.endDate ? ` to ${formatDate(lease.endDate)}` : ', ongoing'}
+            {lease.leaseType === 'month_to_month'
+              ? ' · Month to Month'
+              : (lease.endDate ? ` to ${formatDate(lease.endDate)}` : ', ongoing')}
           </span>
           {lease.status === 'active' && (
             <span className="ml-auto flex-shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary-soft text-primary">

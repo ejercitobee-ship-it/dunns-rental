@@ -45,12 +45,15 @@ export interface Unit {
 }
 
 export type LeaseStatus = 'active' | 'paused' | 'ended';
+export type LeaseType = 'fixed' | 'month_to_month';
 
 export interface Lease {
   id: string;
   /** Cleared if the unit is deleted, so lease and payment history survive. */
   unitId?: string;
   propertyId?: string;
+  /** 'fixed' = contract with an end date, 'month_to_month' = open-ended. */
+  leaseType: LeaseType;
   startDate?: string;
   endDate?: string;
   monthlyRent: number;

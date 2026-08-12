@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
 
 const API_BASE = '/api';
 
@@ -633,6 +633,7 @@ export interface PortalLease {
   id: string;
   unitId?: string;
   propertyId?: string;
+  leaseType: LeaseType;
   startDate?: string;
   endDate?: string;
   monthlyRent: number;

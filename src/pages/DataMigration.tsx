@@ -538,6 +538,7 @@ export function DataMigration() {
         const created = await addLease({
           unitId: lease.unitId ? unitIdMapRef.current.get(lease.unitId) : undefined,
           propertyId: lease.propertyId ? propertyIdMapRef.current.get(lease.propertyId) : undefined,
+          leaseType: 'fixed',
           startDate: lease.startDate,
           endDate: lease.endDate,
           monthlyRent: lease.monthlyRent,

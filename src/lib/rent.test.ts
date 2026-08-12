@@ -6,6 +6,7 @@ const lease = (over: Partial<Lease> = {}): Lease => ({
   id: 'L1',
   unitId: 'U1',
   propertyId: 'P1',
+  leaseType: 'fixed',
   startDate: '2026-01-01',
   endDate: '2027-01-01',
   monthlyRent: 1325,
