@@ -31,6 +31,7 @@ export function serializeMessage(r: Row) {
     id: r.id,
     tenantId: r.tenant_id,
     senderRole: r.sender_role,
+    senderName: r.sender_name ?? undefined,
     body: r.body,
     createdAt: r.created_at,
     // An attachment is served through the generic /api/photo route (any Drive

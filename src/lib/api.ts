@@ -763,6 +763,7 @@ export interface Message {
   id: string;
   tenantId: string;
   senderRole: 'tenant' | 'office';
+  senderName?: string;
   body: string;
   createdAt: number;
   attachmentUrl?: string;
@@ -775,6 +776,7 @@ export interface VendorMessage {
   id: string;
   handymanId: string;
   senderRole: 'office' | 'handyman';
+  senderName?: string;
   body: string;
   createdAt: number;
   attachmentUrl?: string;

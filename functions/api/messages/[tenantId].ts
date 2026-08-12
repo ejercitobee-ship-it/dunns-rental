@@ -31,7 +31,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     ).bind(tenantId).first<{ propertyName: string | null; propertyAddress: string | null; unitNumber: string | null }>();
 
     const { results } = await env.DB.prepare(
-      'SELECT * FROM messages WHERE tenant_id = ? ORDER BY created_at ASC'
+      `SELECT m.*, u.name AS sender_name
+         FROM messages m
+         LEFT JOIN user u ON u.id = m.sender_user_id
+        WHERE m.tenant_id = ?
+        ORDER BY m.created_at ASC`
     ).bind(tenantId).all();
 
     await env.DB.prepare(
@@ -89,7 +93,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       notifyTenantOfReply(env, tenantId, body || '(sent an attachment)').catch((e) => console.error('notifyTenantOfReply failed', e))
     );
 
-    const row = await env.DB.prepare('SELECT * FROM messages WHERE id = ?').bind(id).first();
+    const row = await env.DB.prepare(
+      `SELECT m.*, u.name AS sender_name FROM messages m LEFT JOIN user u ON u.id = m.sender_user_id WHERE m.id = ?`
+    ).bind(id).first();
     return jsonOk({ success: true, data: serializeMessage(row as Record<string, unknown>) }, 201);
   } catch (err) {
     if (err instanceof DriveNotConnected) return jsonError('Attachments are unavailable right now. Please try again without the file.', 503);

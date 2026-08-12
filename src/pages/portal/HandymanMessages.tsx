@@ -87,7 +87,7 @@ export function HandymanMessages() {
               body: m.body,
               createdAt: m.createdAt,
               mine: m.senderRole === 'handyman',
-              senderLabel: m.senderRole === 'handyman' ? 'You' : 'MH Dunn Property',
+              senderLabel: m.senderRole === 'handyman' ? 'You' : (m.senderName || 'MH Dunn Property'),
               attachmentUrl: m.attachmentUrl,
               attachmentName: m.attachmentName,
               attachmentType: m.attachmentType,

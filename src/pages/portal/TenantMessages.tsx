@@ -118,7 +118,7 @@ export function TenantMessages() {
               body: m.body,
               createdAt: m.createdAt,
               mine: m.senderRole === 'tenant',
-              senderLabel: m.senderRole === 'tenant' ? 'You' : 'MH Dunn Property',
+              senderLabel: m.senderRole === 'tenant' ? 'You' : (m.senderName || 'MH Dunn Property'),
               attachmentUrl: m.attachmentUrl,
               attachmentName: m.attachmentName,
               attachmentType: m.attachmentType,

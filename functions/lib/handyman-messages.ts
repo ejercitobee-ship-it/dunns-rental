@@ -12,6 +12,7 @@ export function serializeHandymanMessage(r: Row) {
     id: r.id,
     handymanId: r.handyman_id,
     senderRole: r.sender_role,
+    senderName: r.sender_name ?? undefined,
     body: r.body,
     createdAt: r.created_at,
     attachmentUrl: r.attachment_drive_id ? `/api/photo/${r.attachment_drive_id}` : undefined,

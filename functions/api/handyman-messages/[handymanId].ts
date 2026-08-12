@@ -18,7 +18,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if (!who) return jsonError('Handyman not found', 404);
 
     const { results } = await env.DB.prepare(
-      'SELECT * FROM handyman_messages WHERE handyman_id = ? ORDER BY created_at ASC'
+      `SELECT m.*, u.name AS sender_name
+         FROM handyman_messages m
+         LEFT JOIN user u ON u.id = m.sender_user_id
+        WHERE m.handyman_id = ?
+        ORDER BY m.created_at ASC`
     ).bind(handymanId).all();
 
     await env.DB.prepare(
@@ -73,7 +77,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       notifyHandymanOfReply(env, handymanId, body || '(sent an attachment)').catch((e) => console.error('notifyHandymanOfReply failed', e))
     );
 
-    const row = await env.DB.prepare('SELECT * FROM handyman_messages WHERE id = ?').bind(id).first();
+    const row = await env.DB.prepare(
+      `SELECT m.*, u.name AS sender_name FROM handyman_messages m LEFT JOIN user u ON u.id = m.sender_user_id WHERE m.id = ?`
+    ).bind(id).first();
     return jsonOk({ success: true, data: serializeHandymanMessage(row as Record<string, unknown>) }, 201);
   } catch (err) {
     if (err instanceof DriveNotConnected) return jsonError('Attachments are unavailable right now. Please try again without the file.', 503);
