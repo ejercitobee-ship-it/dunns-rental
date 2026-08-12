@@ -1,11 +1,11 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { AI_TOOLS, executeTool } from '../../lib/ai-tools';
+import { AI_TOOLS, executeTool, type ToolDefinition } from '../../lib/ai-tools';
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
-const MAX_TOKENS = 4096;
-const MAX_TOOL_ROUNDS = 8; // safety limit on tool-use loops
+// Cloudflare Workers AI model (free tier: 10,000 neurons/day).
+const WORKERS_AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const MAX_TOKENS = 2048;
+const MAX_TOOL_ROUNDS = 6; // safety limit on tool-use loops
 
 const SYSTEM_PROMPT = `You are the MH Dunn Property Assistant, an AI operations assistant built into the MH Dunn Property management application. You help the office team answer questions about tenants, properties, leases, rent payments, maintenance, expenses, and day to day operations.
 
@@ -25,31 +25,40 @@ interface ChatRequest {
   message: string;
 }
 
-interface AnthropicMessage {
-  role: 'user' | 'assistant';
-  content: string | AnthropicContentBlock[];
-}
-
-interface AnthropicContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result';
-  text?: string;
-  id?: string;
+interface WorkersAIMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
   name?: string;
-  input?: Record<string, unknown>;
-  tool_use_id?: string;
-  content?: string;
+  tool_call_id?: string;
 }
 
-interface AnthropicResponse {
+interface WorkersAIToolCall {
   id: string;
-  content: AnthropicContentBlock[];
-  stop_reason: string;
-  usage: { input_tokens: number; output_tokens: number };
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+interface WorkersAIResponse {
+  response?: string;
+  tool_calls?: WorkersAIToolCall[];
+}
+
+/** Convert our tool definitions to the OpenAI-compatible format Workers AI expects. */
+function toWorkersAITools(tools: ToolDefinition[]) {
+  return tools.map(t => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema,
+    },
+  }));
 }
 
 /**
  * POST /api/ai/chat — send a message to the AI assistant.
  *
+ * Uses Cloudflare Workers AI (free tier) by default.
  * Body: { conversationId?: string, message: string }
  * Returns: { conversationId, response, toolsUsed }
  */
@@ -58,8 +67,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const auth = await requirePermission(env, request, 'ai_assistant_use');
   if (auth instanceof Response) return auth;
 
-  if (!env.ANTHROPIC_API_KEY) {
-    return jsonError('AI Assistant is not configured. An Anthropic API key is required.', 503);
+  if (!env.AI) {
+    return jsonError('AI Assistant is not configured. The Workers AI binding is required.', 503);
   }
 
   try {
@@ -88,85 +97,75 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'INSERT INTO ai_messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)'
     ).bind(userMsgId, conversationId, 'user', userMessage).run();
 
-    // Load conversation history (last 20 messages for context window).
+    // Load conversation history (last 10 messages for context window — smaller model).
     const { results: history } = await env.DB.prepare(
       `SELECT role, content FROM ai_messages
         WHERE conversation_id = ? AND id != ?
         ORDER BY created_at ASC`
     ).bind(conversationId, userMsgId).all();
 
-    // Build messages array for Claude.
-    const messages: AnthropicMessage[] = [];
-    for (const row of history || []) {
-      messages.push({ role: row.role as 'user' | 'assistant', content: row.content as string });
+    // Build messages array.
+    const messages: WorkersAIMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+    ];
+    const historySlice = (history || []).slice(-10);
+    for (const row of historySlice) {
+      messages.push({
+        role: row.role as 'user' | 'assistant',
+        content: row.content as string,
+      });
     }
-    // Keep last 20 messages to control token usage.
-    if (messages.length > 20) messages.splice(0, messages.length - 20);
     messages.push({ role: 'user', content: userMessage });
 
     // Run the tool-use loop.
     let finalText = '';
     const toolsUsed: string[] = [];
     let rounds = 0;
+    const workersTools = toWorkersAITools(AI_TOOLS);
 
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
 
-      const apiResponse = await fetch(ANTHROPIC_API_URL, {
-        method: 'POST',
-        headers: {
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system: SYSTEM_PROMPT,
-          tools: AI_TOOLS,
-          messages,
-        }),
-      });
+      const result = await env.AI.run(WORKERS_AI_MODEL, {
+        messages,
+        tools: workersTools,
+        max_tokens: MAX_TOKENS,
+      }) as WorkersAIResponse;
 
-      if (!apiResponse.ok) {
-        const errText = await apiResponse.text();
-        console.error('Anthropic API error:', apiResponse.status, errText);
-        return jsonError('AI service temporarily unavailable. Please try again.', 502);
-      }
-
-      const result = (await apiResponse.json()) as AnthropicResponse;
-
-      // Check if Claude wants to use tools.
-      const toolUseBlocks = result.content.filter(b => b.type === 'tool_use');
-      const textBlocks = result.content.filter(b => b.type === 'text');
-
-      if (toolUseBlocks.length === 0) {
-        // No tool calls: extract the final text response.
-        finalText = textBlocks.map(b => b.text || '').join('\n').trim();
-        break;
-      }
-
-      // Claude wants tools: execute them and loop.
-      // Add the assistant's response to messages.
-      messages.push({ role: 'assistant', content: result.content });
-
-      // Execute each tool and collect results.
-      const toolResults: AnthropicContentBlock[] = [];
-      for (const block of toolUseBlocks) {
-        const toolName = block.name!;
-        const toolInput = block.input || {};
-        if (!toolsUsed.includes(toolName)) toolsUsed.push(toolName);
-
-        const toolOutput = await executeTool(env.DB, toolName, toolInput);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id!,
-          content: toolOutput,
+      // Check if the model wants to use tools.
+      if (result.tool_calls && result.tool_calls.length > 0) {
+        // Add assistant message with tool calls to history.
+        messages.push({
+          role: 'assistant',
+          content: result.response || '',
         });
+
+        // Execute each tool and feed results back.
+        for (const tc of result.tool_calls) {
+          const toolName = tc.function.name;
+          let toolInput: Record<string, unknown> = {};
+          try {
+            toolInput = JSON.parse(tc.function.arguments);
+          } catch {
+            // If the model returns malformed JSON, pass empty input.
+          }
+          if (!toolsUsed.includes(toolName)) toolsUsed.push(toolName);
+
+          const toolOutput = await executeTool(env.DB, toolName, toolInput);
+          messages.push({
+            role: 'tool',
+            content: toolOutput,
+            tool_call_id: tc.id,
+            name: toolName,
+          });
+        }
+        // Continue the loop so the model can process tool results.
+        continue;
       }
 
-      // Send tool results back to Claude.
-      messages.push({ role: 'user', content: toolResults });
+      // No tool calls: this is the final response.
+      finalText = (result.response || '').trim();
+      break;
     }
 
     if (!finalText && rounds >= MAX_TOOL_ROUNDS) {
@@ -191,7 +190,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).bind(conversationId).first<{ title: string | null }>();
 
     if (!existingTitle?.title) {
-      // Use the first ~60 chars of the user's message as the title.
       const autoTitle = userMessage.length > 60
         ? userMessage.slice(0, 57) + '...'
         : userMessage;

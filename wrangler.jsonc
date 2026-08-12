@@ -9,7 +9,10 @@
       "database_name": "dunns-rental-db",
       "database_id": "fc7ff39d-0398-4b20-813e-a871a4d8e884"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
   // NOTE: The R2 bucket binding for document storage is intentionally omitted
   // until R2 is enabled on the Cloudflare account and the "dunns-rental-docs"
   // bucket is created. Re-add it then:

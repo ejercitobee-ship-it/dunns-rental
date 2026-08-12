@@ -4,6 +4,8 @@ import { roleCan } from './permissions';
 export interface Env {
   DB: D1Database;
   DOCS?: R2Bucket;
+  /** Cloudflare Workers AI binding for the free AI Assistant. */
+  AI?: Ai;
   /** Resend API key. When unset, password reset emails are not sent. */
   RESEND_API_KEY?: string;
   /** From address for outgoing mail, e.g. "MH Dunn Property <info@mhdunnproperty.net>" */
@@ -16,7 +18,7 @@ export interface Env {
   VAPID_PRIVATE_JWK?: string;
   /** Shared secret the scheduled rent-reminder worker presents to /api/cron/rent-due. */
   CRON_SECRET?: string;
-  /** Anthropic API key for the AI Assistant. */
+  /** Anthropic API key for the AI Assistant (optional fallback). */
   ANTHROPIC_API_KEY?: string;
 }
 
