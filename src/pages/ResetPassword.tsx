@@ -36,7 +36,12 @@ export function ResetPassword() {
       showToast('Password updated. You can sign in now.', 'success');
       navigate('/login');
     } catch (err) {
-      setError((err as Error).message || 'That reset link is invalid or has expired.');
+      const raw = (err as Error).message || '';
+      if (raw.includes('expired') || raw.includes('Invalid')) {
+        setError('This reset link has expired or was already used. Please request a new one from the forgot password page.');
+      } else {
+        setError('Something went wrong while resetting your password. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -59,12 +64,12 @@ export function ResetPassword() {
               <div className="inline-flex items-center justify-center w-12 h-12 bg-danger-soft rounded-full">
                 <AlertCircle className="h-6 w-6 text-danger" />
               </div>
-              <h2 className="text-lg font-semibold text-ink">This link is not valid</h2>
-              <p className="text-sm text-muted">
-                Reset links expire after an hour and work only once. Request a new one to continue.
+              <h2 className="text-lg font-semibold text-ink">This reset link is no longer valid</h2>
+              <p className="text-sm text-muted leading-relaxed">
+                Password reset links expire after one hour and can only be used once. Please request a new link to continue.
               </p>
-              <Link to="/forgot-password" className="inline-block text-sm font-medium text-primary hover:text-primary-hover">
-                Request a new link
+              <Link to="/forgot-password" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover">
+                Request a new reset link
               </Link>
             </div>
           ) : (
@@ -73,9 +78,18 @@ export function ResetPassword() {
               <p className="text-sm text-muted mb-6">Make it at least 8 characters.</p>
 
               {error && (
-                <div className="mb-4 p-4 bg-danger-soft border border-[#e8cdc8] rounded-lg flex items-center gap-3">
-                  <AlertCircle className="h-5 w-5 text-danger flex-shrink-0" />
-                  <p className="text-sm text-danger">{error}</p>
+                <div className="mb-4 p-4 bg-danger-soft border border-[#e8cdc8] rounded-xl flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-danger font-medium">{error}</p>
+                    {error.includes('expired') && (
+                      <p className="text-xs text-danger/80 mt-1">
+                        <Link to="/forgot-password" className="underline font-medium hover:text-danger">
+                          Request a new reset link
+                        </Link>
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

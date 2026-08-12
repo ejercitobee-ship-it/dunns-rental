@@ -45,24 +45,29 @@ export function ForgotPassword() {
                   <div className="inline-flex items-center justify-center w-12 h-12 bg-positive-soft rounded-full">
                     <CheckCircle2 className="h-6 w-6 text-positive" />
                   </div>
-                  <h2 className="text-lg font-semibold text-ink">Check your email</h2>
+                  <h2 className="text-lg font-semibold text-ink">Check your inbox</h2>
                   <p className="text-sm text-muted leading-relaxed">
-                    If an account exists for <span className="text-ink">{email}</span>, we've sent a link to reset
-                    your password. It expires in one hour.
+                    If <span className="text-ink font-medium">{email}</span> is linked to an active account,
+                    you will receive an email with a link to reset your password. The link is valid for one hour.
                   </p>
-                  <p className="text-xs text-muted">
-                    Nothing arrived? Check your spam folder, or try again in a minute.
-                  </p>
+                  <div className="text-left bg-canvas rounded-xl p-4 space-y-2 mt-2">
+                    <p className="text-xs text-muted"><span className="font-medium text-ink">No email after a few minutes?</span></p>
+                    <ul className="text-xs text-muted space-y-1 list-disc list-inside">
+                      <li>Check your spam or junk folder</li>
+                      <li>Make sure you entered the email address you used to sign up</li>
+                      <li>Try again, or contact your property manager for help</li>
+                    </ul>
+                  </div>
                 </>
               ) : (
                 <>
                   <div className="inline-flex items-center justify-center w-12 h-12 bg-warning-soft rounded-full">
                     <AlertCircle className="h-6 w-6 text-warning" />
                   </div>
-                  <h2 className="text-lg font-semibold text-ink">Reset by email is not set up yet</h2>
+                  <h2 className="text-lg font-semibold text-ink">Email reset is not available yet</h2>
                   <p className="text-sm text-muted leading-relaxed">
-                    We can't send you a reset link right now. Please contact your administrator, who can set a new
-                    password for you from the Team page.
+                    Password reset by email is not set up for this account. Please contact your property
+                    manager directly. They can set a new password for you from the Team page.
                   </p>
                 </>
               )}

@@ -55,12 +55,24 @@ export function Login() {
         showToast('Welcome back!', 'success');
         navigate('/');
       } else {
-        setError(result.error || (twoFactorMode ? 'Invalid authentication code' : 'Invalid email or password'));
-        showToast(result.error || 'Invalid credentials', 'error');
+        // Map server errors to friendlier, more specific messages.
+        const raw = result.error || '';
+        let message: string;
+        if (twoFactorMode) {
+          message = raw.includes('expired')
+            ? 'That code has expired. Please request a new one.'
+            : 'The code you entered is incorrect. Please check and try again.';
+        } else if (raw.includes('deactivated')) {
+          message = 'This account has been deactivated. Please contact your administrator.';
+        } else if (raw.includes('Too many')) {
+          message = raw; // Throttle message already has the wait time
+        } else {
+          message = 'The email or password you entered is incorrect. Please double check and try again.';
+        }
+        setError(message);
       }
     } catch {
-      setError('An error occurred. Please try again.');
-      showToast('Login failed', 'error');
+      setError('Something went wrong on our end. Please try again in a moment.');
     } finally {
       setIsLoading(false);
     }
@@ -111,9 +123,24 @@ export function Login() {
           <h2 className="text-lg font-semibold text-ink mb-6">Sign in</h2>
 
           {error && (
-            <div className="mb-4 p-4 bg-danger-soft border border-[#e8cdc8] rounded-xl flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-danger flex-shrink-0" />
-              <p className="text-sm text-danger">{error}</p>
+            <div className="mb-4 p-4 bg-danger-soft border border-[#e8cdc8] rounded-xl flex gap-3">
+              <AlertCircle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-danger font-medium">{error}</p>
+                {error.includes('incorrect') && !twoFactorMode && (
+                  <p className="text-xs text-danger/80 mt-1">
+                    Forgot your password?{' '}
+                    <Link to="/forgot-password" className="underline font-medium hover:text-danger">
+                      Reset it here
+                    </Link>
+                  </p>
+                )}
+                {error.includes('deactivated') && (
+                  <p className="text-xs text-danger/80 mt-1">
+                    If you believe this is a mistake, reach out to your property manager.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
