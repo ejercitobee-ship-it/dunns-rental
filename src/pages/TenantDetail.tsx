@@ -259,13 +259,37 @@ export function TenantDetail() {
     setIsEditOpen(true);
   };
 
-  const markMoveInFeePaid = async () => {
-    if (!lease) return;
+  // Move-in fee recording modal — replaces the old boolean toggle with a proper
+  // flow that captures date, method, records income, and generates a receipt.
+  const [moveInFeeModalOpen, setMoveInFeeModalOpen] = useState(false);
+  const [moveInFeeForm, setMoveInFeeForm] = useState({ paidDate: '', method: '' });
+  const [recordingMoveInFee, setRecordingMoveInFee] = useState(false);
+
+  const openMoveInFeeModal = () => {
+    setMoveInFeeForm({ paidDate: todayLocalDate(), method: '' });
+    setMoveInFeeModalOpen(true);
+  };
+
+  const handleRecordMoveInFee = async () => {
+    if (!lease || recordingMoveInFee) return;
+    if (!moveInFeeForm.paidDate) {
+      showToast('Enter the date the fee was paid.', 'error');
+      return;
+    }
+    setRecordingMoveInFee(true);
     try {
-      await updateLease({ ...lease, moveInFeePaid: true });
-      showToast('Move-in fee marked as paid.', 'success');
+      await leasesApi.recordMoveInFee(lease.id, {
+        amount: lease.securityDeposit || 0,
+        paidDate: moveInFeeForm.paidDate,
+        method: moveInFeeForm.method || undefined,
+      });
+      showToast('Move-in fee recorded with receipt.', 'success');
+      setMoveInFeeModalOpen(false);
+      refreshData();
     } catch (err) {
-      showToast((err as Error).message || 'Could not update the move-in fee.', 'error');
+      showToast((err as Error).message || 'Could not record the move-in fee.', 'error');
+    } finally {
+      setRecordingMoveInFee(false);
     }
   };
 
@@ -500,7 +524,7 @@ export function TenantDetail() {
   // billing and shows Active). The unit was already occupied while pending.
   const [approveOpen, setApproveOpen] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true });
+  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '' });
 
   const openApprove = () => {
     if (!lease) return;
@@ -510,6 +534,8 @@ export function TenantDetail() {
       endDate: lease.endDate || '',
       moveInFee: lease.securityDeposit ? String(lease.securityDeposit) : '',
       moveInFeePaid: lease.moveInFeePaid !== false,
+      moveInFeePaidDate: lease.moveInFeePaidDate || '',
+      moveInFeeMethod: (lease.moveInFeeMethod as string) || '',
     });
     setApproveOpen(true);
   };
@@ -527,15 +553,26 @@ export function TenantDetail() {
     }
     setApproving(true);
     try {
+      const feeAmount = approveForm.moveInFee ? Number(approveForm.moveInFee) : 0;
       await updateLease({
         ...lease,
         monthlyRent: rent,
         startDate: approveForm.startDate,
         endDate: approveForm.endDate || undefined,
-        securityDeposit: approveForm.moveInFee ? Number(approveForm.moveInFee) : 0,
+        securityDeposit: feeAmount,
         moveInFeePaid: approveForm.moveInFeePaid,
         needsReview: false,
       });
+
+      // Record the move-in fee properly when marked as paid during approval.
+      if (approveForm.moveInFeePaid && feeAmount > 0 && approveForm.moveInFeePaidDate) {
+        await leasesApi.recordMoveInFee(lease.id, {
+          amount: feeAmount,
+          paidDate: approveForm.moveInFeePaidDate,
+          method: approveForm.moveInFeeMethod || undefined,
+        });
+      }
+
       await refreshData();
       showToast('Tenancy approved. It is now active.', 'success');
       setApproveOpen(false);
@@ -549,7 +586,7 @@ export function TenantDetail() {
   // Edit an existing tenancy's rent, dates, and move-in fee (the Tenancy card).
   const [tenancyOpen, setTenancyOpen] = useState(false);
   const [savingTenancy, setSavingTenancy] = useState(false);
-  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, rentDueDay: '' });
+  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', rentDueDay: '' });
 
   const openEditTenancy = () => {
     if (!lease) return;
@@ -559,6 +596,8 @@ export function TenantDetail() {
       endDate: lease.endDate || '',
       moveInFee: lease.securityDeposit ? String(lease.securityDeposit) : '',
       moveInFeePaid: lease.moveInFeePaid !== false,
+      moveInFeePaidDate: lease.moveInFeePaidDate || '',
+      moveInFeeMethod: (lease.moveInFeeMethod as string) || '',
       rentDueDay: lease.rentDueDay ? String(lease.rentDueDay) : '',
     });
     setTenancyOpen(true);
@@ -573,15 +612,30 @@ export function TenantDetail() {
     }
     setSavingTenancy(true);
     try {
+      const feeAmount = tenancyForm.moveInFee ? Number(tenancyForm.moveInFee) : 0;
+      // If the fee is being newly marked paid (was unpaid before) and we have
+      // a date, use the proper recording endpoint that creates income + receipt.
+      const newlyPaid = tenancyForm.moveInFeePaid && lease.moveInFeePaid === false && feeAmount > 0 && tenancyForm.moveInFeePaidDate;
+
       await updateLease({
         ...lease,
         monthlyRent: rent,
         startDate: tenancyForm.startDate || undefined,
         endDate: tenancyForm.endDate || undefined,
-        securityDeposit: tenancyForm.moveInFee ? Number(tenancyForm.moveInFee) : 0,
+        securityDeposit: feeAmount,
         moveInFeePaid: tenancyForm.moveInFeePaid,
         rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
       });
+
+      // Record the move-in fee properly: income row + receipt + audit log.
+      if (newlyPaid) {
+        await leasesApi.recordMoveInFee(lease.id, {
+          amount: feeAmount,
+          paidDate: tenancyForm.moveInFeePaidDate,
+          method: tenancyForm.moveInFeeMethod || undefined,
+        });
+      }
+
       // Refresh so the incomes table (move-in fee) is current on the Finances
       // page and Tax Report without a full page reload.
       await refreshData();
@@ -1077,7 +1131,7 @@ export function TenantDetail() {
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Badge variant="destructive">Owed</Badge>
                         {canManagePortal && (
-                          <button onClick={markMoveInFeePaid} className="text-xs text-primary hover:underline">Mark paid</button>
+                          <button onClick={openMoveInFeeModal} className="text-xs text-primary hover:underline">Record payment</button>
                         )}
                       </div>
                     ) : (
@@ -1838,6 +1892,48 @@ export function TenantDetail() {
         </Card>
       )}
 
+      {/* Record move-in fee modal */}
+      <Modal isOpen={moveInFeeModalOpen} onClose={() => (recordingMoveInFee ? undefined : setMoveInFeeModalOpen(false))} title="Record move-in fee payment" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Recording {formatCurrency(lease?.securityDeposit || 0)} for this tenancy. This creates an income entry, generates a receipt, and logs the payment.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Date Paid *</label>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              value={moveInFeeForm.paidDate}
+              onChange={(e) => setMoveInFeeForm({ ...moveInFeeForm, paidDate: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Payment Method</label>
+            <select
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+              value={moveInFeeForm.method}
+              onChange={(e) => setMoveInFeeForm({ ...moveInFeeForm, method: e.target.value })}
+            >
+              <option value="">Select method</option>
+              <option value="check">Check</option>
+              <option value="money_order">Money Order</option>
+              <option value="zelle">Zelle</option>
+              <option value="venmo">Venmo</option>
+              <option value="cash">Cash</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setMoveInFeeModalOpen(false)} disabled={recordingMoveInFee}>
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleRecordMoveInFee} disabled={recordingMoveInFee || !moveInFeeForm.paidDate}>
+              {recordingMoveInFee ? 'Recording...' : 'Record Payment'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Edit modal */}
       <Modal isOpen={tenancyOpen} onClose={() => (savingTenancy ? undefined : setTenancyOpen(false))} title="Edit tenancy" size="md">
         <div className="space-y-4">
@@ -1896,10 +1992,39 @@ export function TenantDetail() {
                 type="checkbox"
                 className="h-4 w-4 rounded border-line-strong"
                 checked={tenancyForm.moveInFeePaid}
-                onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaid: e.target.checked })}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaid: e.target.checked, ...(!e.target.checked ? {} : { moveInFeePaidDate: tenancyForm.moveInFeePaidDate || todayLocalDate() }) })}
               />
               Move-in fee already paid
             </label>
+            {tenancyForm.moveInFeePaid && tenancyForm.moveInFee && lease?.moveInFeePaid === false && (
+              <div className="mt-3 grid grid-cols-2 gap-3 pl-6 border-l-2 border-primary/20">
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Date Paid *</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={tenancyForm.moveInFeePaidDate}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaidDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Method</label>
+                  <select
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={tenancyForm.moveInFeeMethod}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeeMethod: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="check">Check</option>
+                    <option value="money_order">Money Order</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Rent Due Day</label>
@@ -1985,10 +2110,39 @@ export function TenantDetail() {
                 type="checkbox"
                 className="h-4 w-4 rounded border-line-strong"
                 checked={approveForm.moveInFeePaid}
-                onChange={(e) => setApproveForm({ ...approveForm, moveInFeePaid: e.target.checked })}
+                onChange={(e) => setApproveForm({ ...approveForm, moveInFeePaid: e.target.checked, ...(!e.target.checked ? {} : { moveInFeePaidDate: approveForm.moveInFeePaidDate || todayLocalDate() }) })}
               />
               Move-in fee already paid
             </label>
+            {approveForm.moveInFeePaid && approveForm.moveInFee && (
+              <div className="mt-3 grid grid-cols-2 gap-3 pl-6 border-l-2 border-primary/20">
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Date Paid *</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={approveForm.moveInFeePaidDate}
+                    onChange={(e) => setApproveForm({ ...approveForm, moveInFeePaidDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Method</label>
+                  <select
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={approveForm.moveInFeeMethod}
+                    onChange={(e) => setApproveForm({ ...approveForm, moveInFeeMethod: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="check">Check</option>
+                    <option value="money_order">Money Order</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+            )}
             {!approveForm.moveInFeePaid && approveForm.moveInFee && (
               <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
             )}

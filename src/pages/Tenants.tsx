@@ -10,7 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency, formatDate, todayLocalDate, cn } from '../lib/utils';
 import { ProspectiveTenantsPanel } from '../components/ProspectiveTenantsPanel';
-import { tenantsApi } from '../lib/api';
+import { tenantsApi, leasesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -41,6 +41,8 @@ const emptyTenancyForm = {
   monthlyRent: '',
   securityDeposit: '',
   moveInFeePaid: true,
+  moveInFeePaidDate: '',
+  moveInFeeMethod: '',
   notes: '',
   rentDueDay: '',
 };
@@ -462,13 +464,14 @@ export function Tenants() {
 
       const tenantIds = nextRows.map(row => row.tenantId).filter((id): id is string => !!id);
 
-      await addLease({
+      const feeAmount = tenancyForm.securityDeposit ? Number(tenancyForm.securityDeposit) : 0;
+      const newLease = await addLease({
         unitId: unit.id,
         propertyId: unit.propertyId,
         startDate: tenancyForm.startDate || undefined,
         endDate: tenancyForm.endDate || undefined,
         monthlyRent: Number(tenancyForm.monthlyRent) || 0,
-        securityDeposit: tenancyForm.securityDeposit ? Number(tenancyForm.securityDeposit) : undefined,
+        securityDeposit: feeAmount || undefined,
         moveInFeePaid: tenancyForm.moveInFeePaid,
         rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
         status: 'active',
@@ -478,6 +481,19 @@ export function Tenants() {
         // stamps this list itself from then on.
         pauses: [],
       });
+
+      // When the fee is marked "already paid" with a date, record it properly:
+      // income row + receipt + audit log. Best-effort; the tenancy is already
+      // created, so a failed recording can be retried from the tenant profile.
+      if (tenancyForm.moveInFeePaid && feeAmount > 0 && tenancyForm.moveInFeePaidDate) {
+        try {
+          await leasesApi.recordMoveInFee(newLease.id, {
+            amount: feeAmount,
+            paidDate: tenancyForm.moveInFeePaidDate,
+            method: tenancyForm.moveInFeeMethod || undefined,
+          });
+        } catch { /* the tenancy is safe; fee can be recorded from profile */ }
+      }
 
       // Best-effort portal invites right after the tenancy exists, so onboarding
       // is one step. Only people with an email are invited; a failed invite
@@ -892,10 +908,39 @@ export function Tenants() {
                     type="checkbox"
                     className="h-4 w-4 rounded border-line-strong"
                     checked={tenancyForm.moveInFeePaid}
-                    onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaid: e.target.checked })}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaid: e.target.checked, ...(!e.target.checked ? {} : { moveInFeePaidDate: tenancyForm.moveInFeePaidDate || todayLocalDate() }) })}
                   />
                   Move-in fee already paid
                 </label>
+                {tenancyForm.moveInFeePaid && tenancyForm.securityDeposit && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 pl-6 border-l-2 border-primary/20">
+                    <div>
+                      <label className="block text-xs font-medium text-muted mb-1">Date Paid *</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        value={tenancyForm.moveInFeePaidDate}
+                        onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaidDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted mb-1">Method</label>
+                      <select
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        value={tenancyForm.moveInFeeMethod}
+                        onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeeMethod: e.target.value })}
+                      >
+                        <option value="">Select</option>
+                        <option value="check">Check</option>
+                        <option value="money_order">Money Order</option>
+                        <option value="zelle">Zelle</option>
+                        <option value="venmo">Venmo</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
                 {!tenancyForm.moveInFeePaid && tenancyForm.securityDeposit && (
                   <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
                 )}

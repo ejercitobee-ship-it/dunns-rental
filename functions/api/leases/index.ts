@@ -193,6 +193,32 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         newValues: { monthlyRent: body.monthlyRent, startDate: body.startDate, endDate: body.endDate, status },
       }),
     ];
+
+    // When the move-in fee is marked paid at creation time, record the income
+    // row so Finances and Tax Report see it immediately. The dedicated
+    // move-in-fee POST endpoint handles the receipt + full audit; this only
+    // ensures the income row exists so there is never a gap.
+    const deposit = Number(body.securityDeposit) || 0;
+    if (body.moveInFeePaid !== false && deposit > 0) {
+      const incomeDate = (body.startDate as string) || new Date().toISOString().slice(0, 10);
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO incomes (id, property_id, unit_id, source, amount, date, description, user_id)
+           VALUES (?, ?, ?, 'move_in_fee', ?, ?, 'Move-in fee', ?)
+           ON CONFLICT(id) DO UPDATE SET
+             amount = excluded.amount, date = excluded.date,
+             property_id = excluded.property_id, unit_id = excluded.unit_id`
+        ).bind(
+          `movein-${id}`,
+          body.propertyId ?? unit.property_id ?? null,
+          body.unitId,
+          deposit,
+          incomeDate,
+          auth.id
+        )
+      );
+    }
+
     await env.DB.batch(statements);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
