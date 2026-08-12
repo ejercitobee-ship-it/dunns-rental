@@ -62,6 +62,14 @@ export interface Lease {
   moveInFeePaidDate?: string;
   moveInFeeMethod?: string;
   moveInFeeReceiptDocumentId?: string;
+  /** Refundable security deposit amount (separate from the move-in fee). */
+  depositAmount?: number;
+  /** Whether the security deposit has been collected. */
+  depositPaid?: boolean;
+  /** When the deposit was collected. */
+  depositPaidDate?: string;
+  /** How the deposit was paid. */
+  depositMethod?: string;
   status: LeaseStatus;
   needsReview?: boolean;
   /**

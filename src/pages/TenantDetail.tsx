@@ -293,28 +293,39 @@ export function TenantDetail() {
     }
   };
 
-  // Inline editing of move-in fee date (requires leases_move_in permission).
+  // Super-admin move-in fee editing modal (date + amount + method + reason).
   const canEditMoveIn = hasPermission('leases_move_in');
-  const [editingMoveInFeeLeaseId, setEditingMoveInFeeLeaseId] = useState<string | null>(null);
-  const [editMoveInFeeDate, setEditMoveInFeeDate] = useState('');
-  const [editMoveInFeeReason, setEditMoveInFeeReason] = useState('');
+  const [editMoveInFeeOpen, setEditMoveInFeeOpen] = useState(false);
+  const [editMoveInFeeLeaseId, setEditMoveInFeeLeaseId] = useState('');
+  const [editMoveInFeeForm, setEditMoveInFeeForm] = useState({ paidDate: '', amount: '', method: '', reason: '' });
   const [savingMoveInFee, setSavingMoveInFee] = useState(false);
 
-  const handleEditMoveInFeeDate = async (leaseId: string) => {
-    if (!editMoveInFeeDate) return;
+  const openEditMoveInFee = (l: { id: string; moveInFeePaidDate?: string; securityDeposit?: number; moveInFeeMethod?: string }) => {
+    setEditMoveInFeeLeaseId(l.id);
+    setEditMoveInFeeForm({
+      paidDate: l.moveInFeePaidDate || '',
+      amount: l.securityDeposit ? String(l.securityDeposit) : '',
+      method: (l.moveInFeeMethod as string) || '',
+      reason: '',
+    });
+    setEditMoveInFeeOpen(true);
+  };
+
+  const handleSaveEditMoveInFee = async () => {
+    if (savingMoveInFee) return;
     setSavingMoveInFee(true);
     try {
-      await leasesApi.editMoveInFee(leaseId, {
-        paidDate: editMoveInFeeDate,
-        reason: editMoveInFeeReason || undefined,
+      await leasesApi.editMoveInFee(editMoveInFeeLeaseId, {
+        paidDate: editMoveInFeeForm.paidDate || undefined,
+        amount: editMoveInFeeForm.amount ? Number(editMoveInFeeForm.amount) : undefined,
+        method: editMoveInFeeForm.method || undefined,
+        reason: editMoveInFeeForm.reason || undefined,
       });
-      showToast('Move-in fee date updated.', 'success');
-      setEditingMoveInFeeLeaseId(null);
-      setEditMoveInFeeDate('');
-      setEditMoveInFeeReason('');
+      showToast('Move-in fee updated.', 'success');
+      setEditMoveInFeeOpen(false);
       refreshData();
     } catch (err) {
-      showToast((err as Error).message || 'Could not update the date.', 'error');
+      showToast((err as Error).message || 'Could not update the move-in fee.', 'error');
     } finally {
       setSavingMoveInFee(false);
     }
@@ -524,7 +535,7 @@ export function TenantDetail() {
   // billing and shows Active). The unit was already occupied while pending.
   const [approveOpen, setApproveOpen] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '' });
+  const [approveForm, setApproveForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', depositAmount: '', depositPaid: false, depositPaidDate: '', depositMethod: '' });
 
   const openApprove = () => {
     if (!lease) return;
@@ -536,6 +547,10 @@ export function TenantDetail() {
       moveInFeePaid: lease.moveInFeePaid !== false,
       moveInFeePaidDate: lease.moveInFeePaidDate || '',
       moveInFeeMethod: (lease.moveInFeeMethod as string) || '',
+      depositAmount: lease.depositAmount ? String(lease.depositAmount) : '',
+      depositPaid: !!lease.depositPaid,
+      depositPaidDate: lease.depositPaidDate || '',
+      depositMethod: (lease.depositMethod as string) || '',
     });
     setApproveOpen(true);
   };
@@ -561,6 +576,10 @@ export function TenantDetail() {
         endDate: approveForm.endDate || undefined,
         securityDeposit: feeAmount,
         moveInFeePaid: approveForm.moveInFeePaid,
+        depositAmount: approveForm.depositAmount ? Number(approveForm.depositAmount) : 0,
+        depositPaid: approveForm.depositPaid,
+        depositPaidDate: approveForm.depositPaidDate || undefined,
+        depositMethod: approveForm.depositMethod || undefined,
         needsReview: false,
       });
 
@@ -586,7 +605,7 @@ export function TenantDetail() {
   // Edit an existing tenancy's rent, dates, and move-in fee (the Tenancy card).
   const [tenancyOpen, setTenancyOpen] = useState(false);
   const [savingTenancy, setSavingTenancy] = useState(false);
-  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', rentDueDay: '' });
+  const [tenancyForm, setTenancyForm] = useState({ monthlyRent: '', startDate: '', endDate: '', moveInFee: '', moveInFeePaid: true, moveInFeePaidDate: '', moveInFeeMethod: '', depositAmount: '', depositPaid: false, depositPaidDate: '', depositMethod: '', rentDueDay: '' });
 
   const openEditTenancy = () => {
     if (!lease) return;
@@ -598,6 +617,10 @@ export function TenantDetail() {
       moveInFeePaid: lease.moveInFeePaid !== false,
       moveInFeePaidDate: lease.moveInFeePaidDate || '',
       moveInFeeMethod: (lease.moveInFeeMethod as string) || '',
+      depositAmount: lease.depositAmount ? String(lease.depositAmount) : '',
+      depositPaid: !!lease.depositPaid,
+      depositPaidDate: lease.depositPaidDate || '',
+      depositMethod: (lease.depositMethod as string) || '',
       rentDueDay: lease.rentDueDay ? String(lease.rentDueDay) : '',
     });
     setTenancyOpen(true);
@@ -624,6 +647,10 @@ export function TenantDetail() {
         endDate: tenancyForm.endDate || undefined,
         securityDeposit: feeAmount,
         moveInFeePaid: tenancyForm.moveInFeePaid,
+        depositAmount: tenancyForm.depositAmount ? Number(tenancyForm.depositAmount) : 0,
+        depositPaid: tenancyForm.depositPaid,
+        depositPaidDate: tenancyForm.depositPaidDate || undefined,
+        depositMethod: tenancyForm.depositMethod || undefined,
         rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
       });
 
@@ -1139,6 +1166,16 @@ export function TenantDetail() {
                     )}
                   </div>
                 )}
+                {(lease.depositAmount ?? 0) > 0 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-line">
+                    <span className="text-sm text-muted">Security deposit {formatCurrency(lease.depositAmount ?? 0)}</span>
+                    {lease.depositPaid ? (
+                      <Badge variant="success">Collected</Badge>
+                    ) : (
+                      <Badge variant="destructive">Owed</Badge>
+                    )}
+                  </div>
+                )}
                 {lease.status !== 'active' && (
                   <div className="pt-2 border-t border-line flex items-start justify-between gap-2">
                     <span className="eyebrow">Status</span>
@@ -1515,7 +1552,7 @@ export function TenantDetail() {
           leaseId={(lease || endedLease)!.id}
           propertyId={(lease || endedLease)!.propertyId}
           unitId={(lease || endedLease)!.unitId}
-          depositAmount={(lease || endedLease)!.securityDeposit || 0}
+          depositAmount={(lease || endedLease)!.depositAmount || 0}
           leaseStatus={(lease || endedLease)!.status || 'active'}
         />
       )}
@@ -1567,56 +1604,23 @@ export function TenantDetail() {
               <tbody>
                 {moveInFeeRows.map(l => (
                   <tr key={`mif-${l.id}`} className="border-b border-line last:border-0 bg-primary-soft/20">
-                    <td className="py-3 px-5 text-sm text-ink font-medium">Move-in fee</td>
+                    <td className="py-3 px-5 text-sm text-ink font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        Move-in fee
+                        {canEditMoveIn && (
+                          <button
+                            onClick={() => openEditMoveInFee(l)}
+                            className="text-faint hover:text-primary"
+                            title="Edit move-in fee details"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </span>
+                    </td>
                     <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(l.securityDeposit || 0)}</td>
                     <td className="py-3 px-5 text-sm text-muted">{formatMethod(l.moveInFeeMethod as PaymentMethod | undefined)}</td>
-                    <td className="py-3 px-5 text-sm text-muted">
-                      {editingMoveInFeeLeaseId === l.id ? (
-                        <div className="flex flex-col gap-1.5">
-                          <input
-                            type="date"
-                            value={editMoveInFeeDate}
-                            onChange={(e) => setEditMoveInFeeDate(e.target.value)}
-                            className="w-full rounded border border-line bg-surface px-2 py-1 text-sm text-ink"
-                          />
-                          <input
-                            type="text"
-                            value={editMoveInFeeReason}
-                            onChange={(e) => setEditMoveInFeeReason(e.target.value)}
-                            placeholder="Reason (optional)"
-                            className="w-full rounded border border-line bg-surface px-2 py-1 text-xs text-ink"
-                          />
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleEditMoveInFeeDate(l.id)}
-                              disabled={savingMoveInFee || !editMoveInFeeDate}
-                              className="text-xs font-medium text-primary hover:text-primary-hover disabled:opacity-50"
-                            >
-                              {savingMoveInFee ? 'Saving...' : 'Save'}
-                            </button>
-                            <button
-                              onClick={() => { setEditingMoveInFeeLeaseId(null); setEditMoveInFeeDate(''); setEditMoveInFeeReason(''); }}
-                              className="text-xs text-muted hover:text-ink"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5">
-                          {l.moveInFeePaidDate ? formatDate(l.moveInFeePaidDate) : '—'}
-                          {canEditMoveIn && (
-                            <button
-                              onClick={() => { setEditingMoveInFeeLeaseId(l.id); setEditMoveInFeeDate(l.moveInFeePaidDate || ''); }}
-                              className="text-faint hover:text-primary"
-                              title="Edit date (super admin)"
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </button>
-                          )}
-                        </span>
-                      )}
-                    </td>
+                    <td className="py-3 px-5 text-sm text-muted">{l.moveInFeePaidDate ? formatDate(l.moveInFeePaidDate) : '—'}</td>
                     <td className="py-3 px-5 text-sm">
                       {l.moveInFeeReceiptDocumentId ? (
                         <a href={`/api/documents/${l.moveInFeeReceiptDocumentId}`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary-hover">Download</a>
@@ -1934,6 +1938,73 @@ export function TenantDetail() {
         </div>
       </Modal>
 
+      {/* Super-admin edit move-in fee modal */}
+      <Modal isOpen={editMoveInFeeOpen} onClose={() => (savingMoveInFee ? undefined : setEditMoveInFeeOpen(false))} title="Edit move-in fee" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Update the move-in fee details. Every change is audit logged with your name and reason.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Amount</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={editMoveInFeeForm.amount}
+                onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, amount: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Date Paid</label>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              value={editMoveInFeeForm.paidDate}
+              onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, paidDate: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Payment Method</label>
+            <select
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+              value={editMoveInFeeForm.method}
+              onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, method: e.target.value })}
+            >
+              <option value="">Select method</option>
+              <option value="check">Check</option>
+              <option value="money_order">Money Order</option>
+              <option value="zelle">Zelle</option>
+              <option value="venmo">Venmo</option>
+              <option value="cash">Cash</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Reason for Edit</label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+              value={editMoveInFeeForm.reason}
+              onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, reason: e.target.value })}
+              placeholder="e.g. Correcting payment date"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setEditMoveInFeeOpen(false)} disabled={savingMoveInFee}>
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleSaveEditMoveInFee} disabled={savingMoveInFee}>
+              {savingMoveInFee ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Edit modal */}
       <Modal isOpen={tenancyOpen} onClose={() => (savingTenancy ? undefined : setTenancyOpen(false))} title="Edit tenancy" size="md">
         <div className="space-y-4">
@@ -2013,6 +2084,59 @@ export function TenantDetail() {
                     className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
                     value={tenancyForm.moveInFeeMethod}
                     onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeeMethod: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="check">Check</option>
+                    <option value="money_order">Money Order</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Security Deposit (refundable)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={tenancyForm.depositAmount}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, depositAmount: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line-strong"
+                checked={tenancyForm.depositPaid}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, depositPaid: e.target.checked, ...(!e.target.checked ? {} : { depositPaidDate: tenancyForm.depositPaidDate || todayLocalDate() }) })}
+              />
+              Deposit collected
+            </label>
+            {tenancyForm.depositPaid && tenancyForm.depositAmount && (
+              <div className="mt-3 grid grid-cols-2 gap-3 pl-6 border-l-2 border-primary/20">
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Date Collected</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={tenancyForm.depositPaidDate}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, depositPaidDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Method</label>
+                  <select
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={tenancyForm.depositMethod}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, depositMethod: e.target.value })}
                   >
                     <option value="">Select</option>
                     <option value="check">Check</option>
@@ -2145,6 +2269,59 @@ export function TenantDetail() {
             )}
             {!approveForm.moveInFeePaid && approveForm.moveInFee && (
               <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Security Deposit (refundable)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={approveForm.depositAmount}
+                onChange={(e) => setApproveForm({ ...approveForm, depositAmount: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line-strong"
+                checked={approveForm.depositPaid}
+                onChange={(e) => setApproveForm({ ...approveForm, depositPaid: e.target.checked, ...(!e.target.checked ? {} : { depositPaidDate: approveForm.depositPaidDate || todayLocalDate() }) })}
+              />
+              Deposit collected
+            </label>
+            {approveForm.depositPaid && approveForm.depositAmount && (
+              <div className="mt-3 grid grid-cols-2 gap-3 pl-6 border-l-2 border-primary/20">
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Date Collected</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={approveForm.depositPaidDate}
+                    onChange={(e) => setApproveForm({ ...approveForm, depositPaidDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">Method</label>
+                  <select
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    value={approveForm.depositMethod}
+                    onChange={(e) => setApproveForm({ ...approveForm, depositMethod: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="check">Check</option>
+                    <option value="money_order">Money Order</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
             )}
           </div>
           <div className="flex gap-3 pt-2">

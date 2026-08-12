@@ -43,6 +43,10 @@ const emptyTenancyForm = {
   moveInFeePaid: true,
   moveInFeePaidDate: '',
   moveInFeeMethod: '',
+  depositAmount: '',
+  depositPaid: false,
+  depositPaidDate: '',
+  depositMethod: '',
   notes: '',
   rentDueDay: '',
 };
@@ -473,6 +477,10 @@ export function Tenants() {
         monthlyRent: Number(tenancyForm.monthlyRent) || 0,
         securityDeposit: feeAmount || undefined,
         moveInFeePaid: tenancyForm.moveInFeePaid,
+        depositAmount: tenancyForm.depositAmount ? Number(tenancyForm.depositAmount) : 0,
+        depositPaid: tenancyForm.depositPaid,
+        depositPaidDate: tenancyForm.depositPaidDate || undefined,
+        depositMethod: tenancyForm.depositMethod || undefined,
         rentDueDay: tenancyForm.rentDueDay ? Number(tenancyForm.rentDueDay) : undefined,
         status: 'active',
         notes: tenancyForm.notes.trim() || undefined,
@@ -943,6 +951,59 @@ export function Tenants() {
                 )}
                 {!tenancyForm.moveInFeePaid && tenancyForm.securityDeposit && (
                   <p className="text-xs text-muted mt-1">Will show as owed on their record until you mark it paid.</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Security Deposit (refundable)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    value={tenancyForm.depositAmount}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, depositAmount: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-line-strong"
+                    checked={tenancyForm.depositPaid}
+                    onChange={(e) => setTenancyForm({ ...tenancyForm, depositPaid: e.target.checked, ...(!e.target.checked ? {} : { depositPaidDate: tenancyForm.depositPaidDate || todayLocalDate() }) })}
+                  />
+                  Deposit collected
+                </label>
+                {tenancyForm.depositPaid && tenancyForm.depositAmount && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 pl-6 border-l-2 border-primary/20">
+                    <div>
+                      <label className="block text-xs font-medium text-muted mb-1">Date Collected</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        value={tenancyForm.depositPaidDate}
+                        onChange={(e) => setTenancyForm({ ...tenancyForm, depositPaidDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted mb-1">Method</label>
+                      <select
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        value={tenancyForm.depositMethod}
+                        onChange={(e) => setTenancyForm({ ...tenancyForm, depositMethod: e.target.value })}
+                      >
+                        <option value="">Select</option>
+                        <option value="check">Check</option>
+                        <option value="money_order">Money Order</option>
+                        <option value="zelle">Zelle</option>
+                        <option value="venmo">Venmo</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

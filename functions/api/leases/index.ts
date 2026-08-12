@@ -153,8 +153,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = crypto.randomUUID();
     const statements = [
       env.DB.prepare(
-        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, move_in_fee_paid, status, notes, user_id, rent_due_day)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO leases (id, unit_id, property_id, start_date, end_date, monthly_rent, security_deposit, move_in_fee_paid, status, notes, user_id, rent_due_day,
+         deposit_amount, deposit_paid, deposit_paid_date, deposit_method)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id,
         body.unitId,
@@ -168,7 +169,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.notes ?? null,
         auth.id,
         typeof body.rentDueDay === 'number' && body.rentDueDay >= 1 && body.rentDueDay <= 31
-          ? Math.floor(body.rentDueDay) : null
+          ? Math.floor(body.rentDueDay) : null,
+        Number(body.depositAmount) || 0,
+        body.depositPaid ? 1 : 0,
+        body.depositPaidDate ?? null,
+        body.depositMethod ?? null
       ),
       ...tenantIds.map(tid =>
         env.DB.prepare(

@@ -77,6 +77,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
           unit_id = ?, property_id = ?, start_date = ?, end_date = ?, monthly_rent = ?,
           security_deposit = ?, move_in_fee_paid = ?, status = ?, needs_review = 0, notes = ?,
           end_reason = ?, ended_property_label = ?, ended_unit_label = ?, rent_due_day = ?,
+          deposit_amount = ?, deposit_paid = ?, deposit_paid_date = ?, deposit_method = ?,
           updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
@@ -94,6 +95,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.endedUnitLabel ?? null,
         typeof body.rentDueDay === 'number' && body.rentDueDay >= 1 && body.rentDueDay <= 31
           ? Math.floor(body.rentDueDay) : null,
+        Number(body.depositAmount) || 0,
+        body.depositPaid ? 1 : 0,
+        body.depositPaidDate ?? null,
+        body.depositMethod ?? null,
         id
       ),
     ];
