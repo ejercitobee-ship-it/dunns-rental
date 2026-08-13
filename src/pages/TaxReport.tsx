@@ -537,6 +537,29 @@ export function TaxReport() {
     downloadBlob([header, ...rows].join('\n'), `schedule-e-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
   };
 
+  const exportScheduleEPerPropertyZIP = async () => {
+    setExportOpen(false);
+    const props = main.scheduleEPerProperty.filter(p => p.lines.some(l => l.amount !== 0));
+    if (props.length === 0) return;
+    const label = mainLabel.replace(/\s+/g, '-');
+    const zip = new JSZip();
+    for (const prop of props) {
+      const headerCols = ['Line', 'Description', 'Amount'];
+      const rows = prop.lines.map(l =>
+        [l.line, csvEscape(l.label), l.amount.toFixed(2)].join(',')
+      );
+      const slug = prop.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '').toLowerCase();
+      zip.file(`schedule-e-${slug}-${label}.csv`, [headerCols.join(','), ...rows].join('\n'));
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schedule-e-per-property-${label}.zip`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const export1099CSV = () => {
     const header = 'Vendor,Total Paid,Needs 1099';
     const rows = main.vendors1099.map(v =>
@@ -676,6 +699,7 @@ export function TaxReport() {
                 <div className="border-t border-line my-1" />
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportPrintPdf}>Print / Save as PDF</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleECSV}>Schedule E (CSV)</button>
+                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleEPerPropertyZIP}>Schedule E Per Property (ZIP)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportExpensesCSV}>Expenses (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportIncomeCSV}>Income (CSV)</button>
                 <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={export1099CSV}>1099 Vendor (CSV)</button>
