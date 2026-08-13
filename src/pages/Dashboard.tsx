@@ -221,7 +221,7 @@ export function Dashboard() {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
     return activeLeases(leases)
-      .map(lease => ({ lease, ...monthsBehind(lease, rentPayments, month, year) }))
+      .map(lease => ({ lease, ...monthsBehind(lease, rentPayments, month, year, leases) }))
       .filter(x => x.months >= pastDueMonths)
       .map(x => ({
         ...x,

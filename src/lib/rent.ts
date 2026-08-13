@@ -289,16 +289,21 @@ export interface PastDue {
  * the app (leasesOwingMonth) and the same settlement (settleMonth), so this
  * cannot disagree with the Rent Management numbers. The window is capped so a
  * very old lease cannot loop unbounded.
+ *
+ * `siblingLeases` — see `unsettledMonths`. When provided, renewal overlap
+ * de-duplication uses the full set instead of `[lease]` alone.
  */
 export function monthsBehind(
   lease: Lease,
   payments: RentPayment[],
   currentMonth: number,
-  currentYear: number
+  currentYear: number,
+  siblingLeases?: Lease[]
 ): PastDue {
   if (!lease.startDate || lease.needsReview) return { months: 0, balance: 0 };
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
     return { months: 0, balance: 0 };
+  const leaseSet = siblingLeases || [lease];
   const currentTarget = currentYear * 12 + currentMonth;
   const from = Math.max(yearMonthOf(lease.startDate), currentTarget - 60);
   let months = 0;
@@ -306,7 +311,8 @@ export function monthsBehind(
   for (let t = from; t <= currentTarget; t++) {
     const year = Math.floor((t - 1) / 12);
     const month = t - year * 12;
-    if (leasesOwingMonth([lease], month, year).length === 0) continue;
+    const owing = leasesOwingMonth(leaseSet, month, year);
+    if (!owing.some(l => l.id === lease.id)) continue;
     const s = settleMonth(lease, payments, month, year);
     if (s.balance > 0) {
       months += 1;
@@ -323,23 +329,34 @@ export function monthsBehind(
  * backdated start date and is already paid up. Skips months the lease does not
  * owe (out of term, or paused) and months already settled, so running it is
  * idempotent. Returns them oldest first.
+ *
+ * `siblingLeases` (optional): all leases for the same tenant / unit. When
+ * provided, `leasesOwingMonth` uses the full set for its renewal overlap
+ * de-duplication, so a renewal that starts in the same month as the old lease
+ * ends is correctly excluded from that month. Without this, a caller that
+ * passes only `[lease]` (e.g. TenantDetail) defeats the de-duplication and
+ * the new lease shows the overlap month as owed.
  */
 export function unsettledMonths(
   lease: Lease,
   payments: RentPayment[],
   throughMonth: number,
-  throughYear: number
+  throughYear: number,
+  siblingLeases?: Lease[]
 ): Array<{ month: number; year: number; amount: number }> {
   if (!lease.startDate || lease.needsReview) return [];
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
     return [];
+  const leaseSet = siblingLeases || [lease];
   const from = yearMonthOf(lease.startDate);
   const through = throughYear * 12 + throughMonth;
   const out: Array<{ month: number; year: number; amount: number }> = [];
   for (let t = from; t <= through; t++) {
     const year = Math.floor((t - 1) / 12);
     const month = t - year * 12;
-    if (leasesOwingMonth([lease], month, year).length === 0) continue;
+    // Use the full sibling set so renewal overlap de-duplication fires.
+    const owing = leasesOwingMonth(leaseSet, month, year);
+    if (!owing.some(l => l.id === lease.id)) continue;
     const s = settleMonth(lease, payments, month, year);
     if (s.balance > EPSILON) out.push({ month, year, amount: round2(s.balance) });
   }

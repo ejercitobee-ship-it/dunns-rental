@@ -200,29 +200,33 @@ export function TenantDetail() {
   const endedPropLabel = endedLease?.endedPropertyLabel || endedProp?.name || endedProp?.address;
   const endedUnitLabel = endedLease?.endedUnitLabel || (endedUnitRow ? `Unit ${endedUnitRow.unitNumber}` : undefined);
 
+  // All leases for this tenant, needed so the renewal overlap de-duplication
+  // in leasesOwingMonth fires correctly (it requires seeing both the old and
+  // new lease to skip the overlap month on the renewal).
+  const allTenantLeases = useMemo(() => id ? getTenantLeases(id) : [], [id, getTenantLeases]);
+
   const thisMonth = useMemo(() => {
     if (!lease) return undefined;
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
-    // Gated the same way every other page gates a month against a lease:
-    // leasesOwingMonth already knows a lease starting in the future owes
-    // nothing yet, and that a paused lease stops owing from its pause month
-    // on. Showing a settlement without this would invent a balance the
-    // owner never billed.
-    if (!leasesOwingMonth([lease], month, year).length) return undefined;
+    // Use allTenantLeases so the renewal overlap de-duplication fires: a
+    // renewal that starts in the same month as the old lease ends is
+    // excluded from that month because the old lease already covers it.
+    const owing = leasesOwingMonth(allTenantLeases, month, year);
+    if (!owing.some(l => l.id === lease.id)) return undefined;
     return settleMonth(lease, rentPayments, month, year);
-  }, [lease, rentPayments]);
+  }, [lease, allTenantLeases, rentPayments]);
 
   // Every month this tenancy still owes (oldest first), with the amount, so the
   // profile shows exactly which months are behind, not just a total.
   const owed = useMemo(() => {
     if (!lease) return { months: [] as { month: number; year: number; amount: number }[], total: 0 };
     const now = new Date();
-    const months = unsettledMonths(lease, rentPayments, now.getMonth() + 1, now.getFullYear());
+    const months = unsettledMonths(lease, rentPayments, now.getMonth() + 1, now.getFullYear(), allTenantLeases);
     const total = Math.round(months.reduce((s, m) => s + m.amount, 0) * 100) / 100;
     return { months, total };
-  }, [lease, rentPayments]);
+  }, [lease, allTenantLeases, rentPayments]);
 
   const payments = useMemo(() => {
     if (!id) return [];

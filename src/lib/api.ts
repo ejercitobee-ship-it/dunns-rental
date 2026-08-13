@@ -640,11 +640,14 @@ export interface PortalLease {
   securityDeposit?: number;
   status: LeaseStatus;
   pauses: { pausedAt: string; resumedAt?: string }[];
+  renewalStatus?: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
+  renewedFromLeaseId?: string;
 }
 
 export interface PortalMeResponse {
   tenant: Tenant;
   lease: PortalLease | null;
+  siblingLeases?: PortalLease[];
   unit: Unit | null;
   property: Property | null;
   // The owner's "how to pay" text from Settings; the portal adds the memo.

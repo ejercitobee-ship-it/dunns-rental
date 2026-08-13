@@ -75,6 +75,13 @@ export function TenantHome() {
     };
   }, []);
 
+  // All leases this tenant is on (including ended ones), so leasesOwingMonth
+  // can de-duplicate months when a renewal overlaps with its parent lease.
+  const allLeases = useMemo(() => {
+    if (!me?.siblingLeases?.length) return me?.lease ? [toLease(me.lease)] : [];
+    return me.siblingLeases.map(toLease);
+  }, [me]);
+
   // This month's settlement, gated by leasesOwingMonth so it matches the
   // owner's Rent Management exactly: a lease starting next month owes nothing
   // yet, and a month the owner paused is not owed either. Showing "Not yet
@@ -86,17 +93,18 @@ export function TenantHome() {
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
-    if (leasesOwingMonth([lease], month, year).length === 0) return null;
+    const owing = leasesOwingMonth(allLeases, month, year);
+    if (!owing.some(l => l.id === lease.id)) return null;
     return settleMonth(lease, payments, month, year);
-  }, [me, payments]);
+  }, [me, payments, allLeases]);
 
   const pastDue = useMemo(() => {
     if (!me?.lease) return null;
     const now = new Date();
     const threshold = me.pastDueMonths ?? PAST_DUE_MONTHS;
-    const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear());
+    const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear(), allLeases);
     return pd.months >= threshold ? pd : null;
-  }, [me, payments]);
+  }, [me, payments, allLeases]);
 
   // Nudge the tenant when their lease is within a month of expiring (or has
   // expired), so they know to reach out about renewing.

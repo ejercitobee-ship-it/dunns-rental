@@ -169,6 +169,9 @@ export function serializePortalLease(r: Row) {
     // The tenant's own pause history, not private: without it the portal would
     // show a month the owner paused as unpaid. The endpoint fills r.pauses in.
     pauses: full.pauses,
+    // Renewal fields needed by leasesOwingMonth for overlap de-duplication.
+    renewalStatus: full.renewalStatus,
+    renewedFromLeaseId: full.renewedFromLeaseId,
   };
 }
 

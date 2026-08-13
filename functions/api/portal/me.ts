@@ -65,6 +65,27 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       ? await env.DB.prepare('SELECT * FROM properties WHERE id = ?').bind(lease.property_id).first()
       : null;
 
+    // Fetch ALL leases this tenant is on (including ended) so the portal can
+    // pass them to monthsBehind for renewal overlap de-duplication. Without
+    // this, a renewed lease would falsely show the tenant as owing a month
+    // that was already paid on the prior lease.
+    let siblingLeases: Record<string, unknown>[] = [];
+    if (lease) {
+      const { results: siblings } = await env.DB.prepare(
+        `SELECT l.* FROM leases l
+           JOIN lease_tenants lt ON lt.lease_id = l.id
+          WHERE lt.tenant_id = ?
+          ORDER BY l.start_date DESC`
+      ).bind(tenantId).all();
+      siblingLeases = (siblings || []) as Record<string, unknown>[];
+      // Attach pauses to each sibling so leasesOwingMonth can check them.
+      for (const sl of siblingLeases) {
+        if (sl.id !== lease.id) {
+          sl.pauses = await leasePauses(env, sl.id as string);
+        }
+      }
+    }
+
     const globalSettings = await rentPortalSettings(env);
     const leaseSpecificDueDay = lease?.rent_due_day;
     return jsonOk({
@@ -72,6 +93,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       data: {
         tenant: serializePortalTenant(tenant as Record<string, unknown>),
         lease: lease ? serializePortalLease(lease as Record<string, unknown>) : null,
+        siblingLeases: siblingLeases.map(sl => serializePortalLease(sl)),
         unit: unit ? serializeUnit(unit as Record<string, unknown>) : null,
         property: property ? serializeProperty(property as Record<string, unknown>) : null,
         ...globalSettings,
