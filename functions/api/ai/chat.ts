@@ -29,17 +29,20 @@ interface WorkersAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   name?: string;
-  tool_call_id?: string;
 }
 
+/**
+ * Workers AI tool call format — NOT the OpenAI format.
+ * Workers AI returns { name, arguments } directly (no `function` wrapper,
+ * no `id`, and `arguments` is already an object, not a JSON string).
+ */
 interface WorkersAIToolCall {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
+  name: string;
+  arguments: Record<string, unknown> | string;
 }
 
 interface WorkersAIResponse {
-  response?: string;
+  response?: string | null;
   tool_calls?: WorkersAIToolCall[];
 }
 
@@ -142,12 +145,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         // Execute each tool and feed results back.
         for (const tc of result.tool_calls) {
-          const toolName = tc.function.name;
+          // Workers AI returns { name, arguments } directly (no `function` wrapper).
+          const toolName = tc.name;
           let toolInput: Record<string, unknown> = {};
-          try {
-            toolInput = JSON.parse(tc.function.arguments);
-          } catch {
-            // If the model returns malformed JSON, pass empty input.
+          if (typeof tc.arguments === 'string') {
+            try { toolInput = JSON.parse(tc.arguments); } catch { /* malformed */ }
+          } else if (tc.arguments && typeof tc.arguments === 'object') {
+            toolInput = tc.arguments as Record<string, unknown>;
           }
           if (!toolsUsed.includes(toolName)) toolsUsed.push(toolName);
 
@@ -155,7 +159,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           messages.push({
             role: 'tool',
             content: toolOutput,
-            tool_call_id: tc.id,
             name: toolName,
           });
         }
