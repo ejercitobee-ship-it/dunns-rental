@@ -1286,8 +1286,8 @@ export function Calendar() {
       {/* Event Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-line">
+          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col modal-enter">
+            <div className="flex items-center justify-between p-5 border-b border-line shrink-0">
               <h2 className="text-lg font-semibold text-ink">
                 {editingEvent ? 'Edit Event' : 'New Event'}
               </h2>
@@ -1295,7 +1295,7 @@ export function Calendar() {
                 <X className="h-5 w-5 text-muted" />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div>
                 <label className="block text-sm font-medium text-ink mb-1">Title *</label>
                 <input
@@ -1545,7 +1545,7 @@ export function Calendar() {
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between p-5 border-t border-line">
+            <div className="flex items-center justify-between p-5 border-t border-line shrink-0">
               <div className="flex items-center gap-3">
                 {editingEvent && (
                   <button
