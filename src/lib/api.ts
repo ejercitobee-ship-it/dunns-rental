@@ -1397,6 +1397,8 @@ export const announcementsApi = {
   list: (): Promise<Announcement[]> => apiRequest('/announcements'),
   create: (data: AnnouncementInput): Promise<{ ids: string[]; recipientCount: number }> =>
     apiRequest('/announcements', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { title?: string; body?: string; expiresAt?: string | null }): Promise<void> =>
+    apiRequest(`/announcements/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id: string): Promise<void> => apiRequest(`/announcements/${id}`, { method: 'DELETE' }),
 };
 

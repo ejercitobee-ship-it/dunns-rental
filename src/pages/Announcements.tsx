@@ -3,6 +3,7 @@ import {
   Megaphone,
   Send,
   Trash2,
+  Edit2,
   Building2,
   CalendarClock,
   Users,
@@ -126,6 +127,10 @@ export function Announcements() {
   const [sending, setSending] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Editing state: when set, the compose form edits an existing announcement.
+  const [editingAnnouncement, setEditingAnnouncement] = useState<GroupedAnnouncement | null>(null);
 
   // Close dropdown on outside click.
   useEffect(() => {
@@ -184,6 +189,26 @@ export function Announcements() {
     return tenantIds.size;
   }, [leases, tenants, selectedPropertyIds]);
 
+  const startEdit = (g: GroupedAnnouncement) => {
+    setEditingAnnouncement(g);
+    setTitle(g.title);
+    setBody(g.body);
+    setExpiresAt(g.expires_at || '');
+    // Properties can't be changed after send (rows are per-property), so
+    // we show them as read-only context but don't let the dropdown change.
+    setSelectedPropertyIds(g.properties.map(p => p.id));
+    // Scroll to the compose form.
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  };
+
+  const cancelEdit = () => {
+    setEditingAnnouncement(null);
+    setTitle('');
+    setBody('');
+    setSelectedPropertyIds([]);
+    setExpiresAt('');
+  };
+
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) {
       showToast('Title and message are required.', 'error');
@@ -191,16 +216,27 @@ export function Announcements() {
     }
     setSending(true);
     try {
-      const result = await announcementsApi.create({
-        title: title.trim(),
-        body: body.trim(),
-        propertyIds: selectedPropertyIds.length > 0 ? selectedPropertyIds : undefined,
-        expiresAt: expiresAt || undefined,
-      });
-      showToast(
-        `Announcement sent to ${result.recipientCount} tenant${result.recipientCount === 1 ? '' : 's'}.`,
-        'success',
-      );
+      if (editingAnnouncement) {
+        // Update the existing announcement (all rows in the group).
+        await announcementsApi.update(editingAnnouncement.ids[0], {
+          title: title.trim(),
+          body: body.trim(),
+          expiresAt: expiresAt || null,
+        });
+        showToast('Announcement updated.', 'success');
+        setEditingAnnouncement(null);
+      } else {
+        const result = await announcementsApi.create({
+          title: title.trim(),
+          body: body.trim(),
+          propertyIds: selectedPropertyIds.length > 0 ? selectedPropertyIds : undefined,
+          expiresAt: expiresAt || undefined,
+        });
+        showToast(
+          `Announcement sent to ${result.recipientCount} tenant${result.recipientCount === 1 ? '' : 's'}.`,
+          'success',
+        );
+      }
       setTitle('');
       setBody('');
       setSelectedPropertyIds([]);
@@ -291,12 +327,17 @@ export function Announcements() {
       </div>
 
       {/* Compose card */}
-      <Card>
+      <Card ref={formRef}>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Send className="h-4 w-4" />
-            New Announcement
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              {editingAnnouncement ? <Edit2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              {editingAnnouncement ? 'Edit Announcement' : 'New Announcement'}
+            </CardTitle>
+            {editingAnnouncement && (
+              <Button variant="outline" size="sm" onClick={cancelEdit}>Cancel editing</Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Title */}
@@ -337,11 +378,14 @@ export function Announcements() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setDropdownOpen(o => !o)}
-                  className="w-full flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary"
+                  onClick={() => !editingAnnouncement && setDropdownOpen(o => !o)}
+                  disabled={!!editingAnnouncement}
+                  className={`w-full flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary ${editingAnnouncement ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <span className={selectedPropertyIds.length === 0 ? 'text-gray-500 dark:text-gray-400' : ''}>
-                    {selectionLabel}
+                    {editingAnnouncement
+                      ? (editingAnnouncement.isAllProperties ? 'All Properties' : selectionLabel)
+                      : selectionLabel}
                   </span>
                   <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -424,14 +468,22 @@ export function Announcements() {
             </div>
           )}
 
-          {/* Recipient count + Send */}
+          {/* Recipient count + Send / Save */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-            <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-              <Users className="h-4 w-4" />
-              Will be sent to <strong>{recipientCount}</strong> active tenant{recipientCount === 1 ? '' : 's'}
-            </span>
+            {editingAnnouncement ? (
+              <span className="text-sm text-muted">
+                Editing will update the announcement for all recipients.
+              </span>
+            ) : (
+              <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                <Users className="h-4 w-4" />
+                Will be sent to <strong>{recipientCount}</strong> active tenant{recipientCount === 1 ? '' : 's'}
+              </span>
+            )}
             <Button onClick={handleSend} disabled={sending || !title.trim() || !body.trim()}>
-              {sending ? 'Sending...' : 'Send Announcement'}
+              {sending
+                ? (editingAnnouncement ? 'Saving...' : 'Sending...')
+                : (editingAnnouncement ? 'Save Changes' : 'Send Announcement')}
             </Button>
           </div>
         </CardContent>
@@ -622,14 +674,23 @@ export function Announcements() {
                             </div>
                           </div>
 
-                          {/* Delete button */}
-                          <button
-                            onClick={() => setDeleteTarget(g)}
-                            className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-soft flex-shrink-0"
-                            title="Delete announcement"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {/* Edit + Delete buttons */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => startEdit(g)}
+                              className="text-faint hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary-soft"
+                              title="Edit announcement"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(g)}
+                              className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-soft"
+                              title="Delete announcement"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
