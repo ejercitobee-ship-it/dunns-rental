@@ -1640,11 +1640,15 @@ export function TenantDetail() {
                 ))}
                 {payments.map(p => {
                   const receiptId = p.receiptDocumentId ?? receiptIds[p.id];
+                  const isCredit = p.type === 'credit';
                   return (
-                  <tr key={p.id} className="border-b border-line last:border-0">
-                    <td className="py-3 px-5 text-sm text-ink">{formatMonthYear(p.month, p.year)}</td>
-                    <td className="py-3 px-5 text-sm text-ink text-right tnum">{formatCurrency(p.amount)}</td>
-                    <td className="py-3 px-5 text-sm text-muted">{formatMethod(p.paymentMethod)}</td>
+                  <tr key={p.id} className={`border-b border-line last:border-0${isCredit ? ' bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                    <td className="py-3 px-5 text-sm text-ink">
+                      {formatMonthYear(p.month, p.year)}
+                      {isCredit && <span className="ml-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">Credit</span>}
+                    </td>
+                    <td className={`py-3 px-5 text-sm text-right tnum ${isCredit ? 'text-amber-600 dark:text-amber-400' : 'text-ink'}`}>{formatCurrency(p.amount)}</td>
+                    <td className="py-3 px-5 text-sm text-muted">{isCredit ? (p.creditReason === 'maintenance' ? 'Repair/Maintenance' : p.creditReason === 'proration' ? 'Proration' : 'Credit') : formatMethod(p.paymentMethod)}</td>
                     <td className="py-3 px-5 text-sm text-muted">
                       {p.paidDate ? formatDate(p.paidDate) : p.dueDate ? formatDate(p.dueDate) : '—'}
                     </td>

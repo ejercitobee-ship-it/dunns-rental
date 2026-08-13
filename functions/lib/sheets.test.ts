@@ -15,16 +15,16 @@ describe('paymentRow', () => {
     const row = paymentRow({
       paid_date: '2026-07-01', first_name: 'Pat', last_name: 'Payer',
       unit_number: '2', address: '12 Oak St', amount: 900, payment_method: 'zelle',
-      month: 7, year: 2026, status: 'paid',
+      month: 7, year: 2026, status: 'paid', type: null,
     });
     expect(row).toHaveLength(PAYMENTS_HEADER.length);
-    expect(row).toEqual(['2026-07-01', 'Pat Payer', '2', '12 Oak St', 900, 'Zelle', 7, 2026, 'paid']);
+    expect(row).toEqual(['2026-07-01', 'Pat Payer', '2', '12 Oak St', 900, 'Zelle', 7, 2026, 'paid', 'Payment']);
   });
 
   it('leaves the tenant blank when the payment is unattributed', () => {
     const row = paymentRow({
       paid_date: null, first_name: null, last_name: null, unit_number: null, address: null,
-      amount: null, payment_method: null, month: null, year: null, status: null,
+      amount: null, payment_method: null, month: null, year: null, status: null, type: null,
     });
     expect(row[1]).toBe('');
     expect(row[4]).toBe(0);

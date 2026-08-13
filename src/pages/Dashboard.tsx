@@ -132,7 +132,7 @@ export function Dashboard() {
     const currentYear = new Date().getFullYear();
 
     const monthlyRentIncome = rentPayments
-      .filter(r => r.status === 'paid' && r.month === currentMonth && r.year === currentYear)
+      .filter(r => r.status === 'paid' && r.month === currentMonth && r.year === currentYear && r.type !== 'credit')
       .reduce((sum, r) => sum + r.amount, 0);
 
     const monthlyOtherIncome = incomes
@@ -175,7 +175,7 @@ export function Dashboard() {
     const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     return months.map(month => {
       const rent = rentPayments
-        .filter(r => r.status === 'paid' && r.month === month && r.year === currentYear)
+        .filter(r => r.status === 'paid' && r.month === month && r.year === currentYear && r.type !== 'credit')
         .reduce((sum, r) => sum + r.amount, 0);
       const other = incomes
         .filter(i => i.source !== 'deposit' && monthOf(i.date) === month && yearOf(i.date) === currentYear)

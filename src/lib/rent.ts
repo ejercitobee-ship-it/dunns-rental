@@ -208,7 +208,8 @@ export function rentIncomeForMonths(
 ): number {
   return round2(
     payments
-      .filter(p => p.status === 'paid' && p.year === year && months.includes(p.month))
+      .filter(p => p.status === 'paid' && p.year === year && months.includes(p.month)
+        && p.type !== 'credit') // Credits settle rent but are not income.
       .reduce((sum, p) => sum + (p.amount || 0), 0)
   );
 }

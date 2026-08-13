@@ -138,7 +138,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const financialYears: Record<string, { income: number; expenses: number; net: number }> = {};
 
     for (const row of (rentPayments.results || [])) {
-      if (row.status !== 'paid') continue;
+      if (row.status !== 'paid' || row.type === 'credit') continue;
       const yr = String(row.year);
       if (!financialYears[yr]) financialYears[yr] = { income: 0, expenses: 0, net: 0 };
       financialYears[yr].income += Number(row.amount) || 0;
@@ -211,6 +211,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           status: rp.status,
           paidDate: rp.paid_date,
           paymentMethod: rp.payment_method,
+          type: rp.type ?? 'payment',
+          creditReason: rp.credit_reason ?? undefined,
         })),
         expenses: (expenses.results || []).map(e => ({
           id: e.id,

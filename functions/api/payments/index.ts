@@ -47,12 +47,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('Year is required', 400);
     }
 
+    const paymentType = body.type === 'credit' ? 'credit' : 'payment';
+    const creditReason = paymentType === 'credit' ? (body.creditReason ?? null) : null;
+
     const id = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO rent_payments (id, lease_id, paid_by_tenant_id, amount, due_date, paid_date,
-          received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes, type, credit_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -68,15 +71,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           body.paymentMethod ?? null,
           body.uploadedBy ?? auth.id,
           body.uploadedAt ?? null,
-          body.notes ?? null
+          body.notes ?? null,
+          paymentType,
+          creditReason
         ),
       logActivityStmt(env.DB, auth, {
         module: 'finances',
-        action: 'Recorded a rent payment',
+        action: paymentType === 'credit' ? 'Applied a rent credit' : 'Recorded a rent payment',
         targetType: 'payments',
         targetId: id,
-        description: `$${amount} for ${body.month}/${body.year}`,
-        newValues: { amount, month: body.month, year: body.year, status: body.status ?? 'pending', paymentMethod: body.paymentMethod },
+        description: `$${amount} ${paymentType === 'credit' ? 'credit' : ''} for ${body.month}/${body.year}${creditReason ? ` (${creditReason})` : ''}`,
+        newValues: { amount, month: body.month, year: body.year, status: body.status ?? 'pending', paymentMethod: body.paymentMethod, type: paymentType, creditReason },
       }),
     ]);
 
@@ -90,7 +95,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       syncRentSheet(context);
       // Best-effort receipt for a manually recorded paid payment; never blocks
       // or fails the payment (the database is the record of truth).
-      if (body.status === 'paid') {
+      // Credits don't generate receipts (no real money changed hands).
+      if (body.status === 'paid' && paymentType !== 'credit') {
         context.waitUntil(generateReceipt(env, id, auth.id).catch(() => {}));
       }
     }

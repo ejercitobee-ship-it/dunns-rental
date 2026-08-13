@@ -164,7 +164,13 @@ export interface RentPayment {
   uploadedBy?: string;
   uploadedAt?: string;
   receiptDocumentId?: string;
+  /** 'payment' (default) = real money in; 'credit' = balance reduction, not income. */
+  type?: 'payment' | 'credit';
+  /** Why the credit was given. Only set when type = 'credit'. */
+  creditReason?: CreditReason;
 }
+
+export type CreditReason = 'proration' | 'maintenance' | 'other';
 
 export type PaymentMethod =
   | 'check'
@@ -539,6 +545,8 @@ export interface PropertyProfile {
     status: string;
     paidDate?: string;
     paymentMethod?: string;
+    type?: string;
+    creditReason?: string;
   }>;
   expenses: Array<{
     id: string;

@@ -530,8 +530,12 @@ export function PropertyProfile() {
                         <tr key={rp.id} className="border-b border-line last:border-0">
                           <td className="py-2 px-3">{monthName(rp.month)}</td>
                           <td className="py-2 px-3 text-muted">{rp.unitNumber || '—'}</td>
-                          <td className="py-2 px-3 text-right tnum">{formatCurrency(rp.amount)}</td>
-                          <td className="py-2 px-3 text-muted capitalize">{rp.paymentMethod?.replace(/_/g, ' ') || '—'}</td>
+                          <td className="py-2 px-3 text-right tnum">
+                            {rp.type === 'credit' ? (
+                              <span className="text-amber-600 dark:text-amber-400">{formatCurrency(rp.amount)} credit</span>
+                            ) : formatCurrency(rp.amount)}
+                          </td>
+                          <td className="py-2 px-3 text-muted capitalize">{rp.type === 'credit' ? (rp.creditReason || 'credit') : (rp.paymentMethod?.replace(/_/g, ' ') || '—')}</td>
                           <td className="py-2 px-3 text-muted">{rp.paidDate ? formatDate(rp.paidDate) : '—'}</td>
                         </tr>
                       ))}

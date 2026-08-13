@@ -220,7 +220,7 @@ export function TaxReport() {
     const inP = (d: string) => yearOf(d) === y && months.includes(monthOf(d));
     const pExpenses = expenses.filter(e => inP(e.date));
     const pIncome = incomes.filter(i => inP(i.date));
-    const pPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === y && months.includes(p.month));
+    const pPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === y && months.includes(p.month) && p.type !== 'credit');
 
     // rentIncomeForMonths is the shared definition of taxable rent income, so
     // this matches Rent Management's Tax tab for the same months.

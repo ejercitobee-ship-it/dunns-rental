@@ -217,7 +217,7 @@ export function Expenses() {
   // Dashboard and Reports use. Before, Finances summed ONLY the manual `incomes`
   // table, so rent never showed here and the totals disagreed with the Dashboard.
   const rentCollected = useMemo(
-    () => rentPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.amount || 0), 0),
+    () => rentPayments.filter(p => p.status === 'paid' && p.type !== 'credit').reduce((sum, p) => sum + (p.amount || 0), 0),
     [rentPayments]
   );
 

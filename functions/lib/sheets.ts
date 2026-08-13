@@ -24,7 +24,7 @@ export async function currentRentSheetUrl(env: Env): Promise<string | null> {
 // Pure row mappers (no I/O), so the projection is unit-testable.
 // ---------------------------------------------------------------------------
 
-export const PAYMENTS_HEADER = ['Paid date', 'Tenant', 'Unit', 'Property', 'Amount', 'Method', 'Month', 'Year', 'Status'];
+export const PAYMENTS_HEADER = ['Paid date', 'Tenant', 'Unit', 'Property', 'Amount', 'Method', 'Month', 'Year', 'Status', 'Type'];
 export const TENANTS_HEADER = ['Name', 'Email', 'Phone', 'Unit', 'Property', 'Lease start', 'Monthly rent', 'Status'];
 
 /** Turn a stored method value (bank_transfer) into a readable label. No dashes. */
@@ -44,6 +44,7 @@ export interface PaymentRow {
   month: number | null;
   year: number | null;
   status: string | null;
+  type: string | null;
 }
 
 export function paymentRow(r: PaymentRow): (string | number)[] {
@@ -58,6 +59,7 @@ export function paymentRow(r: PaymentRow): (string | number)[] {
     r.month ?? '',
     r.year ?? '',
     r.status ?? '',
+    r.type === 'credit' ? 'Credit' : 'Payment',
   ];
 }
 
@@ -167,7 +169,7 @@ export async function rebuildRentSheet(env: Env): Promise<string> {
   const id = await ensureRentSheet(env);
 
   const payments = await env.DB.prepare(
-    `SELECT rp.paid_date, rp.amount, rp.payment_method, rp.month, rp.year, rp.status,
+    `SELECT rp.paid_date, rp.amount, rp.payment_method, rp.month, rp.year, rp.status, rp.type,
             t.first_name, t.last_name, u.unit_number, p.address
        FROM rent_payments rp
        LEFT JOIN tenants t ON t.id = rp.paid_by_tenant_id

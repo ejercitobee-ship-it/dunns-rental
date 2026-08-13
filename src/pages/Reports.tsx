@@ -239,7 +239,7 @@ export function Reports() {
   const totals = useMemo(() => {
     const scheduled = monthlyRevenue(leases);
     const collected = rentPayments
-      .filter(p => p.status === 'paid' && p.month === currentMonth && p.year === currentYear)
+      .filter(p => p.status === 'paid' && p.month === currentMonth && p.year === currentYear && p.type !== 'credit')
       .reduce((s, p) => s + p.amount, 0);
     const outstanding = rentRoll.reduce((s, r) => s + (r.settlement?.balance || 0), 0);
     return { scheduled, collected, outstanding };
