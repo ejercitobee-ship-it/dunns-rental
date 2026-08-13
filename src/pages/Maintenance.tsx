@@ -247,6 +247,18 @@ export function Maintenance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maintenance, statusFilter, search, properties]);
 
+  // Map vendor submissions by their linked maintenance request ID for inline display.
+  const subsByRequest = useMemo(() => {
+    const map = new Map<string, typeof vendorSubmissions>();
+    for (const s of vendorSubmissions) {
+      if (!s.maintenanceRequestId) continue;
+      const arr = map.get(s.maintenanceRequestId) || [];
+      arr.push(s);
+      map.set(s.maintenanceRequestId, arr);
+    }
+    return map;
+  }, [vendorSubmissions]);
+
   const availableUnits = units.filter(u => !form.propertyId || u.propertyId === form.propertyId);
 
   const openNew = () => {
@@ -630,132 +642,6 @@ export function Maintenance() {
           )}
         </CardContent>
       </Card>
-
-      {/* Vendor submissions section */}
-      {canApproveMaintenance && vendorSubmissions.length > 0 && (
-        <Card className="mt-6">
-          <CardContent className="p-0">
-            <div className="px-4 py-3 border-b border-line bg-canvas">
-              <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                Vendor Invoice Submissions
-                {vendorSubmissions.filter(s => s.status === 'submitted').length > 0 && (
-                  <Badge variant="warning">
-                    {vendorSubmissions.filter(s => s.status === 'submitted').length} pending
-                  </Badge>
-                )}
-              </h3>
-            </div>
-            <div className="overflow-x-auto sm:overflow-visible">
-              <table className="w-full min-w-[700px] sm:min-w-0">
-                <thead>
-                  <tr className="border-b border-line">
-                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Vendor</th>
-                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Job</th>
-                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
-                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
-                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Payment</th>
-                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
-                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendorSubmissions.map(sub => (
-                    <tr key={sub.id} className="border-b border-line last:border-0">
-                      <td className="py-3 px-4">
-                        <p className="text-sm font-medium text-ink">{sub.vendorName || 'Unknown'}</p>
-                        {sub.companyName && <p className="text-xs text-muted">{sub.companyName}</p>}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted">{sub.jobTitle || 'N/A'}</td>
-                      <td className="py-3 px-4">
-                        <p className="text-sm text-muted">{sub.propName || sub.propAddress || 'N/A'}</p>
-                        {sub.unitNumber && <span className="text-xs text-faint">Unit {sub.unitNumber}</span>}
-                      </td>
-                      <td className="py-3 px-4 text-sm font-medium text-ink text-right">
-                        {sub.amount != null ? formatCurrency(sub.amount) : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted capitalize">{sub.paymentMethod || '—'}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={
-                          sub.status === 'submitted' ? 'warning'
-                            : sub.status === 'approved' ? 'default'
-                            : sub.status === 'paid' ? 'secondary'
-                            : 'outline'
-                        }>
-                          {sub.status === 'draft' ? 'Revision requested' : sub.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {sub.status === 'submitted' && vendorSubRejectId !== sub.id && (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => handleVendorSubAction(sub.id, 'approve')}
-                                disabled={vendorSubBusy === sub.id}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => { setVendorSubRejectId(sub.id); setVendorSubRejectReason(''); }}
-                                disabled={vendorSubBusy === sub.id}
-                              >
-                                Request revision
-                              </Button>
-                            </>
-                          )}
-                          {sub.status === 'submitted' && vendorSubRejectId === sub.id && (
-                            <div className="flex items-center gap-1.5 w-full">
-                              <input
-                                type="text"
-                                placeholder="Reason (optional)"
-                                value={vendorSubRejectReason}
-                                onChange={e => setVendorSubRejectReason(e.target.value)}
-                                className="flex-1 text-xs border border-line rounded px-2 py-1.5 bg-canvas focus:outline-none focus:ring-1 focus:ring-primary/25"
-                              />
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleVendorSubAction(sub.id, 'reject', vendorSubRejectReason)}
-                                disabled={vendorSubBusy === sub.id}
-                              >
-                                Send
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => setVendorSubRejectId(null)}>
-                                Cancel
-                              </Button>
-                            </div>
-                          )}
-                          {sub.status === 'approved' && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleVendorSubAction(sub.id, 'paid')}
-                              disabled={vendorSubBusy === sub.id}
-                            >
-                              Mark paid
-                            </Button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteVendorSub(sub.id)}
-                            disabled={vendorSubBusy === sub.id}
-                            className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-soft disabled:opacity-50"
-                            title="Delete submission"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Record payment */}
       <Modal isOpen={!!payTarget} onClose={() => setPayTarget(null)} title="Record payment" size="sm">
@@ -1292,6 +1178,102 @@ export function Maintenance() {
                   </div>
                 </div>
               )}
+
+              {/* Vendor invoice submissions (inline per request) */}
+              {(() => {
+                const subs = subsByRequest.get(m.id);
+                if (!subs || subs.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Vendor Invoices</p>
+                    <div className="space-y-2">
+                      {subs.map(sub => {
+                        const statusLabel =
+                          sub.status === 'draft' ? 'Revision requested'
+                          : sub.status === 'submitted' ? 'Submitted'
+                          : sub.status === 'approved' ? 'Approved'
+                          : sub.status === 'paid' ? 'Paid'
+                          : sub.status;
+                        const statusVariant =
+                          sub.status === 'submitted' ? 'warning' as const
+                          : sub.status === 'approved' ? 'default' as const
+                          : sub.status === 'paid' ? 'secondary' as const
+                          : 'outline' as const;
+
+                        return (
+                          <div key={sub.id} className="rounded-lg border border-line bg-canvas p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <FileText className="h-4 w-4 text-faint flex-shrink-0" />
+                                <span className="text-sm font-medium text-ink truncate">
+                                  {sub.companyName || sub.vendorName || 'Vendor'}
+                                </span>
+                                {sub.amount != null && (
+                                  <span className="text-sm font-medium text-ink tnum flex-shrink-0">
+                                    {formatCurrency(sub.amount)}
+                                  </span>
+                                )}
+                                {sub.paymentMethod && (
+                                  <span className="text-xs text-muted capitalize flex-shrink-0">via {sub.paymentMethod}</span>
+                                )}
+                                <Badge variant={statusVariant}>{statusLabel}</Badge>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {sub.status === 'submitted' && vendorSubRejectId !== sub.id && (
+                                  <>
+                                    <Button size="sm" onClick={() => handleVendorSubAction(sub.id, 'approve')} disabled={vendorSubBusy === sub.id}>
+                                      Approve
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => { setVendorSubRejectId(sub.id); setVendorSubRejectReason(''); }} disabled={vendorSubBusy === sub.id}>
+                                      Revision
+                                    </Button>
+                                  </>
+                                )}
+                                {sub.status === 'approved' && (
+                                  <Button size="sm" variant="secondary" onClick={() => handleVendorSubAction(sub.id, 'paid')} disabled={vendorSubBusy === sub.id}>
+                                    Mark paid
+                                  </Button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteVendorSub(sub.id)}
+                                  disabled={vendorSubBusy === sub.id}
+                                  className="text-faint hover:text-danger transition-colors p-1 rounded hover:bg-danger-soft disabled:opacity-50"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            {/* Reject reason input */}
+                            {sub.status === 'submitted' && vendorSubRejectId === sub.id && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <input
+                                  type="text"
+                                  placeholder="Reason for revision (optional)"
+                                  value={vendorSubRejectReason}
+                                  onChange={e => setVendorSubRejectReason(e.target.value)}
+                                  className="flex-1 text-xs border border-line rounded px-2 py-1.5 bg-surface focus:outline-none focus:ring-1 focus:ring-primary/25"
+                                />
+                                <Button size="sm" variant="destructive" onClick={() => handleVendorSubAction(sub.id, 'reject', vendorSubRejectReason)} disabled={vendorSubBusy === sub.id}>
+                                  Send
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => setVendorSubRejectId(null)}>Cancel</Button>
+                              </div>
+                            )}
+                            {/* Show rejection reason if in draft (revision requested) */}
+                            {sub.status === 'draft' && sub.rejectionReason && (
+                              <p className="text-xs text-warning-ink mt-1.5">Reason: {sub.rejectionReason}</p>
+                            )}
+                            {sub.workDescription && (
+                              <p className="text-xs text-muted mt-1.5">{sub.workDescription}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Status history timeline */}
               <div>
