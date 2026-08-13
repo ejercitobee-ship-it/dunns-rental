@@ -331,6 +331,21 @@ export function Maintenance() {
     }
   };
 
+  const handleDeleteVendorSub = async (id: string) => {
+    if (!confirm('Delete this vendor submission? If an expense was created from it, that will also be removed.')) return;
+    setVendorSubBusy(id);
+    try {
+      await vendorSubmissionsApi.remove(id);
+      setVendorSubmissions(prev => prev.filter(s => s.id !== id));
+      showToast('Vendor submission deleted', 'success');
+      refreshData();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete', 'error');
+    } finally {
+      setVendorSubBusy(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) return;
@@ -723,6 +738,14 @@ export function Maintenance() {
                               Mark paid
                             </Button>
                           )}
+                          <button
+                            onClick={() => handleDeleteVendorSub(sub.id)}
+                            disabled={vendorSubBusy === sub.id}
+                            className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-soft disabled:opacity-50"
+                            title="Delete submission"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>

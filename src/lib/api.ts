@@ -1274,6 +1274,8 @@ export const vendorSubmissionsApi = {
       method: 'POST',
       body: JSON.stringify({ action, ...extra }),
     }),
+  remove: (id: string): Promise<void> =>
+    apiRequest(`/vendor-submissions/${id}`, { method: 'DELETE' }),
 };
 
 // Office side of tenant messaging: the inbox, one tenant's thread, and replies.
