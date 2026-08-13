@@ -174,6 +174,7 @@ export function TenantHome() {
           firstName={tenant.firstName || 'Welcome'}
           initials={`${tenant.firstName?.[0] ?? ''}${tenant.lastName?.[0] ?? ''}`}
           photoUrl={tenant.photoUrl}
+          pastDue={pastDue}
         />
       ) : (
         <div className="flex items-center justify-between gap-3">
@@ -193,18 +194,6 @@ export function TenantHome() {
 
       {/* Contact + emergency details, right under the hero. */}
       <ProfileCard tenant={tenant} />
-
-      {pastDue && (
-        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
-          <ShieldAlert className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-ink">Your rent is {pastDue.months} months past due</p>
-            <p className="text-sm text-muted mt-1">
-              You have an outstanding balance of {formatCurrency(pastDue.balance)}. Please bring your account current as soon as you can. See the payment instructions below, and reach out to us with any questions.
-            </p>
-          </div>
-        </div>
-      )}
 
       {leaseExpiry && (() => {
         const isDanger = leaseExpiry.urgency === 'expired' || leaseExpiry.urgency === 'critical';
@@ -271,7 +260,7 @@ export function TenantHome() {
 // The signature surface of the tenant app: this month's rent, its status, and
 // how close the due date is, on a rich evergreen card.
 function RentHero({
-  monthLabel, amount, status, balance, dueDay, daysToDue, greeting, firstName, initials, photoUrl,
+  monthLabel, amount, status, balance, dueDay, daysToDue, greeting, firstName, initials, photoUrl, pastDue,
 }: {
   monthLabel: string;
   amount: number;
@@ -283,6 +272,7 @@ function RentHero({
   firstName: string;
   initials: string;
   photoUrl?: string | null;
+  pastDue: { months: number; balance: number } | null;
 }) {
   const scrollToPay = () => {
     document.getElementById('how-to-pay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -343,6 +333,20 @@ function RentHero({
             </>
           )}
         </div>
+
+        {pastDue && (
+          <div className="mt-4 rounded-xl bg-[#c0342a]/20 border border-[#c0342a]/30 px-4 py-3 flex items-start gap-2.5">
+            <ShieldAlert className="h-4 w-4 text-[#ffb3ad] flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-white leading-snug">
+                {pastDue.months} {pastDue.months === 1 ? 'month' : 'months'} past due
+              </p>
+              <p className="text-[12px] text-white/70 leading-snug mt-0.5">
+                Outstanding balance: {formatCurrency(pastDue.balance)}
+              </p>
+            </div>
+          </div>
+        )}
 
         <button
           type="button"

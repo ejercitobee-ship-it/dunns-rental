@@ -362,11 +362,18 @@ export function TaxReport() {
     });
 
     // ── 1099 vendor tracker ──────────────────────────────────────────────
-    // Aggregate payments per vendor name across ALL expenses in the period.
+    // Aggregate payments per vendor name across service expenses only.
     // Any vendor paid ≥$600 in a calendar year typically needs a 1099-NEC.
+    // Categories paid to government entities (property taxes), corporations
+    // (insurance, mortgage, utilities, HOA, banks, software) are exempt
+    // from 1099 reporting and excluded from this tracker.
+    const EXEMPT_1099_CATEGORIES = new Set([
+      'taxes', 'insurance', 'mortgage', 'utilities', 'hoa',
+      'banking_fees', 'software',
+    ]);
     const vendorTotals = new Map<string, number>();
     pExpenses.forEach(e => {
-      if (e.vendor) {
+      if (e.vendor && !EXEMPT_1099_CATEGORIES.has(e.category)) {
         vendorTotals.set(e.vendor, (vendorTotals.get(e.vendor) || 0) + e.amount);
       }
     });
@@ -1568,12 +1575,13 @@ export function TaxReport() {
           </CardHeader>
           {!collapsed.has('vendors1099') && <CardContent>
             <p className="text-sm text-muted mb-4">
-              Any vendor you paid {formatCurrency(VENDOR_1099_THRESHOLD)} or more in a calendar year may need
+              Service vendors you paid {formatCurrency(VENDOR_1099_THRESHOLD)} or more in a calendar year may need
               a 1099-NEC by January 31 of the following year. <strong className="text-ink font-medium">LLCs
               and partnerships: yes,</strong> unless the LLC has elected to be taxed as a C-corp or S-corp.
               Sole proprietors and individuals: yes. <strong className="text-ink font-medium">Corporations
-              (C-corp/S-corp): generally exempt.</strong> When in doubt, request a W-9 from the vendor;
-              Box 3 shows their entity type.
+              (C-corp/S-corp): generally exempt.</strong> Payments to government entities (property taxes),
+              insurance companies, mortgage servicers, utilities, HOA, and banks are excluded automatically. When
+              in doubt, request a W-9 from the vendor; Box 3 shows their entity type.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
