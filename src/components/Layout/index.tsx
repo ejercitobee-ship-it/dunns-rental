@@ -32,6 +32,7 @@ import {
 import { cn } from '../../lib/utils';
 import { messagesApi, vendorMessagesApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useScrolled } from '../../lib/useScrolled';
 import { Avatar } from '../ui/Avatar';
 import { ProfileModal } from '../ProfileModal';
 import { BackToTop } from '../BackToTop';
@@ -90,6 +91,7 @@ export function Layout({ children }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [flyoutGroup, setFlyoutGroup] = useState<string | null>(null);
   const flyoutTimeout = useRef<number | null>(null);
+  const scrolled = useScrolled();
 
   // On mobile overlay the sidebar always shows labels (expanded).
   // On desktop, labels hide when collapsed.
@@ -279,7 +281,7 @@ export function Layout({ children }: LayoutProps) {
           </button>
           {flyoutGroup === group.label && (
             <div
-              className="absolute left-full top-0 ml-1.5 bg-sidebar border border-sidebar-line rounded-xl py-1.5 shadow-2xl min-w-[200px] z-[60]"
+              className="absolute left-full top-0 ml-1.5 bg-sidebar border border-sidebar-line rounded-xl py-1.5 shadow-2xl min-w-[200px] z-[60] flyout-enter"
               onMouseEnter={() => showFlyout(group.label)}
               onMouseLeave={hideFlyout}
             >
@@ -345,13 +347,14 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-canvas">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {/* Mobile sidebar overlay — always rendered so it can fade in/out */}
+      <div
+        className={cn(
+          'fixed inset-0 bg-ink/40 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-200',
+          sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        )}
+        onClick={() => setSidebarOpen(false)}
+      />
 
       {/* Sidebar */}
       <aside
@@ -497,7 +500,7 @@ export function Layout({ children }: LayoutProps) {
       {/* Main content */}
       <main className={cn('min-h-screen transition-[margin-left] duration-200 ease-in-out', collapsed ? 'lg:ml-16' : 'lg:ml-64')}>
         {/* Mobile header */}
-        <header className="lg:hidden h-16 bg-surface/90 backdrop-blur-md border-b border-line flex items-center justify-between px-4 sticky top-0 z-30">
+        <header className={cn('lg:hidden h-16 bg-surface/90 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-30 sticky-header', scrolled && 'scrolled')}>
           <Link to="/" className="flex items-center">
             <img src={logo} alt="MH Dunn Property" className="h-10 w-auto" />
           </Link>

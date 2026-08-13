@@ -7,6 +7,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useExitAnimation } from '../lib/useExitAnimation';
 
 const ROUTES: { name: string; path: string; icon: LucideIcon; keywords: string }[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard, keywords: 'home overview stats' },
@@ -43,6 +44,7 @@ export function CommandPalette() {
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { tenants, properties, units, leases } = useApp();
+  const { mounted, phase } = useExitAnimation(open, 160);
 
   // Listen for Ctrl+K / Cmd+K
   useEffect(() => {
@@ -163,7 +165,7 @@ export function CommandPalette() {
     }
   };
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   // Group results by kind for section headers.
   const pages = results.filter(r => r.kind === 'page');
@@ -178,13 +180,13 @@ export function CommandPalette() {
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-ink/30 backdrop-blur-sm z-[60]"
+        className={`fixed inset-0 bg-ink/30 backdrop-blur-sm z-[60] ${phase === 'entering' ? 'backdrop-enter' : 'backdrop-exit'}`}
         onClick={() => setOpen(false)}
       />
 
       {/* Palette */}
       <div className="fixed top-[15%] left-1/2 -translate-x-1/2 z-[61] w-full max-w-lg mx-auto px-4">
-        <div className="bg-surface rounded-xl shadow-2xl border border-line overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className={`bg-surface rounded-xl shadow-2xl border border-line overflow-hidden ${phase === 'entering' ? 'modal-enter' : 'modal-exit'}`}>
           {/* Search input */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
             <Search className="h-4 w-4 text-muted flex-shrink-0" />

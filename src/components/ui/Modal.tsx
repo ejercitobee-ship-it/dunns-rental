@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useExitAnimation } from '../../lib/useExitAnimation';
 
 interface ModalProps {
   isOpen: boolean;
@@ -15,9 +16,11 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children, size = 'md', footer }: ModalProps) {
+  const { mounted, phase } = useExitAnimation(isOpen, 180);
+
   // Close on Escape key.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!mounted) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -29,9 +32,9 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
       document.removeEventListener('keydown', handler);
       document.body.style.overflow = prev;
     };
-  }, [isOpen, onClose]);
+  }, [mounted, onClose]);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   const sizeClasses = {
     sm: 'max-w-md',
@@ -44,7 +47,10 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-ink/40 backdrop-blur-[2px] transition-opacity"
+        className={cn(
+          'fixed inset-0 bg-ink/40 backdrop-blur-[2px]',
+          phase === 'entering' ? 'backdrop-enter' : 'backdrop-exit'
+        )}
         onClick={onClose}
       />
 
@@ -52,8 +58,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
       <div className={cn(
         'relative z-50 w-full mx-0 sm:mx-4 bg-surface border border-line rounded-t-2xl sm:rounded-2xl',
         'shadow-[0_24px_60px_-12px_rgba(27,26,23,0.28)]',
-        'transform transition-all duration-300 ease-out',
-        'scale-100 opacity-100',
+        phase === 'entering' ? 'modal-enter' : 'modal-exit',
         sizeClasses[size]
       )}>
         {/* Header */}

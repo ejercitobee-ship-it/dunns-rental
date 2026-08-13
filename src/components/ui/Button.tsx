@@ -29,10 +29,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         className={cn(
           'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium',
-          'transition-all duration-200 ease-out',
+          'transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
           'disabled:pointer-events-none disabled:opacity-50',
-          'active:scale-[0.985]',
+          'active:scale-[0.97] active:duration-75',
           variants[variant],
           sizes[size],
           className

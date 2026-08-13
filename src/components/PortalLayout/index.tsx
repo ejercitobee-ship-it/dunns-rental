@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAutoEnablePush } from '../../lib/useAutoPush';
 import { portalApi, type PortalAnnouncement } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { useScrolled } from '../../lib/useScrolled';
 import { PageTransition } from '../PageTransition';
 
 // The portal shell for tenants and realtors. This is a separate world from
@@ -47,6 +48,8 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const scrolled = useScrolled();
 
   // Tenants get push notifications on by default, enabled automatically the
   // first time they interact with the app. There is no toggle to turn it off.
@@ -98,7 +101,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <header className="bg-surface/80 backdrop-blur-md border-b border-line sticky top-0 z-30">
+      <header className={cn('bg-surface/80 backdrop-blur-md sticky top-0 z-30 sticky-header', scrolled && 'scrolled')}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <Link to="/portal" className="flex items-center">
             <img src={logo} alt="MH Dunn Property" className="h-9 w-auto" />
@@ -158,7 +161,8 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                   key={tab.path}
                   to={tab.path}
                   className={cn(
-                    'relative flex flex-col items-center gap-1 py-2.5 px-2 flex-1 transition-colors',
+                    'relative flex flex-col items-center gap-1 py-2.5 px-2 flex-1',
+                    'transition-[transform,color] duration-200 ease-out active:scale-90 active:duration-75',
                     isActive ? 'text-primary' : 'text-faint hover:text-muted'
                   )}
                 >

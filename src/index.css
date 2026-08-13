@@ -91,6 +91,27 @@
   color: var(--color-muted);
 }
 
+/* Sticky header: hairline border fades in a shadow when content scrolls under.
+   Applied via JS (add .scrolled when scrollY > 0). */
+.sticky-header {
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.sticky-header.scrolled {
+  border-bottom-color: var(--color-line);
+  box-shadow: 0 1px 8px rgba(27, 26, 23, 0.06);
+}
+
+/* Sidebar flyout: scale from left edge */
+@keyframes flyout-enter {
+  from { opacity: 0; transform: translateX(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.flyout-enter {
+  animation: flyout-enter 0.15s cubic-bezier(0.2, 0, 0, 1) both;
+  transform-origin: left top;
+}
+
 /* Scrollbar — quiet */
 ::-webkit-scrollbar {
   width: 11px;
@@ -130,6 +151,68 @@
   100% { transform: translateX(400%); }
 }
 
+/* Modal / dialog enter-exit: scale + fade, anchored to center */
+@keyframes modal-enter {
+  from { opacity: 0; transform: scale(0.97) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes modal-exit {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.97) translateY(6px); }
+}
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modal-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes backdrop-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.modal-enter {
+  animation: modal-enter 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.modal-exit {
+  animation: modal-exit 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+}
+.backdrop-enter {
+  animation: backdrop-enter 0.2s ease-out both;
+}
+.backdrop-exit {
+  animation: backdrop-exit 0.16s ease-in both;
+}
+
+/* Toast enter-exit: slide from right */
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(100%); }
+}
+@keyframes toast-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes toast-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.toast-enter {
+  animation: toast-enter 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.toast-exit {
+  animation: toast-exit 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
 /* Page transition: fade + subtle upward slide on route change. */
 @keyframes page-enter {
   from {
@@ -141,16 +224,66 @@
     transform: translateY(0);
   }
 }
+@keyframes page-enter-reduced {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .page-enter {
   animation: page-enter 0.25s ease-out both;
 }
 
+/*
+  Reduced motion: replace slides/springs with short opacity fades, not
+  no feedback at all. Opacity and color changes that aid comprehension
+  are preserved — only transform-based motion is removed.
+*/
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
   ::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
+  }
+
+  /* Preserve opacity fades for comprehension: page changes, modals, toasts */
+  .page-enter {
+    animation: page-enter-reduced 0.15s ease-out both !important;
+  }
+  .modal-enter {
+    animation: modal-fade-in 0.15s ease-out both !important;
+  }
+  .modal-exit {
+    animation: modal-fade-out 0.12s ease-in both !important;
+  }
+  .toast-enter {
+    animation: toast-fade-in 0.15s ease-out both !important;
+  }
+  .toast-exit {
+    animation: toast-fade-out 0.12s ease-in both !important;
+  }
+}
+
+/* Reduced transparency: make translucent surfaces solid for legibility */
+@media (prefers-reduced-transparency: reduce) {
+  .backdrop-blur-md,
+  .backdrop-blur-sm,
+  .backdrop-blur-\\[2px\\] {
+    backdrop-filter: none !important;
+  }
+  /* Raise background opacity so text stays readable */
+  header[class*="bg-surface\\/"],
+  nav[class*="bg-surface\\/"] {
+    background-color: var(--color-surface) !important;
+  }
+}
+
+/* Increased contrast: stronger borders, solid backgrounds */
+@media (prefers-contrast: more) {
+  :root {
+    --color-line: #c8c3b8;
+    --color-line-strong: #a8a297;
+    --color-muted: #555249;
+    --color-faint: #75726a;
   }
 }
 

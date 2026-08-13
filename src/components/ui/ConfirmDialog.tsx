@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../../lib/utils';
+import { useExitAnimation } from '../../lib/useExitAnimation';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -27,11 +28,12 @@ export function ConfirmDialog({
   variant = 'danger',
   loading = false,
 }: ConfirmDialogProps) {
+  const { mounted, phase } = useExitAnimation(isOpen, 180);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   // Close on Escape; auto-focus the confirm button on open.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!mounted) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -39,9 +41,9 @@ export function ConfirmDialog({
     // Focus the confirm button so Enter confirms immediately.
     confirmRef.current?.focus();
     return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
+  }, [mounted, onClose]);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   const variants = {
     danger: {
@@ -61,14 +63,17 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 bg-ink/40 backdrop-blur-[2px] transition-opacity"
+        className={cn(
+          'fixed inset-0 bg-ink/40 backdrop-blur-[2px]',
+          phase === 'entering' ? 'backdrop-enter' : 'backdrop-exit'
+        )}
         onClick={onClose}
       />
 
       <div className={cn(
         'relative z-50 w-full max-w-md mx-4 bg-surface rounded-2xl border border-line',
         'shadow-[0_24px_60px_-12px_rgba(27,26,23,0.28)]',
-        'transform transition-all duration-200 ease-out scale-100'
+        phase === 'entering' ? 'modal-enter' : 'modal-exit'
       )}>
         <div className="p-6">
           <div className="flex items-start gap-4">
