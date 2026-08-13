@@ -1350,6 +1350,32 @@ export function Maintenance() {
               <p className="text-xs uppercase tracking-wider font-semibold text-muted mb-1">Job reference</p>
               <p className="text-sm font-medium text-ink">{vendorLinkTarget.title}</p>
             </div>
+
+            {/* Pick from registered handymen or enter manually */}
+            {handymen.filter(h => h.isActive).length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Select a registered vendor</label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const h = handymen.find(hm => hm.id === e.target.value);
+                    if (h) {
+                      setVendorLinkName(h.name);
+                      setVendorLinkEmail(h.email || '');
+                    }
+                  }}
+                  className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/25"
+                >
+                  <option value="">Choose from roster, or enter manually below</option>
+                  {handymen.filter(h => h.isActive).map(h => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}{h.companyName ? ` (${h.companyName})` : ''}{h.email ? ` — ${h.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Vendor Name</label>
               <input

@@ -68,6 +68,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           auth.id
         ),
       ];
+      // Also advance the linked maintenance request to "completed".
+      if (sub.maintenance_request_id) {
+        stmts.push(
+          env.DB.prepare(
+            `UPDATE maintenance_requests
+                SET status = 'completed', cost = ?,
+                    vendor = COALESCE(NULLIF(?, ''), vendor),
+                    updated_at = unixepoch()
+              WHERE id = ? AND status NOT IN ('paid', 'cancelled')`
+          ).bind(
+            amount,
+            (sub.company_name as string) || (sub.vendor_name as string) || '',
+            sub.maintenance_request_id
+          )
+        );
+      }
       await env.DB.batch(stmts);
 
       // Email the vendor.
@@ -87,13 +103,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     } else if (action === 'paid') {
       if (sub.status !== 'approved') return jsonError('Can only mark approved invoices as paid.', 400);
 
-      await env.DB.prepare(
-        `UPDATE vendor_submissions
-            SET status = 'paid', paid_at = ?,
-                admin_notes = COALESCE(?, admin_notes),
-                updated_at = unixepoch()
-          WHERE id = ?`
-      ).bind(today, (body.notes as string) || null, id).run();
+      const paidStmts = [
+        env.DB.prepare(
+          `UPDATE vendor_submissions
+              SET status = 'paid', paid_at = ?,
+                  admin_notes = COALESCE(?, admin_notes),
+                  updated_at = unixepoch()
+            WHERE id = ?`
+        ).bind(today, (body.notes as string) || null, id),
+      ];
+      // Move the linked maintenance request to "paid".
+      if (sub.maintenance_request_id) {
+        paidStmts.push(
+          env.DB.prepare(
+            `UPDATE maintenance_requests
+                SET status = 'paid', updated_at = unixepoch()
+              WHERE id = ? AND status NOT IN ('cancelled')`
+          ).bind(sub.maintenance_request_id)
+        );
+      }
+      await env.DB.batch(paidStmts);
 
       if (sub.vendor_email) {
         context.waitUntil(
