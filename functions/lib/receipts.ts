@@ -48,6 +48,16 @@ export interface ReceiptEmailData {
   amount: string;
   method: string;
   datePaid: string;
+  /** Optional notes to show on the email receipt. */
+  notes?: string;
+  /** Override the heading, e.g. "Rent credit" instead of "Rent receipt". */
+  heading?: string;
+  /** Override the badge label, e.g. "CREDIT" instead of "PAID". */
+  badgeLabel?: string;
+  /** Override the amount label, e.g. "CREDIT AMOUNT" instead of "AMOUNT PAID". */
+  amountLabel?: string;
+  /** Override the confirmation text shown to the tenant. */
+  confirmationText?: string;
 }
 
 /** A branded, receipt-styled HTML email (inline styles, table layout for email clients). */
@@ -64,9 +74,9 @@ export function receiptEmailHtml(d: ReceiptEmailData): string {
         ${d.contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${d.contact}</div>` : ''}
       </td></tr>
       <tr><td style="padding:24px 32px 4px;">
-        <div style="font-size:16px;font-weight:bold;color:#1c1a17;">Rent receipt</div>
-        <div style="font-size:12px;color:#8a887f;margin-top:4px;">No. ${d.receiptNumber}${d.datePaid ? ` &nbsp;&middot;&nbsp; Paid ${d.datePaid}` : ''}</div>
-        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:16px 0 4px;">Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.</p>
+        <div style="font-size:16px;font-weight:bold;color:#1c1a17;">${d.heading || 'Rent receipt'}</div>
+        <div style="font-size:12px;color:#8a887f;margin-top:4px;">No. ${d.receiptNumber}${d.datePaid ? ` &nbsp;&middot;&nbsp; ${d.datePaid}` : ''}</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:16px 0 4px;">${d.confirmationText || `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`}</p>
       </td></tr>
       <tr><td style="padding:8px 32px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -74,15 +84,16 @@ export function receiptEmailHtml(d: ReceiptEmailData): string {
           ${row('Property', d.location)}
           ${row('Rent period', d.period)}
           ${row('Payment method', d.method)}
+          ${d.notes ? row('Notes', d.notes) : ''}
         </table>
       </td></tr>
       <tr><td style="padding:16px 32px 4px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f4;border:1px solid #e7e5dd;border-radius:8px;"><tr>
           <td style="padding:16px 18px;">
-            <div style="font-size:11px;letter-spacing:0.08em;color:#8a887f;font-weight:bold;">AMOUNT PAID</div>
+            <div style="font-size:11px;letter-spacing:0.08em;color:#8a887f;font-weight:bold;">${d.amountLabel || 'AMOUNT PAID'}</div>
             <div style="font-size:22px;font-weight:bold;color:#1c1a17;margin-top:2px;">${d.amount}</div>
           </td>
-          <td style="padding:16px 18px;text-align:right;font-size:16px;font-weight:bold;color:#2b7a59;">PAID</td>
+          <td style="padding:16px 18px;text-align:right;font-size:16px;font-weight:bold;color:#2b7a59;">${d.badgeLabel || 'PAID'}</td>
         </tr></table>
       </td></tr>
       <tr><td style="padding:16px 32px 24px;">
@@ -98,20 +109,24 @@ export function receiptEmailHtml(d: ReceiptEmailData): string {
 
 /** Plain-text fallback for the receipt email. */
 export function receiptEmailText(d: ReceiptEmailData): string {
-  return [
-    `${d.companyName} — Rent receipt`,
-    `No. ${d.receiptNumber}${d.datePaid ? ` · Paid ${d.datePaid}` : ''}`,
+  const heading = d.heading || 'Rent receipt';
+  const badge = d.badgeLabel || 'PAID';
+  const amtLabel = d.amountLabel || 'Amount paid';
+  const lines = [
+    `${d.companyName} — ${heading}`,
+    `No. ${d.receiptNumber}${d.datePaid ? ` · ${d.datePaid}` : ''}`,
     '',
-    `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`,
+    d.confirmationText || `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`,
     '',
     `Received from: ${d.tenantName}`,
     `Property: ${d.location}`,
     `Rent period: ${d.period}`,
     `Payment method: ${d.method}`,
-    `Amount paid: ${d.amount} (PAID)`,
-    '',
-    'You can view and download this receipt anytime in your tenant portal, under Payments.',
-  ].join('\n');
+  ];
+  if (d.notes) lines.push(`Notes: ${d.notes}`);
+  lines.push(`${amtLabel}: ${d.amount} (${badge})`);
+  lines.push('', 'You can view and download this receipt anytime in your tenant portal, under Payments.');
+  return lines.join('\n');
 }
 
 export interface ReceiptData {
@@ -127,6 +142,12 @@ export interface ReceiptData {
   title?: string;
   /** Label for the period row, e.g. "For rent period" (default) or "Payment for". */
   periodFieldLabel?: string;
+  /** Optional notes to display on the receipt (e.g. credit reason). */
+  notes?: string;
+  /** Badge label shown in the green box, e.g. "PAID" (default) or "CREDIT". */
+  badgeLabel?: string;
+  /** Label for the amount row, e.g. "AMOUNT PAID" (default) or "CREDIT AMOUNT". */
+  amountLabel?: string;
 }
 
 /**
@@ -180,6 +201,7 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
   field('Property', data.location);
   field(data.periodFieldLabel || 'For rent period', data.period);
   field('Payment method', data.method);
+  if (data.notes) field('Notes', data.notes);
 
   // Amount box
   y -= 6;
@@ -189,10 +211,11 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
     x: left, y: boxTop - boxH, width: right - left, height: boxH,
     color: rgb(0.96, 0.965, 0.955), borderColor: line, borderWidth: 1,
   });
-  text('AMOUNT PAID', left + 18, boxTop - 22, 9, bold, muted);
+  const amtLabel = (data.amountLabel || 'AMOUNT PAID').toUpperCase();
+  text(amtLabel, left + 18, boxTop - 22, 9, bold, muted);
   text(data.amount, left + 18, boxTop - 44, 22, bold, ink);
-  const paid = 'PAID';
-  text(paid, right - 18 - bold.widthOfTextAtSize(paid, 22), boxTop - 40, 22, bold, green);
+  const badge = (data.badgeLabel || 'PAID').toUpperCase();
+  text(badge, right - 18 - bold.widthOfTextAtSize(badge, 22), boxTop - 40, 22, bold, green);
 
   // Footer
   text('Thank you for your payment.', left, 96, 11, font, muted);
@@ -249,6 +272,9 @@ interface PaymentJoin {
   property_state: string | null;
   property_zip: string | null;
   receipt_document_id: string | null;
+  type: string | null;
+  credit_reason: string | null;
+  notes: string | null;
 }
 
 interface TenantRow {
@@ -394,7 +420,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   const p = await env.DB.prepare(
     `SELECT rp.id, rp.amount, rp.month, rp.year, rp.paid_date, rp.received_date,
             rp.payment_method, rp.status, rp.paid_by_tenant_id, rp.lease_id,
-            rp.receipt_document_id,
+            rp.receipt_document_id, rp.type, rp.credit_reason, rp.notes,
             l.property_id AS property_id, u.unit_number AS unit_number,
             pr.name AS property_name, pr.address AS property_address,
             pr.city AS property_city, pr.state AS property_state, pr.zip_code AS property_zip
@@ -405,6 +431,8 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
       WHERE rp.id = ?`
   ).bind(paymentId).first<PaymentJoin>();
   if (!p || p.status !== 'paid' || !p.lease_id) return null;
+
+  const isCredit = p.type === 'credit';
 
   // The tenant to file under: the recorded payer if there is one, else the
   // lease's first occupant. No tenant means nowhere to file it — skip.
@@ -440,9 +468,24 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   const datePaid = rawDatePaid ? prettyDate(rawDatePaid) : '';
   const rNumber = receiptNumber(p.id, p.month, p.year);
 
+  // Build a human-readable notes string for credits: combine the reason label
+  // with any freeform notes the user entered.
+  const creditReasonLabels: Record<string, string> = {
+    proration: 'Move-in proration',
+    maintenance: 'Repair/Maintenance reimbursement',
+    other: 'Other',
+  };
+  const noteParts: string[] = [];
+  if (isCredit && p.credit_reason) noteParts.push(creditReasonLabels[p.credit_reason] || p.credit_reason);
+  if (p.notes) noteParts.push(p.notes);
+  const receiptNotes = noteParts.length > 0 ? noteParts.join(': ') : undefined;
+
   const pdfBytes = await buildReceiptPdf({
     receiptNumber: rNumber,
     datePaid,
+    title: isCredit ? 'RENT CREDIT' : undefined,
+    badgeLabel: isCredit ? 'CREDIT' : undefined,
+    amountLabel: isCredit ? 'CREDIT AMOUNT' : undefined,
     company: {
       name: company.companyName,
       lines: [
@@ -455,10 +498,13 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     location,
     period,
     amount: money(p.amount),
-    method: prettyMethod(p.payment_method),
+    method: isCredit ? 'Credit' : prettyMethod(p.payment_method),
+    notes: receiptNotes,
   });
 
-  const name = `Rent receipt - ${period || p.id.slice(0, 6)}.pdf`;
+  const name = isCredit
+    ? `Rent credit - ${period || p.id.slice(0, 6)}.pdf`
+    : `Rent receipt - ${period || p.id.slice(0, 6)}.pdf`;
   const folderId = await ensureTenantFolder(env, tenant.id);
   const { id: driveId } = await uploadToDrive(
     env, folderId, name, 'application/pdf', new Blob([pdfBytes], { type: 'application/pdf' })
@@ -501,12 +547,20 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
         location,
         period,
         amount: money(p.amount),
-        method: prettyMethod(p.payment_method),
+        method: isCredit ? 'Credit' : prettyMethod(p.payment_method),
         datePaid,
+        notes: receiptNotes,
+        heading: isCredit ? 'Rent credit' : undefined,
+        badgeLabel: isCredit ? 'CREDIT' : undefined,
+        amountLabel: isCredit ? 'CREDIT AMOUNT' : undefined,
+        confirmationText: isCredit
+          ? `Hi ${tenant.first_name}, a rent credit of ${money(p.amount)} has been applied to your account${period ? ` for ${period}` : ''}.`
+          : undefined,
       };
+      const subjectKind = isCredit ? 'rent credit' : 'rent receipt';
       await sendEmail(env, {
         to: tenant.email,
-        subject: `Your rent receipt${period ? ` for ${period}` : ''} — ${company.companyName}`,
+        subject: `Your ${subjectKind}${period ? ` for ${period}` : ''} — ${company.companyName}`,
         html: receiptEmailHtml(emailData),
         text: receiptEmailText(emailData),
       });

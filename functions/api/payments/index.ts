@@ -93,10 +93,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const isBulk = new URL(request.url).searchParams.get('deferSheetSync') === '1';
     if (!isBulk) {
       syncRentSheet(context);
-      // Best-effort receipt for a manually recorded paid payment; never blocks
-      // or fails the payment (the database is the record of truth).
-      // Credits don't generate receipts (no real money changed hands).
-      if (body.status === 'paid' && paymentType !== 'credit') {
+      // Best-effort receipt for a manually recorded paid payment (or credit);
+      // never blocks or fails the payment (the database is the record of truth).
+      if (body.status === 'paid') {
         context.waitUntil(generateReceipt(env, id, auth.id).catch(() => {}));
       }
     }
