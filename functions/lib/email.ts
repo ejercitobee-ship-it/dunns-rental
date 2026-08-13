@@ -464,3 +464,124 @@ export function announcementEmail(opts: {
 
   return { subject: opts.title, html, text };
 }
+
+// ── Vendor invoice form emails ────────────────────────────────────────
+
+/** Invite a vendor to fill out an invoice form via a secure link. */
+export function vendorFormInviteEmail(opts: {
+  url: string;
+  vendorName?: string;
+  jobTitle?: string;
+  propertyAddress?: string;
+}) {
+  const greeting = opts.vendorName ? `Hi ${opts.vendorName},` : 'Hi,';
+  const jobLine = opts.jobTitle ? `\nJob: ${opts.jobTitle}` : '';
+  const propLine = opts.propertyAddress ? `\nProperty: ${opts.propertyAddress}` : '';
+
+  const text = [
+    greeting,
+    '',
+    'MH Dunn Property is requesting your invoice for work performed.',
+    jobLine, propLine,
+    '',
+    'Please fill out the form at the link below. No account or password is needed.',
+    opts.url,
+    '',
+    'Once we receive your submission, you will be notified by email when it is approved and when payment is sent.',
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].filter(l => l !== '').join('\n');
+
+  const detailRows = [
+    opts.jobTitle ? `<tr><td style="padding:4px 0;font-size:14px;color:#8a887f;">Job</td><td style="padding:4px 0 4px 12px;font-size:14px;color:#1c1a17;">${escapeHtml(opts.jobTitle)}</td></tr>` : '',
+    opts.propertyAddress ? `<tr><td style="padding:4px 0;font-size:14px;color:#8a887f;">Property</td><td style="padding:4px 0 4px 12px;font-size:14px;color:#1c1a17;">${escapeHtml(opts.propertyAddress)}</td></tr>` : '',
+  ].filter(Boolean).join('');
+
+  const html = `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">MH Dunn Property</div>
+      </td></tr>
+      <tr><td style="padding:26px 32px 20px;">
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;margin-bottom:14px;">Invoice Request</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 16px;">${escapeHtml(greeting)}</p>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 16px;">We are requesting your invoice for work performed. Please fill out the short form below. No account or login is needed.</p>
+        ${detailRows ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;">${detailRows}</table>` : ''}
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#24503f;border-radius:8px;">
+          <a href="${opts.url}" style="display:inline-block;padding:12px 26px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Submit Your Invoice</a>
+        </td></tr></table>
+        <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:20px 0 0;">If the button does not work, paste this into your browser:<br><a href="${opts.url}" style="color:#24503f;word-break:break-all;">${opts.url}</a></p>
+      </td></tr>
+      <tr><td style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        MH Dunn Property
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+
+  return { subject: 'Invoice request from MH Dunn Property', html, text };
+}
+
+/** Status notification sent to the vendor when their submission changes state. */
+export function vendorSubmissionStatusEmail(opts: {
+  vendorName?: string;
+  status: 'received' | 'approved' | 'paid' | 'rejected';
+  jobTitle?: string;
+  amount?: number;
+  rejectionReason?: string;
+}) {
+  const greeting = opts.vendorName ? `Hi ${opts.vendorName},` : 'Hi,';
+  const headings: Record<string, string> = {
+    received: 'Invoice Received',
+    approved: 'Invoice Approved',
+    paid: 'Payment Sent',
+    rejected: 'Invoice Needs Revision',
+  };
+  const heading = headings[opts.status];
+  const messages: Record<string, string> = {
+    received: 'We have received your invoice and it is now under review. You will be notified once it is approved.',
+    approved: 'Your invoice has been approved and payment will be processed shortly.',
+    paid: `Payment has been sent${opts.amount ? ` for ${formatUSD(opts.amount)}` : ''}. Thank you for your work.`,
+    rejected: opts.rejectionReason
+      ? `Your invoice needs revision: ${opts.rejectionReason}. Please resubmit with the corrections.`
+      : 'Your invoice needs revision. Please contact the office for details.',
+  };
+  const message = messages[opts.status];
+
+  const text = [
+    greeting, '', heading, '',
+    opts.jobTitle ? `Job: ${opts.jobTitle}` : '',
+    message, '',
+    'Thank you,', 'MH Dunn Property',
+  ].filter(l => l !== '').join('\n');
+
+  const jobRow = opts.jobTitle
+    ? `<p style="margin:0 0 12px;font-size:13px;color:#8a887f;">Job: ${escapeHtml(opts.jobTitle)}</p>` : '';
+
+  const html = `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">MH Dunn Property</div>
+      </td></tr>
+      <tr><td style="padding:26px 32px 20px;">
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;margin-bottom:14px;">${heading}</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 16px;">${escapeHtml(greeting)}</p>
+        ${jobRow}
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 16px;">${escapeHtml(message)}</p>
+      </td></tr>
+      <tr><td style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        MH Dunn Property
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+
+  return { subject: `${heading} — MH Dunn Property`, html, text };
+}
+
+function formatUSD(n: number) { return `$${n.toFixed(2)}`; }

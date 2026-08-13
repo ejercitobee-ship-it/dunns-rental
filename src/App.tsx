@@ -35,6 +35,7 @@ const Calendar = lazy(() => import('./pages/Calendar').then(m => ({ default: m.C
 const Messages = lazy(() => import('./pages/Messages').then(m => ({ default: m.Messages })));
 const ProspectiveTenantDetail = lazy(() => import('./pages/ProspectiveTenantDetail').then(m => ({ default: m.ProspectiveTenantDetail })));
 const SigningPage = lazy(() => import('./pages/SigningPage').then(m => ({ default: m.SigningPage })));
+const VendorFormPage = lazy(() => import('./pages/VendorFormPage').then(m => ({ default: m.VendorFormPage })));
 const TenantHome = lazy(() => import('./pages/portal/TenantHome').then(m => ({ default: m.TenantHome })));
 const TenantPayments = lazy(() => import('./pages/portal/TenantPayments').then(m => ({ default: m.TenantPayments })));
 const TenantMaintenance = lazy(() => import('./pages/portal/TenantMaintenance').then(m => ({ default: m.TenantMaintenance })));
@@ -190,6 +191,9 @@ function AppRoutes() {
 
       {/* Public, no-login document signing for prospective tenants. */}
       <Route path="/sign/:token" element={<SigningPage />} />
+
+      {/* Public, no-login vendor invoice form. */}
+      <Route path="/vendor-form/:token" element={<VendorFormPage />} />
       
       <Route path="/" element={<RootRoute />} />
 

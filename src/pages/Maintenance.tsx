@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download, User, MapPin, Calendar, ChevronRight, Image } from 'lucide-react';
+import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download, User, MapPin, Calendar, ChevronRight, Image, Send, Copy, Check } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -11,7 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus, MaintenanceStatusLog } from '../types';
 import { STATUS_BADGE, STATUS_LABEL, approvalBadge, tradeLabel } from '../lib/maintenance';
-import { handymenApi, maintenanceApi } from '../lib/api';
+import { handymenApi, maintenanceApi, vendorSubmissionsApi, type VendorSubmission } from '../lib/api';
 
 /** Which active handymen may take a job in this category (general sees all). */
 function eligibleHandymen(handymen: Handyman[], category?: string): Handyman[] {
@@ -70,6 +70,20 @@ export function Maintenance() {
   const [invoiceAction, setInvoiceAction] = useState<'approve' | 'reject' | 'revision'>('approve');
   const [invoiceReason, setInvoiceReason] = useState('');
 
+  // Vendor form link state.
+  const [vendorLinkTarget, setVendorLinkTarget] = useState<MaintenanceRequest | null>(null);
+  const [vendorLinkEmail, setVendorLinkEmail] = useState('');
+  const [vendorLinkName, setVendorLinkName] = useState('');
+  const [vendorLinkResult, setVendorLinkResult] = useState<{ url: string; emailed: boolean } | null>(null);
+  const [vendorLinkSending, setVendorLinkSending] = useState(false);
+  const [vendorLinkCopied, setVendorLinkCopied] = useState(false);
+
+  // Vendor submissions state.
+  const [vendorSubmissions, setVendorSubmissions] = useState<VendorSubmission[]>([]);
+  const [vendorSubBusy, setVendorSubBusy] = useState<string | null>(null);
+  const [vendorSubRejectId, setVendorSubRejectId] = useState<string | null>(null);
+  const [vendorSubRejectReason, setVendorSubRejectReason] = useState('');
+
   // Detail drawer state.
   const [detailTarget, setDetailTarget] = useState<MaintenanceRequest | null>(null);
   const [detailHistory, setDetailHistory] = useState<MaintenanceStatusLog[]>([]);
@@ -77,7 +91,10 @@ export function Maintenance() {
 
   useEffect(() => {
     handymenApi.getAll().then(setHandymen).catch(() => setHandymen([]));
-  }, []);
+    if (canApproveMaintenance) {
+      vendorSubmissionsApi.list().then(setVendorSubmissions).catch(() => {});
+    }
+  }, [canApproveMaintenance]);
 
   const handymanName = (id?: string) => handymen.find(h => h.id === id)?.name;
   const handymanCompany = (id?: string) => handymen.find(h => h.id === id)?.companyName;
@@ -255,6 +272,63 @@ export function Maintenance() {
     });
     setEditingId(m.id);
     setIsModalOpen(true);
+  };
+
+  const openVendorLink = (m: MaintenanceRequest) => {
+    setVendorLinkTarget(m);
+    setVendorLinkEmail('');
+    setVendorLinkName('');
+    setVendorLinkResult(null);
+    setVendorLinkCopied(false);
+  };
+
+  const generateVendorLink = async () => {
+    if (!vendorLinkTarget || vendorLinkSending) return;
+    setVendorLinkSending(true);
+    try {
+      const res = await maintenanceApi.vendorLink(vendorLinkTarget.id, {
+        vendorEmail: vendorLinkEmail.trim() || undefined,
+        vendorName: vendorLinkName.trim() || undefined,
+      });
+      setVendorLinkResult({ url: res.url, emailed: res.emailed });
+      showToast(res.emailed ? 'Invoice form sent to vendor' : 'Invoice form link generated', 'success');
+    } catch {
+      showToast('Failed to generate vendor link', 'error');
+    } finally {
+      setVendorLinkSending(false);
+    }
+  };
+
+  const copyVendorLink = async () => {
+    if (!vendorLinkResult) return;
+    try {
+      await navigator.clipboard.writeText(vendorLinkResult.url);
+      setVendorLinkCopied(true);
+      showToast('Link copied to clipboard', 'success');
+      setTimeout(() => setVendorLinkCopied(false), 2000);
+    } catch {
+      showToast('Failed to copy link', 'error');
+    }
+  };
+
+  const handleVendorSubAction = async (id: string, action: 'approve' | 'paid' | 'reject', rejectionReason?: string) => {
+    setVendorSubBusy(id);
+    try {
+      const updated = await vendorSubmissionsApi.updateStatus(id, action, {
+        rejectionReason: rejectionReason || undefined,
+      });
+      setVendorSubmissions(prev => prev.map(s => s.id === id ? updated : s));
+      const msgs = { approve: 'Invoice approved', paid: 'Marked as paid', reject: 'Revision requested' };
+      showToast(msgs[action], 'success');
+      setVendorSubRejectId(null);
+      setVendorSubRejectReason('');
+      // Refresh expenses if we approved (new expense created).
+      if (action === 'approve') refreshData();
+    } catch (err) {
+      showToast((err as Error).message || 'Action failed', 'error');
+    } finally {
+      setVendorSubBusy(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -541,6 +615,124 @@ export function Maintenance() {
           )}
         </CardContent>
       </Card>
+
+      {/* Vendor submissions section */}
+      {canApproveMaintenance && vendorSubmissions.length > 0 && (
+        <Card className="mt-6">
+          <CardContent className="p-0">
+            <div className="px-4 py-3 border-b border-line bg-canvas">
+              <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                Vendor Invoice Submissions
+                {vendorSubmissions.filter(s => s.status === 'submitted').length > 0 && (
+                  <Badge variant="warning">
+                    {vendorSubmissions.filter(s => s.status === 'submitted').length} pending
+                  </Badge>
+                )}
+              </h3>
+            </div>
+            <div className="overflow-x-auto sm:overflow-visible">
+              <table className="w-full min-w-[700px] sm:min-w-0">
+                <thead>
+                  <tr className="border-b border-line">
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Vendor</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Job</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Payment</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendorSubmissions.map(sub => (
+                    <tr key={sub.id} className="border-b border-line last:border-0">
+                      <td className="py-3 px-4">
+                        <p className="text-sm font-medium text-ink">{sub.vendorName || 'Unknown'}</p>
+                        {sub.companyName && <p className="text-xs text-muted">{sub.companyName}</p>}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-muted">{sub.jobTitle || 'N/A'}</td>
+                      <td className="py-3 px-4">
+                        <p className="text-sm text-muted">{sub.propName || sub.propAddress || 'N/A'}</p>
+                        {sub.unitNumber && <span className="text-xs text-faint">Unit {sub.unitNumber}</span>}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-medium text-ink text-right">
+                        {sub.amount != null ? formatCurrency(sub.amount) : '—'}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-muted capitalize">{sub.paymentMethod || '—'}</td>
+                      <td className="py-3 px-4">
+                        <Badge variant={
+                          sub.status === 'submitted' ? 'warning'
+                            : sub.status === 'approved' ? 'default'
+                            : sub.status === 'paid' ? 'secondary'
+                            : 'outline'
+                        }>
+                          {sub.status === 'draft' ? 'Revision requested' : sub.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {sub.status === 'submitted' && vendorSubRejectId !== sub.id && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => handleVendorSubAction(sub.id, 'approve')}
+                                disabled={vendorSubBusy === sub.id}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setVendorSubRejectId(sub.id); setVendorSubRejectReason(''); }}
+                                disabled={vendorSubBusy === sub.id}
+                              >
+                                Request revision
+                              </Button>
+                            </>
+                          )}
+                          {sub.status === 'submitted' && vendorSubRejectId === sub.id && (
+                            <div className="flex items-center gap-1.5 w-full">
+                              <input
+                                type="text"
+                                placeholder="Reason (optional)"
+                                value={vendorSubRejectReason}
+                                onChange={e => setVendorSubRejectReason(e.target.value)}
+                                className="flex-1 text-xs border border-line rounded px-2 py-1.5 bg-canvas focus:outline-none focus:ring-1 focus:ring-primary/25"
+                              />
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleVendorSubAction(sub.id, 'reject', vendorSubRejectReason)}
+                                disabled={vendorSubBusy === sub.id}
+                              >
+                                Send
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setVendorSubRejectId(null)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                          {sub.status === 'approved' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleVendorSubAction(sub.id, 'paid')}
+                              disabled={vendorSubBusy === sub.id}
+                            >
+                              Mark paid
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Record payment */}
       <Modal isOpen={!!payTarget} onClose={() => setPayTarget(null)} title="Record payment" size="sm">
@@ -1126,6 +1318,11 @@ export function Maintenance() {
                   && m.status !== 'invoice_submitted' && m.status !== 'approved_for_invoicing' && (
                   <Button variant="secondary" onClick={() => { setDetailTarget(null); openPay(m); }}>Mark paid</Button>
                 )}
+                {canApproveMaintenance && m.status !== 'paid' && m.status !== 'cancelled' && (
+                  <Button variant="outline" onClick={() => { setDetailTarget(null); openVendorLink(m); }}>
+                    <Send className="h-4 w-4 mr-1.5" />Send vendor form
+                  </Button>
+                )}
                 {canEditMaintenance && (
                   <Button variant="outline" onClick={() => { setDetailTarget(null); openEdit(m); }}>
                     <Edit2 className="h-4 w-4 mr-1.5" />Edit
@@ -1135,6 +1332,87 @@ export function Maintenance() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Vendor invoice form link modal */}
+      <Modal
+        isOpen={!!vendorLinkTarget}
+        onClose={() => setVendorLinkTarget(null)}
+        title="Send Vendor Invoice Form"
+      >
+        {vendorLinkTarget && !vendorLinkResult && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Generate a link for a vendor to submit their invoice for this job.
+              If you provide their email, the form will be sent to them directly.
+            </p>
+            <div className="p-3 rounded-lg bg-surface-alt border border-line">
+              <p className="text-xs uppercase tracking-wider font-semibold text-muted mb-1">Job reference</p>
+              <p className="text-sm font-medium text-ink">{vendorLinkTarget.title}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Vendor Name</label>
+              <input
+                type="text"
+                value={vendorLinkName}
+                onChange={(e) => setVendorLinkName(e.target.value)}
+                className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="e.g. John Smith"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1.5">Vendor Email</label>
+              <input
+                type="email"
+                value={vendorLinkEmail}
+                onChange={(e) => setVendorLinkEmail(e.target.value)}
+                className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="vendor@example.com (optional)"
+              />
+              <p className="text-xs text-muted mt-1">Leave blank to generate a link you can share manually.</p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={generateVendorLink} disabled={vendorLinkSending} className="flex-1">
+                <Send className="h-4 w-4 mr-1.5" />
+                {vendorLinkSending ? 'Generating...' : vendorLinkEmail.trim() ? 'Send to vendor' : 'Generate link'}
+              </Button>
+              <Button variant="outline" onClick={() => setVendorLinkTarget(null)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
+        {vendorLinkResult && (
+          <div className="space-y-4">
+            <div className="text-center py-2">
+              <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 mb-3">
+                <Check className="h-5 w-5 text-primary" />
+              </div>
+              <p className="text-sm font-medium text-ink">
+                {vendorLinkResult.emailed
+                  ? 'Invoice form sent to vendor'
+                  : 'Invoice form link generated'}
+              </p>
+              {vendorLinkResult.emailed && (
+                <p className="text-xs text-muted mt-1">The vendor will receive an email with instructions.</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-surface-alt border border-line">
+              <input
+                type="text"
+                readOnly
+                value={vendorLinkResult.url}
+                className="flex-1 text-xs bg-transparent text-ink truncate focus:outline-none"
+              />
+              <Button variant="outline" size="sm" onClick={copyVendorLink}>
+                {vendorLinkCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted">
+              The vendor can use this link to fill out their invoice details. You will see the submission on this page once they complete it.
+            </p>
+            <Button variant="outline" onClick={() => setVendorLinkTarget(null)} className="w-full">Done</Button>
+          </div>
+        )}
       </Modal>
     </div>
   );

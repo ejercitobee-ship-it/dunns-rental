@@ -1032,6 +1032,11 @@ export const maintenanceApi = {
   // Fetch the status change history log for a request.
   getHistory: (id: string): Promise<import('../types').MaintenanceStatusLog[]> =>
     apiRequest(`/maintenance/${id}/history`),
+  // Generate a secure, no-login vendor invoice form link and optionally email it.
+  vendorLink: (id: string, opts: { vendorEmail?: string; vendorName?: string }): Promise<{
+    id: string; token: string; url: string; emailed: boolean; emailedTo: string | null;
+  }> =>
+    apiRequest(`/maintenance/${id}/vendor-link`, { method: 'POST', body: JSON.stringify(opts) }),
 };
 
 // Handymen roster API (admin side).
@@ -1203,6 +1208,72 @@ export const signingApi = {
   },
   complete: (token: string): Promise<{ success: boolean }> =>
     apiRequest(`/sign/${token}/complete`, { method: 'POST' }),
+};
+
+// PUBLIC vendor invoice form (no login), used by the /vendor-form/:token page.
+export interface VendorFormInfo {
+  status: string;
+  alreadySubmitted: boolean;
+  vendorName: string;
+  companyName: string;
+  vendorEmail: string;
+  vendorPhone: string;
+  propertyId: string;
+  unitId: string;
+  workDescription: string;
+  amount: number | null;
+  paymentMethod: string;
+  jobTitle: string;
+  propName: string;
+  propAddress: string;
+  rejectionReason: string | null;
+  properties: { id: string; name: string; address: string }[];
+  units: { id: string; propertyId: string; unitNumber: string }[];
+}
+export const vendorFormApi = {
+  info: (token: string): Promise<VendorFormInfo> => apiRequest(`/vendor-form/${token}`),
+  submit: (token: string, data: Record<string, unknown>): Promise<{ success: boolean }> =>
+    apiRequest(`/vendor-form/${token}`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// Admin vendor submissions management.
+export interface VendorSubmission {
+  id: string;
+  token: string;
+  maintenanceRequestId: string | null;
+  vendorName: string;
+  companyName: string;
+  vendorEmail: string;
+  vendorPhone: string;
+  propertyId: string | null;
+  unitId: string | null;
+  workDescription: string;
+  amount: number | null;
+  paymentMethod: string;
+  status: 'draft' | 'submitted' | 'approved' | 'paid' | 'rejected';
+  approvedBy: string | null;
+  approvedAt: string | null;
+  paidAt: string | null;
+  rejectionReason: string | null;
+  adminNotes: string | null;
+  expenseId: string | null;
+  createdAt: number;
+  submittedAt: number | null;
+  updatedAt: number;
+  jobTitle: string | null;
+  propName: string | null;
+  propAddress: string | null;
+  unitNumber: string | null;
+}
+export const vendorSubmissionsApi = {
+  list: (): Promise<VendorSubmission[]> => apiRequest('/vendor-submissions'),
+  updateStatus: (id: string, action: 'approve' | 'paid' | 'reject', extra?: {
+    notes?: string; rejectionReason?: string;
+  }): Promise<VendorSubmission> =>
+    apiRequest(`/vendor-submissions/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ action, ...extra }),
+    }),
 };
 
 // Office side of tenant messaging: the inbox, one tenant's thread, and replies.
