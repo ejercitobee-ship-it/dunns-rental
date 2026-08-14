@@ -72,10 +72,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('Amount must be greater than zero.', 400);
     }
 
-    const tenant = await env.DB.prepare('SELECT name FROM tenants WHERE id = ?')
-      .bind(tenantId).first<{ name: string }>();
+    const tenant = await env.DB.prepare('SELECT first_name, last_name FROM tenants WHERE id = ?')
+      .bind(tenantId).first<{ first_name: string; last_name: string }>();
     if (!tenant) return jsonError('Tenant not found', 404);
 
+    const tenantName = `${tenant.first_name} ${tenant.last_name}`.trim();
     const id = crypto.randomUUID();
     const reason = (body.reason as string) || null;
     const notes = ((body.notes as string) || '').trim() || null;
@@ -90,7 +91,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         action: 'Added tenant credit',
         targetType: 'tenants',
         targetId: tenantId,
-        description: `$${amount} credit for ${tenant.name}${reason ? ` (${reason})` : ''}`,
+        description: `$${amount} credit for ${tenantName}${reason ? ` (${reason})` : ''}`,
         newValues: { amount, reason, notes },
       }),
     ]);
