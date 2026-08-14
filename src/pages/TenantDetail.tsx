@@ -1401,8 +1401,10 @@ export function TenantDetail() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <a
                       href={documentsApi.downloadUrl(doc.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors"
-                      title="Download"
+                      title="View"
                     >
                       <Download className="h-4 w-4" />
                     </a>

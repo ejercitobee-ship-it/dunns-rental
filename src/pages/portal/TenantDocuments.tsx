@@ -122,8 +122,10 @@ export function TenantDocuments() {
                   <span className="text-sm text-ink truncate flex-1 min-w-0">{doc.name}</span>
                   <a
                     href={portalApi.downloadUrl(doc.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0"
-                    title="Download"
+                    title="View"
                   >
                     <Download className="h-4 w-4" />
                   </a>

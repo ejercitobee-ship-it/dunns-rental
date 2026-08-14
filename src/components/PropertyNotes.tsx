@@ -343,7 +343,7 @@ export function PropertyNotes({ propertyId }: Props) {
                             <div key={att.id} className="flex items-center gap-2 text-sm group">
                               <Paperclip className="h-3.5 w-3.5 text-faint flex-shrink-0" />
                               <a
-                                href={`/api/documents/download/${att.driveFileId}`}
+                                href={`/api/drive/${att.driveFileId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-primary hover:underline truncate"

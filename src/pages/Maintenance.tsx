@@ -763,9 +763,9 @@ export function Maintenance() {
                   {invoiceTarget.invoiceDriveIds.map((f, i) => (
                     <a
                       key={i}
-                      href={`/api/documents/download/${f.id}`}
+                      href={`/api/drive/${f.id}`}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="flex items-center gap-2 text-sm text-primary hover:text-primary-hover px-3 py-1.5 rounded-md hover:bg-primary-soft transition-colors"
                     >
                       {f.contentType?.startsWith('application/pdf') ? <FileText className="h-4 w-4" /> : <Download className="h-4 w-4" />}
@@ -1164,9 +1164,9 @@ export function Maintenance() {
                         {m.invoiceDriveIds.map((f, i) => (
                           <a
                             key={i}
-                            href={`/api/documents/download/${f.id}`}
+                            href={`/api/drive/${f.id}`}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                             className="flex items-center gap-2 text-sm text-primary hover:text-primary-hover px-3 py-1.5 rounded-md hover:bg-primary-soft transition-colors"
                           >
                             {f.contentType?.startsWith('application/pdf') ? <FileText className="h-4 w-4" /> : <Image className="h-4 w-4" />}
