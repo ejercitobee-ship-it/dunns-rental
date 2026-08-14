@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Upload, Download } from 'lucide-react';
+import { FileText, Upload } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { portalApi, type AppDocument } from '../../lib/api';
@@ -115,21 +115,18 @@ export function TenantDocuments() {
           ) : (
             <div className="space-y-2">
               {docs.map((doc) => (
-                <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl">
+                <a
+                  key={doc.id}
+                  href={portalApi.downloadUrl(doc.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl hover:border-primary/30 hover:bg-primary-soft/30 transition-colors"
+                >
                   <span className="w-9 h-9 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
                     <FileText className="h-[18px] w-[18px]" strokeWidth={1.8} />
                   </span>
                   <span className="text-sm text-ink truncate flex-1 min-w-0">{doc.name}</span>
-                  <a
-                    href={portalApi.downloadUrl(doc.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0"
-                    title="View"
-                  >
-                    <Download className="h-4 w-4" />
-                  </a>
-                </div>
+                </a>
               ))}
             </div>
           )}

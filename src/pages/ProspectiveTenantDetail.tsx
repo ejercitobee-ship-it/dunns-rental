@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, Upload, Download, Trash2, UserCheck, User, Link2, Copy, Pencil, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, Upload, Trash2, UserCheck, User, Link2, Copy, Pencil, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -392,11 +392,10 @@ export function ProspectiveTenantDetail() {
                   <p className="text-sm text-muted">Nothing sent yet. Upload the application or lease for them to sign.</p>
                 ) : (
                   sentDocs.map(doc => (
-                    <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl">
+                    <a key={doc.id} href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 border border-line rounded-xl hover:border-primary/30 hover:bg-primary-soft/30 transition-colors">
                       <span className="w-9 h-9 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
                       <span className="text-sm text-ink truncate flex-1 min-w-0">{doc.name}</span>
-                      <a href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0" title="Download"><Download className="h-4 w-4" /></a>
-                    </div>
+                    </a>
                   ))
                 )}
               </div>
@@ -408,14 +407,13 @@ export function ProspectiveTenantDetail() {
                   <p className="text-sm text-muted">No signed documents returned yet.</p>
                 ) : (
                   signedDocs.map(doc => (
-                    <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 border border-positive/30 bg-positive-soft/40 rounded-xl">
+                    <a key={doc.id} href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 border border-positive/30 bg-positive-soft/40 rounded-xl hover:bg-positive-soft/60 transition-colors">
                       <span className="w-9 h-9 rounded-lg bg-positive-soft text-positive grid place-items-center flex-shrink-0"><CheckCircle2 className="h-[18px] w-[18px]" /></span>
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-ink truncate block">{cleanName(doc.name)}</span>
                         <span className="text-xs text-positive font-medium">Signed by applicant</span>
                       </div>
-                      <a href={documentsApi.downloadUrl(doc.id)} target="_blank" rel="noopener noreferrer" className="p-2 text-faint hover:text-primary hover:bg-primary-soft rounded-lg transition-colors flex-shrink-0" title="Download"><Download className="h-4 w-4" /></a>
-                    </div>
+                    </a>
                   ))
                 )}
               </div>

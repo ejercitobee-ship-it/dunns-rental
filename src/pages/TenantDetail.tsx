@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
-  FileText, Upload, Download, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
+  FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
   Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
@@ -1394,28 +1394,22 @@ export function TenantDetail() {
             <div className="space-y-1.5">
               {docs.map(doc => (
                 <div key={doc.id} className="flex items-center justify-between px-3 py-2 border border-line rounded-lg">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <a
+                    href={documentsApi.downloadUrl(doc.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 min-w-0 flex-1 text-sm text-ink hover:text-primary transition-colors"
+                  >
                     <FileText className="h-4 w-4 text-faint flex-shrink-0" />
-                    <span className="text-sm text-ink truncate">{doc.name}</span>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <a
-                      href={documentsApi.downloadUrl(doc.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors"
-                      title="View"
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                    <button
-                      onClick={() => handleDeleteDoc(doc.id)}
-                      className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                    <span className="truncate">{doc.name}</span>
+                  </a>
+                  <button
+                    onClick={() => handleDeleteDoc(doc.id)}
+                    className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 ml-1"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               ))}
             </div>

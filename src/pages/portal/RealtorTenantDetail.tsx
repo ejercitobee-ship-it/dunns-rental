@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, User, Mail, Phone, ShieldAlert, FileText, Upload, Download, MapPin } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, ShieldAlert, FileText, Upload, MapPin } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
@@ -210,19 +210,16 @@ export function RealtorTenantDetail() {
           ) : (
             <div className="space-y-1.5">
               {docs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between px-3 py-2 border border-line rounded-lg">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText className="h-4 w-4 text-faint flex-shrink-0" />
-                    <span className="text-sm text-ink truncate">{doc.name}</span>
-                  </div>
-                  <a
-                    href={portalApi.downloadUrl(doc.id)}
-                    className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors flex-shrink-0"
-                    title="Download"
-                  >
-                    <Download className="h-4 w-4" />
-                  </a>
-                </div>
+                <a
+                  key={doc.id}
+                  href={portalApi.downloadUrl(doc.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 border border-line rounded-lg hover:border-primary/30 hover:bg-primary-soft/30 transition-colors min-w-0"
+                >
+                  <FileText className="h-4 w-4 text-faint flex-shrink-0" />
+                  <span className="text-sm text-ink truncate">{doc.name}</span>
+                </a>
               ))}
             </div>
           )}
