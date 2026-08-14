@@ -215,7 +215,7 @@ interface AppContextType extends AppState {
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
   updateIncome: (income: Income) => Promise<void>;
   deleteIncome: (id: string) => Promise<void>;
-  addRentPayment: (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => Promise<void>;
+  addRentPayment: (payment: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
   deleteRentPayment: (id: string) => Promise<void>;
   addMaintenance: (request: Omit<MaintenanceRequest, 'id'>) => Promise<void>;
@@ -403,7 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_INCOME', payload: id });
   };
 
-  const addRentPayment = async (payment: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }) => {
+  const addRentPayment = async (payment: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }) => {
     const newPayment = await paymentsApi.create(payment, opts);
     dispatch({ type: 'ADD_RENT_PAYMENT', payload: newPayment });
   };

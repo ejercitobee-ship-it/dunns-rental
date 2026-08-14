@@ -322,7 +322,28 @@ export const tenantsApi = {
   // side, so it works for any staff member who can link a realtor, not only
   // those who also hold users_view.
   listRealtorUsers: (): Promise<RealtorUserOption[]> => apiRequest('/realtors'),
+  // Tenant credit balance ledger.
+  getCredits: (id: string): Promise<TenantCreditsResponse> =>
+    apiRequest(`/tenants/${id}/credits`),
+  addCredit: (id: string, data: { amount: number; reason?: string; notes?: string }): Promise<{ id: string; balance: number }> =>
+    apiRequest(`/tenants/${id}/credits`, { method: 'POST', body: JSON.stringify(data) }),
 };
+
+export interface TenantCreditEntry {
+  id: string;
+  tenantId: string;
+  amount: number;
+  reason: string | null;
+  notes: string | null;
+  appliedToPaymentId: string | null;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface TenantCreditsResponse {
+  balance: number;
+  entries: TenantCreditEntry[];
+}
 
 export interface RealtorUserOption {
   id: string;
@@ -396,7 +417,7 @@ export const paymentsApi = {
   getById: (id: string): Promise<RentPayment> => apiRequest(`/payments/${id}`),
   // deferSheetSync lets a bulk import skip the per-row master-spreadsheet
   // rebuild and trigger a single rebuild once, at the end.
-  create: (data: Omit<RentPayment, 'id'>, opts?: { deferSheetSync?: boolean }): Promise<RentPayment> =>
+  create: (data: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }): Promise<RentPayment> =>
     apiRequest(`/payments${opts?.deferSheetSync ? '?deferSheetSync=1' : ''}`, { method: 'POST', body: JSON.stringify(data) }),
   // Generate (or refresh) the PDF receipt for a paid payment; returns its
   // document id so the UI can link to the download.

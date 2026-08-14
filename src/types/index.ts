@@ -170,7 +170,7 @@ export interface RentPayment {
   creditReason?: CreditReason;
 }
 
-export type CreditReason = 'proration' | 'maintenance' | 'other';
+export type CreditReason = 'proration' | 'maintenance' | 'balance' | 'other';
 
 export type PaymentMethod =
   | 'check'

@@ -51,7 +51,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const creditReason = paymentType === 'credit' ? (body.creditReason ?? null) : null;
 
     const id = crypto.randomUUID();
-    await env.DB.batch([
+    const stmts = [
       env.DB.prepare(
         `INSERT INTO rent_payments (id, lease_id, paid_by_tenant_id, amount, due_date, paid_date,
           received_date, status, month, year, payment_method, uploaded_by, uploaded_at, notes, type, credit_reason)
@@ -83,7 +83,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         description: `$${amount} ${paymentType === 'credit' ? 'credit' : ''} for ${body.month}/${body.year}${creditReason ? ` (${creditReason})` : ''}`,
         newValues: { amount, month: body.month, year: body.year, status: body.status ?? 'pending', paymentMethod: body.paymentMethod, type: paymentType, creditReason },
       }),
-    ]);
+    ];
+
+    // When a credit is applied from the tenant's credit balance, also debit
+    // the tenant_credits ledger so the running balance stays accurate.
+    if (paymentType === 'credit' && body.debitCreditBalance && body.paidByTenantId) {
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO tenant_credits (id, tenant_id, amount, reason, notes, applied_to_payment_id, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          crypto.randomUUID(),
+          body.paidByTenantId,
+          -amount,
+          creditReason,
+          `Applied to ${body.month}/${body.year} rent`,
+          id,
+          auth.id
+        )
+      );
+    }
+
+    await env.DB.batch(stmts);
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
     // A bulk CSV import posts one row at a time with ?deferSheetSync=1: it skips

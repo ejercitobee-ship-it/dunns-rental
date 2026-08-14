@@ -12,7 +12,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi, leasesApi } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi, tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -139,15 +139,10 @@ export function Rents() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const proofInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
-  // Apply Credit modal.
-  const [creditRow, setCreditRow] = useState<LeaseMonthRow | null>(null);
-  const [creditForm, setCreditForm] = useState({
-    amount: '',
-    reason: 'maintenance' as 'proration' | 'maintenance' | 'other',
-    notes: '',
-  });
-  const [isCreditBusy, setIsCreditBusy] = useState(false);
-  const isCreditBusyRef = useRef(false);
+  // Credit balance for the tenant in the Record Rent modal.
+  const [creditBalance, setCreditBalance] = useState(0);
+  const [applyCredit, setApplyCredit] = useState(false);
+  const [creditAmount, setCreditAmount] = useState('');
 
   // Move-in fee collection.
   const [mifCollapsed, setMifCollapsed] = useState(true);
@@ -544,6 +539,19 @@ export function Rents() {
       paymentMethod: 'check',
       notes: '',
     });
+    setCreditBalance(0);
+    setApplyCredit(false);
+    setCreditAmount('');
+    // Fetch credit balance for the first occupant.
+    const tenantId = row.occupants[0]?.id;
+    if (tenantId) {
+      tenantsApi.getCredits(tenantId).then(res => {
+        setCreditBalance(res.balance);
+        if (res.balance > 0) {
+          setCreditAmount(String(Math.min(res.balance, row.settlement.balance)));
+        }
+      }).catch(() => {});
+    }
   };
 
   const closeRecordModal = () => {
@@ -557,50 +565,9 @@ export function Rents() {
       paymentMethod: 'check',
       notes: '',
     });
-  };
-
-  const openCreditModal = (row: LeaseMonthRow) => {
-    setCreditRow(row);
-    setCreditForm({ amount: '', reason: 'maintenance', notes: '' });
-  };
-
-  const closeCreditModal = () => {
-    setCreditRow(null);
-    setCreditForm({ amount: '', reason: 'maintenance', notes: '' });
-  };
-
-  const handleApplyCredit = async () => {
-    if (isCreditBusyRef.current || !creditRow) return;
-    const amount = Number(creditForm.amount);
-    if (!creditForm.amount || Number.isNaN(amount) || amount <= 0) {
-      showToast('Enter a credit amount greater than zero.', 'error');
-      return;
-    }
-    isCreditBusyRef.current = true;
-    setIsCreditBusy(true);
-    try {
-      const dueDate = `${creditRow.year}-${String(creditRow.month).padStart(2, '0')}-01`;
-      await addRentPayment({
-        leaseId: creditRow.lease.id,
-        amount,
-        month: creditRow.month,
-        year: creditRow.year,
-        status: 'paid',
-        receivedDate: todayLocalDate(),
-        paidDate: todayLocalDate(),
-        dueDate,
-        notes: creditForm.notes.trim() || undefined,
-        type: 'credit',
-        creditReason: creditForm.reason,
-      });
-      showToast('Credit applied.', 'success');
-      closeCreditModal();
-    } catch (err) {
-      showToast((err as Error).message || 'Could not apply the credit.', 'error');
-    } finally {
-      isCreditBusyRef.current = false;
-      setIsCreditBusy(false);
-    }
+    setCreditBalance(0);
+    setApplyCredit(false);
+    setCreditAmount('');
   };
 
   const handleRecordPayment = async () => {
@@ -610,7 +577,8 @@ export function Rents() {
     if (isRecordingRef.current || !recordRow) return;
 
     const amount = Number(recordForm.amount);
-    if (!recordForm.amount || Number.isNaN(amount) || amount <= 0) {
+    const creditAmt = applyCredit ? Math.min(Number(creditAmount) || 0, creditBalance) : 0;
+    if ((!recordForm.amount && !creditAmt) || (Number.isNaN(amount) && !creditAmt) || (amount <= 0 && creditAmt <= 0)) {
       showToast('Enter an amount greater than zero.', 'error');
       return;
     }
@@ -623,19 +591,46 @@ export function Rents() {
     setIsRecording(true);
     try {
       const dueDate = `${recordRow.year}-${String(recordRow.month).padStart(2, '0')}-01`;
-      await addRentPayment({
-        leaseId: recordRow.lease.id,
-        paidByTenantId: recordForm.paidByTenantId || undefined,
-        amount: Number(recordForm.amount),
-        month: recordRow.month,
-        year: recordRow.year,
-        status: 'paid',
-        receivedDate: recordForm.receivedDate,
-        paidDate: recordForm.receivedDate,
-        paymentMethod: recordForm.paymentMethod,
-        dueDate,
-        notes: recordForm.notes.trim() || undefined,
-      });
+
+      // If applying credit, record it as a separate credit payment first.
+      if (applyCredit && creditBalance > 0) {
+        const creditAmt = Math.min(Number(creditAmount) || 0, creditBalance, recordRow.settlement.balance);
+        if (creditAmt > 0) {
+          await addRentPayment({
+            leaseId: recordRow.lease.id,
+            paidByTenantId: recordForm.paidByTenantId || undefined,
+            amount: creditAmt,
+            month: recordRow.month,
+            year: recordRow.year,
+            status: 'paid',
+            receivedDate: recordForm.receivedDate,
+            paidDate: recordForm.receivedDate,
+            dueDate,
+            type: 'credit',
+            creditReason: 'balance',
+            notes: 'Applied from credit balance',
+            debitCreditBalance: true,
+          });
+        }
+      }
+
+      // Record the cash payment (skip if amount is 0 — credit covered everything).
+      const cashAmount = Number(recordForm.amount);
+      if (cashAmount > 0) {
+        await addRentPayment({
+          leaseId: recordRow.lease.id,
+          paidByTenantId: recordForm.paidByTenantId || undefined,
+          amount: cashAmount,
+          month: recordRow.month,
+          year: recordRow.year,
+          status: 'paid',
+          receivedDate: recordForm.receivedDate,
+          paidDate: recordForm.receivedDate,
+          paymentMethod: recordForm.paymentMethod,
+          dueDate,
+          notes: recordForm.notes.trim() || undefined,
+        });
+      }
 
       // Save the proof of payment to the tenant's Drive folder. Best-effort:
       // a Drive hiccup must never lose the recorded payment.
@@ -1161,11 +1156,6 @@ export function Rents() {
                             Record
                           </Button>
                         )}
-                        {canRecordThisMonth && (
-                          <Button size="sm" variant="ghost" onClick={() => openCreditModal(group.thisMonth!)} className="text-muted">
-                            Credit
-                          </Button>
-                        )}
                         {hasPermission('leases_terminate') && (
                           <button
                             onClick={() => handleDeleteLease(group)}
@@ -1221,14 +1211,9 @@ export function Rents() {
                                   {s.label}
                                 </Badge>
                               ) : (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => openRecordModal(mr)} className="flex-shrink-0">
-                                    Record
-                                  </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => openCreditModal(mr)} className="flex-shrink-0 text-muted">
-                                    Credit
-                                  </Button>
-                                </>
+                                <Button size="sm" variant="outline" onClick={() => openRecordModal(mr)} className="flex-shrink-0">
+                                  Record
+                                </Button>
                               )}
                               {hasPermission('rents_edit') && mr.settlement.paid > 0 && (
                                 <button
@@ -1612,8 +1597,69 @@ export function Rents() {
               </div>
             </div>
 
+            {/* Credit balance banner */}
+            {creditBalance > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      {formatCurrency(creditBalance)} credit available
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                      Apply this credit to reduce the amount owed.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApplyCredit(!applyCredit);
+                      if (!applyCredit) {
+                        const maxCredit = Math.min(creditBalance, recordRow.settlement.balance);
+                        setCreditAmount(String(maxCredit));
+                        // Reduce the cash amount by the credit being applied.
+                        const cashNeeded = Math.max(0, recordRow.settlement.balance - maxCredit);
+                        setRecordForm(f => ({ ...f, amount: cashNeeded > 0 ? String(cashNeeded) : '0' }));
+                      } else {
+                        // Un-toggling: restore the full balance as the amount.
+                        setRecordForm(f => ({ ...f, amount: String(recordRow.settlement.balance) }));
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      applyCredit
+                        ? 'bg-amber-600 text-white hover:bg-amber-700'
+                        : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800'
+                    }`}
+                  >
+                    {applyCredit ? 'Applied ✓' : 'Apply'}
+                  </button>
+                </div>
+                {applyCredit && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <label className="text-xs font-medium text-amber-700 dark:text-amber-300 whitespace-nowrap">Credit to use:</label>
+                    <div className="relative flex-1">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-amber-500 text-sm">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={creditBalance}
+                        step="0.01"
+                        value={creditAmount}
+                        onChange={(e) => {
+                          const val = Math.min(Number(e.target.value) || 0, creditBalance, recordRow.settlement.balance);
+                          setCreditAmount(e.target.value);
+                          const cashNeeded = Math.max(0, recordRow.settlement.balance - val);
+                          setRecordForm(f => ({ ...f, amount: cashNeeded > 0 ? String(cashNeeded) : '0' }));
+                        }}
+                        className="w-full pl-6 pr-2 py-1.5 border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-amber-950/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/25"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-ink">Amount *</label>
+              <label className="text-sm font-medium text-ink">{applyCredit ? 'Cash Amount' : 'Amount *'}</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
                 <input
@@ -1626,6 +1672,11 @@ export function Rents() {
                   placeholder="0.00"
                 />
               </div>
+              {applyCredit && (
+                <p className="text-xs text-muted">
+                  The remaining amount after credit. Enter 0 if credit covers the full rent.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -1721,112 +1772,6 @@ export function Rents() {
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 {isRecording ? 'Saving...' : 'Record Payment'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Apply Credit Modal */}
-      <Modal
-        isOpen={!!creditRow}
-        onClose={isCreditBusy ? () => {} : closeCreditModal}
-        title="Apply Credit"
-        size="md"
-      >
-        {creditRow && (
-          <div className="space-y-4">
-            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-1">
-                {creditRow.property?.name || 'Unit'}{creditRow.unit ? `, Unit ${creditRow.unit.unitNumber}` : ''}
-              </h4>
-              <div className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
-                <p>
-                  <span className="font-medium">Period:</span>{' '}
-                  {formatMonthYear(creditRow.month, creditRow.year)}
-                </p>
-                <p>
-                  <span className="font-medium">Due:</span>{' '}
-                  {formatCurrency(creditRow.settlement.due)}
-                </p>
-                <p>
-                  <span className="font-medium">Balance:</span>{' '}
-                  {formatCurrency(creditRow.settlement.balance)}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-ink">Reason *</label>
-              <div className="grid grid-cols-3 gap-2">
-                {([
-                  { key: 'maintenance' as const, label: 'Repair/Maintenance' },
-                  { key: 'proration' as const, label: 'Move-in Proration' },
-                  { key: 'other' as const, label: 'Other' },
-                ]).map(({ key, label }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setCreditForm({ ...creditForm, reason: key })}
-                    className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                      creditForm.reason === key
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-line hover:border-primary/50'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-ink">Credit Amount *</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={creditForm.amount}
-                  onChange={(e) => setCreditForm({ ...creditForm, amount: e.target.value })}
-                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  placeholder="0.00"
-                />
-              </div>
-              <p className="text-xs text-muted">
-                This reduces the tenant's balance for this month. No real money is recorded as income.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-ink">Notes</label>
-              <textarea
-                rows={2}
-                value={creditForm.notes}
-                onChange={(e) => setCreditForm({ ...creditForm, notes: e.target.value })}
-                placeholder="What is this credit for? (e.g. tenant paid $150 for plumbing repair)"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
-              />
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={closeCreditModal}
-                disabled={isCreditBusy}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleApplyCredit}
-                disabled={isCreditBusy}
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                {isCreditBusy ? 'Applying...' : 'Apply Credit'}
               </Button>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw,
+  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -18,6 +18,7 @@ import { useToast } from '../context/ToastContext';
 import {
   documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi, leasesApi,
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message, type TenantEmail,
+  type TenantCreditEntry,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
@@ -91,6 +92,13 @@ export function TenantDetail() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Credits
+  const [creditBalance, setCreditBalance] = useState(0);
+  const [creditEntries, setCreditEntries] = useState<TenantCreditEntry[]>([]);
+  const [showAddCredit, setShowAddCredit] = useState(false);
+  const [creditForm, setCreditForm] = useState({ amount: '', reason: 'maintenance' as string, notes: '' });
+  const [creditBusy, setCreditBusy] = useState(false);
+
   // Portal access: who is invited, and which realtors are linked. Only
   // fetched when this viewer can act on it, since the endpoints require
   // tenants_edit and would otherwise just 403.
@@ -127,6 +135,15 @@ export function TenantDetail() {
     if (!id) return;
     documentsApi.list(id).then(setDocs).catch(() => setDocs([]));
   }, [id]);
+
+  const loadCredits = useCallback(() => {
+    if (!id) return;
+    tenantsApi.getCredits(id).then(res => {
+      setCreditBalance(res.balance);
+      setCreditEntries(res.entries);
+    }).catch(() => {});
+  }, [id]);
+  useEffect(loadCredits, [loadCredits]);
 
   useEffect(() => {
     if (!id) return;
@@ -768,6 +785,31 @@ export function TenantDetail() {
     }
   };
 
+  const handleAddCredit = async () => {
+    if (!id) return;
+    const amount = Number(creditForm.amount);
+    if (!creditForm.amount || Number.isNaN(amount) || amount <= 0) {
+      showToast('Enter a credit amount greater than zero.', 'error');
+      return;
+    }
+    setCreditBusy(true);
+    try {
+      await tenantsApi.addCredit(id, {
+        amount,
+        reason: creditForm.reason || undefined,
+        notes: creditForm.notes.trim() || undefined,
+      });
+      showToast(`${formatCurrency(amount)} credit added.`, 'success');
+      setShowAddCredit(false);
+      setCreditForm({ amount: '', reason: 'maintenance', notes: '' });
+      loadCredits();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not add credit.', 'error');
+    } finally {
+      setCreditBusy(false);
+    }
+  };
+
   // There is no field that says a tenant already has a login: the invite
   // endpoint is the source of truth, and answers with a 400 ("This tenant
   // already has a login") when one exists. So the button is always shown,
@@ -1369,6 +1411,135 @@ export function TenantDetail() {
           confirmText="Remove"
         />
       </Card>
+
+      {/* Credits */}
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-ink flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-faint" /> Credit Balance
+              {creditBalance > 0 && (
+                <Badge variant="warning" className="ml-1">{formatCurrency(creditBalance)}</Badge>
+              )}
+            </h3>
+            {hasPermission('rents_record') && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowAddCredit(true);
+                  setCreditForm({ amount: '', reason: 'maintenance', notes: '' });
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Add Credit
+              </Button>
+            )}
+          </div>
+
+          {creditBalance <= 0 && creditEntries.length === 0 && (
+            <p className="text-sm text-muted">No credits on file. Add one above when a tenant is owed a balance reduction (e.g. a repair reimbursement or move-in proration).</p>
+          )}
+
+          {creditEntries.length > 0 && (
+            <div className="space-y-1.5">
+              {creditEntries.slice(0, 10).map(entry => {
+                const isAdd = entry.amount > 0;
+                const reasonLabels: Record<string, string> = {
+                  maintenance: 'Repair/Maintenance',
+                  proration: 'Proration',
+                  overpayment: 'Overpayment',
+                  balance: 'Applied to rent',
+                  other: 'Other',
+                };
+                return (
+                  <div key={entry.id} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isAdd ? 'border-positive/30 bg-positive-soft/20' : 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20'}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink">
+                        {isAdd ? 'Credit added' : 'Credit applied'}
+                        {entry.reason && ` · ${reasonLabels[entry.reason] || entry.reason}`}
+                      </p>
+                      {entry.notes && <p className="text-xs text-muted truncate">{entry.notes}</p>}
+                      <p className="text-xs text-faint">{formatDate(new Date(entry.createdAt * 1000).toISOString().slice(0, 10))}</p>
+                    </div>
+                    <span className={`text-sm font-semibold tnum flex-shrink-0 ml-3 ${isAdd ? 'text-positive' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {isAdd ? '+' : ''}{formatCurrency(Math.abs(entry.amount))}
+                    </span>
+                  </div>
+                );
+              })}
+              {creditEntries.length > 10 && (
+                <p className="text-xs text-muted text-center pt-1">Showing the 10 most recent entries.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add Credit Modal */}
+      <Modal isOpen={showAddCredit} onClose={creditBusy ? () => {} : () => setShowAddCredit(false)} title="Add Credit" size="md">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-ink">Reason</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: 'maintenance', label: 'Repair/Maintenance' },
+                { key: 'proration', label: 'Move-in Proration' },
+                { key: 'other', label: 'Other' },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCreditForm(f => ({ ...f, reason: key }))}
+                  className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                    creditForm.reason === key
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-line hover:border-primary/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-ink">Amount *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={creditForm.amount}
+                onChange={(e) => setCreditForm(f => ({ ...f, amount: e.target.value }))}
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="0.00"
+              />
+            </div>
+            <p className="text-xs text-muted">This adds to the tenant's credit balance. It can be applied when recording rent.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-ink">Notes</label>
+            <textarea
+              rows={2}
+              value={creditForm.notes}
+              onChange={(e) => setCreditForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="What is this credit for? (e.g. tenant paid $150 for plumbing repair)"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowAddCredit(false)} disabled={creditBusy}>
+              Cancel
+            </Button>
+            <Button className="flex-1" onClick={handleAddCredit} disabled={creditBusy}>
+              {creditBusy ? 'Adding...' : 'Add Credit'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Documents */}
       <Card>
