@@ -17,9 +17,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const upstream = await getDriveFileStream(env, meta.drive_file_id);
     if (!upstream.ok) return jsonError('Document not found', 404);
 
+    const ct = meta.content_type || 'application/octet-stream';
+    const previewable = ct === 'application/pdf' || ct.startsWith('image/');
+    const disp = previewable ? 'inline' : 'attachment';
     const headers = new Headers();
-    headers.set('Content-Type', meta.content_type || 'application/octet-stream');
-    headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(meta.name)}"`);
+    headers.set('Content-Type', ct);
+    headers.set('Content-Disposition', `${disp}; filename="${encodeURIComponent(meta.name)}"`);
     headers.set('Cache-Control', 'private, no-store');
     headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(upstream.body, { headers });

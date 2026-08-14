@@ -31,13 +31,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const upstream = await getDriveFileStream(env, meta.drive_file_id);
     if (!upstream.ok) return jsonError('Document not found', 404);
 
-    // attachment + an encoded filename, matching the staff endpoint. The name is
-    // user supplied, so an unencoded one is header injection. no-store because
-    // these are tenants' personal documents and must not sit in a cache.
+    // inline for previewable types (PDF, images) so tenants can view in the
+    // browser; attachment for everything else. The name is user supplied, so an
+    // unencoded one is header injection. no-store because these are tenants'
+    // personal documents and must not sit in a cache.
+    const ct = meta.content_type || 'application/octet-stream';
+    const previewable = ct === 'application/pdf' || ct.startsWith('image/');
+    const disp = previewable ? 'inline' : 'attachment';
     return new Response(upstream.body, {
       headers: {
-        'Content-Type': meta.content_type || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.name)}"`,
+        'Content-Type': ct,
+        'Content-Disposition': `${disp}; filename="${encodeURIComponent(meta.name)}"`,
         'Cache-Control': 'private, no-store',
       },
     });
