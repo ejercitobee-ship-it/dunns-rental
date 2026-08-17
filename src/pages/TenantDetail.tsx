@@ -98,6 +98,11 @@ export function TenantDetail() {
   const [showAddCredit, setShowAddCredit] = useState(false);
   const [creditForm, setCreditForm] = useState({ amount: '', reason: 'maintenance' as string, notes: '' });
   const [creditBusy, setCreditBusy] = useState(false);
+  const [editingCredit, setEditingCredit] = useState<TenantCreditEntry | null>(null);
+  const [editCreditForm, setEditCreditForm] = useState({ amount: '', reason: '', notes: '' });
+  const [editCreditBusy, setEditCreditBusy] = useState(false);
+  const [deletingCredit, setDeletingCredit] = useState<TenantCreditEntry | null>(null);
+  const [deleteCreditBusy, setDeleteCreditBusy] = useState(false);
 
   // Portal access: who is invited, and which realtors are linked. Only
   // fetched when this viewer can act on it, since the endpoints require
@@ -810,6 +815,56 @@ export function TenantDetail() {
     }
   };
 
+  const openEditCredit = (entry: TenantCreditEntry) => {
+    setEditingCredit(entry);
+    setEditCreditForm({
+      amount: String(Math.abs(entry.amount)),
+      reason: entry.reason || '',
+      notes: entry.notes || '',
+    });
+  };
+
+  const handleEditCredit = async () => {
+    if (!id || !editingCredit) return;
+    const rawAmount = Number(editCreditForm.amount);
+    if (!editCreditForm.amount || Number.isNaN(rawAmount) || rawAmount <= 0) {
+      showToast('Amount must be greater than zero.', 'error');
+      return;
+    }
+    // Keep original sign: positive entries stay positive, negative stay negative.
+    const amount = editingCredit.amount > 0 ? rawAmount : -rawAmount;
+    setEditCreditBusy(true);
+    try {
+      await tenantsApi.updateCredit(id, editingCredit.id, {
+        amount,
+        reason: editCreditForm.reason || undefined,
+        notes: editCreditForm.notes.trim() || undefined,
+      });
+      showToast('Credit entry updated.', 'success');
+      setEditingCredit(null);
+      loadCredits();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update credit.', 'error');
+    } finally {
+      setEditCreditBusy(false);
+    }
+  };
+
+  const handleDeleteCredit = async () => {
+    if (!id || !deletingCredit) return;
+    setDeleteCreditBusy(true);
+    try {
+      await tenantsApi.deleteCredit(id, deletingCredit.id);
+      showToast('Credit entry deleted.', 'success');
+      setDeletingCredit(null);
+      loadCredits();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete credit.', 'error');
+    } finally {
+      setDeleteCreditBusy(false);
+    }
+  };
+
   // There is no field that says a tenant already has a login: the invite
   // endpoint is the source of truth, and answers with a 400 ("This tenant
   // already has a login") when one exists. So the button is always shown,
@@ -1451,6 +1506,7 @@ export function TenantDetail() {
                   balance: 'Applied to rent',
                   other: 'Other',
                 };
+                const isSA = user?.roleId === 'super_admin';
                 return (
                   <div key={entry.id} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isAdd ? 'border-positive/30 bg-positive-soft/20' : 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20'}`}>
                     <div className="min-w-0">
@@ -1461,9 +1517,21 @@ export function TenantDetail() {
                       {entry.notes && <p className="text-xs text-muted truncate">{entry.notes}</p>}
                       <p className="text-xs text-faint">{formatDate(new Date(entry.createdAt * 1000).toISOString().slice(0, 10))}</p>
                     </div>
-                    <span className={`text-sm font-semibold tnum flex-shrink-0 ml-3 ${isAdd ? 'text-positive' : 'text-amber-600 dark:text-amber-400'}`}>
-                      {isAdd ? '+' : ''}{formatCurrency(Math.abs(entry.amount))}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      <span className={`text-sm font-semibold tnum ${isAdd ? 'text-positive' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {isAdd ? '+' : ''}{formatCurrency(Math.abs(entry.amount))}
+                      </span>
+                      {isSA && (
+                        <div className="flex items-center gap-0.5">
+                          <button type="button" title="Edit" onClick={() => openEditCredit(entry)} className="p-1 rounded hover:bg-surface-raised text-faint hover:text-primary transition-colors">
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button type="button" title="Delete" onClick={() => setDeletingCredit(entry)} className="p-1 rounded hover:bg-surface-raised text-faint hover:text-destructive transition-colors">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1540,6 +1608,82 @@ export function TenantDetail() {
           </div>
         </div>
       </Modal>
+
+      {/* Edit Credit Modal (super admin) */}
+      <Modal isOpen={!!editingCredit} onClose={editCreditBusy ? () => {} : () => setEditingCredit(null)} title="Edit Credit Entry" size="md">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-ink">Reason</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: 'maintenance', label: 'Repair/Maintenance' },
+                { key: 'proration', label: 'Move-in Proration' },
+                { key: 'other', label: 'Other' },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setEditCreditForm(f => ({ ...f, reason: key }))}
+                  className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                    editCreditForm.reason === key
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-line hover:border-primary/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-ink">Amount *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={editCreditForm.amount}
+                onChange={(e) => setEditCreditForm(f => ({ ...f, amount: e.target.value }))}
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-ink">Notes</label>
+            <textarea
+              rows={2}
+              value={editCreditForm.notes}
+              onChange={(e) => setEditCreditForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Optional notes"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setEditingCredit(null)} disabled={editCreditBusy}>
+              Cancel
+            </Button>
+            <Button className="flex-1" onClick={handleEditCredit} disabled={editCreditBusy}>
+              {editCreditBusy ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Credit Confirmation (super admin) */}
+      <ConfirmDialog
+        isOpen={!!deletingCredit}
+        onClose={() => setDeletingCredit(null)}
+        onConfirm={handleDeleteCredit}
+        title="Delete Credit Entry"
+        message={`Remove this ${formatCurrency(Math.abs(deletingCredit?.amount ?? 0))} credit entry? This cannot be undone.`}
+        confirmText={deleteCreditBusy ? 'Deleting...' : 'Delete'}
+        variant="danger"
+      />
 
       {/* Documents */}
       <Card>

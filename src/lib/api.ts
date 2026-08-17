@@ -327,6 +327,10 @@ export const tenantsApi = {
     apiRequest(`/tenants/${id}/credits`),
   addCredit: (id: string, data: { amount: number; reason?: string; notes?: string }): Promise<{ id: string; balance: number }> =>
     apiRequest(`/tenants/${id}/credits`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCredit: (tenantId: string, creditId: string, data: { amount?: number; reason?: string; notes?: string }): Promise<{ success: boolean; balance: number }> =>
+    apiRequest(`/tenants/${tenantId}/credits/${creditId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCredit: (tenantId: string, creditId: string): Promise<{ success: boolean; balance: number }> =>
+    apiRequest(`/tenants/${tenantId}/credits/${creditId}`, { method: 'DELETE' }),
 };
 
 export interface TenantCreditEntry {
