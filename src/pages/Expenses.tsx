@@ -77,6 +77,9 @@ export function Expenses() {
   const [capitalProjects, setCapitalProjects] = useState<{ id: string; name: string; propertyId: string }[]>([]);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  // Recurring expense tracking (controlled so we can auto-set for utilities).
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState<'monthly' | 'quarterly' | 'yearly' | ''>('');
   // An invoice/receipt file to attach when adding (or replacing on) the expense.
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -130,6 +133,9 @@ export function Expenses() {
       setExpenseUnitId(match.unitId || '');
       setExpenseCategory('utilities');
       if (match.provider) setExpenseVendor(match.provider);
+      // Utilities are monthly; auto-set so the admin doesn't have to.
+      setIsRecurring(true);
+      setRecurringFrequency('monthly');
     }
   };
 
@@ -149,6 +155,8 @@ export function Expenses() {
     setCapitalProjectId('');
     setShowNewProject(false);
     setNewProjectName('');
+    setIsRecurring(false);
+    setRecurringFrequency('');
     setIsModalOpen(true);
   };
 
@@ -168,6 +176,8 @@ export function Expenses() {
     setCapitalProjectId(expense.capitalProjectId || '');
     setShowNewProject(false);
     setNewProjectName('');
+    setIsRecurring(expense.isRecurring || false);
+    setRecurringFrequency(expense.recurringFrequency || '');
     setIsModalOpen(true);
   };
 
@@ -425,8 +435,8 @@ export function Expenses() {
         const description = formData.get('description') as string;
         const vendor = (formData.get('vendor') as string) || undefined;
         const paymentAccount = (formData.get('paymentAccount') as string)?.trim() || undefined;
-        const isRecurring = formData.get('isRecurring') === 'on';
-        const recurringFrequency = (formData.get('recurringFrequency') as 'monthly' | 'quarterly' | 'yearly') || undefined;
+        const isRecurringVal = isRecurring;
+        const recurringFrequencyVal = recurringFrequency || undefined;
         const interestAmount = category === 'mortgage' && formData.get('interestAmount')
           ? Number(formData.get('interestAmount'))
           : undefined;
@@ -468,8 +478,8 @@ export function Expenses() {
             description: splitNote,
             vendor,
             paymentAccount,
-            isRecurring,
-            recurringFrequency,
+            isRecurring: isRecurringVal,
+            recurringFrequency: recurringFrequencyVal,
             expenseType,
             classificationStatus: 'confirmed' as const,
             capitalProjectId: expenseType === 'capital' ? resolvedProjectId : undefined,
@@ -1085,7 +1095,7 @@ export function Expenses() {
                   type="text"
                   value={accountLookup}
                   onChange={(e) => applyAccountLookup(e.target.value)}
-                  placeholder="Paste the account number and the property fills in automatically"
+                  placeholder="Paste full or last 4+ digits of account number"
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {accountLookup.trim() && (accountMatch ? (
@@ -1095,7 +1105,7 @@ export function Expenses() {
                     {accountMatch.provider ? ` · ${accountMatch.provider}` : ''} <span className="capitalize">({accountMatch.type})</span>. Filled in below.
                   </p>
                 ) : (
-                  <p className="text-xs text-muted">No saved utility account matches that number. Add it on the property's Utilities section, or pick the property manually.</p>
+                  <p className="text-xs text-muted">No match found. Try the last 4+ digits, or add this account on the property's Utilities section.</p>
                 ))}
               </div>
 
@@ -1106,7 +1116,15 @@ export function Expenses() {
                     name="category"
                     required
                     value={expenseCategory}
-                    onChange={(e) => setExpenseCategory(e.target.value as ExpenseCategory | '')}
+                    onChange={(e) => {
+                      const cat = e.target.value as ExpenseCategory | '';
+                      setExpenseCategory(cat);
+                      // Utilities are always monthly; auto-set so the admin doesn't have to.
+                      if (cat === 'utilities' && !editingExpense) {
+                        setIsRecurring(true);
+                        setRecurringFrequency('monthly');
+                      }
+                    }}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Select Category</option>
@@ -1254,22 +1272,24 @@ export function Expenses() {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    name="isRecurring"
-                    defaultChecked={editingExpense?.isRecurring}
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
                     className="w-4 h-4 rounded border-line-strong"
                   />
                   <span className="text-sm">Recurring Expense</span>
                 </label>
-                <select
-                  name="recurringFrequency"
-                  defaultValue={editingExpense?.recurringFrequency || ''}
-                  className="px-3 py-1 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Select Frequency</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
+                {isRecurring && (
+                  <select
+                    value={recurringFrequency}
+                    onChange={(e) => setRecurringFrequency(e.target.value as 'monthly' | 'quarterly' | 'yearly' | '')}
+                    className="px-3 py-1 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select Frequency</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                )}
               </div>
 
               {expenseCategory === 'mortgage' && (
