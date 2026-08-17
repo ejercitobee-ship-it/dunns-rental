@@ -180,7 +180,7 @@ export function CommandPalette() {
     <>
       {/* Overlay */}
       <div
-        className={`fixed inset-0 bg-ink/30 backdrop-blur-sm z-[60] ${phase === 'entering' ? 'backdrop-enter' : 'backdrop-exit'}`}
+        className={`fixed inset-0 bg-ink/30 backdrop-blur-[2px] z-[60] ${phase === 'entering' ? 'backdrop-enter' : 'backdrop-exit'}`}
         onClick={() => setOpen(false)}
       />
 

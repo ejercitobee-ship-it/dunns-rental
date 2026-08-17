@@ -1285,7 +1285,7 @@ export function Calendar() {
 
       {/* Event Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col modal-enter">
             <div className="flex items-center justify-between p-5 border-b border-line shrink-0">
               <h2 className="text-lg font-semibold text-ink">

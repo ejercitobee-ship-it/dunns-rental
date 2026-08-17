@@ -350,7 +350,7 @@ export function Layout({ children }: LayoutProps) {
       {/* Mobile sidebar overlay — always rendered so it can fade in/out */}
       <div
         className={cn(
-          'fixed inset-0 bg-ink/40 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-200',
+          'fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-40 lg:hidden transition-opacity duration-200',
           sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
         onClick={() => setSidebarOpen(false)}
