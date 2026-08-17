@@ -1374,7 +1374,7 @@ export function Maintenance() {
                   <option value="">Choose from roster, or enter manually below</option>
                   {handymen.filter(h => h.isActive).map(h => (
                     <option key={h.id} value={h.id}>
-                      {h.name}{h.companyName ? ` (${h.companyName})` : ''}{h.email ? ` — ${h.email}` : ''}
+                      {h.name}{h.companyName ? ` (${h.companyName})` : ''}{h.email ? `, ${h.email}` : ''}
                     </option>
                   ))}
                 </select>

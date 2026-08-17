@@ -814,17 +814,18 @@ export function TaxReport() {
                   {([
                     ['Total income', main.totalIncome, comp.totalIncome, true],
                     ['Deductible expenses', main.totalDeductibleExpenses, comp.totalDeductibleExpenses, false],
-                    ['— Operating', main.operatingExpenses, comp.operatingExpenses, false],
-                    ['— Capital Improvements', main.capitalExpenses, comp.capitalExpenses, false],
-                    ['— Depreciation', main.depreciation, comp.depreciation, false],
+                    ['  Operating', main.operatingExpenses, comp.operatingExpenses, false],
+                    ['  Capital Improvements', main.capitalExpenses, comp.capitalExpenses, false],
+                    ['  Depreciation', main.depreciation, comp.depreciation, false],
                     ['Net income', main.netIncome, comp.netIncome, true],
                   ] as [string, number, number, boolean][]).map(([label, a, b, higherIsGood]) => {
                     const diff = Math.round((a - b) * 100) / 100;
                     const pct = b !== 0 ? (diff / Math.abs(b)) * 100 : (a !== 0 ? 100 : 0);
                     const good = diff === 0 ? false : (diff > 0) === higherIsGood;
+                    const isSubRow = label.startsWith('  ');
                     return (
                       <tr key={label} className="border-b border-line last:border-0">
-                        <td className="py-2.5 px-4 font-medium text-ink">{label}</td>
+                        <td className={`py-2.5 px-4 ${isSubRow ? 'pl-8 text-muted' : 'font-medium text-ink'}`}>{isSubRow ? label.trimStart() : label}</td>
                         <td className="py-2.5 px-4 text-right tnum">{formatCurrency(a)}</td>
                         <td className="py-2.5 px-4 text-right tnum text-muted">{formatCurrency(b)}</td>
                         <td className={`py-2.5 px-4 text-right tnum font-medium ${diff === 0 ? 'text-muted' : good ? 'text-positive' : 'text-danger'}`}>

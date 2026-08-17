@@ -88,7 +88,7 @@ export function RealtorAvailableUnits() {
             </div>
             <h2 className="font-display text-lg font-medium text-ink">No units available right now</h2>
             <p className="text-sm text-muted mt-1 max-w-sm mx-auto">
-              There are no vacancies at the moment. Please check back soon — new units are added here as they become available.
+              There are no vacancies at the moment. Please check back soon. New units are added here as they become available.
             </p>
           </CardContent>
         </Card>

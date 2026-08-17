@@ -673,7 +673,7 @@ export function PropertyProfile() {
                           </td>
                           <td className="py-2 px-3 text-muted">{l.unitNumber || '—'}</td>
                           <td className="py-2 px-3 text-muted">
-                            {l.startDate ? formatDate(l.startDate) : '—'} — {l.endDate ? formatDate(l.endDate) : '—'}
+                            {l.startDate ? formatDate(l.startDate) : '—'} to {l.endDate ? formatDate(l.endDate) : '—'}
                           </td>
                           <td className="py-2 px-3 text-right tnum">{formatCurrency(l.monthlyRent || 0)}</td>
                           <td className="py-2 px-3 text-muted">{l.endReason || '—'}</td>

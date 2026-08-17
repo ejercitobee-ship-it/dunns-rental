@@ -852,7 +852,7 @@ export function Tenants() {
                 {availableUnits.map(({ unit, property, leavingDate }) => (
                   <option key={unit.id} value={unit.id}>
                     {property ? `${property.name}, Unit ${unit.unitNumber}` : `Unit ${unit.unitNumber}`}
-                    {leavingDate ? ` — available ${leavingDate}` : ''}
+                    {leavingDate ? ` (available ${leavingDate})` : ''}
                   </option>
                 ))}
               </select>

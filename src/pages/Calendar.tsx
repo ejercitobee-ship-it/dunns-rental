@@ -1164,7 +1164,7 @@ export function Calendar() {
                         <span className="font-medium block truncate">{e.title}</span>
                         <span className="text-[9px] opacity-70 block truncate">
                           {formatTime12(e.eventTime!)}
-                          {e.endTime && ` – ${formatTime12(e.endTime)}`}
+                          {e.endTime && ` to ${formatTime12(e.endTime)}`}
                         </span>
                       </button>
                     );

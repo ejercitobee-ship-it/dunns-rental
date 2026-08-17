@@ -465,7 +465,7 @@ export function ProspectiveTenantDetail() {
               {availableUnits.map(({ unit, property, leavingDate }) => (
                 <option key={unit.id} value={unit.id}>
                   {property?.name ? `${property.name}, ` : ''}Unit {unit.unitNumber} ({formatCurrency(unit.monthlyRent)})
-                  {leavingDate ? ` — available ${leavingDate}` : ''}
+                  {leavingDate ? ` (available ${leavingDate})` : ''}
                 </option>
               ))}
             </select>

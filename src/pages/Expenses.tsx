@@ -834,7 +834,7 @@ export function Expenses() {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleDeleteExpense(expense.id, `${expenseCategoryLabel(expense.category)} — ${formatCurrency(expense.amount)}`)}
+                                  onClick={() => handleDeleteExpense(expense.id, `${expenseCategoryLabel(expense.category)}: ${formatCurrency(expense.amount)}`)}
                                   disabled={deletingId === expense.id}
                                   title="Delete this expense"
                                   className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
@@ -920,7 +920,7 @@ export function Expenses() {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleDeleteIncome(income.id, `${income.description} — ${formatCurrency(income.amount)}`)}
+                                  onClick={() => handleDeleteIncome(income.id, `${income.description}: ${formatCurrency(income.amount)}`)}
                                   disabled={deletingId === income.id}
                                   title="Delete this income"
                                   className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
