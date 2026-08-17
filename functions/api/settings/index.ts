@@ -39,6 +39,11 @@ const DEFAULTS = {
     maintenanceAlerts: true,
     paymentConfirmations: true,
   },
+  finances: {
+    /** Configurable capitalization threshold. Expenses above this amount are
+     *  suggested as capital, but the user always makes the final call. */
+    capitalThreshold: 2500,
+  },
 };
 
 type SettingsKey = keyof typeof DEFAULTS;

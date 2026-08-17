@@ -216,6 +216,8 @@ export function serializeExpense(r: Row) {
     capitalProjectId: r.capital_project_id ?? undefined,
     tier: r.tier ?? undefined,
     paymentAccount: r.payment_account ?? undefined,
+    expenseType: r.expense_type ?? undefined,
+    classificationStatus: r.classification_status ?? undefined,
   };
 }
 

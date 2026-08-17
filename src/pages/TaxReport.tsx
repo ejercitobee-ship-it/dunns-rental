@@ -10,7 +10,7 @@ import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { rentIncomeForMonths } from '../lib/rent';
-import { capitalProjectsApi, calendarApi } from '../lib/api';
+import { capitalProjectsApi, calendarApi, settingsApi } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import type { CapitalProject, Expense, Income, RentPayment } from '../types';
@@ -122,8 +122,17 @@ export function TaxReport() {
 
   // Capital projects lookup
   const [capitalProjects, setCapitalProjects] = useState<CapitalProject[]>([]);
+  // Configurable capital threshold from Settings (default: IRS de minimis $2,500).
+  const [capitalThreshold, setCapitalThreshold] = useState(CAPITAL_THRESHOLD);
   useEffect(() => {
     capitalProjectsApi.list().then(setCapitalProjects).catch(() => {});
+    settingsApi.get()
+      .then(data => {
+        if (data?.finances?.capitalThreshold != null) {
+          setCapitalThreshold(data.finances.capitalThreshold);
+        }
+      })
+      .catch(() => {});
   }, []);
   const [drilldownProp, setDrilldownProp] = useState<string | null>(null);
   // TransactionDrillDown modal state
@@ -279,7 +288,7 @@ export function TaxReport() {
       }
 
       if (deductible > 0) {
-        if (isCapitalExpense(e, CAPITAL_THRESHOLD)) {
+        if (isCapitalExpense(e, capitalThreshold)) {
           // Capital improvement: NOT deductible in the current year. It should
           // be capitalized and depreciated over its useful life. Track it
           // separately for reference but do NOT add it to totalDeductibleExpenses.
@@ -354,7 +363,7 @@ export function TaxReport() {
       // Exclude capital items and non-deductible; use interest-only for mortgage
       const mExp = pExpenses.filter(e => monthOf(e.date) === m).reduce((s, e) => {
         if (e.taxDeductible === false) return s;
-        if (isCapitalExpense(e, CAPITAL_THRESHOLD)) return s;
+        if (isCapitalExpense(e, capitalThreshold)) return s;
         if (e.category === 'mortgage') return s + (e.interestAmount != null ? e.interestAmount : e.amount);
         return s + e.amount;
       }, 0);
@@ -401,7 +410,7 @@ export function TaxReport() {
         rentIncome: propRent + propOtherInc,
         depreciation: propDepreciation,
         deductibleAmount,
-        capitalThreshold: CAPITAL_THRESHOLD,
+        capitalThreshold: capitalThreshold,
         isCapital: isCapitalExpense,
       });
     });
@@ -1101,15 +1110,16 @@ export function TaxReport() {
         {!collapsed.has('opVsCap') && <CardContent>
           <p className="text-sm text-muted mb-4">
             Recurring costs (property taxes, insurance, HOA, utilities, management) are always
-            operating expenses regardless of amount. Repairs and improvements over{' '}
-            {formatCurrency(CAPITAL_THRESHOLD)} per item are classified as capital improvements
-            (capitalize and depreciate). Confirm the treatment with your accountant.
+            operating expenses regardless of amount. Expenses explicitly marked as capital
+            projects are shown separately. For legacy expenses without an explicit type,
+            amounts over {formatCurrency(capitalThreshold)} per item in eligible categories are
+            suggested as capital improvements. Confirm the treatment with your accountant.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <button
               className="rounded-xl border border-line p-4 text-left hover:border-line-strong hover:shadow-sm transition-all"
               onClick={() => openDrillModal('Operating Expenses', {
-                expenses: main.pExpenses.filter(e => !isCapitalExpense(e, CAPITAL_THRESHOLD) && e.category !== 'mortgage'),
+                expenses: main.pExpenses.filter(e => !isCapitalExpense(e, capitalThreshold) && e.category !== 'mortgage'),
                 tab: 'expenses',
               })}
             >
@@ -1127,7 +1137,7 @@ export function TaxReport() {
             <button
               className="rounded-xl border border-line p-4 text-left hover:border-line-strong hover:shadow-sm transition-all"
               onClick={() => openDrillModal('Capital Improvements', {
-                expenses: main.pExpenses.filter(e => isCapitalExpense(e, CAPITAL_THRESHOLD)),
+                expenses: main.pExpenses.filter(e => isCapitalExpense(e, capitalThreshold)),
                 tab: 'expenses',
               })}
             >

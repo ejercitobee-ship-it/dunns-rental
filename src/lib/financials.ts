@@ -150,32 +150,42 @@ export const CAPITAL_ELIGIBLE_CATEGORIES = new Set<string>([
 
 /**
  * Determine whether an expense should be treated as a capital improvement
- * for tax purposes. Returns true when:
- *  1. The expense is linked to a Capital Project (capitalProjectId is set), OR
- *  2. The category is explicitly 'capital_improvements', 'property_improvements',
- *     or 'unit_improvements', OR
- *  3. The category is in the capital-eligible set AND the amount exceeds the
- *     IRS de minimis safe-harbor threshold ($2,500)
+ * for tax purposes.
  *
- * Recurring costs (taxes, insurance, HOA, utilities, etc.) are NEVER capital,
- * even if linked to a project or over the threshold.
+ * Priority order:
+ *  1. If `expenseType` is explicitly set ('operating' or 'capital'), that is
+ *     the answer. The user made a deliberate classification.
+ *  2. If the expense is linked to a Capital Project, it is capital.
+ *  3. If the category is explicitly 'capital_improvements',
+ *     'property_improvements', or 'unit_improvements', it is capital.
+ *  4. Always-operating categories (taxes, insurance, utilities, etc.) are
+ *     never capital.
+ *  5. For legacy rows without an explicit type, fall back to the configurable
+ *     threshold (default $2,500) for capital-eligible categories.
+ *
+ * The threshold is a configurable policy/tax setting, not an absolute rule.
+ * New expenses should always have an explicit `expenseType` so the threshold
+ * is only a fallback for historical data.
  */
 export function isCapitalExpense(expense: Expense, threshold = 2500): boolean {
-  // If the expense is explicitly linked to a Capital Project, it is
-  // always capital. The user made a deliberate classification by
-  // linking it, which overrides every other rule.
+  // 1. Explicit classification always wins.
+  if (expense.expenseType === 'capital') return true;
+  if (expense.expenseType === 'operating') return false;
+
+  // 2. Linked to a Capital Project = capital.
   if (expense.capitalProjectId) return true;
 
   const cat = expense.category;
-  // Categories that are always operating never cross into capital
-  // (unless overridden above by a project link).
+  // 3. Always-operating categories are never capital.
   if (ALWAYS_OPERATING_CATEGORIES.has(cat)) return false;
-  // These categories are always capital, regardless of amount.
+  // 4. Explicitly capital categories.
   if (cat === 'capital_improvements' || cat === 'property_improvements' || cat === 'unit_improvements') {
     return true;
   }
-  // For everything else, apply the de minimis threshold.
-  return expense.amount > threshold;
+  // 5. Legacy fallback: threshold test for capital-eligible categories.
+  //    New expenses should have expenseType set, so this only applies to
+  //    historical rows that predate the classification column.
+  return CAPITAL_ELIGIBLE_CATEGORIES.has(cat) && expense.amount > threshold;
 }
 
 // ---------------------------------------------------------------------------

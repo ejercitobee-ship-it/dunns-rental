@@ -43,6 +43,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         `UPDATE expenses SET
           property_id = ?, unit_id = ?, category = ?, amount = ?, date = ?, description = ?, vendor = ?,
           is_recurring = ?, recurring_frequency = ?, interest_amount = ?, payment_account = ?,
+          expense_type = ?, classification_status = ?, capital_project_id = ?,
           updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
@@ -57,6 +58,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.recurringFrequency ?? null,
         body.interestAmount ?? null,
         body.paymentAccount ?? null,
+        body.expenseType ?? null,
+        body.classificationStatus ?? null,
+        body.capitalProjectId ?? null,
         id
       ),
       logActivityStmt(env.DB, auth, {
@@ -67,8 +71,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         targetName: String(body.description),
         propertyId: (body.propertyId as string) || undefined,
         unitId: (body.unitId as string) || undefined,
-        previousValues: { category: before.category, amount: before.amount, date: before.date, description: before.description, vendor: before.vendor },
-        newValues: { category: body.category, amount: body.amount, date: body.date, description: body.description, vendor: body.vendor },
+        previousValues: { category: before.category, amount: before.amount, date: before.date, description: before.description, vendor: before.vendor, expenseType: before.expense_type, capitalProjectId: before.capital_project_id },
+        newValues: { category: body.category, amount: body.amount, date: body.date, description: body.description, vendor: body.vendor, expenseType: body.expenseType, capitalProjectId: body.capitalProjectId },
       }),
     ]);
 

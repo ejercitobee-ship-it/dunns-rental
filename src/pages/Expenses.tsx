@@ -15,7 +15,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type { ExpenseCategory, Expense, Income } from '../types';
-import { expensesApi } from '../lib/api';
+import { expensesApi, capitalProjectsApi } from '../lib/api';
 import {
   EXPENSE_TIERS, categoriesForTier,
   expenseCategoryLabel, expenseCategoryIcon,
@@ -71,6 +71,12 @@ export function Expenses() {
   const [splitMode, setSplitMode] = useState(false);
   const [splitPropertyIds, setSplitPropertyIds] = useState<Set<string>>(new Set());
   const [splitTotalAmount, setSplitTotalAmount] = useState<number>(0);
+  // Expense type: operating (default) or capital project.
+  const [expenseType, setExpenseType] = useState<'operating' | 'capital'>('operating');
+  const [capitalProjectId, setCapitalProjectId] = useState('');
+  const [capitalProjects, setCapitalProjects] = useState<{ id: string; name: string; propertyId: string }[]>([]);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
   // An invoice/receipt file to attach when adding (or replacing on) the expense.
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -91,6 +97,15 @@ export function Expenses() {
   const [yearFilter, setYearFilter] = useState<string>('all');
   // Reset pagination when any filter or view changes.
   useEffect(() => { setVisibleCount(10); }, [searchTerm, categoryFilter, propertyFilter, sourceFilter, monthFilter, yearFilter, view]);
+
+  // Load capital projects when the expense modal opens.
+  useEffect(() => {
+    if (isModalOpen && view === 'expenses') {
+      capitalProjectsApi.list()
+        .then(ps => setCapitalProjects(ps.map(p => ({ id: p.id, name: p.name, propertyId: p.propertyId }))))
+        .catch(() => {});
+    }
+  }, [isModalOpen, view]);
 
   const accountMatch = useMemo(() => {
     const q = accountLookup.trim().toLowerCase();
@@ -130,6 +145,10 @@ export function Expenses() {
     setSplitMode(false);
     setSplitPropertyIds(new Set());
     setSplitTotalAmount(0);
+    setExpenseType('operating');
+    setCapitalProjectId('');
+    setShowNewProject(false);
+    setNewProjectName('');
     setIsModalOpen(true);
   };
 
@@ -145,6 +164,10 @@ export function Expenses() {
     setSplitMode(false);
     setSplitPropertyIds(new Set());
     setSplitTotalAmount(0);
+    setExpenseType(expense.expenseType || (expense.capitalProjectId ? 'capital' : 'operating'));
+    setCapitalProjectId(expense.capitalProjectId || '');
+    setShowNewProject(false);
+    setNewProjectName('');
     setIsModalOpen(true);
   };
 
@@ -417,6 +440,18 @@ export function Expenses() {
         // is exact: e.g., $100 / 3 = $33.34 + $33.33 + $33.33.
         const remainder = Math.round((totalAmount - perPropertyAmount * targetPropertyIds.length) * 100) / 100;
 
+        // If creating a new capital project inline, do that first.
+        let resolvedProjectId = expenseType === 'capital' ? capitalProjectId : undefined;
+        if (expenseType === 'capital' && showNewProject && newProjectName.trim()) {
+          const newProject = await capitalProjectsApi.create({
+            name: newProjectName.trim(),
+            propertyId: targetPropertyIds[0],
+            status: 'in_progress',
+          });
+          resolvedProjectId = newProject.id;
+          setCapitalProjects(prev => [...prev, { id: newProject.id, name: newProject.name, propertyId: newProject.propertyId }]);
+        }
+
         const savedIds: string[] = [];
         for (let idx = 0; idx < targetPropertyIds.length; idx++) {
           const propId = targetPropertyIds[idx];
@@ -435,6 +470,9 @@ export function Expenses() {
             paymentAccount,
             isRecurring,
             recurringFrequency,
+            expenseType,
+            classificationStatus: 'confirmed' as const,
+            capitalProjectId: expenseType === 'capital' ? resolvedProjectId : undefined,
             interestAmount: interestAmount != null
               ? Math.round((interestAmount / targetPropertyIds.length) * 100) / 100
               : undefined,
@@ -740,6 +778,12 @@ export function Expenses() {
                           <div className="flex items-center gap-2">
                             <CategoryIcon className="h-4 w-4 text-muted" />
                             <span className="text-sm">{expenseCategoryLabel(expense.category)}</span>
+                            {expense.expenseType === 'capital' && (
+                              <Badge variant="warning" className="text-xs">Capital</Badge>
+                            )}
+                            {expense.classificationStatus === 'needs_review' && (
+                              <Badge variant="destructive" className="text-xs">Needs Review</Badge>
+                            )}
                             {expense.isRecurring && (
                               <Badge variant="secondary" className="text-xs">Recurring</Badge>
                             )}
@@ -1099,6 +1143,84 @@ export function Expenses() {
                   />
                   <p className="text-xs text-muted">Bank account or card number (last few digits) so you can match the statement.</p>
                 </div>
+              </div>
+
+              {/* Expense Type: Operating vs Capital Project */}
+              <div className="space-y-3 rounded-lg border border-line bg-canvas p-4">
+                <label className="text-sm font-medium text-ink">Expense Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setExpenseType('operating'); setCapitalProjectId(''); setShowNewProject(false); }}
+                    className={`px-3 py-2.5 rounded-lg border text-sm transition-colors text-left ${
+                      expenseType === 'operating'
+                        ? 'border-primary bg-primary/5 text-primary font-medium'
+                        : 'border-line hover:border-primary/50 text-ink'
+                    }`}
+                  >
+                    Operating Expense
+                    <p className="text-xs text-muted mt-0.5 font-normal">Day to day costs, repairs, maintenance</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseType('capital')}
+                    className={`px-3 py-2.5 rounded-lg border text-sm transition-colors text-left ${
+                      expenseType === 'capital'
+                        ? 'border-primary bg-primary/5 text-primary font-medium'
+                        : 'border-line hover:border-primary/50 text-ink'
+                    }`}
+                  >
+                    Capital Project
+                    <p className="text-xs text-muted mt-0.5 font-normal">Improvements that add value or extend life</p>
+                  </button>
+                </div>
+
+                {expenseType === 'capital' && (
+                  <div className="space-y-2 pt-1">
+                    {!showNewProject ? (
+                      <>
+                        <label className="text-xs text-muted">Link to Capital Project</label>
+                        <select
+                          value={capitalProjectId}
+                          onChange={(e) => setCapitalProjectId(e.target.value)}
+                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                        >
+                          <option value="">Select a project...</option>
+                          {capitalProjects
+                            .filter(p => !expensePropertyId || p.propertyId === expensePropertyId)
+                            .map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowNewProject(true)}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          + Create new project
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <label className="text-xs text-muted">New Project Name</label>
+                        <input
+                          type="text"
+                          value={newProjectName}
+                          onChange={(e) => setNewProjectName(e.target.value)}
+                          placeholder="e.g., Kitchen Renovation"
+                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setShowNewProject(false); setNewProjectName(''); }}
+                          className="text-xs text-muted hover:text-ink"
+                        >
+                          Cancel, select existing project instead
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {expenseCategory === 'utilities' && expensePropertyId && (() => {

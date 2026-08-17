@@ -206,6 +206,12 @@ export interface Expense {
   tier?: ExpenseTier;
   /** Last 3-4 digits of the bank/card account used to pay this expense. */
   paymentAccount?: string;
+  /** Explicit classification: 'operating' or 'capital'. When set, overrides
+   *  all automatic classification logic. Null/undefined = legacy behavior. */
+  expenseType?: 'operating' | 'capital';
+  /** Review status: 'confirmed' = user made a deliberate choice,
+   *  'needs_review' = flagged for admin review (e.g. ambiguous import). */
+  classificationStatus?: 'confirmed' | 'needs_review';
 }
 
 export type TaxDeductibleCategory =

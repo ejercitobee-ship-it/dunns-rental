@@ -20,6 +20,7 @@ import {
   ExternalLink,
   ShieldCheck,
   RefreshCw,
+  Receipt,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -75,6 +76,10 @@ export function Settings() {
     paymentConfirmations: true,
   });
 
+  const [financeSettings, setFinanceSettings] = useState({
+    capitalThreshold: 2500,
+  });
+
   const [roleForm, setRoleForm] = useState({
     name: '',
     description: '',
@@ -93,6 +98,7 @@ export function Settings() {
         if (data.company) setCompanySettings(data.company);
         if (data.rent) setRentSettings(data.rent);
         if (data.notifications) setNotificationSettings(data.notifications);
+        if (data.finances) setFinanceSettings(data.finances);
       })
       .catch(() => {
         // Leave defaults in place if the load fails.
@@ -218,6 +224,7 @@ export function Settings() {
         company: companySettings,
         rent: rentSettings,
         notifications: notificationSettings,
+        finances: financeSettings,
       });
       showToast('Settings saved successfully!', 'success');
     } catch (err) {
@@ -313,6 +320,7 @@ export function Settings() {
   const tabs = [
     { id: 'company', label: 'Company', icon: Building2 },
     { id: 'rent', label: 'Rent', icon: DollarSign },
+    { id: 'finances', label: 'Finances', icon: Receipt },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: ShieldCheck },
     { id: 'team-access', label: 'Team Access', icon: Users },
@@ -654,6 +662,46 @@ export function Settings() {
               <Save className="h-4 w-4 mr-2" />
               {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Finances Settings */}
+      {activeTab === 'finances' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Financial Settings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-ink">Capital Expense Threshold</h3>
+              <p className="text-sm text-muted">
+                Expenses above this amount may be suggested as capital improvements
+                for tax purposes. This is a policy guideline, not an automatic rule.
+                Users always choose the final classification when entering an expense.
+              </p>
+              <div className="max-w-xs">
+                <label className="block text-xs text-muted mb-1">Threshold Amount ($)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="100"
+                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    value={financeSettings.capitalThreshold}
+                    onChange={(e) => setFinanceSettings({ ...financeSettings, capitalThreshold: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <p className="text-xs text-muted mt-1">
+                  IRS de minimis safe harbor is $2,500. Adjust based on your
+                  accountant's guidance.
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

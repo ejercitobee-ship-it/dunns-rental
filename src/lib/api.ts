@@ -174,6 +174,9 @@ export interface AppSettings {
     emailNotifications: boolean; smsNotifications: boolean; rentReminders: boolean;
     leaseExpiryAlerts: boolean; maintenanceAlerts: boolean; paymentConfirmations: boolean;
   };
+  finances: {
+    capitalThreshold: number;
+  };
 }
 
 export const settingsApi = {

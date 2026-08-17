@@ -36,8 +36,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, recurring_frequency, interest_amount, tier, payment_account, user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, recurring_frequency, interest_amount, tier, payment_account, expense_type, classification_status, capital_project_id, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -53,6 +53,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           body.interestAmount ?? null,
           body.tier ?? null,
           body.paymentAccount ?? null,
+          body.expenseType ?? null,
+          body.classificationStatus ?? 'confirmed',
+          body.capitalProjectId ?? null,
           auth.id
         ),
       logActivityStmt(env.DB, auth, {
