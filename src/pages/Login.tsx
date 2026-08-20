@@ -58,7 +58,9 @@ export function Login() {
         // Map server errors to friendlier, more specific messages.
         const raw = result.error || '';
         let message: string;
-        if (twoFactorMode) {
+        if (raw.includes('could not send')) {
+          message = raw; // Email delivery failure: pass through so user knows the code didn't send
+        } else if (twoFactorMode) {
           message = raw.includes('expired')
             ? 'That code has expired. Please request a new one.'
             : 'The code you entered is incorrect. Please check and try again.';
@@ -83,8 +85,12 @@ export function Login() {
     if (resending) return;
     setResending(true);
     try {
-      await login(email, password);
-      showToast('A new code is on its way to your email.', 'success');
+      const result = await login(email, password);
+      if (result.error?.includes('could not send')) {
+        showToast('Could not send the code right now. Please contact the office.', 'error');
+      } else {
+        showToast('A new code is on its way to your email.', 'success');
+      }
     } catch {
       showToast('Could not send a new code. Please try again.', 'error');
     } finally {

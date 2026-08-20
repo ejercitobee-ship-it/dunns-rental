@@ -100,7 +100,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const code = (body.code || '').trim();
       if (!code) {
         // Password was right; email a fresh code and ask the client for it.
-        await issueAndSendEmailCode(env, user.id, user.email, user.name);
+        const sent = await issueAndSendEmailCode(env, user.id, user.email, user.name);
+        if (!sent) {
+          return jsonError('We could not send your sign-in code. Please try again or contact the office.', 503);
+        }
         return jsonOk({ success: false, twoFactorRequired: true, method: 'email' }, 200);
       }
       const ok = await verifyEmailCode(env, user.id, code);

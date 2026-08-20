@@ -597,9 +597,9 @@ export function Maintenance() {
                             {m.status === 'in_progress' ? 'Complete' : 'Start'}
                           </button>
                         )}
-                        {/* Mark paid: skip for invoice_submitted (goes through invoice flow) */}
-                        {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled'
-                          && m.status !== 'invoice_submitted' && m.status !== 'approved_for_invoicing' && (
+                        {/* Mark paid: available on any non-terminal status so the admin can
+                            bypass the vendor form when an invoice arrives via chat/email. */}
+                        {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
                           <button
                             onClick={() => openPay(m)}
                             className="text-xs font-medium text-positive hover:opacity-80 px-2 py-1 rounded-md hover:bg-positive-soft transition-colors"
@@ -1319,8 +1319,7 @@ export function Maintenance() {
                 {canApproveMaintenance && m.status === 'invoice_submitted' && (
                   <Button onClick={() => { setDetailTarget(null); openInvoiceReview(m); }}>Review invoice</Button>
                 )}
-                {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled'
-                  && m.status !== 'invoice_submitted' && m.status !== 'approved_for_invoicing' && (
+                {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
                   <Button variant="secondary" onClick={() => { setDetailTarget(null); openPay(m); }}>Mark paid</Button>
                 )}
                 {canApproveMaintenance && m.status !== 'paid' && m.status !== 'cancelled' && (
