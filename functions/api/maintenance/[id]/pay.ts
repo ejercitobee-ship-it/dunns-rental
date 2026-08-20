@@ -25,16 +25,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!Number.isFinite(cost) || cost < 0) return jsonError('Enter a valid amount', 400);
 
     const req = await env.DB.prepare(
-      'SELECT status, title, property_id, unit_id, assigned_handyman_id FROM maintenance_requests WHERE id = ?'
+      'SELECT status, title, property_id, unit_id, assigned_handyman_id, vendor FROM maintenance_requests WHERE id = ?'
     )
       .bind(id)
-      .first<{ status: string; title: string; property_id: string | null; unit_id: string | null; assigned_handyman_id: string | null }>();
+      .first<{ status: string; title: string; property_id: string | null; unit_id: string | null; assigned_handyman_id: string | null; vendor: string | null }>();
     if (!req) return jsonError('Request not found', 404);
     if (req.status === 'cancelled') return jsonError('This request was cancelled', 400);
 
+    // Use the roster handyman name if assigned, otherwise fall back to the
+    // free-text vendor field so one-off contractors still appear on the expense.
     const vendor = req.assigned_handyman_id
       ? (await env.DB.prepare('SELECT COALESCE(company_name, name) AS name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
-      : null;
+      : req.vendor || null;
 
     const today = new Date().toISOString().slice(0, 10);
     const expenseId = maintenanceExpenseId(id);

@@ -539,16 +539,30 @@ export function Maintenance() {
                     <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                       {m.status === 'paid' || m.status === 'cancelled' || isInvoiceStatus(m.status) ? (
                         <div className="min-w-0">
-                          <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || '—'}</span>
+                          <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || m.vendor || '—'}</span>
                           {handymanCompany(m.assignedHandymanId) && (
                             <span className="block text-[11px] text-faint">{handymanCompany(m.assignedHandymanId)}</span>
+                          )}
+                          {!m.assignedHandymanId && m.vendor && (
+                            <span className="block text-[11px] text-faint">Not in roster</span>
                           )}
                         </div>
                       ) : (
                         <select
-                          value={m.assignedHandymanId || ''}
+                          value={m.assignedHandymanId || (m.vendor ? '__other__' : '')}
                           disabled={busyId === m.id}
-                          onChange={(e) => assignHandyman(m, e.target.value)}
+                          onChange={(e) => {
+                            if (e.target.value === '__other__') {
+                              const name = prompt('Enter the vendor or handyman name:');
+                              if (name?.trim()) {
+                                maintenanceApi.update(m.id, { ...m, vendor: name.trim(), assignedHandymanId: undefined })
+                                  .then(updated => { dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated }); showToast(`Assigned to ${name.trim()}`, 'success'); })
+                                  .catch(() => showToast('Could not update', 'error'));
+                              }
+                            } else {
+                              assignHandyman(m, e.target.value);
+                            }
+                          }}
                           className="text-sm px-2 py-1 border border-line rounded-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 max-w-[150px]"
                         >
                           <option value="">Unassigned</option>
@@ -559,6 +573,7 @@ export function Maintenance() {
                           {m.assignedHandymanId && !eligibleHandymen(handymen, m.category).some((h) => h.id === m.assignedHandymanId) && (
                             <option value={m.assignedHandymanId}>{handymanName(m.assignedHandymanId) || 'Assigned'}</option>
                           )}
+                          <option value="__other__">{m.vendor ? `Other: ${m.vendor}` : 'Other (type a name)'}</option>
                         </select>
                       )}
                     </td>
@@ -647,7 +662,7 @@ export function Maintenance() {
       <Modal isOpen={!!payTarget} onClose={() => setPayTarget(null)} title="Record payment" size="sm">
         <div className="space-y-4">
           <p className="text-sm text-muted">
-            Record what you paid the handyman for <span className="font-medium text-ink">{payTarget?.title}</span>. This
+            Record what you paid {payTarget?.assignedHandymanId ? handymanName(payTarget.assignedHandymanId) : payTarget?.vendor || 'the vendor'} for <span className="font-medium text-ink">{payTarget?.title}</span>. This
             marks the job paid and counts it as an expense in Finances. It does not touch the tenant's rent.
           </p>
           <div>
@@ -674,9 +689,9 @@ export function Maintenance() {
         <div className="space-y-4">
           <p className="text-sm text-muted">
             Approve <span className="font-medium text-ink">{approveTarget?.title}</span>
-            {approveTarget?.assignedHandymanId && <>
-              {' '}by <span className="font-medium text-ink">{handymanName(approveTarget.assignedHandymanId)}</span>
-              {handymanCompany(approveTarget.assignedHandymanId) && (
+            {(approveTarget?.assignedHandymanId || approveTarget?.vendor) && <>
+              {' '}by <span className="font-medium text-ink">{approveTarget?.assignedHandymanId ? handymanName(approveTarget.assignedHandymanId) : approveTarget?.vendor}</span>
+              {approveTarget?.assignedHandymanId && handymanCompany(approveTarget.assignedHandymanId) && (
                 <span className="text-muted"> ({handymanCompany(approveTarget.assignedHandymanId)})</span>
               )}
             </>}.
@@ -1082,9 +1097,9 @@ export function Maintenance() {
                     )}
                   </div>
 
-                  {/* Handyman info */}
+                  {/* Handyman / vendor info */}
                   <div>
-                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">Handyman</p>
+                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">Handyman / Vendor</p>
                     {m.assignedHandymanId ? (
                       <div className="mt-1">
                         <p className="text-sm font-medium text-ink">{handymanName(m.assignedHandymanId) || 'Unknown'}</p>
@@ -1092,11 +1107,13 @@ export function Maintenance() {
                           <p className="text-xs text-muted">{handymanCompany(m.assignedHandymanId)}</p>
                         )}
                       </div>
+                    ) : m.vendor ? (
+                      <div className="mt-1">
+                        <p className="text-sm font-medium text-ink">{m.vendor}</p>
+                        <p className="text-xs text-muted">Not in roster</p>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted mt-1">Not assigned yet.</p>
-                    )}
-                    {m.vendor && !m.assignedHandymanId && (
-                      <p className="text-sm text-ink mt-1">Vendor: {m.vendor}</p>
                     )}
                   </div>
 

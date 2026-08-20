@@ -1032,7 +1032,7 @@ export const maintenanceApi = {
   getById: (id: string): Promise<MaintenanceRequest> => apiRequest(`/maintenance/${id}`),
   create: (data: Omit<MaintenanceRequest, 'id'>): Promise<MaintenanceRequest> =>
     apiRequest('/maintenance', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: MaintenanceRequest): Promise<MaintenanceRequest> =>
+  update: (id: string, data: Partial<MaintenanceRequest> & Pick<MaintenanceRequest, 'title' | 'status'>): Promise<MaintenanceRequest> =>
     apiRequest(`/maintenance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/maintenance/${id}`, { method: 'DELETE' }),
