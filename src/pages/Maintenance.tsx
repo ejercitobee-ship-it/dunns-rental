@@ -172,7 +172,7 @@ export function Maintenance() {
       if (updated.status === 'approved_for_invoicing') {
         showToast('Approved. The handyman has been notified to submit their invoice.', 'success');
       } else {
-        showToast('Approved. It now counts as an expense on the property.', 'success');
+        showToast('Approved. Mark it paid when the payment is sent.', 'success');
       }
       setApproveTarget(null);
     } catch (err) {

@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeMaintenance } from '../../../lib/serializers';
-import { maintenanceExpenseId, logStatusChange } from '../../../lib/maintenance';
+import { logStatusChange } from '../../../lib/maintenance';
 import { notifyHandyman } from '../../../lib/maintenance-notify';
 import { sendPushToUser } from '../../../lib/push';
 import { SITE_URL } from '../../../lib/site';
@@ -56,12 +56,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // admin's earlier approved cost if the handyman itemized differently).
       const expenseAmount = req.invoice_total_amount ?? req.cost ?? 0;
 
-      const vendor = req.assigned_handyman_id
-        ? (await env.DB.prepare('SELECT COALESCE(company_name, name) AS name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
-        : null;
-
-      const expenseId = maintenanceExpenseId(id);
-
+      // Approve the invoice but do NOT write an expense yet. The expense is
+      // created only when the admin clicks "Mark paid" — keeping financials
+      // on a cash basis so numbers match when money actually leaves.
       const stmts = [
         env.DB.prepare(
           `UPDATE maintenance_requests
@@ -69,25 +66,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                   cost = ?, updated_at = unixepoch()
             WHERE id = ?`
         ).bind(today, auth.id, expenseAmount, id),
-        // Idempotent expense row.
-        env.DB.prepare(
-          `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, user_id)
-           VALUES (?, ?, ?, 'maintenance', ?, ?, ?, ?, 0, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             amount = excluded.amount, date = excluded.date, description = excluded.description,
-             vendor = excluded.vendor, property_id = excluded.property_id, unit_id = excluded.unit_id,
-             updated_at = unixepoch()`
-        ).bind(
-          expenseId,
-          req.property_id,
-          req.unit_id,
-          expenseAmount,
-          today,
-          `Maintenance: ${req.title}`,
-          vendor,
-          auth.id
-        ),
-        logStatusChange(env.DB, id, 'invoice_submitted', 'invoice_approved', auth.id, auth.name, `Invoice #${req.invoice_number} approved, expense $${expenseAmount.toFixed(2)}`),
+        logStatusChange(env.DB, id, 'invoice_submitted', 'invoice_approved', auth.id, auth.name, `Invoice #${req.invoice_number} approved, $${expenseAmount.toFixed(2)}`),
       ];
       await env.DB.batch(stmts);
 

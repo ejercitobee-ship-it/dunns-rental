@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeMaintenance } from '../../../lib/serializers';
-import { maintenanceExpenseId, logStatusChange } from '../../../lib/maintenance';
+import { logStatusChange } from '../../../lib/maintenance';
 import { notifyHandyman } from '../../../lib/maintenance-notify';
 import { sendPushToUser } from '../../../lib/push';
 import { SITE_URL } from '../../../lib/site';
@@ -42,10 +42,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .first<{ status: string; title: string; property_id: string | null; unit_id: string | null; assigned_handyman_id: string | null }>();
     if (!req) return jsonError('Request not found', 404);
     if (req.status === 'cancelled') return jsonError('This request was cancelled', 400);
-
-    const vendor = req.assigned_handyman_id
-      ? (await env.DB.prepare('SELECT COALESCE(company_name, name) AS name FROM handymen WHERE id = ?').bind(req.assigned_handyman_id).first<{ name: string }>())?.name ?? null
-      : null;
 
     const today = new Date().toISOString().slice(0, 10);
     const useInvoiceFlow = !!req.assigned_handyman_id && !skipInvoice;
@@ -94,8 +90,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         })().catch(e => console.error('approve-for-invoicing notify failed', e))
       );
     } else {
-      // --- Direct flow: write expense immediately (legacy behaviour). ---
-      const expenseId = maintenanceExpenseId(id);
+      // --- Direct flow: approve the work but do NOT write an expense yet. ---
+      // The expense is created only when the admin explicitly clicks "Mark paid"
+      // (the pay endpoint). This keeps financials on a cash basis: an expense
+      // appears when money actually leaves the business, not at approval time.
       const stmts = [
         env.DB.prepare(
           `UPDATE maintenance_requests
@@ -103,14 +101,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                   resolved_date = COALESCE(resolved_date, ?), updated_at = unixepoch()
             WHERE id = ?`
         ).bind(cost, today, today, id),
-        env.DB.prepare(
-          `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, user_id)
-           VALUES (?, ?, ?, 'maintenance', ?, ?, ?, ?, 0, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             amount = excluded.amount, date = excluded.date, description = excluded.description,
-             vendor = excluded.vendor, property_id = excluded.property_id, unit_id = excluded.unit_id,
-             updated_at = unixepoch()`
-        ).bind(expenseId, req.property_id, req.unit_id, cost, today, `Maintenance: ${req.title}`, vendor, auth.id),
         logStatusChange(env.DB, id, req.status, req.status, auth.id, auth.name, `Approved (direct): $${cost.toFixed(2)}`),
       ];
       await env.DB.batch(stmts);
