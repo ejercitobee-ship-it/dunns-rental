@@ -217,6 +217,7 @@ interface AppContextType extends AppState {
   deleteIncome: (id: string) => Promise<void>;
   addRentPayment: (payment: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
+  updateRentPayment: (payment: RentPayment) => Promise<void>;
   deleteRentPayment: (id: string) => Promise<void>;
   addMaintenance: (request: Omit<MaintenanceRequest, 'id'>) => Promise<void>;
   updateMaintenance: (request: MaintenanceRequest) => Promise<void>;
@@ -427,6 +428,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
   };
 
+  const updateRentPayment = async (payment: RentPayment) => {
+    const updated = await paymentsApi.update(payment.id, payment);
+    dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
+  };
+
   const deleteRentPayment = async (id: string) => {
     await paymentsApi.delete(id);
     dispatch({ type: 'DELETE_RENT_PAYMENT', payload: id });
@@ -484,6 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteIncome,
         addRentPayment,
         updatePaymentStatus,
+        updateRentPayment,
         deleteRentPayment,
         addMaintenance,
         updateMaintenance,

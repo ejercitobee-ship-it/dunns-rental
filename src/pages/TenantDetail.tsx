@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus,
+  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -269,6 +269,43 @@ export function TenantDetail() {
     if (!id) return [];
     return getTenantLeases(id).filter(l => l.moveInFeePaid && (l.securityDeposit || 0) > 0);
   }, [id, getTenantLeases]);
+
+  const downloadLedger = useCallback(() => {
+    if (!tenant) return;
+    const rows: string[][] = [['Date', 'Type', 'Month', 'Amount', 'Method', 'Status']];
+    for (const l of moveInFeeRows) {
+      rows.push([
+        l.moveInFeePaidDate || '',
+        'Move-in fee',
+        '',
+        (l.securityDeposit || 0).toFixed(2),
+        formatMethod(l.moveInFeeMethod as PaymentMethod | undefined),
+        'Paid',
+      ]);
+    }
+    for (const p of payments) {
+      const isCredit = p.type === 'credit';
+      rows.push([
+        p.paidDate || p.dueDate || '',
+        isCredit ? 'Credit' : 'Rent',
+        formatMonthYear(p.month, p.year),
+        p.amount.toFixed(2),
+        isCredit
+          ? (p.creditReason === 'maintenance' ? 'Repair/Maintenance' : p.creditReason === 'proration' ? 'Proration' : 'Credit')
+          : formatMethod(p.paymentMethod),
+        p.status === 'paid' ? 'Paid' : p.status === 'partial' ? 'Partial' : 'Unpaid',
+      ]);
+    }
+    const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const name = `${tenant.firstName}_${tenant.lastName}`.replace(/\s+/g, '_');
+    a.download = `${name}_ledger_${todayLocalDate()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [tenant, payments, moveInFeeRows]);
 
   const openEdit = () => {
     if (!tenant) return;
@@ -1910,10 +1947,19 @@ export function TenantDetail() {
       {/* Payment history */}
       <Card>
         <CardContent className="p-0">
-          <div className="p-5 pb-0">
+          <div className="p-5 pb-0 flex items-center justify-between">
             <h3 className="font-semibold text-ink flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-faint" /> Payment History
             </h3>
+            {(payments.length > 0 || moveInFeeRows.length > 0) && (
+              <button
+                type="button"
+                onClick={downloadLedger}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-hover"
+              >
+                <Download className="h-3.5 w-3.5" /> Download CSV
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto mt-3">
             <table className="w-full min-w-[600px]">

@@ -4,7 +4,7 @@ import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
   Search, Download, Upload,
   TrendingUp, TrendingDown, FileText, ChevronRight, ChevronDown,
-  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2,
+  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2, Edit2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -107,7 +107,7 @@ function matchSinglePayer(cell: string, occupants: Tenant[]): Tenant | undefined
 export function Rents() {
   const {
     properties, units, leases, rentPayments,
-    getLeaseTenants, addRentPayment, deleteRentPayment, deleteLease, refreshData,
+    getLeaseTenants, addRentPayment, updateRentPayment, deleteRentPayment, deleteLease, refreshData,
   } = useApp();
   const { hasPermission } = useAuth();
   const { showToast } = useToast();
@@ -525,6 +525,60 @@ export function Rents() {
         }
       },
     });
+  };
+
+  // Super Admin only: edit a recorded payment (amount, date, method, month/year, notes).
+  const [editPayment, setEditPayment] = useState<RentPayment | null>(null);
+  const [editForm, setEditForm] = useState({ amount: '', paidDate: '', paymentMethod: 'check' as PaymentMethod, month: '', year: '', notes: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const openEditModal = (mr: LeaseMonthRow) => {
+    // Find the actual payment(s) for this month. If there are multiple (credit + payment),
+    // we edit the primary cash payment (type !== 'credit'). If only credits exist, edit the first.
+    const pmts = rentPayments.filter(
+      pm => pm.leaseId === mr.lease.id && pm.month === mr.month && pm.year === mr.year
+    );
+    const primary = pmts.find(p => p.type !== 'credit') || pmts[0];
+    if (!primary) return;
+    setEditPayment(primary);
+    setEditForm({
+      amount: String(primary.amount),
+      paidDate: primary.paidDate || primary.receivedDate || '',
+      paymentMethod: primary.paymentMethod || 'check',
+      month: String(primary.month),
+      year: String(primary.year),
+      notes: primary.notes || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editPayment || isSavingEdit) return;
+    const amount = Number(editForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount.', 'error'); return; }
+    if (!editForm.paidDate) { showToast('Enter the payment date.', 'error'); return; }
+    const month = Number(editForm.month);
+    const year = Number(editForm.year);
+    if (month < 1 || month > 12) { showToast('Enter a valid month (1 to 12).', 'error'); return; }
+    if (year < 2020 || year > 2099) { showToast('Enter a valid year.', 'error'); return; }
+    setIsSavingEdit(true);
+    try {
+      await updateRentPayment({
+        ...editPayment,
+        amount,
+        paidDate: editForm.paidDate,
+        receivedDate: editForm.paidDate,
+        paymentMethod: editForm.paymentMethod,
+        month,
+        year,
+        notes: editForm.notes.trim() || undefined,
+      });
+      showToast('Payment updated.', 'success');
+      setEditPayment(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update the payment.', 'error');
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const openRecordModal = (row: LeaseMonthRow) => {
@@ -1216,14 +1270,23 @@ export function Rents() {
                                 </Button>
                               )}
                               {hasPermission('rents_edit') && mr.settlement.paid > 0 && (
-                                <button
-                                  onClick={() => handleDeleteRent(mr)}
-                                  disabled={deletingRow === `${mr.lease.id}-${mr.month}-${mr.year}`}
-                                  title="Delete this recorded rent"
-                                  className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => openEditModal(mr)}
+                                    title="Edit this payment"
+                                    className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors flex-shrink-0"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteRent(mr)}
+                                    disabled={deletingRow === `${mr.lease.id}-${mr.month}-${mr.year}`}
+                                    title="Delete this recorded rent"
+                                    className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           );
@@ -1772,6 +1835,126 @@ export function Rents() {
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 {isRecording ? 'Saving...' : 'Record Payment'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Edit Payment Modal (super admin / rents_edit) */}
+      <Modal
+        isOpen={!!editPayment}
+        onClose={isSavingEdit ? () => {} : () => setEditPayment(null)}
+        title="Edit Payment"
+        size="md"
+      >
+        {editPayment && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-ink">Amount *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editForm.amount}
+                    onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-ink">Date Paid *</label>
+                <input
+                  type="date"
+                  value={editForm.paidDate}
+                  onChange={(e) => setEditForm({ ...editForm, paidDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-ink">Month *</label>
+                <select
+                  value={editForm.month}
+                  onChange={(e) => setEditForm({ ...editForm, month: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                >
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>{formatMonthYear(i + 1, Number(editForm.year) || new Date().getFullYear())}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-ink">Year *</label>
+                <input
+                  type="number"
+                  min={2020}
+                  max={2099}
+                  value={editForm.year}
+                  onChange={(e) => setEditForm({ ...editForm, year: e.target.value })}
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-ink">Payment Method</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(Object.keys(paymentMethodConfig) as PaymentMethod[]).map((method) => {
+                  const config = paymentMethodConfig[method];
+                  const Icon = config.icon;
+                  return (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, paymentMethod: method })}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
+                        editForm.paymentMethod === method
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-line hover:border-primary/50'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {config.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-ink">Notes</label>
+              <textarea
+                rows={2}
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                placeholder="Optional note about this payment"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setEditPayment(null)}
+                disabled={isSavingEdit}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {isSavingEdit ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </div>
