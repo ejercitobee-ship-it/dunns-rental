@@ -457,55 +457,127 @@ async function getRentStatus(db: D1Database, input: ToolInput): Promise<string> 
   const month = typeof input.month === 'number' ? input.month : now.getMonth() + 1;
   const year = typeof input.year === 'number' ? input.year : now.getFullYear();
 
-  const clauses: string[] = ['rp.month = ?', 'rp.year = ?'];
-  const binds: unknown[] = [month, year];
+  // Build a date string for the target month to check lease validity.
+  const monthPadded = String(month).padStart(2, '0');
+  const monthStart = `${year}-${monthPadded}-01`;
 
-  if (input.propertyId) {
-    clauses.push('l.property_id = ?');
-    binds.push(String(input.propertyId));
-  }
+  // Step 1: find all active leases that should owe rent for this month.
+  const propFilter = input.propertyId ? 'AND l.property_id = ?' : '';
+  const leaseBinds: unknown[] = [monthStart, monthStart];
+  if (input.propertyId) leaseBinds.push(String(input.propertyId));
 
-  const where = clauses.join(' AND ');
-  const { results } = await db.prepare(
-    `SELECT rp.id, rp.amount, rp.status, rp.paid_date, rp.payment_method,
-            t.first_name, t.last_name, t.id AS tenant_id,
+  const { results: leases } = await db.prepare(
+    `SELECT l.id AS lease_id, l.monthly_rent, l.start_date, l.end_date,
             p.name AS property_name, u.unit_number,
-            l.monthly_rent AS lease_rent
-       FROM rent_payments rp
-       JOIN leases l ON l.id = rp.lease_id
-       LEFT JOIN rent_payments rp2 ON 0=1  -- placeholder
+            GROUP_CONCAT(t.first_name || ' ' || t.last_name, ', ') AS tenant_names
+       FROM leases l
        LEFT JOIN units u ON u.id = l.unit_id
        LEFT JOIN properties p ON p.id = l.property_id
        LEFT JOIN lease_tenants lt ON lt.lease_id = l.id
        LEFT JOIN tenants t ON t.id = lt.tenant_id
-      WHERE ${where}
-      ORDER BY rp.status ASC, p.name, u.unit_number`
-  ).bind(...binds).all();
+      WHERE l.status IN ('active', 'paused')
+        AND l.start_date <= ?
+        AND (l.end_date IS NULL OR l.end_date >= ?)
+        AND l.needs_review = 0
+        ${propFilter}
+      GROUP BY l.id
+      ORDER BY p.name, u.unit_number`
+  ).bind(...leaseBinds).all();
 
-  const paid = (results || []).filter(r => r.status === 'paid');
-  const pending = (results || []).filter(r => r.status !== 'paid');
-  const totalCollected = paid.reduce((s, r) => s + (r.amount as number), 0);
-  const totalExpected = (results || []).reduce((s, r) => s + (r.amount as number), 0);
+  // Step 2: get all payments for this month.
+  const payBinds: unknown[] = [month, year];
+  if (input.propertyId) payBinds.push(String(input.propertyId));
+
+  const { results: payments } = await db.prepare(
+    `SELECT rp.lease_id, rp.amount, rp.status, rp.paid_date, rp.payment_method, rp.type
+       FROM rent_payments rp
+       JOIN leases l ON l.id = rp.lease_id
+      WHERE rp.month = ? AND rp.year = ?
+        ${input.propertyId ? 'AND l.property_id = ?' : ''}
+      ORDER BY rp.lease_id`
+  ).bind(...payBinds).all();
+
+  // Step 3: match payments to leases.
+  const paymentsByLease = new Map<string, typeof payments>();
+  for (const p of (payments || [])) {
+    const lid = p.lease_id as string;
+    if (!paymentsByLease.has(lid)) paymentsByLease.set(lid, []);
+    paymentsByLease.get(lid)!.push(p);
+  }
+
+  interface LeaseRentRow {
+    tenantNames: string;
+    property: string | null;
+    unit: string | null;
+    monthlyRent: number;
+    amountPaid: number;
+    amountOwed: number;
+    status: 'paid' | 'partial' | 'unpaid';
+    paidDate: string | null;
+    method: string | null;
+  }
+
+  const rows: LeaseRentRow[] = [];
+  let totalExpected = 0;
+  let totalCollected = 0;
+  let paidCount = 0;
+  let partialCount = 0;
+  let unpaidCount = 0;
+
+  for (const lease of (leases || [])) {
+    const rent = (lease.monthly_rent as number) || 0;
+    totalExpected += rent;
+
+    const lPayments = paymentsByLease.get(lease.lease_id as string) || [];
+    const cashPayments = lPayments.filter(p => (p.type as string) !== 'credit');
+    const paid = cashPayments
+      .filter(p => p.status === 'paid')
+      .reduce((s, p) => s + ((p.amount as number) || 0), 0);
+    totalCollected += paid;
+
+    let status: 'paid' | 'partial' | 'unpaid';
+    if (paid >= rent) {
+      status = 'paid';
+      paidCount++;
+    } else if (paid > 0) {
+      status = 'partial';
+      partialCount++;
+    } else {
+      status = 'unpaid';
+      unpaidCount++;
+    }
+
+    const lastPaid = cashPayments.find(p => p.status === 'paid');
+    rows.push({
+      tenantNames: (lease.tenant_names as string) || 'Unknown',
+      property: (lease.property_name as string) || null,
+      unit: (lease.unit_number as string) || null,
+      monthlyRent: rent,
+      amountPaid: paid,
+      amountOwed: Math.max(0, rent - paid),
+      status,
+      paidDate: (lastPaid?.paid_date as string) || null,
+      method: (lastPaid?.payment_method as string) || null,
+    });
+  }
+
+  // Sort: unpaid first, then partial, then paid.
+  const statusOrder = { unpaid: 0, partial: 1, paid: 2 };
+  rows.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
   return JSON.stringify({
     period: { month, year },
     summary: {
-      totalPayments: (results || []).length,
-      paid: paid.length,
-      pending: pending.length,
-      totalCollected,
+      totalLeases: (leases || []).length,
+      paid: paidCount,
+      partial: partialCount,
+      unpaid: unpaidCount,
       totalExpected,
+      totalCollected,
+      totalOwed: totalExpected - totalCollected,
       collectionRate: totalExpected > 0 ? `${Math.round((totalCollected / totalExpected) * 100)}%` : 'N/A',
     },
-    payments: (results || []).map(r => ({
-      tenantName: r.first_name ? `${r.first_name} ${r.last_name}` : 'Unknown',
-      property: r.property_name,
-      unit: r.unit_number,
-      amount: r.amount,
-      status: r.status,
-      paidDate: r.paid_date,
-      method: r.payment_method,
-    })),
+    tenants: rows,
   });
 }
 
