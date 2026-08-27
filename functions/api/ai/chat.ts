@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError } from '../../lib/session';
 import { AI_TOOLS, executeTool, type ToolDefinition } from '../../lib/ai-tools';
 
 // Cloudflare Workers AI model (free tier: 10,000 neurons/day).
@@ -46,7 +46,7 @@ interface WorkersAIResponse {
   tool_calls?: WorkersAIToolCall[];
 }
 
-/** Convert our tool definitions to the OpenAI-compatible format Workers AI expects. */
+/** Convert our tool definitions to the format Workers AI expects. */
 function toWorkersAITools(tools: ToolDefinition[]) {
   return tools.map(t => ({
     type: 'function' as const,
@@ -55,6 +55,15 @@ function toWorkersAITools(tools: ToolDefinition[]) {
       description: t.description,
       parameters: t.input_schema,
     },
+  }));
+}
+
+/** Fallback: flat format some Workers AI models prefer. */
+function toWorkersAIToolsFlat(tools: ToolDefinition[]) {
+  return tools.map(t => ({
+    name: t.name,
+    description: t.description,
+    parameters: t.input_schema,
   }));
 }
 
@@ -125,15 +134,42 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const toolsUsed: string[] = [];
     let rounds = 0;
     const workersTools = toWorkersAITools(AI_TOOLS);
+    const workersToolsFlat = toWorkersAIToolsFlat(AI_TOOLS);
 
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
 
-      const result = await env.AI.run(WORKERS_AI_MODEL, {
-        messages,
-        tools: workersTools,
-        max_tokens: MAX_TOKENS,
-      }) as WorkersAIResponse;
+      let result: WorkersAIResponse;
+      try {
+        result = await env.AI.run(WORKERS_AI_MODEL, {
+          messages,
+          tools: workersTools,
+          max_tokens: MAX_TOKENS,
+        }) as WorkersAIResponse;
+      } catch (aiErr) {
+        // If the OpenAI-wrapped format fails, try the flat format.
+        console.error('Workers AI call failed (wrapped format), trying flat:', aiErr);
+        try {
+          result = await env.AI.run(WORKERS_AI_MODEL, {
+            messages,
+            tools: workersToolsFlat,
+            max_tokens: MAX_TOKENS,
+          }) as WorkersAIResponse;
+        } catch (aiErr2) {
+          // Both formats failed — try without tools as a last resort.
+          console.error('Workers AI call failed (flat format), trying no tools:', aiErr2);
+          try {
+            result = await env.AI.run(WORKERS_AI_MODEL, {
+              messages,
+              max_tokens: MAX_TOKENS,
+            }) as WorkersAIResponse;
+          } catch (aiErr3) {
+            console.error('Workers AI call failed entirely:', aiErr3);
+            const errMsg = (aiErr3 as Error).message || String(aiErr3);
+            return jsonError(`AI service error: ${errMsg}`, 502);
+          }
+        }
+      }
 
       // Check if the model wants to use tools.
       if (result.tool_calls && result.tool_calls.length > 0) {
@@ -219,6 +255,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     });
   } catch (err) {
     console.error('AI chat error:', err);
-    return serverError();
+    const msg = (err as Error).message || String(err);
+    // Surface the real error so the UI can show something useful.
+    if (msg.includes('quota') || msg.includes('limit') || msg.includes('neuron')) {
+      return jsonError('The AI assistant has reached its daily usage limit. Please try again tomorrow.', 429);
+    }
+    return jsonError(`Something went wrong with the AI assistant: ${msg}`, 500);
   }
 };
