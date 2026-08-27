@@ -58,14 +58,6 @@ function toWorkersAITools(tools: ToolDefinition[]) {
   }));
 }
 
-/** Fallback: flat format some Workers AI models prefer. */
-function toWorkersAIToolsFlat(tools: ToolDefinition[]) {
-  return tools.map(t => ({
-    name: t.name,
-    description: t.description,
-    parameters: t.input_schema,
-  }));
-}
 
 /**
  * POST /api/ai/chat — send a message to the AI assistant.
@@ -129,13 +121,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
     messages.push({ role: 'user', content: userMessage });
 
-    // Run the tool-use loop.
+    // Two-phase approach: Llama 3.3 handles tool calling better when we
+    // separate "decide which tools to call" from "summarise the results".
+    // Phase 1: call with tools, execute any tool calls (up to MAX_TOOL_ROUNDS).
+    // Phase 2: call WITHOUT tools so the model is forced to write a response.
     let finalText = '';
     const toolsUsed: string[] = [];
     let rounds = 0;
     const workersTools = toWorkersAITools(AI_TOOLS);
-    const workersToolsFlat = toWorkersAIToolsFlat(AI_TOOLS);
 
+    // Phase 1: tool-calling rounds.
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
 
@@ -147,64 +142,60 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           max_tokens: MAX_TOKENS,
         }) as WorkersAIResponse;
       } catch (aiErr) {
-        // If the OpenAI-wrapped format fails, try the flat format.
-        console.error('Workers AI call failed (wrapped format), trying flat:', aiErr);
-        try {
-          result = await env.AI.run(WORKERS_AI_MODEL, {
-            messages,
-            tools: workersToolsFlat,
-            max_tokens: MAX_TOKENS,
-          }) as WorkersAIResponse;
-        } catch (aiErr2) {
-          // Both formats failed — try without tools as a last resort.
-          console.error('Workers AI call failed (flat format), trying no tools:', aiErr2);
-          try {
-            result = await env.AI.run(WORKERS_AI_MODEL, {
-              messages,
-              max_tokens: MAX_TOKENS,
-            }) as WorkersAIResponse;
-          } catch (aiErr3) {
-            console.error('Workers AI call failed entirely:', aiErr3);
-            const errMsg = (aiErr3 as Error).message || String(aiErr3);
-            return jsonError(`AI service error: ${errMsg}`, 502);
-          }
-        }
+        console.error('Workers AI tool call failed:', aiErr);
+        const errMsg = (aiErr as Error).message || String(aiErr);
+        return jsonError(`AI service error: ${errMsg}`, 502);
       }
 
-      // Check if the model wants to use tools.
-      if (result.tool_calls && result.tool_calls.length > 0) {
-        // Add assistant message with tool calls to history.
+      // If the model did NOT call tools, use its response directly.
+      if (!result.tool_calls || result.tool_calls.length === 0) {
+        finalText = (result.response || '').trim();
+        break;
+      }
+
+      // Add assistant message acknowledging the tool calls.
+      messages.push({
+        role: 'assistant',
+        content: result.response || '',
+      });
+
+      // Execute each tool and feed results back.
+      for (const tc of result.tool_calls) {
+        const toolName = tc.name;
+        let toolInput: Record<string, unknown> = {};
+        if (typeof tc.arguments === 'string') {
+          try { toolInput = JSON.parse(tc.arguments); } catch { /* malformed */ }
+        } else if (tc.arguments && typeof tc.arguments === 'object') {
+          toolInput = tc.arguments as Record<string, unknown>;
+        }
+        if (!toolsUsed.includes(toolName)) toolsUsed.push(toolName);
+
+        const toolOutput = await executeTool(env.DB, toolName, toolInput);
         messages.push({
-          role: 'assistant',
-          content: result.response || '',
+          role: 'tool',
+          content: toolOutput,
+          name: toolName,
         });
-
-        // Execute each tool and feed results back.
-        for (const tc of result.tool_calls) {
-          // Workers AI returns { name, arguments } directly (no `function` wrapper).
-          const toolName = tc.name;
-          let toolInput: Record<string, unknown> = {};
-          if (typeof tc.arguments === 'string') {
-            try { toolInput = JSON.parse(tc.arguments); } catch { /* malformed */ }
-          } else if (tc.arguments && typeof tc.arguments === 'object') {
-            toolInput = tc.arguments as Record<string, unknown>;
-          }
-          if (!toolsUsed.includes(toolName)) toolsUsed.push(toolName);
-
-          const toolOutput = await executeTool(env.DB, toolName, toolInput);
-          messages.push({
-            role: 'tool',
-            content: toolOutput,
-            name: toolName,
-          });
-        }
-        // Continue the loop so the model can process tool results.
-        continue;
       }
+    }
 
-      // No tool calls: this is the final response.
-      finalText = (result.response || '').trim();
-      break;
+    // Phase 2: if tools were called but we have no final text yet, call
+    // the model one more time WITHOUT tools so it must write a summary.
+    if (!finalText && toolsUsed.length > 0) {
+      try {
+        // Add a nudge so the model knows it should summarise.
+        messages.push({
+          role: 'user',
+          content: 'Now answer the original question using the data you just retrieved. Be concise and specific.',
+        });
+        const summary = await env.AI.run(WORKERS_AI_MODEL, {
+          messages,
+          max_tokens: MAX_TOKENS,
+        }) as WorkersAIResponse;
+        finalText = (summary.response || '').trim();
+      } catch (sumErr) {
+        console.error('Workers AI summary call failed:', sumErr);
+      }
     }
 
     if (!finalText && rounds >= MAX_TOOL_ROUNDS) {
