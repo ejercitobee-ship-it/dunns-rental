@@ -624,6 +624,57 @@ export const documentsApi = {
   downloadUrl: (id: string) => `${API_BASE}/documents/${id}`,
 };
 
+// Document Templates (central template library)
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  category: 'lease' | 'application' | 'rules' | 'addendum' | 'other';
+  description?: string;
+  driveFileId: string;
+  contentType?: string;
+  size: number;
+  uploadedBy?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export const templateApi = {
+  list: (): Promise<DocumentTemplate[]> => apiRequest('/document-templates'),
+  upload: async (file: File, name: string, category: string, description?: string): Promise<DocumentTemplate> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', name);
+    fd.append('category', category);
+    if (description) fd.append('description', description);
+    const res = await fetch(`${API_BASE}/document-templates`, { method: 'POST', credentials: 'include', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.data !== undefined ? data.data : data;
+  },
+  update: (id: string, data: { name?: string; category?: string; description?: string }): Promise<DocumentTemplate> =>
+    apiRequest(`/document-templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string) => apiRequest(`/document-templates/${id}`, { method: 'DELETE' }),
+  /** Send a single template to a prospective tenant. */
+  send: (templateId: string, prospectiveTenantId: string): Promise<{ documentId: string; emailed: boolean; statusAdvanced: boolean }> =>
+    apiRequest(`/document-templates/${templateId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ prospectiveTenantId }),
+    }),
+  /** Send multiple templates to a prospective tenant at once. */
+  sendBatch: (templateIds: string[], prospectiveTenantId: string): Promise<{
+    sent: { documentId: string; templateName: string }[];
+    emailed: boolean;
+    statusAdvanced: boolean;
+  }> =>
+    apiRequest('/document-templates/send-batch', {
+      method: 'POST',
+      body: JSON.stringify({ templateIds, prospectiveTenantId }),
+    }),
+};
+
 // Google Drive API (document storage connection)
 export interface GoogleStatus {
   connected: boolean;

@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   RefreshCw,
   Receipt,
+  FileText,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -30,6 +31,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { settingsApi, googleApi, rentSheetApi, adminApi, authApi } from '../lib/api';
 import { SYSTEM_PERMISSIONS } from '../types/auth';
+import { DocumentTemplatesSection } from '../components/DocumentTemplatesSection';
 import type { Role } from '../types/auth';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -324,6 +326,7 @@ export function Settings() {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: ShieldCheck },
     { id: 'team-access', label: 'Team Access', icon: Users },
+    { id: 'templates', label: 'Templates', icon: FileText },
   ];
 
   const moduleColors: Record<string, string> = {
@@ -880,6 +883,8 @@ export function Settings() {
           </div>
         </div>
       )}
+
+      {activeTab === 'templates' && <DocumentTemplatesSection />}
 
       {/* Role Modal */}
       <Modal

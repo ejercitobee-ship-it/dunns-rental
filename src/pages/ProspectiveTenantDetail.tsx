@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, Upload, Trash2, UserCheck, User, Link2, Copy, Pencil, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, Upload, Trash2, UserCheck, User, Link2, Copy, Pencil, CheckCircle2, Send } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -10,7 +10,7 @@ import { PROSPECTIVE_STATUS } from '../lib/prospectiveStatus';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { prospectiveApi, documentsApi, type ProspectiveTenant, type ProspectiveStatus } from '../lib/api';
+import { prospectiveApi, documentsApi, templateApi, type ProspectiveTenant, type ProspectiveStatus, type DocumentTemplate } from '../lib/api';
 import type { AppDocument } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 
@@ -45,6 +45,13 @@ export function ProspectiveTenantDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [edit, setEdit] = useState({ firstName: '', lastName: '', email: '', phone: '', notes: '' });
+
+  // Send from templates state.
+  const [sendTemplateOpen, setSendTemplateOpen] = useState(false);
+  const [allTemplates, setAllTemplates] = useState<DocumentTemplate[]>([]);
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -222,6 +229,54 @@ export function ProspectiveTenantDetail() {
     }
   };
 
+  const openSendTemplates = async () => {
+    setSendTemplateOpen(true);
+    setSelectedTemplates(new Set());
+    if (allTemplates.length === 0) {
+      setLoadingTemplates(true);
+      try {
+        const list = await templateApi.list();
+        setAllTemplates(list);
+      } catch (err) {
+        showToast((err as Error).message || 'Could not load templates.', 'error');
+      } finally {
+        setLoadingTemplates(false);
+      }
+    }
+  };
+
+  const toggleTemplate = (tid: string) => {
+    setSelectedTemplates(prev => {
+      const next = new Set(prev);
+      if (next.has(tid)) next.delete(tid); else next.add(tid);
+      return next;
+    });
+  };
+
+  const handleSendTemplates = async () => {
+    if (!id || selectedTemplates.size === 0 || sending) return;
+    setSending(true);
+    try {
+      const ids = Array.from(selectedTemplates);
+      const result = await templateApi.sendBatch(ids, id);
+      // Refresh the documents list.
+      const updatedDocs = await prospectiveApi.documents(id);
+      setDocs(updatedDocs);
+      // If the status was auto-advanced, update locally.
+      if (result.statusAdvanced) {
+        setApplicant(prev => prev ? { ...prev, status: 'docs_sent' } : prev);
+      }
+      const count = result.sent.length;
+      const emailNote = result.emailed ? ' and emailed a notification' : '';
+      showToast(`Sent ${count} document${count > 1 ? 's' : ''}${emailNote}.`, 'success');
+      setSendTemplateOpen(false);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not send templates.', 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 gap-3 animate-in fade-in duration-200">
       <User className="h-8 w-8 text-faint animate-pulse" />
@@ -340,12 +395,15 @@ export function ProspectiveTenantDetail() {
               )}
             </h3>
             {canEdit && (
-              <>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={openSendTemplates}>
+                  <Send className="h-4 w-4 mr-2" /> Send from Templates
+                </Button>
                 <input ref={fileRef} type="file" className="hidden" onChange={handleUpload} />
                 <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Upload to sign'}
+                  <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Upload file'}
                 </Button>
-              </>
+              </div>
             )}
           </div>
           <p className="text-xs text-muted">Application, lease, and any documents for this applicant. On conversion these carry over to their tenant record.</p>
@@ -514,6 +572,64 @@ export function ProspectiveTenantDetail() {
         message="This removes the prospective tenant and their file list. This cannot be undone."
         confirmText="Delete"
       />
+
+      {/* Send from Templates modal */}
+      <Modal isOpen={sendTemplateOpen} onClose={() => setSendTemplateOpen(false)} title="Send Documents from Templates" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Pick which templates to send to {applicant?.firstName}. Each document will be copied to their file and they will receive an email notification.
+          </p>
+
+          {loadingTemplates ? (
+            <p className="text-sm text-muted animate-pulse py-4 text-center">Loading templates...</p>
+          ) : allTemplates.length === 0 ? (
+            <div className="py-4 text-center">
+              <p className="text-sm text-muted mb-1">No templates uploaded yet.</p>
+              <p className="text-xs text-faint">Go to Settings → Templates to upload your lease agreement, application form, and other standard documents.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[360px] overflow-y-auto">
+              {allTemplates.map(tpl => {
+                const selected = selectedTemplates.has(tpl.id);
+                return (
+                  <label
+                    key={tpl.id}
+                    className={`flex items-center gap-3 px-3 py-2.5 border rounded-xl cursor-pointer transition-colors ${
+                      selected ? 'border-primary bg-primary-soft/40' : 'border-line hover:border-line-strong hover:bg-canvas'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleTemplate(tpl.id)}
+                      className="w-4 h-4 accent-[#24503f] flex-shrink-0"
+                    />
+                    <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+                      <FileText className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-ink font-medium truncate">{tpl.name}</p>
+                      <p className="text-xs text-muted capitalize">{tpl.category}{tpl.description ? ` · ${tpl.description}` : ''}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {allTemplates.length > 0 && (
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs text-muted">{selectedTemplates.size} selected</p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setSendTemplateOpen(false)}>Cancel</Button>
+                <Button onClick={handleSendTemplates} disabled={sending || selectedTemplates.size === 0}>
+                  <Send className="h-4 w-4 mr-2" /> {sending ? 'Sending...' : `Send ${selectedTemplates.size || ''}`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

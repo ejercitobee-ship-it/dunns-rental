@@ -17,6 +17,7 @@ const KEY_MAINTENANCE_FOLDER = 'google_maintenance_folder_id';
 const KEY_PROSPECTIVE_FOLDER = 'google_prospective_folder_id';
 const KEY_VENDORS_FOLDER = 'google_vendors_folder_id';
 const KEY_MGMT_EXPENSES_FOLDER = 'google_mgmt_expenses_folder_id';
+const KEY_TEMPLATES_FOLDER = 'google_templates_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
@@ -25,6 +26,7 @@ const MAINTENANCE_FOLDER_NAME = 'Maintenance Photos';
 const PROSPECTIVE_FOLDER_NAME = 'Prospective Tenants';
 const VENDORS_FOLDER_NAME = 'Vendors';
 const MGMT_EXPENSES_NAME = 'Management Expenses';
+const TEMPLATES_FOLDER_NAME = 'Document Templates';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -291,6 +293,40 @@ export async function ensureProspectiveFolder(env: Env): Promise<string> {
   const id = (await findFolder(env, PROSPECTIVE_FOLDER_NAME, root)) ?? (await createFolder(env, PROSPECTIVE_FOLDER_NAME, root));
   await putSetting(env, KEY_PROSPECTIVE_FOLDER, id);
   return id;
+}
+
+/** The "Document Templates" folder under the root, for reusable templates. */
+export async function ensureTemplatesFolder(env: Env): Promise<string> {
+  const existing = await getSetting(env, KEY_TEMPLATES_FOLDER);
+  if (existing) return existing;
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, TEMPLATES_FOLDER_NAME, root)) ?? (await createFolder(env, TEMPLATES_FOLDER_NAME, root));
+  await putSetting(env, KEY_TEMPLATES_FOLDER, id);
+  return id;
+}
+
+/**
+ * Copy a file in Google Drive. Returns the new file's id.
+ * Used to copy a template into a tenant's folder.
+ */
+export async function copyDriveFile(
+  env: Env,
+  sourceFileId: string,
+  newName: string,
+  destinationFolderId: string,
+): Promise<string> {
+  const token = await getAccessToken(env);
+  const res = await fetch(`${DRIVE_API}/files/${sourceFileId}/copy`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: newName, parents: [destinationFolderId] }),
+  });
+  if (!res.ok) throw new Error(`Drive copy failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { id: string };
+  return data.id;
 }
 
 /** The shared "Vendors" folder under the root. */

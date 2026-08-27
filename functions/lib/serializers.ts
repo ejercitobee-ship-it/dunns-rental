@@ -335,6 +335,21 @@ export function serializeDocument(r: Row) {
   };
 }
 
+export function serializeDocumentTemplate(r: Row) {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    description: r.description ?? undefined,
+    driveFileId: r.drive_file_id,
+    contentType: r.content_type ?? undefined,
+    size: r.size ?? 0,
+    uploadedBy: r.uploaded_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
 export function serializeIncome(r: Row) {
   return {
     id: r.id,
