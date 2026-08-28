@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download,
+  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download, UserPlus,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -59,7 +59,7 @@ export function TenantDetail() {
   const navigate = useNavigate();
   const {
     tenants, properties, units, rentPayments,
-    updateTenant, deleteTenant, updateLease, getLeaseTenants, getTenantLeases,
+    updateTenant, deleteTenant, addTenant, updateLease, getLeaseTenants, getTenantLeases,
     refreshData,
   } = useApp();
   const { user, hasPermission } = useAuth();
@@ -742,6 +742,74 @@ export function TenantDetail() {
     }
   };
 
+  // ── Add housemate to an existing lease ──────────────────────────────
+  const [hmOpen, setHmOpen] = useState(false);
+  const [hmSaving, setHmSaving] = useState(false);
+  const [hmMode, setHmMode] = useState<'new' | 'existing'>('new');
+  const [hmExistingId, setHmExistingId] = useState('');
+  const [hmForm, setHmForm] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+  const [hmInvite, setHmInvite] = useState(true);
+
+  // Tenants not already on this lease, available for the "existing" picker.
+  const hmCandidates = useMemo(() => {
+    if (!lease) return [];
+    const onLease = new Set(lease.tenantIds);
+    return tenants
+      .filter(t => !onLease.has(t.id))
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
+  }, [lease, tenants]);
+
+  const openAddHousemate = () => {
+    setHmMode('new');
+    setHmExistingId('');
+    setHmForm({ firstName: '', lastName: '', email: '', phone: '' });
+    setHmInvite(true);
+    setHmOpen(true);
+  };
+
+  const handleAddHousemate = async () => {
+    if (!lease || hmSaving) return;
+    setHmSaving(true);
+    try {
+      let newTenantId: string;
+      let newEmail: string | undefined;
+
+      if (hmMode === 'existing') {
+        if (!hmExistingId) { showToast('Select a person.', 'error'); setHmSaving(false); return; }
+        newTenantId = hmExistingId;
+        newEmail = tenants.find(t => t.id === hmExistingId)?.email;
+      } else {
+        const fn = hmForm.firstName.trim();
+        const ln = hmForm.lastName.trim();
+        if (!fn || !ln) { showToast('First and last name are required.', 'error'); setHmSaving(false); return; }
+        const created = await addTenant({
+          firstName: fn,
+          lastName: ln,
+          email: hmForm.email.trim() || undefined,
+          phone: hmForm.phone.trim() || undefined,
+        });
+        newTenantId = created.id;
+        newEmail = hmForm.email.trim() || undefined;
+      }
+
+      // Update the lease with the expanded tenant list.
+      await updateLease({ ...lease, tenantIds: [...lease.tenantIds, newTenantId] });
+
+      // Send a portal invite if the housemate has an email.
+      if (hmInvite && newEmail) {
+        try { await tenantsApi.invite(newTenantId); } catch { /* invite can be resent from their profile */ }
+      }
+
+      await refreshData();
+      showToast('Housemate added.', 'success');
+      setHmOpen(false);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not add housemate.', 'error');
+    } finally {
+      setHmSaving(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenant) return;
@@ -1389,9 +1457,16 @@ export function TenantDetail() {
         {/* Housemates */}
         <Card>
           <CardContent className="p-5 space-y-4">
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <Users className="h-4 w-4 text-faint" /> Housemates
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-ink flex items-center gap-2">
+                <Users className="h-4 w-4 text-faint" /> Housemates
+              </h3>
+              {lease && lease.status !== 'ended' && hasPermission('tenants_edit') && (
+                <button type="button" onClick={openAddHousemate} className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1">
+                  <UserPlus className="h-3.5 w-3.5" /> Add
+                </button>
+              )}
+            </div>
             {housemates.length > 0 ? (
               <div className="space-y-2">
                 {housemates.map(h => (
@@ -2568,6 +2643,77 @@ export function TenantDetail() {
             </Button>
             <Button type="button" className="flex-1" onClick={handleSaveTenancy} disabled={savingTenancy}>
               {savingTenancy ? 'Saving…' : 'Save tenancy'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add housemate modal */}
+      <Modal isOpen={hmOpen} onClose={() => (hmSaving ? undefined : setHmOpen(false))} title="Add housemate" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Add another person to this lease. They will share the same unit and rent obligation.</p>
+
+          {/* Mode toggle */}
+          <div className="flex rounded-lg overflow-hidden border border-line">
+            <button
+              type="button"
+              onClick={() => setHmMode('new')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${hmMode === 'new' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+            >New person</button>
+            <button
+              type="button"
+              onClick={() => setHmMode('existing')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${hmMode === 'existing' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-canvas'}`}
+            >Existing tenant</button>
+          </div>
+
+          {hmMode === 'new' ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">First Name *</label>
+                  <input type="text" className="input" value={hmForm.firstName} onChange={e => setHmForm({ ...hmForm, firstName: e.target.value })} placeholder="First name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">Last Name *</label>
+                  <input type="text" className="input" value={hmForm.lastName} onChange={e => setHmForm({ ...hmForm, lastName: e.target.value })} placeholder="Last name" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Email</label>
+                <input type="email" className="input" value={hmForm.email} onChange={e => setHmForm({ ...hmForm, email: e.target.value })} placeholder="Email address" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Phone</label>
+                <input type="tel" className="input" value={hmForm.phone} onChange={e => setHmForm({ ...hmForm, phone: e.target.value })} placeholder="Phone number" />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Select a tenant</label>
+              {hmCandidates.length > 0 ? (
+                <select className="input" value={hmExistingId} onChange={e => setHmExistingId(e.target.value)}>
+                  <option value="">Choose...</option>
+                  {hmCandidates.map(t => (
+                    <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-faint">All tenants are already on this lease.</p>
+              )}
+            </div>
+          )}
+
+          {/* Portal invite toggle */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="accent-primary" checked={hmInvite} onChange={e => setHmInvite(e.target.checked)} />
+            <span className="text-sm text-ink">Send portal invite email</span>
+          </label>
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setHmOpen(false)} disabled={hmSaving}>Cancel</Button>
+            <Button className="flex-1" onClick={handleAddHousemate} disabled={hmSaving || (hmMode === 'existing' && !hmExistingId)}>
+              {hmSaving ? 'Adding…' : 'Add housemate'}
             </Button>
           </div>
         </div>
