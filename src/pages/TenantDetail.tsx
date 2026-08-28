@@ -21,7 +21,7 @@ import {
   type TenantCreditEntry,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
-import { leasesOwingMonth, settleMonth, unsettledMonths } from '../lib/rent';
+import { leasesOwingMonth, settleMonthWithCredit, unsettledMonths } from '../lib/rent';
 import type { LeaseStatus, PaymentMethod, LeaseAuditEntry, LeaseNotification } from '../types';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { DepositReturnSection } from '../components/DepositReturnSection';
@@ -237,7 +237,7 @@ export function TenantDetail() {
     // excluded from that month because the old lease already covers it.
     const owing = leasesOwingMonth(allTenantLeases, month, year);
     if (!owing.some(l => l.id === lease.id)) return undefined;
-    return settleMonth(lease, rentPayments, month, year);
+    return settleMonthWithCredit(lease, rentPayments, month, year, allTenantLeases);
   }, [lease, allTenantLeases, rentPayments]);
 
   // Every month this tenancy still owes (oldest first), with the amount, so the

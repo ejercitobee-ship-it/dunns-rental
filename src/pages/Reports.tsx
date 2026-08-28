@@ -9,7 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonthWithCredit, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
 import {
   expenseCategoryLabel, expensesByCategory, expensesByTier,
   EXPENSE_TIERS, propertyFinancials, maintenanceCosts,
@@ -229,7 +229,7 @@ export function Reports() {
           occupants: getLeaseTenants(lease.id),
           rent: lease.monthlyRent || 0,
           leaseEnd: lease.endDate,
-          settlement: covers ? settleMonth(lease, rentPayments, currentMonth, currentYear) : null,
+          settlement: covers ? settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, leases) : null,
         };
       })
       .sort((a, b) => a.property.localeCompare(b.property));

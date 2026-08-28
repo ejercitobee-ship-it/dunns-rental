@@ -16,7 +16,7 @@ import { rentSheetApi, documentsApi, leasesApi, tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonth, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
+import { activeLeases, settleMonthWithCredit, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -217,7 +217,7 @@ export function Rents() {
       let collected = 0;
       let outstanding = 0;
       for (const lease of leasesOwingMonth(leases, month, year)) {
-        const s = settleMonth(lease, rentPayments, month, year);
+        const s = settleMonthWithCredit(lease, rentPayments, month, year, leases);
         expected += s.due;
         collected += s.paid;
         outstanding += s.balance;
@@ -257,7 +257,7 @@ export function Rents() {
       let qExpected = 0;
       for (const month of q.months) {
         for (const lease of leasesOwingMonth(leases, month, year)) {
-          qExpected += settleMonth(lease, rentPayments, month, year).due;
+          qExpected += settleMonthWithCredit(lease, rentPayments, month, year, leases).due;
         }
       }
       const qCollected = rentIncomeForMonths(rentPayments, q.months, year);
@@ -302,7 +302,7 @@ export function Rents() {
           occupants,
           month,
           year,
-          settlement: settleMonth(lease, rentPayments, month, year),
+          settlement: settleMonthWithCredit(lease, rentPayments, month, year, leases),
         });
       }
     }
@@ -433,7 +433,7 @@ export function Rents() {
 
     for (const month of elapsedMonths) {
       for (const lease of leasesOwingMonth(leases, month, year)) {
-        const s = settleMonth(lease, rentPayments, month, year);
+        const s = settleMonthWithCredit(lease, rentPayments, month, year, leases);
         totalDue += s.due;
         totalPaidElapsed += s.paid;
         outstanding += s.balance;

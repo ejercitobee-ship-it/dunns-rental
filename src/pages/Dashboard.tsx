@@ -14,7 +14,7 @@ import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
 import { calendarApi, depositReturnsApi } from '../lib/api';
-import { activeLeases, monthlyRevenue, settleMonth, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { DashboardStats, Expense, Unit, CalendarEvent, DepositReturn } from '../types';
 import {
@@ -150,7 +150,7 @@ export function Dashboard() {
     let totalOwed = 0;
     for (const month of elapsedMonths) {
       for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        totalOwed += settleMonth(lease, rentPayments, month, currentYear).balance;
+        totalOwed += settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases).balance;
       }
     }
 
@@ -247,7 +247,7 @@ export function Dashboard() {
     const perLease = new Map<string, { lease: ReturnType<typeof leasesOwingMonth>[number]; months: number; total: number }>();
     for (const month of elapsed) {
       for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        const s = settleMonth(lease, rentPayments, month, currentYear);
+        const s = settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases);
         if (s.status === 'paid') continue;
         let e = perLease.get(lease.id);
         if (!e) { e = { lease, months: 0, total: 0 }; perLease.set(lease.id, e); }
@@ -384,7 +384,7 @@ export function Dashboard() {
     const currentLeases = leasesOwingMonth(leases.filter(l => l.status !== 'ended'), currentMonth, currentYear);
     let paid = 0;
     for (const lease of currentLeases) {
-      if (settleMonth(lease, rentPayments, currentMonth, currentYear).status === 'paid') paid++;
+      if (settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, currentLeases).status === 'paid') paid++;
     }
     return { paid, total: currentLeases.length };
   }, [leases, rentPayments]);

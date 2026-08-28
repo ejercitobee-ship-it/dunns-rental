@@ -283,12 +283,92 @@ export interface PastDue {
 }
 
 /**
+ * Settle every owed month for a lease from `from` through `through`, carrying
+ * overpayments forward: when a month's payments exceed its rent, the excess
+ * reduces the balance of the next owed month rather than vanishing. The carry
+ * is pure math on top of `settleMonth` and never changes what `paid` means
+ * for tax / income (those sum raw payment records, not settlements).
+ *
+ * Returns an array of `{ ym, settlement }` for each owed month, in
+ * chronological order, with balances adjusted for the carry.
+ */
+export function settleWithCarryForward(
+  lease: Lease,
+  payments: RentPayment[],
+  from: number,
+  through: number,
+  leaseSet: Lease[]
+): Array<{ ym: number; settlement: MonthSettlement }> {
+  const out: Array<{ ym: number; settlement: MonthSettlement }> = [];
+  let credit = 0;
+
+  for (let t = from; t <= through; t++) {
+    const year = Math.floor((t - 1) / 12);
+    const month = t - year * 12;
+    const owing = leasesOwingMonth(leaseSet, month, year);
+    if (!owing.some(l => l.id === lease.id)) continue;
+
+    const base = settleMonth(lease, payments, month, year);
+
+    // Apply accumulated credit to an unpaid or partial month.
+    if (credit > EPSILON && base.balance > EPSILON) {
+      const applied = round2(Math.min(credit, base.balance));
+      credit = round2(credit - applied);
+      const effectivePaid = round2(base.paid + applied);
+      const newBalance = round2(base.balance - applied);
+      out.push({
+        ym: t,
+        settlement: {
+          due: base.due,
+          paid: effectivePaid,
+          balance: Math.max(0, newBalance),
+          status: newBalance <= EPSILON ? 'paid' : 'partial',
+        },
+      });
+    } else {
+      out.push({ ym: t, settlement: base });
+      // Accumulate any overpayment as credit for the next month.
+      if (base.paid > base.due + EPSILON) {
+        credit = round2(credit + base.paid - base.due);
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Convenience: settle a single month with carry-forward from all prior months.
+ * Slower than `settleMonth` (loops from lease start), but the window is small
+ * (capped at tracking start, typically a few months) so it is fine for the
+ * handful of single-month callers on profile and portal pages.
+ */
+export function settleMonthWithCredit(
+  lease: Lease,
+  payments: RentPayment[],
+  month: number,
+  year: number,
+  leaseSet?: Lease[]
+): MonthSettlement {
+  if (!lease.startDate) return settleMonth(lease, payments, month, year);
+  const target = year * 12 + month;
+  const from = Math.max(yearMonthOf(lease.startDate), RENT_TRACKING_START);
+  const all = settleWithCarryForward(lease, payments, from, target, leaseSet || [lease]);
+  const found = all.find(e => e.ym === target);
+  return found ? found.settlement : settleMonth(lease, payments, month, year);
+}
+
+/**
  * How far behind a lease is: the count of months it actually owed (term covers
  * it, not paused) from the lease start through the current month that are not
  * fully paid, plus the total outstanding. Same owed-month rule as the rest of
  * the app (leasesOwingMonth) and the same settlement (settleMonth), so this
  * cannot disagree with the Rent Management numbers. The window is capped so a
  * very old lease cannot loop unbounded.
+ *
+ * Overpayment carry-forward: if a month is overpaid, the excess reduces the
+ * balance of later months. This prevents lump-sum payments from creating
+ * false past-due flags when the money was recorded against a single month.
  *
  * `siblingLeases` — see `unsettledMonths`. When provided, renewal overlap
  * de-duplication uses the full set instead of `[lease]` alone.
@@ -306,17 +386,13 @@ export function monthsBehind(
   const leaseSet = siblingLeases || [lease];
   const currentTarget = currentYear * 12 + currentMonth;
   const from = Math.max(yearMonthOf(lease.startDate), currentTarget - 60);
+
   let months = 0;
   let balance = 0;
-  for (let t = from; t <= currentTarget; t++) {
-    const year = Math.floor((t - 1) / 12);
-    const month = t - year * 12;
-    const owing = leasesOwingMonth(leaseSet, month, year);
-    if (!owing.some(l => l.id === lease.id)) continue;
-    const s = settleMonth(lease, payments, month, year);
-    if (s.balance > 0) {
+  for (const { settlement } of settleWithCarryForward(lease, payments, from, currentTarget, leaseSet)) {
+    if (settlement.balance > EPSILON) {
       months += 1;
-      balance = round2(balance + s.balance);
+      balance = round2(balance + settlement.balance);
     }
   }
   return { months, balance };
@@ -329,6 +405,9 @@ export function monthsBehind(
  * backdated start date and is already paid up. Skips months the lease does not
  * owe (out of term, or paused) and months already settled, so running it is
  * idempotent. Returns them oldest first.
+ *
+ * Overpayment carry-forward: excess from one month reduces the balance of
+ * the next, so a lump-sum payment does not leave later months unsettled.
  *
  * `siblingLeases` (optional): all leases for the same tenant / unit. When
  * provided, `leasesOwingMonth` uses the full set for its renewal overlap
@@ -350,15 +429,14 @@ export function unsettledMonths(
   const leaseSet = siblingLeases || [lease];
   const from = yearMonthOf(lease.startDate);
   const through = throughYear * 12 + throughMonth;
+  const settled = settleWithCarryForward(lease, payments, from, through, leaseSet);
   const out: Array<{ month: number; year: number; amount: number }> = [];
-  for (let t = from; t <= through; t++) {
-    const year = Math.floor((t - 1) / 12);
-    const month = t - year * 12;
-    // Use the full sibling set so renewal overlap de-duplication fires.
-    const owing = leasesOwingMonth(leaseSet, month, year);
-    if (!owing.some(l => l.id === lease.id)) continue;
-    const s = settleMonth(lease, payments, month, year);
-    if (s.balance > EPSILON) out.push({ month, year, amount: round2(s.balance) });
+  for (const { ym, settlement } of settled) {
+    if (settlement.balance > EPSILON) {
+      const year = Math.floor((ym - 1) / 12);
+      const month = ym - year * 12;
+      out.push({ month, year, amount: round2(settlement.balance) });
+    }
   }
   return out;
 }

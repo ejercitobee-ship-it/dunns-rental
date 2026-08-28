@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease, type PortalMoveInFee } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
-import { settleMonth, rentMonthsToShow } from '../../lib/rent';
+import { settleMonthWithCredit, rentMonthsToShow } from '../../lib/rent';
 import type { Lease, RentPayment, PortalPayment } from '../../types';
 
 // This app has had a React #310 white screen from a useMemo called after an
@@ -128,7 +128,7 @@ export function TenantPayments() {
         });
       }
 
-      const balance = settleMonth(fullLease, payments, month, year).balance;
+      const balance = settleMonthWithCredit(fullLease, payments, month, year).balance;
       if (balance > 0) {
         out.push({ key: `${year}-${month}-due`, label, amount: balance, method: '', status: 'unpaid' });
       }

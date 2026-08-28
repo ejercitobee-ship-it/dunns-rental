@@ -8,7 +8,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
-import { settleMonth, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
+import { settleMonthWithCredit, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
 import type { Lease, RentPayment, Tenant } from '../../types';
 
@@ -95,7 +95,7 @@ export function TenantHome() {
     const year = now.getFullYear();
     const owing = leasesOwingMonth(allLeases, month, year);
     if (!owing.some(l => l.id === lease.id)) return null;
-    return settleMonth(lease, payments, month, year);
+    return settleMonthWithCredit(lease, payments, month, year, allLeases);
   }, [me, payments, allLeases]);
 
   const pastDue = useMemo(() => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeLeases, monthlyRevenue, settleMonth, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind, unsettledMonths, daysUntilLeaseEnd, isLeaseExpiringSoon } from './rent';
+import { activeLeases, monthlyRevenue, settleMonth, settleWithCarryForward, settleMonthWithCredit, leaseCoversMonth, leasesOwingMonth, paymentsForMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, rentMonthsToShow, monthsBehind, unsettledMonths, daysUntilLeaseEnd, isLeaseExpiringSoon } from './rent';
 import type { Lease, RentPayment, MonthSettlement } from './rent';
 
 const lease = (over: Partial<Lease> = {}): Lease => ({
@@ -568,5 +568,141 @@ describe('isLeaseExpiringSoon', () => {
   });
   it('is false when there is no end date', () => {
     expect(isLeaseExpiringSoon(lease({ endDate: undefined }), '2026-07-27')).toBe(false);
+  });
+});
+
+describe('settleWithCarryForward', () => {
+  // Lease: Jan 2026 to Jan 2027, $1325/month
+  const L = lease({ startDate: '2026-01-01', endDate: '2027-01-01', monthlyRent: 1325 });
+
+  it('carries overpayment from one month to the next', () => {
+    // Jan: pay $2000 ($675 excess) -> Feb: $1325 due, credit covers $675, so balance = $650
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 2000 }),
+    ];
+    const result = settleWithCarryForward(L, payments, 2026 * 12 + 1, 2026 * 12 + 2, [L]);
+    // Jan: due 1325, paid 2000, balance 0, status paid (overpaid by 675)
+    expect(result[0].settlement).toEqual({ due: 1325, paid: 2000, balance: 0, status: 'paid' });
+    // Feb: due 1325, paid 0 + 675 credit = 675, balance 650, status partial
+    expect(result[1].settlement.due).toBe(1325);
+    expect(result[1].settlement.paid).toBe(675);
+    expect(result[1].settlement.balance).toBe(650);
+    expect(result[1].settlement.status).toBe('partial');
+  });
+
+  it('carries credit across multiple months until exhausted', () => {
+    // Jan: pay $4000 ($2675 excess) -> covers Feb fully ($1350 left) -> covers Mar fully ($25 left) -> Apr partial
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 4000 }),
+    ];
+    const result = settleWithCarryForward(L, payments, 2026 * 12 + 1, 2026 * 12 + 4, [L]);
+    expect(result[0].settlement.status).toBe('paid');   // Jan: paid in full
+    expect(result[1].settlement.status).toBe('paid');   // Feb: fully covered by credit
+    expect(result[1].settlement.balance).toBe(0);
+    expect(result[2].settlement.status).toBe('paid');   // Mar: fully covered by remaining credit
+    expect(result[2].settlement.balance).toBe(0);
+    expect(result[3].settlement.status).toBe('partial'); // Apr: only $25 credit left
+    expect(result[3].settlement.balance).toBe(1300);
+  });
+
+  it('does not carry forward when payment exactly matches rent', () => {
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 1325 }),
+    ];
+    const result = settleWithCarryForward(L, payments, 2026 * 12 + 1, 2026 * 12 + 2, [L]);
+    expect(result[0].settlement.status).toBe('paid');
+    expect(result[1].settlement.status).toBe('unpaid');
+    expect(result[1].settlement.balance).toBe(1325);
+  });
+
+  it('does not carry forward from a partial payment', () => {
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 500 }),
+    ];
+    const result = settleWithCarryForward(L, payments, 2026 * 12 + 1, 2026 * 12 + 2, [L]);
+    expect(result[0].settlement.status).toBe('partial');
+    expect(result[0].settlement.balance).toBe(825);
+    expect(result[1].settlement.status).toBe('unpaid');
+    expect(result[1].settlement.balance).toBe(1325);
+  });
+
+  it('combines carry-forward credit with actual payments in a month', () => {
+    // Jan: pay $2000 (excess $675). Feb: pay $500 + $675 credit = $1175 paid.
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 2000 }),
+      payment({ id: 'b', month: 2, year: 2026, amount: 500 }),
+    ];
+    const result = settleWithCarryForward(L, payments, 2026 * 12 + 1, 2026 * 12 + 2, [L]);
+    expect(result[1].settlement.paid).toBe(1175);    // 500 actual + 675 credit
+    expect(result[1].settlement.balance).toBe(150);   // 1325 - 1175
+    expect(result[1].settlement.status).toBe('partial');
+  });
+});
+
+describe('settleMonthWithCredit', () => {
+  const L = lease({ startDate: '2026-01-01', endDate: '2027-01-01', monthlyRent: 1325 });
+
+  it('returns carry-forward-adjusted settlement for a target month', () => {
+    // Jan: pay $2650 (covers Jan + Feb). Query Feb.
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 2650 }),
+    ];
+    const s = settleMonthWithCredit(L, payments, 2, 2026, [L]);
+    expect(s.status).toBe('paid');
+    expect(s.balance).toBe(0);
+  });
+
+  it('falls back to settleMonth for a lease with no startDate', () => {
+    const noStart = lease({ startDate: undefined });
+    const s = settleMonthWithCredit(noStart, [], 7, 2026);
+    expect(s).toEqual({ due: 1325, paid: 0, balance: 1325, status: 'unpaid' });
+  });
+});
+
+describe('monthsBehind with carry-forward', () => {
+  const L = lease({ startDate: '2026-01-01', endDate: '2027-01-01', monthlyRent: 1325 });
+
+  it('overpayment in January reduces months behind', () => {
+    // Pay $2650 in Jan (covers Jan + Feb). Mar, Apr, May unpaid.
+    // Without carry-forward: 3 behind (Mar-May). With carry-forward: also 3, but Feb is covered.
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 2650 }),
+    ];
+    const pd = monthsBehind(L, payments, 5, 2026);
+    expect(pd.months).toBe(3);                    // Mar, Apr, May
+    expect(pd.balance).toBe(1325 * 3);
+  });
+
+  it('large lump sum reduces months behind significantly', () => {
+    // Pay $5300 in Jan (covers Jan through Apr). May unpaid.
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 5300 }),
+    ];
+    const pd = monthsBehind(L, payments, 5, 2026);
+    expect(pd.months).toBe(1);                    // Only May
+    expect(pd.balance).toBe(1325);
+  });
+});
+
+describe('unsettledMonths with carry-forward', () => {
+  const L = lease({ startDate: '2026-01-01', endDate: '2027-01-01', monthlyRent: 1325 });
+
+  it('overpayment in January settles February, leaving Mar onward unsettled', () => {
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 2650 }),
+    ];
+    const months = unsettledMonths(L, payments, 4, 2026);
+    // Jan and Feb are fully paid (2650 covers both). Mar and Apr unsettled.
+    expect(months.map(m => m.month)).toEqual([3, 4]);
+    expect(months[0].amount).toBe(1325);
+    expect(months[1].amount).toBe(1325);
+  });
+
+  it('exact payment leaves no carry-forward, following months unsettled', () => {
+    const payments = [
+      payment({ id: 'a', month: 1, year: 2026, amount: 1325 }),
+    ];
+    const months = unsettledMonths(L, payments, 3, 2026);
+    expect(months.map(m => m.month)).toEqual([2, 3]);
   });
 });

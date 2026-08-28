@@ -14,7 +14,7 @@ import { tenantsApi, leasesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { monthlyRevenue, isLeaseExpiringSoon, leasesOwingMonth, settleMonth } from '../lib/rent';
+import { monthlyRevenue, isLeaseExpiringSoon, leasesOwingMonth, settleMonthWithCredit } from '../lib/rent';
 import type { Lease, LeaseStatus, Property, Unit, Tenant } from '../types';
 
 interface PersonRow {
@@ -281,7 +281,7 @@ export function Tenants() {
       // Current month settlement
       let owed = '', paid = '', balance = '', monthStatus = '';
       if (lease && owingLeaseIds.has(lease.id)) {
-        const s = settleMonth(lease, rentPayments, curMonth, curYear);
+        const s = settleMonthWithCredit(lease, rentPayments, curMonth, curYear, leases);
         owed = formatCurrency(s.due);
         paid = formatCurrency(s.paid);
         balance = formatCurrency(s.balance);
