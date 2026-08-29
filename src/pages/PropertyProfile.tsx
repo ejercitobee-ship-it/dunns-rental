@@ -697,12 +697,49 @@ export function PropertyProfile() {
       )}
 
       {activeTab === 'Maintenance' && (
-        <Card>
-          <CardContent className="p-5 space-y-4">
-            <h2 className="font-semibold text-ink">Maintenance History ({maintenance.length})</h2>
-            {maintenance.length === 0 ? (
-              <p className="text-sm text-muted">No maintenance requests on record.</p>
-            ) : (
+        <div className="space-y-6">
+          {/* Maintenance summary cards */}
+          {maintenance.length > 0 && (() => {
+            const totalSpend = maintenance.reduce((sum, m) => sum + (m.cost || 0), 0);
+            const completedCount = maintenance.filter(m => m.status === 'completed' || m.status === 'paid').length;
+            const openCount = maintenance.filter(m => m.status !== 'completed' && m.status !== 'paid').length;
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="p-5">
+                    <p className="eyebrow mb-1">Total Maintenance Spend</p>
+                    <p className="text-xl font-bold font-display text-danger tnum">{formatCurrency(totalSpend)}</p>
+                    <p className="text-xs text-muted mt-1">{maintenance.length} request{maintenance.length !== 1 ? 's' : ''} total</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-5">
+                    <p className="eyebrow mb-1">Completed</p>
+                    <p className="text-xl font-bold font-display text-positive tnum">{completedCount}</p>
+                    <p className="text-xs text-muted mt-1">
+                      {formatCurrency(maintenance.filter(m => m.status === 'completed' || m.status === 'paid').reduce((s, m) => s + (m.cost || 0), 0))} spent
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-5">
+                    <p className="eyebrow mb-1">Open Requests</p>
+                    <p className={`text-xl font-bold font-display tnum ${openCount > 0 ? 'text-warning' : 'text-positive'}`}>{openCount}</p>
+                    <p className="text-xs text-muted mt-1">
+                      {formatCurrency(maintenance.filter(m => m.status !== 'completed' && m.status !== 'paid').reduce((s, m) => s + (m.cost || 0), 0))} estimated
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <h2 className="font-semibold text-ink">Maintenance History ({maintenance.length})</h2>
+              {maintenance.length === 0 ? (
+                <p className="text-sm text-muted">No maintenance requests on record.</p>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -742,6 +779,7 @@ export function PropertyProfile() {
             )}
           </CardContent>
         </Card>
+        </div>
       )}
 
       {activeTab === 'Documents' && (
