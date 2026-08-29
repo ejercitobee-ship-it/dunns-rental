@@ -77,7 +77,7 @@ export function receiptEmailHtml(d: ReceiptEmailData): string {
       <tr><td style="padding:24px 32px 4px;">
         <div style="font-size:16px;font-weight:bold;color:#1c1a17;">${d.heading || 'Rent receipt'}</div>
         <div style="font-size:12px;color:#8a887f;margin-top:4px;">No. ${d.receiptNumber}${d.datePaid ? ` &nbsp;&middot;&nbsp; ${d.datePaid}` : ''}</div>
-        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:16px 0 4px;">${d.confirmationText || `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`}</p>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:16px 0 4px;">${(d.confirmationText || `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`).replace(/\n/g, '<br>')}</p>
       </td></tr>
       <tr><td style="padding:8px 32px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -536,8 +536,8 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   if (tenant.email) {
     try {
       const confirmationText = isCredit
-        ? `Hi ${tenant.first_name}, a rent credit of ${money(p.amount)} has been applied to your account${period ? ` for ${period}` : ''}.`
-        : `Hi ${tenant.first_name}, we received your ${money(p.amount)} rent payment${period ? ` for ${period}` : ''}. Thank you for being a wonderful tenant!`;
+        ? `Hi ${tenant.first_name},\n\nA rent credit of ${money(p.amount)} has been applied to your account${period ? ` for ${period}` : ''}. You can view the details in your tenant portal under Payments. If you have any questions, please don't hesitate to reach out.\n\nThank you!`
+        : `Hi ${tenant.first_name},\n\nWe have received your ${money(p.amount)} rent payment${period ? ` for ${period}` : ''}. Thank you for your prompt payment and for being a valued tenant. We truly appreciate having you as part of our property community.\n\nYour receipt is available in your tenant portal under Payments.\n\nThank you!`;
       const emailData: ReceiptEmailData = {
         companyName: company.companyName,
         contact: [
@@ -579,7 +579,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
       : `Payment received${period ? ` for ${period}` : ''}`;
     const pushBody = isCredit
       ? `A ${money(p.amount)} credit has been applied to your account.`
-      : `Your ${money(p.amount)} payment has been received. Thank you!`;
+      : `We have received your ${money(p.amount)} payment. Thank you for your prompt payment!`;
     const occupants = await env.DB.prepare(
       'SELECT tenant_id FROM lease_tenants WHERE lease_id = ?'
     ).bind(p.lease_id).all<{ tenant_id: string }>();
