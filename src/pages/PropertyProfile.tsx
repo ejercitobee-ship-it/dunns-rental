@@ -109,6 +109,12 @@ export function PropertyProfile() {
       .sort((a, b) => b.total - a.total);
   }, [yearExpenses]);
 
+  /** Quick unit-id → unit-number lookup for the expense table. */
+  const unitLabel = useMemo(() => {
+    if (!data) return new Map<string, string>();
+    return new Map(data.units.map(u => [u.id, `Unit ${u.unitNumber}`]));
+  }, [data]);
+
   /** HOA expenses for the selected year. */
   const hoaExpenses = useMemo(() => yearExpenses.filter(e => e.category === 'hoa'), [yearExpenses]);
   const hoaTotal = useMemo(() => hoaExpenses.reduce((sum, e) => sum + e.amount, 0), [hoaExpenses]);
@@ -558,6 +564,7 @@ export function PropertyProfile() {
                     <thead>
                       <tr className="border-b border-line">
                         <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
                         <th className="text-left py-2 px-3 font-semibold text-ink">Category</th>
                         <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
                         <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
@@ -568,6 +575,7 @@ export function PropertyProfile() {
                       {yearExpenses.map(e => (
                         <tr key={e.id} className="border-b border-line last:border-0">
                           <td className="py-2 px-3">{formatDate(e.date)}</td>
+                          <td className="py-2 px-3 text-muted">{e.unitId ? unitLabel.get(e.unitId) || '—' : 'Property'}</td>
                           <td className="py-2 px-3">{expenseCategoryLabel(e.category)}</td>
                           <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
                           <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
