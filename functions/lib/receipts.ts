@@ -2,6 +2,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { Env } from './session';
 import { getSetting, ensureTenantFolder, uploadToDrive, deleteDriveFile } from './google';
 import { sendEmail } from './email';
+import { sendPushToTenant } from './push';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -534,6 +535,9 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
 
   if (tenant.email) {
     try {
+      const confirmationText = isCredit
+        ? `Hi ${tenant.first_name}, a rent credit of ${money(p.amount)} has been applied to your account${period ? ` for ${period}` : ''}.`
+        : `Hi ${tenant.first_name}, we received your ${money(p.amount)} rent payment${period ? ` for ${period}` : ''}. Thank you for being a wonderful tenant!`;
       const emailData: ReceiptEmailData = {
         companyName: company.companyName,
         contact: [
@@ -553,20 +557,41 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
         heading: isCredit ? 'Rent credit' : undefined,
         badgeLabel: isCredit ? 'CREDIT' : undefined,
         amountLabel: isCredit ? 'CREDIT AMOUNT' : undefined,
-        confirmationText: isCredit
-          ? `Hi ${tenant.first_name}, a rent credit of ${money(p.amount)} has been applied to your account${period ? ` for ${period}` : ''}.`
-          : undefined,
+        confirmationText,
       };
       const subjectKind = isCredit ? 'rent credit' : 'rent receipt';
       await sendEmail(env, {
         to: tenant.email,
-        subject: `Your ${subjectKind}${period ? ` for ${period}` : ''} — ${company.companyName}`,
+        subject: `Your ${subjectKind}${period ? ` for ${period}` : ''} from ${company.companyName}`,
         html: receiptEmailHtml(emailData),
         text: receiptEmailText(emailData),
       });
     } catch {
       // Best-effort: the receipt is already filed regardless of email.
     }
+  }
+
+  // Push notification to every occupant on the lease so all housemates know the
+  // payment landed, not just the payer. Best-effort, never blocks the receipt.
+  try {
+    const pushTitle = isCredit
+      ? `Rent credit applied${period ? ` for ${period}` : ''}`
+      : `Payment received${period ? ` for ${period}` : ''}`;
+    const pushBody = isCredit
+      ? `A ${money(p.amount)} credit has been applied to your account.`
+      : `Your ${money(p.amount)} payment has been received. Thank you!`;
+    const occupants = await env.DB.prepare(
+      'SELECT tenant_id FROM lease_tenants WHERE lease_id = ?'
+    ).bind(p.lease_id).all<{ tenant_id: string }>();
+    for (const occ of (occupants.results || [])) {
+      await sendPushToTenant(env, occ.tenant_id, {
+        title: pushTitle,
+        body: pushBody,
+        url: '/portal/payments',
+      });
+    }
+  } catch {
+    // Push is best-effort.
   }
 
   return docId;
