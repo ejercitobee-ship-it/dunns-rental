@@ -19,6 +19,33 @@ import { PropertyNotes } from '../components/PropertyNotes';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 
 const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Notes', 'Activity'] as const;
+
+/** Collapsible section used inside the Financials tab. */
+function CollapsibleSection({ title, icon, badge, defaultOpen = false, children }: {
+  title: string;
+  icon?: React.ReactNode;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-canvas/50 transition-colors"
+      >
+        <h2 className="font-semibold text-ink flex items-center gap-2">
+          {icon}
+          {title}
+          {badge && <span className="text-xs font-normal text-muted">({badge})</span>}
+        </h2>
+        {open ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
+      </button>
+      {open && <CardContent className="px-5 pb-5 pt-0 space-y-4">{children}</CardContent>}
+    </Card>
+  );
+}
 type Tab = typeof tabs[number];
 
 const maintenanceStatusBadge: Record<string, 'success' | 'warning' | 'secondary' | 'destructive'> = {
@@ -362,45 +389,11 @@ export function PropertyProfile() {
             </Card>
           </div>
 
-          {/* Year over year */}
-          {financialYears.length > 1 && (
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                <h2 className="font-semibold text-ink">Year Over Year</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-line">
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Year</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Income</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Expenses</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Net</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {financialYears.map(yr => {
-                        const s = data.financialSummary[yr];
-                        return (
-                          <tr key={yr} className="border-b border-line last:border-0">
-                            <td className="py-2 px-3 font-medium">{yr}</td>
-                            <td className="py-2 px-3 text-right tnum text-positive">{formatCurrency(s.income)}</td>
-                            <td className="py-2 px-3 text-right tnum text-danger">{formatCurrency(s.expenses)}</td>
-                            <td className={`py-2 px-3 text-right tnum font-medium ${s.net >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(s.net)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Expense Breakdown by Category */}
+          {/* Expense Breakdown by Category — always visible */}
           {categoryBreakdown.length > 0 && (
             <Card>
               <CardContent className="p-5 space-y-4">
-                <h2 className="font-semibold text-ink">Operating Expenses ({financialYear})</h2>
+                <h2 className="font-semibold text-ink">Expense Breakdown ({financialYear})</h2>
                 <div className="space-y-2">
                   {categoryBreakdown.map(({ category, label, total }) => {
                     const totalExpenses = data.financialSummary[financialYear]?.expenses || 1;
@@ -432,162 +425,192 @@ export function PropertyProfile() {
             </Card>
           )}
 
-          {/* HOA Summary */}
-          {hoaExpenses.length > 0 && (
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                <h2 className="font-semibold text-ink flex items-center gap-2">
-                  <Home className="h-4 w-4 text-faint" /> HOA Dues ({financialYear})
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div>
-                    <p className="eyebrow mb-1">Annual Total</p>
-                    <p className="text-lg font-bold font-display text-danger tnum">{formatCurrency(hoaTotal)}</p>
-                  </div>
-                  <div>
-                    <p className="eyebrow mb-1">Monthly Average</p>
-                    <p className="text-lg font-bold font-display text-ink tnum">
-                      {formatCurrency(hoaTotal / (hoaExpenses.length > 0 ? hoaExpenses.length : 1))}
-                    </p>
-                    <p className="text-xs text-muted">{hoaExpenses.length} payment{hoaExpenses.length !== 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-                <div className="overflow-x-auto mt-2">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-line">
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {hoaExpenses.map(e => (
-                        <tr key={e.id} className="border-b border-line last:border-0">
-                          <td className="py-2 px-3">{formatDate(e.date)}</td>
-                          <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
-                          <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
-                          <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Capital Improvement History */}
-          {capitalProjects.length > 0 && (
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                <h2 className="font-semibold text-ink flex items-center gap-2">
-                  <HardHat className="h-4 w-4 text-faint" /> Capital Improvements
-                </h2>
-                <div className="space-y-3">
-                  {capitalProjects
-                    .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
-                    .map(proj => {
-                      const statusColor = proj.status === 'completed' ? 'success' : proj.status === 'in_progress' ? 'default' : 'destructive';
+          {/* Year over year — collapsible */}
+          {financialYears.length > 1 && (
+            <CollapsibleSection title="Year Over Year" badge={`${financialYears.length} years`}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Year</th>
+                      <th className="text-right py-2 px-3 font-semibold text-ink">Income</th>
+                      <th className="text-right py-2 px-3 font-semibold text-ink">Expenses</th>
+                      <th className="text-right py-2 px-3 font-semibold text-ink">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {financialYears.map(yr => {
+                      const s = data.financialSummary[yr];
                       return (
-                        <div key={proj.id} className="rounded-lg border border-line p-4 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-ink">{proj.name}</span>
-                            <Badge variant={statusColor as any}>
-                              {proj.status === 'in_progress' ? 'In Progress' : proj.status === 'completed' ? 'Completed' : 'Cancelled'}
-                            </Badge>
-                          </div>
-                          {proj.description && <p className="text-sm text-muted">{proj.description}</p>}
-                          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
-                            {proj.startDate && <span>Started: {formatDate(proj.startDate)}</span>}
-                            {proj.completionDate && <span>Completed: {formatDate(proj.completionDate)}</span>}
-                            <span className="font-semibold text-ink tnum">Total: {formatCurrency(proj.totalCost)}</span>
-                            <span>{proj.expenseCount} receipt{proj.expenseCount !== 1 ? 's' : ''}</span>
-                          </div>
-                        </div>
+                        <tr key={yr} className="border-b border-line last:border-0">
+                          <td className="py-2 px-3 font-medium">{yr}</td>
+                          <td className="py-2 px-3 text-right tnum text-positive">{formatCurrency(s.income)}</td>
+                          <td className="py-2 px-3 text-right tnum text-danger">{formatCurrency(s.expenses)}</td>
+                          <td className={`py-2 px-3 text-right tnum font-medium ${s.net >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(s.net)}</td>
+                        </tr>
                       );
                     })}
-                </div>
-              </CardContent>
-            </Card>
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
           )}
 
-          {/* Rent payments for selected year */}
-          <Card>
-            <CardContent className="p-5 space-y-4">
-              <h2 className="font-semibold text-ink">Rent Payments ({financialYear})</h2>
-              {yearPayments.length === 0 ? (
-                <p className="text-sm text-muted">No rent payments recorded for this year.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-line">
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Month</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Method</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Paid Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {yearPayments.map(rp => (
-                        <tr key={rp.id} className="border-b border-line last:border-0">
-                          <td className="py-2 px-3">{monthName(rp.month)}</td>
-                          <td className="py-2 px-3 text-muted">{rp.unitNumber || '—'}</td>
-                          <td className="py-2 px-3 text-right tnum">
-                            {rp.type === 'credit' ? (
-                              <span className="text-amber-600 dark:text-amber-400">{formatCurrency(rp.amount)} credit</span>
-                            ) : formatCurrency(rp.amount)}
-                          </td>
-                          <td className="py-2 px-3 text-muted capitalize">{rp.type === 'credit' ? (rp.creditReason || 'credit') : (rp.paymentMethod?.replace(/_/g, ' ') || '—')}</td>
-                          <td className="py-2 px-3 text-muted">{rp.paidDate ? formatDate(rp.paidDate) : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          {/* HOA Summary — collapsible */}
+          {hoaExpenses.length > 0 && (
+            <CollapsibleSection
+              title={`HOA Dues (${financialYear})`}
+              icon={<Home className="h-4 w-4 text-faint" />}
+              badge={formatCurrency(hoaTotal)}
+            >
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div>
+                  <p className="eyebrow mb-1">Annual Total</p>
+                  <p className="text-lg font-bold font-display text-danger tnum">{formatCurrency(hoaTotal)}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div>
+                  <p className="eyebrow mb-1">Monthly Average</p>
+                  <p className="text-lg font-bold font-display text-ink tnum">
+                    {formatCurrency(hoaTotal / (hoaExpenses.length > 0 ? hoaExpenses.length : 1))}
+                  </p>
+                  <p className="text-xs text-muted">{hoaExpenses.length} payment{hoaExpenses.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto mt-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
+                      <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hoaExpenses.map(e => (
+                      <tr key={e.id} className="border-b border-line last:border-0">
+                        <td className="py-2 px-3">{formatDate(e.date)}</td>
+                        <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
+                        <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
+                        <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
 
-          {/* Expenses for selected year */}
-          <Card>
-            <CardContent className="p-5 space-y-4">
-              <h2 className="font-semibold text-ink">Expenses ({financialYear})</h2>
-              {yearExpenses.length === 0 ? (
-                <p className="text-sm text-muted">No expenses recorded for this year.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-line">
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Category</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+          {/* Capital Improvement History — collapsible */}
+          {capitalProjects.length > 0 && (
+            <CollapsibleSection
+              title="Capital Improvements"
+              icon={<HardHat className="h-4 w-4 text-faint" />}
+              badge={`${capitalProjects.length}`}
+            >
+              <div className="space-y-3">
+                {capitalProjects
+                  .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+                  .map(proj => {
+                    const statusColor = proj.status === 'completed' ? 'success' : proj.status === 'in_progress' ? 'default' : 'destructive';
+                    return (
+                      <div key={proj.id} className="rounded-lg border border-line p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-ink">{proj.name}</span>
+                          <Badge variant={statusColor as any}>
+                            {proj.status === 'in_progress' ? 'In Progress' : proj.status === 'completed' ? 'Completed' : 'Cancelled'}
+                          </Badge>
+                        </div>
+                        {proj.description && <p className="text-sm text-muted">{proj.description}</p>}
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
+                          {proj.startDate && <span>Started: {formatDate(proj.startDate)}</span>}
+                          {proj.completionDate && <span>Completed: {formatDate(proj.completionDate)}</span>}
+                          <span className="font-semibold text-ink tnum">Total: {formatCurrency(proj.totalCost)}</span>
+                          <span>{proj.expenseCount} receipt{proj.expenseCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Rent payments — collapsible */}
+          <CollapsibleSection
+            title={`Rent Payments (${financialYear})`}
+            icon={<DollarSign className="h-4 w-4 text-faint" />}
+            badge={`${yearPayments.length}`}
+          >
+            {yearPayments.length === 0 ? (
+              <p className="text-sm text-muted">No rent payments recorded for this year.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Month</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
+                      <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Method</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Paid Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yearPayments.map(rp => (
+                      <tr key={rp.id} className="border-b border-line last:border-0">
+                        <td className="py-2 px-3">{monthName(rp.month)}</td>
+                        <td className="py-2 px-3 text-muted">{rp.unitNumber || '—'}</td>
+                        <td className="py-2 px-3 text-right tnum">
+                          {rp.type === 'credit' ? (
+                            <span className="text-amber-600 dark:text-amber-400">{formatCurrency(rp.amount)} credit</span>
+                          ) : formatCurrency(rp.amount)}
+                        </td>
+                        <td className="py-2 px-3 text-muted capitalize">{rp.type === 'credit' ? (rp.creditReason || 'credit') : (rp.paymentMethod?.replace(/_/g, ' ') || '—')}</td>
+                        <td className="py-2 px-3 text-muted">{rp.paidDate ? formatDate(rp.paidDate) : '—'}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {yearExpenses.map(e => (
-                        <tr key={e.id} className="border-b border-line last:border-0">
-                          <td className="py-2 px-3">{formatDate(e.date)}</td>
-                          <td className="py-2 px-3 text-muted">{e.unitId ? unitLabel.get(e.unitId) || '—' : 'Property'}</td>
-                          <td className="py-2 px-3">{expenseCategoryLabel(e.category)}</td>
-                          <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
-                          <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
-                          <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CollapsibleSection>
+
+          {/* All expenses — collapsible */}
+          <CollapsibleSection
+            title={`All Expenses (${financialYear})`}
+            badge={`${yearExpenses.length}`}
+          >
+            {yearExpenses.length === 0 ? (
+              <p className="text-sm text-muted">No expenses recorded for this year.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Category</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
+                      <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
+                      <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yearExpenses.map(e => (
+                      <tr key={e.id} className="border-b border-line last:border-0">
+                        <td className="py-2 px-3">{formatDate(e.date)}</td>
+                        <td className="py-2 px-3 text-muted">{e.unitId ? unitLabel.get(e.unitId) || '—' : 'Property'}</td>
+                        <td className="py-2 px-3">{expenseCategoryLabel(e.category)}</td>
+                        <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
+                        <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
+                        <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CollapsibleSection>
         </div>
       )}
 
