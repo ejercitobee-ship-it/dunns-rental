@@ -34,6 +34,7 @@ const CATEGORY_GROUPS: { label: string; items: { value: CalendarCategory; label:
       { value: 'lawn_care', label: 'Lawn Care' },
       { value: 'snow_removal', label: 'Snow Removal' },
       { value: 'maintenance', label: 'General Maintenance' },
+      { value: 'warranty_expiration', label: 'Warranty Expiration' },
     ],
   },
   {
@@ -85,6 +86,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   vendor: 'bg-purple-100 text-purple-800',
   licensing: 'bg-gray-100 text-gray-800',
   city_inspection: 'bg-amber-100 text-amber-800',
+  warranty_expiration: 'bg-orange-100 text-orange-800',
   custom: 'bg-stone-100 text-stone-800',
 };
 
@@ -98,7 +100,7 @@ const CATEGORY_BG: Record<string, string> = {
   lease_termination: '#fee2e2', move_in: '#d1fae5', move_out: '#fce7f3',
   birthday: '#fce7f3', personal: '#ede9fe', contractor: '#fae8ff',
   vendor: '#f3e8ff', licensing: '#f3f4f6', city_inspection: '#fef3c7',
-  custom: '#f5f5f4',
+  warranty_expiration: '#ffedd5', custom: '#f5f5f4',
 };
 
 /** Categories that represent date-based events (informational). They cannot be
@@ -106,6 +108,7 @@ const CATEGORY_BG: Record<string, string> = {
 const EVENT_CATEGORIES = new Set<CalendarCategory>([
   'birthday', 'move_in', 'move_out',
   'lease_expiration', 'lease_renewal', 'lease_termination',
+  'warranty_expiration',
 ]);
 
 /** Returns true when the item is an informational event rather than a

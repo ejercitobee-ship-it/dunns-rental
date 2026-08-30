@@ -470,6 +470,7 @@ export type CalendarCategory =
   | 'inspection' | 'smoke_detector' | 'hvac' | 'pest_control' | 'lawn_care' | 'snow_removal' | 'maintenance'
   | 'lease_expiration' | 'lease_renewal' | 'lease_termination' | 'move_in' | 'move_out'
   | 'contractor' | 'vendor' | 'licensing' | 'city_inspection'
+  | 'warranty_expiration'
   | 'birthday' | 'personal' | 'custom';
 
 export type CalendarPriority = 'low' | 'medium' | 'high' | 'urgent';
