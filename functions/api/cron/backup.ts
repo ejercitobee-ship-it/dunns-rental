@@ -23,24 +23,36 @@ const TABLES = [
   'tenants',
   'leases',
   'lease_tenants',
+  'lease_pauses',
+  'household_members',
   // Financials
   'rent_payments',
+  'tenant_credits',
   'expenses',
+  'expense_imports',
+  'expense_import_rows',
   'incomes',
   // Maintenance
   'maintenance_requests',
+  'maintenance_status_log',
   'handymen',
+  'handyman_messages',
   // Documents
   'documents',
   'document_templates',
   // Users and access
   'user',
   'user_roles',
-  'user_permissions',
+  'user_metadata',
+  'user_permission_overrides',
+  'permission_audit_log',
   'account',
+  'tenant_emails',
+  'tenant_realtors',
   // Activity and audit
   'activity_log',
   'lease_audit_log',
+  'lease_notifications',
   // Messages
   'messages',
   // Calendar
@@ -53,21 +65,28 @@ const TABLES = [
   'inspection_items',
   'notices',
   'deposit_returns',
-  'deposit_return_deductions',
+  'deposit_deductions',
   // Prospective tenants
   'prospective_tenants',
-  'prospective_tenant_files',
+  // Property notes
+  'property_notes',
+  'property_note_attachments',
   // Utility accounts
   'utility_accounts',
   // Capital projects
   'capital_projects',
   // Vendor submissions
-  'vendor_form_tokens',
   'vendor_submissions',
   // Announcements
   'announcements',
-  // Push subscriptions
+  // Notifications and push
+  'notifications',
   'push_subscriptions',
+  // AI conversations
+  'ai_conversations',
+  'ai_messages',
+  // Roles
+  'roles',
 ] as const;
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
