@@ -1,0 +1,17 @@
+# Scheduled worker that triggers the monthly database backup.
+#
+# On the 1st of every month at 06:00 UTC (midnight Chicago time), this
+# worker POSTs to /api/cron/backup with the shared CRON_SECRET. The
+# endpoint exports every table to JSON and uploads the file to Google Drive.
+#
+# Deploy (from this folder):
+#   npx wrangler deploy
+# Set the shared secret (must match the Pages project's CRON_SECRET):
+#   npx wrangler secret put CRON_SECRET
+name = "mhdunn-monthly-backup"
+main = "index.js"
+compatibility_date = "2025-05-20"
+
+# 06:00 UTC on the 1st of every month = midnight Chicago time.
+[triggers]
+crons = ["0 6 1 * *"]
