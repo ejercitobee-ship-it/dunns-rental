@@ -448,3 +448,21 @@ export function serializeNotice(r: Row) {
     updatedAt: r.updated_at,
   };
 }
+
+export function serializeAppliance(r: Row) {
+  return {
+    id: r.id,
+    propertyId: r.property_id,
+    unitId: r.unit_id ?? undefined,
+    type: r.type,
+    brand: r.brand ?? undefined,
+    modelNumber: r.model_number ?? undefined,
+    serialNumber: r.serial_number ?? undefined,
+    purchaseDate: r.purchase_date ?? undefined,
+    warrantyExpiration: r.warranty_expiration ?? undefined,
+    condition: r.condition ?? 'good',
+    notes: r.notes ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}

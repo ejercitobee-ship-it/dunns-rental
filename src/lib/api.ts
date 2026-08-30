@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
 
 const API_BASE = '/api';
 
@@ -242,6 +242,18 @@ export const utilityAccountsApi = {
     apiRequest(`/utility-accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/utility-accounts/${id}`, { method: 'DELETE' }),
+};
+
+// Appliances API (major appliances per property/unit with warranty tracking)
+export const appliancesApi = {
+  getAll: (propertyId?: string): Promise<Appliance[]> =>
+    apiRequest(propertyId ? `/appliances?propertyId=${propertyId}` : '/appliances'),
+  create: (data: Omit<Appliance, 'id'>): Promise<Appliance> =>
+    apiRequest('/appliances', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Appliance): Promise<Appliance> =>
+    apiRequest(`/appliances/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiRequest(`/appliances/${id}`, { method: 'DELETE' }),
 };
 
 // Units API

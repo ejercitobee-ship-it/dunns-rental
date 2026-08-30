@@ -73,6 +73,8 @@ const TABLES = [
   'property_note_attachments',
   // Utility accounts
   'utility_accounts',
+  // Appliances
+  'appliances',
   // Capital projects
   'capital_projects',
   // Vendor submissions

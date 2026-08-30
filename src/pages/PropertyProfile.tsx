@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Building, Home, MapPin, Calendar, DollarSign,
   FileText, Users, ChevronDown, ChevronRight,
-  Download, Zap, Droplets, Flame,
+  Download, Zap, Droplets, Flame, Plus, Pencil, Trash2,
+  ShieldCheck, AlertTriangle, XCircle, X,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -11,14 +12,58 @@ import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
-import { propertiesApi, capitalProjectsApi } from '../lib/api';
+import { propertiesApi, capitalProjectsApi, appliancesApi } from '../lib/api';
 import { HardHat } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import type { PropertyProfile as ProfileData, CapitalProject } from '../types';
+import type { PropertyProfile as ProfileData, CapitalProject, ApplianceType, ApplianceCondition } from '../types';
 import { PropertyNotes } from '../components/PropertyNotes';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 
-const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Documents', 'Notes', 'Activity'] as const;
+const tabs = ['Overview', 'Financials', 'Tenants', 'Maintenance', 'Appliances', 'Documents', 'Notes', 'Activity'] as const;
+
+const APPLIANCE_TYPE_LABELS: Record<ApplianceType, string> = {
+  refrigerator: 'Refrigerator',
+  stove_oven: 'Stove / Oven',
+  dishwasher: 'Dishwasher',
+  washer: 'Washer',
+  dryer: 'Dryer',
+  hvac: 'HVAC',
+  water_heater: 'Water Heater',
+  microwave: 'Microwave',
+  garbage_disposal: 'Garbage Disposal',
+  furnace: 'Furnace',
+  air_conditioner: 'Air Conditioner',
+  range_hood: 'Range Hood',
+  freezer: 'Freezer',
+  other: 'Other',
+};
+
+const APPLIANCE_TYPES: ApplianceType[] = Object.keys(APPLIANCE_TYPE_LABELS) as ApplianceType[];
+
+const CONDITION_LABELS: Record<ApplianceCondition, string> = {
+  excellent: 'Excellent',
+  good: 'Good',
+  fair: 'Fair',
+  replace_soon: 'Replace Soon',
+};
+
+const CONDITION_VARIANTS: Record<ApplianceCondition, 'success' | 'secondary' | 'warning' | 'destructive'> = {
+  excellent: 'success',
+  good: 'secondary',
+  fair: 'warning',
+  replace_soon: 'destructive',
+};
+
+function warrantyStatus(expDate?: string): { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary'; icon: typeof ShieldCheck } {
+  if (!expDate) return { label: 'No warranty', variant: 'secondary', icon: XCircle };
+  const now = new Date();
+  const exp = new Date(expDate + 'T00:00:00');
+  const diffMs = exp.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { label: 'Expired', variant: 'destructive', icon: XCircle };
+  if (diffDays <= 90) return { label: `Expires in ${diffDays}d`, variant: 'warning', icon: AlertTriangle };
+  return { label: 'Active', variant: 'success', icon: ShieldCheck };
+}
 
 /** Collapsible section used inside the Financials tab. */
 function CollapsibleSection({ title, icon, badge, defaultOpen = false, children }: {
@@ -805,6 +850,17 @@ export function PropertyProfile() {
         </div>
       )}
 
+      {activeTab === 'Appliances' && id && (
+        <AppliancesTab
+          appliances={data.appliances}
+          units={units}
+          propertyId={id}
+          onRefresh={() => {
+            propertiesApi.getProfile(id).then(d => setData(d)).catch(() => {});
+          }}
+        />
+      )}
+
       {activeTab === 'Documents' && (
         <Card>
           <CardContent className="p-5 space-y-4">
@@ -896,6 +952,398 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string; 
 
 function monthName(m: number): string {
   return ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m] || '?';
+}
+
+/* ---------- Appliances Tab ---------- */
+
+type ApplianceRow = ProfileData['appliances'][number];
+
+interface ApplianceFormData {
+  type: ApplianceType;
+  brand: string;
+  modelNumber: string;
+  serialNumber: string;
+  unitId: string;
+  purchaseDate: string;
+  warrantyExpiration: string;
+  condition: ApplianceCondition;
+  notes: string;
+}
+
+const emptyForm: ApplianceFormData = {
+  type: 'refrigerator',
+  brand: '',
+  modelNumber: '',
+  serialNumber: '',
+  unitId: '',
+  purchaseDate: '',
+  warrantyExpiration: '',
+  condition: 'good',
+  notes: '',
+};
+
+function AppliancesTab({
+  appliances,
+  units,
+  propertyId,
+  onRefresh,
+}: {
+  appliances: ApplianceRow[];
+  units: ProfileData['units'];
+  propertyId: string;
+  onRefresh: () => void;
+}) {
+  const { showToast } = useToast();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<ApplianceRow | null>(null);
+  const [deleting, setDeleting] = useState<ApplianceRow | null>(null);
+  const [filterUnit, setFilterUnit] = useState<string>('all');
+  const [saving, setSaving] = useState(false);
+
+  const filtered = filterUnit === 'all'
+    ? appliances
+    : filterUnit === 'common'
+      ? appliances.filter(a => !a.unitId)
+      : appliances.filter(a => a.unitId === filterUnit);
+
+  const warrantyExpiring = appliances.filter(a => {
+    if (!a.warrantyExpiration) return false;
+    const diff = new Date(a.warrantyExpiration + 'T00:00:00').getTime() - Date.now();
+    return diff > 0 && diff <= 90 * 24 * 60 * 60 * 1000;
+  }).length;
+
+  const warrantyExpired = appliances.filter(a => {
+    if (!a.warrantyExpiration) return false;
+    return new Date(a.warrantyExpiration + 'T00:00:00').getTime() < Date.now();
+  }).length;
+
+  const handleSave = async (form: ApplianceFormData) => {
+    setSaving(true);
+    try {
+      const payload = {
+        propertyId,
+        type: form.type,
+        brand: form.brand || undefined,
+        modelNumber: form.modelNumber || undefined,
+        serialNumber: form.serialNumber || undefined,
+        unitId: form.unitId || undefined,
+        purchaseDate: form.purchaseDate || undefined,
+        warrantyExpiration: form.warrantyExpiration || undefined,
+        condition: form.condition,
+        notes: form.notes || undefined,
+      };
+      if (editing) {
+        await appliancesApi.update(editing.id, { id: editing.id, ...payload } as any);
+        showToast('Appliance updated.', 'success');
+      } else {
+        await appliancesApi.create(payload as any);
+        showToast('Appliance added.', 'success');
+      }
+      setModalOpen(false);
+      setEditing(null);
+      onRefresh();
+    } catch {
+      showToast('Failed to save appliance.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    try {
+      await appliancesApi.delete(deleting.id);
+      showToast('Appliance removed.', 'success');
+      setDeleting(null);
+      onRefresh();
+    } catch {
+      showToast('Failed to remove appliance.', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-5">
+            <p className="eyebrow mb-1">Total Appliances</p>
+            <p className="text-xl font-bold font-display tnum">{appliances.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="eyebrow mb-1">Warranty Expiring Soon</p>
+            <p className={`text-xl font-bold font-display tnum ${warrantyExpiring > 0 ? 'text-warning' : 'text-positive'}`}>
+              {warrantyExpiring}
+            </p>
+            <p className="text-xs text-muted mt-1">within 90 days</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="eyebrow mb-1">Warranty Expired</p>
+            <p className={`text-xl font-bold font-display tnum ${warrantyExpired > 0 ? 'text-danger' : 'text-positive'}`}>
+              {warrantyExpired}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter + Add */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted">Filter by unit:</label>
+          <select
+            value={filterUnit}
+            onChange={e => setFilterUnit(e.target.value)}
+            className="input py-1.5 px-3 text-sm min-w-[140px]"
+          >
+            <option value="all">All units</option>
+            <option value="common">Common area</option>
+            {units.map(u => (
+              <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={() => { setEditing(null); setModalOpen(true); }}
+          className="btn btn-primary flex items-center gap-1.5 text-sm"
+        >
+          <Plus className="h-4 w-4" /> Add Appliance
+        </button>
+      </div>
+
+      {/* Appliance cards */}
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <p className="text-sm text-muted">No appliances recorded{filterUnit !== 'all' ? ' for this filter' : ''}.</p>
+            <p className="text-xs text-muted mt-1">Click "Add Appliance" to start tracking.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map(a => {
+            const ws = warrantyStatus(a.warrantyExpiration);
+            const WarrantyIcon = ws.icon;
+            return (
+              <Card key={a.id}>
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-semibold text-ink text-sm">
+                        {APPLIANCE_TYPE_LABELS[a.type as ApplianceType] || a.type}
+                      </h3>
+                      {a.brand && <p className="text-sm text-muted">{a.brand}</p>}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => { setEditing(a); setModalOpen(true); }}
+                        className="p-1.5 rounded-md hover:bg-line/50 text-muted hover:text-ink transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleting(a)}
+                        className="p-1.5 rounded-md hover:bg-line/50 text-muted hover:text-danger transition-colors"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={CONDITION_VARIANTS[a.condition as ApplianceCondition] || 'secondary'}>
+                      {CONDITION_LABELS[a.condition as ApplianceCondition] || a.condition}
+                    </Badge>
+                    <Badge variant={ws.variant}>
+                      <WarrantyIcon className="h-3 w-3 mr-1 inline" />
+                      {ws.label}
+                    </Badge>
+                    {a.unitNumber ? (
+                      <Badge variant="secondary">Unit {a.unitNumber}</Badge>
+                    ) : (
+                      <Badge variant="secondary">Common</Badge>
+                    )}
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {a.modelNumber && (
+                      <>
+                        <dt className="text-muted">Model</dt>
+                        <dd className="text-ink">{a.modelNumber}</dd>
+                      </>
+                    )}
+                    {a.serialNumber && (
+                      <>
+                        <dt className="text-muted">Serial</dt>
+                        <dd className="text-ink">{a.serialNumber}</dd>
+                      </>
+                    )}
+                    {a.purchaseDate && (
+                      <>
+                        <dt className="text-muted">Purchased</dt>
+                        <dd className="text-ink">{formatDate(a.purchaseDate)}</dd>
+                      </>
+                    )}
+                    {a.warrantyExpiration && (
+                      <>
+                        <dt className="text-muted">Warranty Exp.</dt>
+                        <dd className="text-ink">{formatDate(a.warrantyExpiration)}</dd>
+                      </>
+                    )}
+                  </dl>
+
+                  {a.notes && (
+                    <p className="text-xs text-muted border-t border-line pt-2">{a.notes}</p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add/Edit modal */}
+      {modalOpen && (
+        <ApplianceModal
+          initial={editing ? {
+            type: editing.type as ApplianceType,
+            brand: editing.brand || '',
+            modelNumber: editing.modelNumber || '',
+            serialNumber: editing.serialNumber || '',
+            unitId: editing.unitId || '',
+            purchaseDate: editing.purchaseDate || '',
+            warrantyExpiration: editing.warrantyExpiration || '',
+            condition: (editing.condition || 'good') as ApplianceCondition,
+            notes: editing.notes || '',
+          } : emptyForm}
+          units={units}
+          isEditing={!!editing}
+          saving={saving}
+          onSave={handleSave}
+          onClose={() => { setModalOpen(false); setEditing(null); }}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <Card className="w-full max-w-sm mx-4">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="font-semibold text-ink">Remove Appliance</h3>
+              <p className="text-sm text-muted">
+                Remove the {APPLIANCE_TYPE_LABELS[deleting.type as ApplianceType] || deleting.type}
+                {deleting.brand ? ` (${deleting.brand})` : ''}? This cannot be undone.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setDeleting(null)} className="btn btn-secondary text-sm">Cancel</button>
+                <button onClick={handleDelete} className="btn btn-danger text-sm">Remove</button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ApplianceModal({
+  initial,
+  units,
+  isEditing,
+  saving,
+  onSave,
+  onClose,
+}: {
+  initial: ApplianceFormData;
+  units: ProfileData['units'];
+  isEditing: boolean;
+  saving: boolean;
+  onSave: (form: ApplianceFormData) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<ApplianceFormData>(initial);
+
+  const set = <K extends keyof ApplianceFormData>(key: K, val: ApplianceFormData[K]) =>
+    setForm(f => ({ ...f, [key]: val }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <Card className="w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <CardContent className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-ink">{isEditing ? 'Edit Appliance' : 'Add Appliance'}</h3>
+            <button onClick={onClose} className="p-1.5 rounded-md hover:bg-line/50 text-muted hover:text-ink transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Type *</label>
+              <select value={form.type} onChange={e => set('type', e.target.value as ApplianceType)} className="input">
+                {APPLIANCE_TYPES.map(t => (
+                  <option key={t} value={t}>{APPLIANCE_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Unit</label>
+              <select value={form.unitId} onChange={e => set('unitId', e.target.value)} className="input">
+                <option value="">Common area</option>
+                {units.map(u => (
+                  <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Brand</label>
+              <input value={form.brand} onChange={e => set('brand', e.target.value)} className="input" placeholder="e.g. LG, Samsung" />
+            </div>
+            <div>
+              <label className="label">Model Number</label>
+              <input value={form.modelNumber} onChange={e => set('modelNumber', e.target.value)} className="input" placeholder="Model #" />
+            </div>
+            <div>
+              <label className="label">Serial Number</label>
+              <input value={form.serialNumber} onChange={e => set('serialNumber', e.target.value)} className="input" placeholder="Serial #" />
+            </div>
+            <div>
+              <label className="label">Condition</label>
+              <select value={form.condition} onChange={e => set('condition', e.target.value as ApplianceCondition)} className="input">
+                {(Object.keys(CONDITION_LABELS) as ApplianceCondition[]).map(c => (
+                  <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Purchase Date</label>
+              <input type="date" value={form.purchaseDate} onChange={e => set('purchaseDate', e.target.value)} className="input" />
+            </div>
+            <div>
+              <label className="label">Warranty Expiration</label>
+              <input type="date" value={form.warrantyExpiration} onChange={e => set('warrantyExpiration', e.target.value)} className="input" />
+            </div>
+          </div>
+          <div>
+            <label className="label">Notes</label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} className="input" rows={2} placeholder="Optional notes" />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={onClose} className="btn btn-secondary text-sm" disabled={saving}>Cancel</button>
+            <button onClick={() => onSave(form)} className="btn btn-primary text-sm" disabled={saving}>
+              {saving ? 'Saving...' : isEditing ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 function ProfileSkeleton() {

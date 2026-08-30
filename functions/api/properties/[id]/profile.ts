@@ -119,6 +119,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       // Table may not exist yet — return empty log rather than crashing.
     }
 
+    // Appliances for this property — tolerant of missing table
+    // (migration 0073 may not be applied yet in all environments).
+    let appliances: { results: Record<string, unknown>[] } = { results: [] };
+    try {
+      appliances = await env.DB.prepare(
+        `SELECT a.*, u.unit_number FROM appliances a
+         LEFT JOIN units u ON u.id = a.unit_id
+         WHERE a.property_id = ?
+         ORDER BY a.type, a.created_at DESC`
+      ).bind(propertyId).all();
+    } catch {
+      // Table may not exist yet — return empty list rather than crashing.
+    }
+
     // Calendar events for this property — tolerant of missing table
     // (migration 0047 may not be applied yet in all environments).
     let calendarEvents: { results: Record<string, unknown>[] } = { results: [] };
@@ -276,6 +290,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           endDate: ce.end_date,
           category: ce.category,
           notes: ce.notes,
+        })),
+        appliances: (appliances.results || []).map(a => ({
+          id: a.id,
+          propertyId: a.property_id,
+          unitId: a.unit_id ?? undefined,
+          unitNumber: a.unit_number ?? undefined,
+          type: a.type,
+          brand: a.brand ?? undefined,
+          modelNumber: a.model_number ?? undefined,
+          serialNumber: a.serial_number ?? undefined,
+          purchaseDate: a.purchase_date ?? undefined,
+          warrantyExpiration: a.warranty_expiration ?? undefined,
+          condition: a.condition ?? 'good',
+          notes: a.notes ?? undefined,
         })),
       },
     });

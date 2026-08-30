@@ -18,6 +18,27 @@ export interface Property {
 
 export type UtilityType = 'water' | 'gas' | 'electric';
 
+export type ApplianceType =
+  | 'refrigerator' | 'stove_oven' | 'dishwasher' | 'washer' | 'dryer'
+  | 'hvac' | 'water_heater' | 'microwave' | 'garbage_disposal' | 'furnace'
+  | 'air_conditioner' | 'range_hood' | 'freezer' | 'other';
+
+export type ApplianceCondition = 'excellent' | 'good' | 'fair' | 'replace_soon';
+
+export interface Appliance {
+  id: string;
+  propertyId: string;
+  unitId?: string;
+  type: ApplianceType;
+  brand?: string;
+  modelNumber?: string;
+  serialNumber?: string;
+  purchaseDate?: string;
+  warrantyExpiration?: string;
+  condition: ApplianceCondition;
+  notes?: string;
+}
+
 /** A utility account the landlord pays on a property (reference details so the
  * monthly bill is quick to encode as a Utilities expense). */
 export interface UtilityAccount {
@@ -615,6 +636,20 @@ export interface PropertyProfile {
     startDate?: string;
     endDate?: string;
     category?: string;
+    notes?: string;
+  }>;
+  appliances: Array<{
+    id: string;
+    propertyId: string;
+    unitId?: string;
+    unitNumber?: string;
+    type: string;
+    brand?: string;
+    modelNumber?: string;
+    serialNumber?: string;
+    purchaseDate?: string;
+    warrantyExpiration?: string;
+    condition: string;
     notes?: string;
   }>;
 }
