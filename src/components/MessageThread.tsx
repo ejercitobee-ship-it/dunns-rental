@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, Paperclip, X, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 
@@ -69,7 +69,17 @@ export function MessageThread({
   const [draft, setDraft] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  /** Auto-grow the textarea to fit its content, up to ~40% of the viewport. */
+  const autoResize = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const maxH = Math.min(window.innerHeight * 0.4, 300);
+    ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`;
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
@@ -83,6 +93,7 @@ export function MessageThread({
     setDraft('');
     setFile(null);
     if (fileRef.current) fileRef.current.value = '';
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   return (
@@ -142,15 +153,17 @@ export function MessageThread({
             <Paperclip className="h-4 w-4" />
           </button>
           <textarea
+            ref={textareaRef}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); autoResize(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(e); }
             }}
             rows={2}
             maxLength={4000}
             placeholder={placeholder}
-            className="flex-1 resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex-1 resize-y rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+            style={{ minHeight: '2.75rem', maxHeight: '40vh' }}
           />
           <Button type="submit" disabled={sending || (!draft.trim() && !file)}>
             <Send className="h-4 w-4 mr-2" />

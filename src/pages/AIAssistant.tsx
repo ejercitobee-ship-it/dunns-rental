@@ -96,11 +96,12 @@ export function AIAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Auto-resize textarea.
+  // Auto-resize textarea to fit content, up to 40% of viewport.
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 150)}px`;
+      const maxH = Math.min(window.innerHeight * 0.4, 300);
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, maxH)}px`;
     }
   }, [input]);
 
@@ -388,8 +389,8 @@ export function AIAssistant() {
               placeholder="Ask about your properties, tenants, rent, maintenance..."
               rows={1}
               disabled={loading}
-              className="flex-1 resize-none rounded-lg border border-line bg-canvas px-3 py-2.5 text-sm placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 transition-colors"
-              style={{ maxHeight: '150px' }}
+              className="flex-1 resize-y rounded-lg border border-line bg-canvas px-3 py-2.5 text-sm placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 transition-colors"
+              style={{ minHeight: '2.75rem', maxHeight: '40vh' }}
             />
             <Button
               onClick={() => sendMessage()}
