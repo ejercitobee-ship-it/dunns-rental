@@ -10,7 +10,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { expenseCategoryLabel } from '../lib/financials';
+import { expenseCategoryLabel, expenseCategoryIcon } from '../lib/financials';
 import { STATUS_LABEL, STATUS_BADGE } from '../lib/maintenance';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { propertiesApi, capitalProjectsApi, appliancesApi } from '../lib/api';
@@ -182,9 +182,22 @@ export function PropertyProfile() {
     return new Map(data.units.map(u => [u.id, `Unit ${u.unitNumber}`]));
   }, [data]);
 
-  /** HOA expenses for the selected year. */
-  const hoaExpenses = useMemo(() => yearExpenses.filter(e => e.category === 'hoa'), [yearExpenses]);
-  const hoaTotal = useMemo(() => hoaExpenses.reduce((sum, e) => sum + e.amount, 0), [hoaExpenses]);
+  /** Per-category detail sections: each category with data gets its own collapsible section. */
+  const categoryDetails = useMemo(() => {
+    const grouped: Record<string, typeof yearExpenses> = {};
+    for (const e of yearExpenses) {
+      (grouped[e.category] ??= []).push(e);
+    }
+    return Object.entries(grouped)
+      .map(([category, expenses]) => ({
+        category,
+        label: expenseCategoryLabel(category),
+        expenses: expenses.sort((a, b) => b.date.localeCompare(a.date)),
+        total: expenses.reduce((sum, e) => sum + e.amount, 0),
+        count: expenses.length,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [yearExpenses]);
 
   const totalMonthlyRent = useMemo(() => {
     return activeLeases.reduce((sum, l) => sum + (l.monthlyRent || 0), 0);
@@ -496,50 +509,96 @@ export function PropertyProfile() {
             </CollapsibleSection>
           )}
 
-          {/* HOA Summary — collapsible */}
-          {hoaExpenses.length > 0 && (
-            <CollapsibleSection
-              title={`HOA Dues (${financialYear})`}
-              icon={<Home className="h-4 w-4 text-faint" />}
-              badge={formatCurrency(hoaTotal)}
-            >
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div>
-                  <p className="eyebrow mb-1">Annual Total</p>
-                  <p className="text-lg font-bold font-display text-danger tnum">{formatCurrency(hoaTotal)}</p>
+          {/* Per-category expense sections — auto-generated for every category with data */}
+          {categoryDetails.map(({ category, label, expenses, total, count }) => {
+            const Icon = expenseCategoryIcon(category);
+            const avg = total / count;
+            // Per-unit breakdown when this property has multiple units
+            const unitTotals = new Map<string, { label: string; total: number; count: number }>();
+            let propertyLevelTotal = 0;
+            let propertyLevelCount = 0;
+            for (const e of expenses) {
+              if (e.unitId && unitLabel.has(e.unitId)) {
+                const existing = unitTotals.get(e.unitId) || { label: unitLabel.get(e.unitId)!, total: 0, count: 0 };
+                existing.total += e.amount;
+                existing.count += 1;
+                unitTotals.set(e.unitId, existing);
+              } else {
+                propertyLevelTotal += e.amount;
+                propertyLevelCount += 1;
+              }
+            }
+            const showUnitBreakdown = unitTotals.size > 0 && units.length > 1;
+
+            return (
+              <CollapsibleSection
+                key={category}
+                title={`${label} (${financialYear})`}
+                icon={<Icon className="h-4 w-4 text-faint" />}
+                badge={formatCurrency(total)}
+              >
+                {/* Summary row */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <div>
+                    <p className="eyebrow mb-1">Total</p>
+                    <p className="text-lg font-bold font-display text-danger tnum">{formatCurrency(total)}</p>
+                  </div>
+                  <div>
+                    <p className="eyebrow mb-1">Average per Transaction</p>
+                    <p className="text-lg font-bold font-display text-ink tnum">{formatCurrency(avg)}</p>
+                    <p className="text-xs text-muted">{count} transaction{count !== 1 ? 's' : ''}</p>
+                  </div>
+                  {showUnitBreakdown && (
+                    <div>
+                      <p className="eyebrow mb-1">By Unit</p>
+                      <div className="space-y-1">
+                        {[...unitTotals.entries()].sort((a, b) => b[1].total - a[1].total).map(([uid, info]) => (
+                          <div key={uid} className="flex items-center justify-between text-sm">
+                            <span className="text-muted">{info.label}</span>
+                            <span className="tnum font-medium text-ink">{formatCurrency(info.total)}</span>
+                          </div>
+                        ))}
+                        {propertyLevelCount > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted">Property</span>
+                            <span className="tnum font-medium text-ink">{formatCurrency(propertyLevelTotal)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <p className="eyebrow mb-1">Monthly Average</p>
-                  <p className="text-lg font-bold font-display text-ink tnum">
-                    {formatCurrency(hoaTotal / (hoaExpenses.length > 0 ? hoaExpenses.length : 1))}
-                  </p>
-                  <p className="text-xs text-muted">{hoaExpenses.length} payment{hoaExpenses.length !== 1 ? 's' : ''}</p>
-                </div>
-              </div>
-              <div className="overflow-x-auto mt-2">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-line">
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {hoaExpenses.map(e => (
-                      <tr key={e.id} className="border-b border-line last:border-0">
-                        <td className="py-2 px-3">{formatDate(e.date)}</td>
-                        <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
-                        <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
-                        <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
+
+                {/* Transaction table */}
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line">
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
+                        {units.length > 1 && <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>}
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
+                        <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
+                        <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CollapsibleSection>
-          )}
+                    </thead>
+                    <tbody>
+                      {expenses.map(e => (
+                        <tr key={e.id} className="border-b border-line last:border-0">
+                          <td className="py-2 px-3">{formatDate(e.date)}</td>
+                          {units.length > 1 && (
+                            <td className="py-2 px-3 text-muted">{e.unitId ? unitLabel.get(e.unitId) || '—' : 'Property'}</td>
+                          )}
+                          <td className="py-2 px-3 text-muted">{e.description || '—'}</td>
+                          <td className="py-2 px-3 text-muted">{e.vendor || '—'}</td>
+                          <td className="py-2 px-3 text-right tnum">{formatCurrency(e.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CollapsibleSection>
+            );
+          })}
 
           {/* Capital Improvement History — collapsible */}
           {capitalProjects.length > 0 && (
