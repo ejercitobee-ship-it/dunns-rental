@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Hammer, Mail, Phone, Edit2, UserX, RotateCcw, Trash2 } from 'lucide-react';
+import { Plus, Wrench, Mail, Phone, Edit2, UserX, RotateCcw, Trash2 } from 'lucide-react';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
@@ -15,7 +15,8 @@ const inputClass =
 
 const emptyForm: HandymanInput = { name: '', companyName: '', phone: '', email: '', trades: [], isActive: true };
 
-/** The admin roster of handymen: add, edit trades, invite/resend, deactivate.
+/** The admin contractor roster: handymen, vendors, and any contractor who works
+ * on your properties. Portal access is optional (leave email blank for record keeping).
  * onCountChange lets a host (the Vendors tab) keep its count in sync. */
 export function HandymenManager({ onCountChange }: { onCountChange?: (n: number) => void } = {}) {
   const { showToast } = useToast();
@@ -34,7 +35,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
         setHandymen(list);
         onCountChange?.(list.length);
       })
-      .catch(() => showToast('Could not load handymen', 'error'))
+      .catch(() => showToast('Could not load contractor roster', 'error'))
       .finally(() => setLoading(false));
   };
 
@@ -70,7 +71,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
       handymenApi
         .update(editingId, form)
         .then(() => {
-          showToast('Handyman updated', 'success');
+          showToast('Contractor updated', 'success');
           setModalOpen(false);
           load();
         })
@@ -80,13 +81,13 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
       handymenApi
         .create(form)
         .then((res) => {
-          if (form.email && res.emailSent) showToast('Handyman added, invite emailed', 'success');
-          else if (form.email && res.inviteUrl) showToast('Handyman added. Mail is off, copy the invite link from the row.', 'info');
-          else showToast('Handyman added', 'success');
+          if (form.email && res.emailSent) showToast('Contractor added, invite emailed', 'success');
+          else if (form.email && res.inviteUrl) showToast('Contractor added. Mail is off, copy the invite link from the row.', 'info');
+          else showToast('Contractor added', 'success');
           setModalOpen(false);
           load();
         })
-        .catch((err) => showToast((err as Error).message || 'Could not add handyman', 'error'))
+        .catch((err) => showToast((err as Error).message || 'Could not add contractor', 'error'))
         .finally(done);
     }
   };
@@ -104,22 +105,22 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
   };
 
   const handleDeactivate = (h: Handyman) => {
-    if (h.isActive && !confirm(`Deactivate ${h.name}? They stop receiving jobs but their record stays.`)) return;
+    if (h.isActive && !confirm(`Deactivate ${h.name}? They stop receiving new jobs but their record stays.`)) return;
     handymenApi
       .update(h.id, { name: h.name, companyName: h.companyName, phone: h.phone, email: h.email, trades: h.trades, isActive: !h.isActive })
       .then(() => {
-        showToast(h.isActive ? 'Handyman deactivated' : 'Handyman reactivated', 'success');
+        showToast(h.isActive ? 'Contractor deactivated' : 'Contractor reactivated', 'success');
         load();
       })
       .catch((err) => showToast((err as Error).message || 'Could not update', 'error'));
   };
 
   const handleDelete = (h: Handyman) => {
-    if (!confirm(`Permanently remove ${h.name}? This deletes their record and login. Their past jobs stay but no longer show a handyman. This cannot be undone.`)) return;
+    if (!confirm(`Permanently remove ${h.name}? This deletes their record and login. Past jobs stay but will no longer show this contractor. This cannot be undone.`)) return;
     handymenApi
       .remove(h.id)
       .then(() => {
-        showToast('Handyman removed', 'success');
+        showToast('Contractor removed', 'success');
         load();
       })
       .catch((err) => showToast((err as Error).message || 'Could not remove', 'error'));
@@ -130,20 +131,20 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <Hammer className="h-4 w-4 text-faint" />
-            <h2 className="font-medium text-ink">Handymen</h2>
-            <span className="text-xs text-muted">roster who can take jobs</span>
+            <Wrench className="h-4 w-4 text-faint" />
+            <h2 className="font-medium text-ink">Contractor Roster</h2>
+            <span className="text-xs text-muted">handymen and vendors who work on your properties</span>
           </div>
           <Button variant="secondary" onClick={openNew}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Add handyman
+            Add contractor
           </Button>
         </div>
 
         {loading ? (
           <p className="text-sm text-muted py-4">Loading.</p>
         ) : handymen.length === 0 ? (
-          <p className="text-sm text-muted py-4">No handymen yet. Add one so tenant requests can be assigned.</p>
+          <p className="text-sm text-muted py-4">No contractors yet. Add your handymen and vendors so jobs can be assigned to them.</p>
         ) : (
           <div className="divide-y divide-line">
             {handymen.map((h) => (
@@ -222,7 +223,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
       <Modal
         isOpen={isModalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingId ? 'Edit handyman' : 'Add handyman'}
+        title={editingId ? 'Edit contractor' : 'Add contractor'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -264,14 +265,14 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="For their portal login"
+                placeholder="Optional. Enables portal login"
                 className={inputClass}
               />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Trades</label>
-            <p className="text-xs text-muted mb-2">They are offered jobs matching these. A General handyman is offered everything.</p>
+            <p className="text-xs text-muted mb-2">For job matching. Leave blank if adding for records only. General covers all categories.</p>
             <div className="flex flex-wrap gap-2">
               {MAINTENANCE_TRADES.map((t) => {
                 const on = form.trades.includes(t);
@@ -301,14 +302,17 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
             </label>
           )}
           {!editingId && form.email && (
-            <p className="text-xs text-muted">An invite to set their password will be emailed when you save.</p>
+            <p className="text-xs text-muted">An invite to set their password will be emailed when you save. Leave email blank to add for record keeping only.</p>
+          )}
+          {!editingId && !form.email && (
+            <p className="text-xs text-muted">No email means no portal access. You can add one later if they need to log in.</p>
           )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? 'Saving.' : editingId ? 'Save' : 'Add handyman'}
+              {saving ? 'Saving.' : editingId ? 'Save' : 'Add contractor'}
             </Button>
           </div>
         </form>
