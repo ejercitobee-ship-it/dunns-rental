@@ -78,7 +78,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                     updated_at = unixepoch()
               WHERE id = ?`
           ).bind(
-            JSON.stringify([uploaded.id]),
+            JSON.stringify([{ id: uploaded.id, name: file.name, contentType: file.type || 'application/octet-stream' }]),
             auth.name ?? auth.id,
             today,
             today,

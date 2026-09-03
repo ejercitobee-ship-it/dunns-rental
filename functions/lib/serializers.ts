@@ -252,6 +252,17 @@ function parseJsonArray<T>(value: unknown): T[] {
   }
 }
 
+/** Normalize invoice_drive_ids: handles both bare strings ["driveId"] and full objects [{id,name,contentType}]. */
+function parseInvoiceDriveIds(value: unknown): { id: string; name: string; contentType: string }[] {
+  const raw = parseJsonArray<string | { id: string; name: string; contentType: string }>(value);
+  return raw.map(item => {
+    if (typeof item === 'string') {
+      return { id: item, name: 'Invoice', contentType: 'image/jpeg' };
+    }
+    return item as { id: string; name: string; contentType: string };
+  });
+}
+
 export type AvailabilityWindow = { date: string; start: string; end: string };
 
 export function serializeMaintenance(r: Row) {
@@ -290,7 +301,7 @@ export function serializeMaintenance(r: Row) {
     invoiceMaterialAmount: r.invoice_material_amount ?? undefined,
     invoiceTotalAmount: r.invoice_total_amount ?? undefined,
     invoiceNotes: r.invoice_notes ?? undefined,
-    invoiceDriveIds: parseJsonArray<{ id: string; name: string; contentType: string }>(r.invoice_drive_ids),
+    invoiceDriveIds: parseInvoiceDriveIds(r.invoice_drive_ids),
     invoiceSubmittedAt: r.invoice_submitted_at ?? undefined,
     invoiceApprovedAt: r.invoice_approved_at ?? undefined,
     invoiceApprovedBy: r.invoice_approved_by ?? undefined,
