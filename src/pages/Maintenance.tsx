@@ -222,11 +222,14 @@ export function Maintenance() {
 
   const stats = useMemo(() => {
     const pendingApproval = maintenance.filter(m => m.needsApproval && m.status !== 'cancelled').length;
-    const invoicesSubmitted = maintenance.filter(m => m.status === 'invoice_submitted').length;
-    const inProgress = maintenance.filter(m => m.status === 'in_progress').length;
+    // "Invoices to review" counts jobs awaiting the handyman's invoice AND invoices already submitted for admin review.
+    const invoicesActionNeeded = maintenance.filter(m => m.status === 'approved_for_invoicing' || m.status === 'invoice_submitted').length;
+    // "In progress" counts all active work statuses before the invoice phase.
+    const activeStatuses = new Set<string>(['submitted', 'assigned', 'scheduled', 'in_progress', 'completed']);
+    const inProgress = maintenance.filter(m => activeStatuses.has(m.status) && !m.needsApproval).length;
     const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'invoice_approved' && m.status !== 'cancelled').length;
     const spend = maintenance.filter(m => m.status === 'paid' || m.status === 'invoice_approved').reduce((s, m) => s + (m.cost || 0), 0);
-    return { pendingApproval, invoicesSubmitted, inProgress, urgent, spend };
+    return { pendingApproval, invoicesActionNeeded, inProgress, urgent, spend };
   }, [maintenance]);
 
   const filtered = useMemo(() => {
@@ -414,7 +417,7 @@ export function Maintenance() {
 
   const statCards = [
     { label: 'Pending approval', value: stats.pendingApproval, icon: <Clock /> },
-    { label: 'Invoices to review', value: stats.invoicesSubmitted, icon: <FileText /> },
+    { label: 'Invoices to review', value: stats.invoicesActionNeeded, icon: <FileText /> },
     { label: 'In progress', value: stats.inProgress, icon: <Wrench /> },
     { label: 'Urgent', value: stats.urgent, icon: <AlertTriangle /> },
   ];

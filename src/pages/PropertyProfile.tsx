@@ -11,6 +11,7 @@ import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { expenseCategoryLabel } from '../lib/financials';
+import { STATUS_LABEL, STATUS_BADGE } from '../lib/maintenance';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { propertiesApi, capitalProjectsApi, appliancesApi } from '../lib/api';
 import { HardHat } from 'lucide-react';
@@ -93,14 +94,8 @@ function CollapsibleSection({ title, icon, badge, defaultOpen = false, children 
 }
 type Tab = typeof tabs[number];
 
-const maintenanceStatusBadge: Record<string, 'success' | 'warning' | 'secondary' | 'destructive'> = {
-  completed: 'success',
-  in_progress: 'warning',
-  scheduled: 'warning',
-  assigned: 'secondary',
-  submitted: 'destructive',
-  paid: 'success',
-};
+/** Map the maintenance.ts badge variant names to the Badge component variant set. */
+const maintenanceStatusBadge: Record<string, 'success' | 'warning' | 'secondary' | 'destructive' | 'default'> = STATUS_BADGE;
 
 const utilityIcons: Record<string, typeof Zap> = {
   electric: Zap,
@@ -830,7 +825,7 @@ export function PropertyProfile() {
                         <td className="py-2 px-3 text-muted">{m.handymanName || '—'}</td>
                         <td className="py-2 px-3">
                           <Badge variant={maintenanceStatusBadge[m.status] || 'secondary'}>
-                            {m.status.replace(/_/g, ' ')}
+                            {STATUS_LABEL[m.status as keyof typeof STATUS_LABEL] || m.status.replace(/_/g, ' ')}
                           </Badge>
                         </td>
                         <td className="py-2 px-3 text-right tnum">
