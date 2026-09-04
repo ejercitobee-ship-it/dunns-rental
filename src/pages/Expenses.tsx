@@ -34,7 +34,14 @@ import {
   Cell,
 } from 'recharts';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+const COLORS = [
+  '#24503f', '#2c7a58', '#97671c', '#b98a5e', '#7e8b83',
+  '#5a7d6c', '#a23429', '#c2a878', '#4a7c6b', '#d4a853',
+  '#8b5e3c', '#6b8f7f', '#c17832', '#3d6b54', '#9a7b5a',
+];
+
+/** Threshold below which pie slices are grouped into "Other". */
+const PIE_OTHER_THRESHOLD = 0.03;
 
 /** Whether a stored ISO date falls in a given month and year. */
 function isInMonth(dateStr: string, month: number, year: number): boolean {
@@ -281,9 +288,19 @@ export function Expenses() {
     expenses.forEach(e => {
       categories[e.category] = (categories[e.category] || 0) + e.amount;
     });
-    return Object.entries(categories)
+    const all = Object.entries(categories)
       .map(([name, value]) => ({ name: expenseCategoryLabel(name), value }))
       .sort((a, b) => b.value - a.value);
+    const total = all.reduce((s, d) => s + d.value, 0);
+    if (total === 0) return all;
+    const major: typeof all = [];
+    let otherSum = 0;
+    for (const d of all) {
+      if (d.value / total < PIE_OTHER_THRESHOLD) otherSum += d.value;
+      else major.push(d);
+    }
+    if (otherSum > 0) major.push({ name: 'Other', value: otherSum });
+    return major;
   }, [expenses]);
 
   // Every month of the current year. This used to stop at May because the list
@@ -609,8 +626,8 @@ export function Expenses() {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Bar dataKey="income" fill="#10b981" name="Income" />
-                <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
+                <Bar dataKey="income" fill="#2c7a58" name="Income" />
+                <Bar dataKey="expenses" fill="#b98a5e" name="Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -621,23 +638,48 @@ export function Expenses() {
             <CardTitle>Expenses by Category</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={expenseByCategory}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  dataKey="value"
-                  label={({ percent }) => `${((percent || 0) * 100).toFixed(0)}%`}
-                >
-                  {expenseByCategory.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-              </PieChart>
-            </ResponsiveContainer>
+            {(() => {
+              const total = expenseByCategory.reduce((s, d) => s + d.value, 0);
+              return (
+                <div className="flex flex-col items-center gap-4">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={expenseByCategory}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={100}
+                        paddingAngle={1}
+                        dataKey="value"
+                        label={false}
+                      >
+                        {expenseByCategory.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    {expenseByCategory.map((d, i) => {
+                      const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : '0';
+                      return (
+                        <div key={d.name} className="flex items-center gap-2 py-1 min-w-0">
+                          <span
+                            className="w-3 h-3 rounded-sm flex-shrink-0"
+                            style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                          />
+                          <span className="truncate text-muted flex-1">{d.name}</span>
+                          <span className="font-medium tnum text-ink whitespace-nowrap">{pct}%</span>
+                          <span className="text-muted tnum whitespace-nowrap">{formatCurrency(d.value)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
