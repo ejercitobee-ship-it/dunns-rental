@@ -39,7 +39,14 @@ import {
   Legend,
 } from 'recharts';
 
-const COLORS = ['#24503f', '#2c7a58', '#97671c', '#b98a5e', '#7e8b83', '#5a7d6c', '#a23429', '#c2a878'];
+const COLORS = [
+  '#24503f', '#2c7a58', '#97671c', '#b98a5e', '#7e8b83',
+  '#5a7d6c', '#a23429', '#c2a878', '#4a7c6b', '#d4a853',
+  '#8b5e3c', '#6b8f7f', '#c17832', '#3d6b54', '#9a7b5a',
+];
+
+/** Threshold below which pie slices are grouped into "Other". */
+const PIE_OTHER_THRESHOLD = 0.03;
 
 // IRS 1099-NEC threshold: vendors paid ≥$600 in a calendar year need a 1099.
 const VENDOR_1099_THRESHOLD = 600;
@@ -426,9 +433,20 @@ export function TaxReport() {
   const compLabel = periodLabel(scope, cYear, cQuarter, cMonth);
 
   const expenseChartData = useMemo(() => {
-    return Object.entries(main.expensesByCategory)
+    const all = Object.entries(main.expensesByCategory)
       .map(([key, value]) => ({ name: TAX_CATEGORIES[key]?.label || key, value }))
       .sort((a, b) => b.value - a.value);
+    const total = all.reduce((s, d) => s + d.value, 0);
+    if (total === 0) return all;
+    // Group slices below the threshold into "Other" so the chart stays readable.
+    const major: typeof all = [];
+    let otherSum = 0;
+    for (const d of all) {
+      if (d.value / total < PIE_OTHER_THRESHOLD) otherSum += d.value;
+      else major.push(d);
+    }
+    if (otherSum > 0) major.push({ name: 'Other', value: otherSum });
+    return major;
   }, [main.expensesByCategory]);
 
   // ── Estimated tax liability (configurable rates, persisted in localStorage) ──
@@ -888,23 +906,48 @@ export function TaxReport() {
             <CardTitle>Expenses by Category</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={expenseChartData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
-                >
-                  {expenseChartData.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-              </PieChart>
-            </ResponsiveContainer>
+            {(() => {
+              const total = expenseChartData.reduce((s, d) => s + d.value, 0);
+              return (
+                <div className="flex flex-col items-center gap-4">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={expenseChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={100}
+                        paddingAngle={1}
+                        dataKey="value"
+                        label={false}
+                      >
+                        {expenseChartData.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    {expenseChartData.map((d, i) => {
+                      const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : '0';
+                      return (
+                        <div key={d.name} className="flex items-center gap-2 py-1 min-w-0">
+                          <span
+                            className="w-3 h-3 rounded-sm flex-shrink-0"
+                            style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                          />
+                          <span className="truncate text-muted flex-1">{d.name}</span>
+                          <span className="font-medium tnum text-ink whitespace-nowrap">{pct}%</span>
+                          <span className="text-muted tnum whitespace-nowrap">{formatCurrency(d.value)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
