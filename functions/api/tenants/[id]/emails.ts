@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { sendEmail, officeTenantEmail } from '../../../lib/email';
+import { logActivityStmt } from '../../../lib/activity';
 
 const MAX_SUBJECT = 200;
 const MAX_BODY = 8000;
@@ -59,10 +60,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const delivered = await sendEmail(env, { to: tenant.email, subject, html, text });
 
     const rowId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO tenant_emails (id, tenant_id, sent_by_user_id, to_email, subject, body, delivered)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(rowId, id, auth.id, tenant.email, subject, body, delivered ? 1 : 0).run();
+    const tenantName = `${tenant.first_name} ${tenant.last_name}`.trim();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO tenant_emails (id, tenant_id, sent_by_user_id, to_email, subject, body, delivered)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(rowId, id, auth.id, tenant.email, subject, body, delivered ? 1 : 0),
+      logActivityStmt(env.DB, auth, {
+        action: 'email_sent',
+        module: 'tenants',
+        description: `Emailed ${tenantName}: "${subject}"${delivered ? '' : ' (delivery failed)'}`,
+        targetType: 'tenant',
+        targetId: id,
+        targetName: tenantName,
+        tenantId: id,
+        newValues: { to: tenant.email, subject, delivered },
+      }),
+    ]);
 
     if (!delivered) {
       return jsonError('The email could not be sent (check the email service). It was saved to the log as not delivered.', 502);
