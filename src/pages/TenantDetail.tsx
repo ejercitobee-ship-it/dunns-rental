@@ -424,12 +424,9 @@ export function TenantDetail() {
     }
     setSendingBalanceNotice(true);
     try {
-      const firstName = tenant.firstName || 'Tenant';
       const lines = owed.months.map(m => `  ${formatMonthYear(m.month, m.year)}: ${formatCurrency(m.amount)}`);
       const subject = `Balance Notice: ${formatCurrency(owed.total)} Outstanding`;
       const body = [
-        `Dear ${firstName},`,
-        '',
         `This is a courtesy notice that our records show an outstanding balance of ${formatCurrency(owed.total)} on your account.`,
         '',
         'Here is the breakdown:',
@@ -440,9 +437,6 @@ export function TenantDetail() {
         'Please arrange payment at your earliest convenience. If you have already made this payment, please disregard this notice.',
         '',
         'If you have any questions or would like to discuss a payment arrangement, please contact our office.',
-        '',
-        'Thank you,',
-        'MH Dunn Property',
       ].join('\n');
       await tenantsApi.sendEmail(id, subject, body);
       showToast(`Balance notice sent to ${tenant.email}`, 'success');
