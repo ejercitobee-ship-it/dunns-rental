@@ -414,6 +414,45 @@ export function TenantDetail() {
   const [terminating, setTerminating] = useState(false);
   const [termForm, setTermForm] = useState({ date: todayLocalDate(), reason: '' });
 
+  // Send balance notice email to the tenant.
+  const [sendingBalanceNotice, setSendingBalanceNotice] = useState(false);
+  const sendBalanceNotice = async () => {
+    if (!tenant || !id || owed.months.length === 0 || sendingBalanceNotice) return;
+    if (!tenant.email) {
+      showToast('This tenant has no email address on file.', 'error');
+      return;
+    }
+    setSendingBalanceNotice(true);
+    try {
+      const firstName = tenant.firstName || 'Tenant';
+      const lines = owed.months.map(m => `  ${formatMonthYear(m.month, m.year)}: ${formatCurrency(m.amount)}`);
+      const subject = `Balance Notice: ${formatCurrency(owed.total)} Outstanding`;
+      const body = [
+        `Dear ${firstName},`,
+        '',
+        `This is a courtesy notice that our records show an outstanding balance of ${formatCurrency(owed.total)} on your account.`,
+        '',
+        'Here is the breakdown:',
+        ...lines,
+        '',
+        `Total: ${formatCurrency(owed.total)}`,
+        '',
+        'Please arrange payment at your earliest convenience. If you have already made this payment, please disregard this notice.',
+        '',
+        'If you have any questions or would like to discuss a payment arrangement, please contact our office.',
+        '',
+        'Thank you,',
+        'MH Dunn Property',
+      ].join('\n');
+      await tenantsApi.sendEmail(id, subject, body);
+      showToast(`Balance notice sent to ${tenant.email}`, 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not send balance notice', 'error');
+    } finally {
+      setSendingBalanceNotice(false);
+    }
+  };
+
   const [leaseGenOpen, setLeaseGenOpen] = useState(false);
   const [generatingLease, setGeneratingLease] = useState(false);
   const openRenewalModal = () => {
@@ -1142,7 +1181,20 @@ export function TenantDetail() {
                 </span>
               ))}
             </div>
-            <p className="text-sm text-muted mt-2">The full record is in Payment History below.</p>
+            <div className="flex items-center gap-3 mt-3">
+              <p className="text-sm text-muted">The full record is in Payment History below.</p>
+              {tenant?.email && (
+                <button
+                  type="button"
+                  disabled={sendingBalanceNotice}
+                  onClick={sendBalanceNotice}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-surface border border-line text-ink hover:bg-canvas transition-colors disabled:opacity-50 whitespace-nowrap flex-shrink-0"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  {sendingBalanceNotice ? 'Sending...' : 'Send Balance Notice'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
