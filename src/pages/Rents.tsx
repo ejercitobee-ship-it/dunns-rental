@@ -939,6 +939,83 @@ export function Rents() {
     a.click();
   };
 
+  // "Export overdue": the delinquency report. One row per tenant who still owes
+  // money for an already-started month of the selected year, biggest balance
+  // first. Unlike exportToCSV (every lease-month row, paid or not), this is
+  // just who owes — how much, how far behind, and how to reach them — so it
+  // drops straight into a collections follow-up. Reads tenantGroups, so it
+  // honors the search box and the merged renewal chains exactly like the list.
+  const exportDelinquentToCSV = () => {
+    const year = parseInt(yearFilter, 10);
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth() + 1;
+    // Which months of the selected year have already started (and so can be
+    // overdue): all of a past year, none of a future one, month-to-date for the
+    // current year. Mirrors groupLeaseMonthRows' "elapsed" rule so a month not
+    // yet due is never counted against a tenant.
+    const elapsedThrough = year < todayYear ? 12 : year > todayYear ? 0 : todayMonth;
+
+    interface DelinquentRow {
+      property: string; unit: string; occupants: string;
+      phone: string; email: string;
+      monthsBehind: number; oldestUnpaid: string; totalOwed: number;
+    }
+    const rows: DelinquentRow[] = [];
+
+    for (const group of tenantGroups) {
+      let totalOwed = 0;
+      let monthsBehind = 0;
+      let oldest: LeaseMonthRow | null = null;
+      for (const mr of group.monthRows) {
+        if (mr.month > elapsedThrough) continue;        // not due yet
+        if (mr.settlement.balance <= 0.005) continue;   // settled
+        totalOwed = Math.round((totalOwed + mr.settlement.balance) * 100) / 100;
+        monthsBehind += 1;
+        if (!oldest || mr.month < oldest.month) oldest = mr;
+      }
+      if (totalOwed <= 0.005) continue;                 // paid up — not delinquent
+
+      const head = group.monthRows[0];
+      const occupants = head?.occupants ?? [];
+      rows.push({
+        property: head?.property?.name || '',
+        unit: head?.unit?.unitNumber || '',
+        occupants: occupants.map(t => `${t.firstName} ${t.lastName}`).join(', '),
+        phone: occupants.map(t => t.phone).filter(Boolean).join(', '),
+        email: occupants.map(t => t.email).filter(Boolean).join(', '),
+        monthsBehind,
+        oldestUnpaid: oldest ? formatMonthYear(oldest.month, oldest.year) : '',
+        totalOwed,
+      });
+    }
+
+    if (rows.length === 0) {
+      showToast(`No tenants owe rent for ${yearFilter}.`, 'success');
+      return;
+    }
+
+    // Biggest balance first — the order the office wants to work the list in.
+    rows.sort((a, b) => b.totalOwed - a.totalOwed);
+
+    const headers = ['Property', 'Unit', 'Occupants', 'Phone', 'Email', 'Months Behind', 'Oldest Unpaid', 'Total Owed'];
+    const csv = [
+      headers.join(','),
+      ...rows.map(r => [
+        r.property, r.unit, r.occupants, r.phone, r.email,
+        r.monthsBehind, r.oldestUnpaid, r.totalOwed,
+      ].map(csvField).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `delinquent-tenants-${yearFilter}.csv`;
+    a.click();
+    showToast(`Exported ${rows.length} tenant${rows.length === 1 ? '' : 's'} who owe rent.`, 'success');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -954,6 +1031,10 @@ export function Rents() {
           <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
             Export
+          </Button>
+          <Button variant="outline" onClick={exportDelinquentToCSV} className="w-full sm:w-auto">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Export overdue
           </Button>
         </div>
       </div>
