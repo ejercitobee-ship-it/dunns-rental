@@ -455,6 +455,10 @@ export interface DashboardStats {
   totalOwed: number;
   occupancyRate: number;
   projectedYearlyIncome?: number;
+  /** Rent lost from vacant units this month. */
+  vacancyLossThisMonth: number;
+  /** Rent lost from vacant units year to date. */
+  vacancyLossYTD: number;
 }
 
 export type ViewType = 'dashboard' | 'properties' | 'tenants' | 'rents' | 'expenses' | 'income';

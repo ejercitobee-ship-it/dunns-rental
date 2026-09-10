@@ -9,7 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { rentIncomeForMonths } from '../lib/rent';
+import { rentIncomeForMonths, vacancyLossForYear } from '../lib/rent';
 import { capitalProjectsApi, calendarApi, settingsApi } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
@@ -145,7 +145,7 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
 import { mapToTaxCategory, isCapitalExpense } from '../lib/financials';
 
 export function TaxReport() {
-  const { expenses, incomes, properties, rentPayments, leases } = useApp();
+  const { expenses, incomes, properties, units, rentPayments, leases } = useApp();
   const { showToast } = useToast();
   const now = new Date();
   // Main period.
@@ -457,9 +457,15 @@ export function TaxReport() {
     });
     const scheduleETotals = buildScheduleETotals(scheduleEPerProperty);
 
-    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent, vendors1099, scheduleEPerProperty, scheduleETotals };
+    // Vacancy loss: potential rent from units with no active lease.
+    const throughMonth = months[months.length - 1] ?? 12;
+    const vacancyData = vacancyLossForYear(units, leases, y, throughMonth);
+    const vacancyLoss = vacancyData.total;
+    const grossPotentialRent = rentIncome + vacancyLoss;
+
+    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent, vendors1099, scheduleEPerProperty, scheduleETotals, vacancyLoss, grossPotentialRent };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, incomes, properties, rentPayments, leases, capitalProjects]);
+  }, [expenses, incomes, properties, units, rentPayments, leases, capitalProjects]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
   const comp = useMemo(() => (compare ? periodData(cYear, monthsFor(scope, cQuarter, cMonth)) : null), [compare, periodData, cYear, scope, cQuarter, cMonth]);
@@ -569,6 +575,8 @@ export function TaxReport() {
       depreciation: main.depreciation,
       depreciationSchedule: main.depreciationSchedule,
       mortgage: { interestDeducted: main.mortgageInterestDeducted, principalExcluded: main.mortgagePrincipalExcluded, entriesNeedingSplit: main.mortgageNeedsSplit },
+      vacancyLoss: main.vacancyLoss,
+      grossPotentialRent: main.grossPotentialRent,
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
@@ -880,6 +888,7 @@ export function TaxReport() {
                     ['  Capital Improvements', main.capitalExpenses, comp.capitalExpenses, false],
                     ['  Depreciation', main.depreciation, comp.depreciation, false],
                     ['Net income', main.netIncome, comp.netIncome, true],
+                    ['Vacancy loss', main.vacancyLoss, comp.vacancyLoss, false],
                   ] as [string, number, number, boolean][]).map(([label, a, b, higherIsGood]) => {
                     const diff = Math.round((a - b) * 100) / 100;
                     const pct = b !== 0 ? (diff / Math.abs(b)) * 100 : (a !== 0 ? 100 : 0);
@@ -1086,6 +1095,24 @@ export function TaxReport() {
               <span className="font-bold">Taxable Income</span>
               <span className="font-bold text-positive tnum">{formatCurrency(main.totalIncome)}</span>
             </div>
+            {main.vacancyLoss > 0 && (
+              <div className="flex justify-between items-center py-2 border-t border-line px-2 -mx-2">
+                <span className="text-sm text-amber-700">
+                  Vacancy loss
+                  <span className="block text-xs text-muted">Potential rent from vacant units (not a tax line item, for your records).</span>
+                </span>
+                <span className="text-sm font-medium text-amber-700 tnum">{formatCurrency(main.vacancyLoss)}</span>
+              </div>
+            )}
+            {main.vacancyLoss > 0 && (
+              <div className="flex justify-between items-center py-2 border-b border-line px-2 -mx-2">
+                <span className="text-sm text-muted">
+                  Gross potential rent
+                  <span className="block text-xs text-muted">Collected rent + vacancy loss.</span>
+                </span>
+                <span className="text-sm text-muted tnum">{formatCurrency(main.grossPotentialRent)}</span>
+              </div>
+            )}
             {main.depositsReceived > 0 && (
               <button
                 className="flex justify-between items-center py-2 border-t border-line w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"

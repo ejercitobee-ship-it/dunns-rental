@@ -4,7 +4,7 @@
 // Task 6 moves Lease and RentPayment into src/types and this file imports them
 // instead of declaring them.
 
-import type { Lease, RentPayment } from '../types';
+import type { Lease, RentPayment, Unit } from '../types';
 export type { Lease, RentPayment };
 
 export interface MonthSettlement {
@@ -542,4 +542,70 @@ export function rentMonthsToShow(
     if (ym <= nowYM || paidYMs.has(ym)) out.push({ month, year });
   }
   return out;
+}
+
+// ── Vacancy loss ─────────────────────────────────────────────────────────────
+
+export interface VacantUnitMonth {
+  unit: Unit;
+  month: number;
+  year: number;
+  /** The asking rent that was lost for this month. */
+  loss: number;
+  /** True when a lease exists that starts after this month (unit is spoken for
+   *  but not yet generating rent, so it should NOT be listed for new tenants). */
+  hasFutureLease: boolean;
+  /** The earliest future lease start date, when applicable. */
+  futureLeaseStart?: string;
+}
+
+/**
+ * For each unit, for each elapsed month in the given year, check whether any
+ * lease covers it. If no lease covers a unit-month, the unit was vacant and
+ * the loss equals the unit's asking rent (monthlyRent).
+ *
+ * Only counts months up to `throughMonth` (inclusive), so mid-year calls don't
+ * project future vacancy. Units with $0 asking rent are skipped (no loss).
+ */
+export function vacancyLossForYear(
+  units: Unit[],
+  leases: Lease[],
+  year: number,
+  throughMonth: number
+): { total: number; thisMonth: number; items: VacantUnitMonth[] } {
+  const items: VacantUnitMonth[] = [];
+  let total = 0;
+  let thisMonth = 0;
+
+  for (const unit of units) {
+    if (unit.monthlyRent <= 0) continue;
+    // All leases that ever touched this unit.
+    const unitLeases = leases.filter(l => l.unitId === unit.id);
+
+    for (let month = 1; month <= throughMonth; month++) {
+      // A unit is vacant this month if no lease covers it.
+      const covered = unitLeases.some(l => leaseCoversMonth(l, month, year));
+      if (!covered) {
+        const loss = unit.monthlyRent;
+        // Check for a future lease: any non-ended, non-review lease whose
+        // start date falls after this month. That unit is spoken for (not
+        // available for new listings) even though it is losing rent now.
+        const target = year * 12 + month;
+        const futureLease = unitLeases
+          .filter(l => l.status !== 'ended' && !l.needsReview
+            && l.renewalStatus !== 'pending' && l.renewalStatus !== 'rejected'
+            && l.renewalStatus !== 'draft' && l.renewalStatus !== 'cancelled')
+          .find(l => l.startDate && yearMonthOf(l.startDate) > target);
+        items.push({
+          unit, month, year, loss,
+          hasFutureLease: !!futureLease,
+          futureLeaseStart: futureLease?.startDate,
+        });
+        total += loss;
+        if (month === throughMonth) thisMonth += loss;
+      }
+    }
+  }
+
+  return { total, thisMonth, items };
 }

@@ -14,7 +14,7 @@ import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
 import { calendarApi, depositReturnsApi } from '../lib/api';
-import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd, vacancyLossForYear, leaseCoversMonth } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { DashboardStats, Expense, Unit, CalendarEvent, DepositReturn } from '../types';
 import {
@@ -156,6 +156,9 @@ export function Dashboard() {
 
     const projectedYearlyIncome = monthlyRevenue(leases) * 12;
 
+    // Vacancy loss: rent lost from units with no active lease.
+    const vacancy = vacancyLossForYear(units, leases, currentYear, currentMonth);
+
     return {
       totalProperties,
       totalUnits,
@@ -167,6 +170,8 @@ export function Dashboard() {
       totalOwed,
       occupancyRate: totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0,
       projectedYearlyIncome,
+      vacancyLossThisMonth: vacancy.thisMonth,
+      vacancyLossYTD: vacancy.total,
     };
   }, [properties, units, leases, expenses, incomes, rentPayments, getUnitLease]);
 
@@ -290,10 +295,40 @@ export function Dashboard() {
       .sort((a, b) => a.days - b.days);
   }, [leases, properties, units, getLeaseTenants]);
 
-  // Vacant units (no lease, not under maintenance).
+  // Vacant units: no lease covers the current month (even if a future lease
+  // exists). Units under maintenance are excluded from the listing concern but
+  // vacancy loss still counted them above.
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+
   const vacantUnits = useMemo(() => {
-    return units.filter(u => u.status !== 'maintenance' && !getUnitLease(u.id));
-  }, [units, getUnitLease]);
+    return units
+      .filter(u => u.status !== 'maintenance')
+      .filter(u => {
+        const unitLeases = leases.filter(l => l.unitId === u.id);
+        return !unitLeases.some(l => leaseCoversMonth(l, currentMonth, currentYear));
+      });
+  }, [units, leases, currentMonth, currentYear]);
+
+  /** Units that are vacant now but have a lease starting in the future (not
+   *  available for new listings). */
+  const futureLeaseUnitIds = useMemo(() => {
+    const ids = new Set<string>();
+    const target = currentYear * 12 + currentMonth;
+    for (const u of vacantUnits) {
+      const hasUpcoming = leases.some(l =>
+        l.unitId === u.id && l.status !== 'ended' && !l.needsReview
+        && l.renewalStatus !== 'pending' && l.renewalStatus !== 'rejected'
+        && l.renewalStatus !== 'draft' && l.renewalStatus !== 'cancelled'
+        && l.startDate && (() => {
+          const [y, m] = l.startDate!.split('-').map(Number);
+          return y * 12 + m > target;
+        })()
+      );
+      if (hasUpcoming) ids.add(u.id);
+    }
+    return ids;
+  }, [vacantUnits, leases, currentMonth, currentYear]);
 
   const vacantByProperty = useMemo(() => {
     const groups = new Map<string, { key: string; name: string; units: Unit[] }>();
@@ -456,6 +491,40 @@ export function Dashboard() {
         <ContextCard icon={<Users />} label="Active tenants" value={stats.totalTenants} onClick={() => navigate('/tenants')} />
         <ContextCard icon={<BarChart3 />} label="Occupancy" value={`${stats.occupancyRate.toFixed(0)}%`} onClick={() => navigate('/properties')} />
       </div>
+
+      {/* Vacancy loss banner: only visible when there is vacancy */}
+      {(stats.vacancyLossThisMonth > 0 || stats.vacancyLossYTD > 0) && (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+            <div className="flex items-center gap-2.5 flex-shrink-0">
+              <span className="w-[34px] h-[34px] rounded-[10px] bg-amber-100 text-amber-600 grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                <AlertTriangle />
+              </span>
+              <span className="text-sm font-medium text-ink">Vacancy loss</span>
+            </div>
+            <div className="flex items-center gap-6 flex-1">
+              {stats.vacancyLossThisMonth > 0 && (
+                <div>
+                  <p className="eyebrow !text-[10px] text-amber-700">This month</p>
+                  <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossThisMonth)}</p>
+                </div>
+              )}
+              <div>
+                <p className="eyebrow !text-[10px] text-amber-700">Year to date</p>
+                <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossYTD)}</p>
+              </div>
+              <div className="text-xs text-amber-700 ml-auto hidden sm:block text-right">
+                <p>{vacantUnits.length} vacant {vacantUnits.length === 1 ? 'unit' : 'units'} at asking rent</p>
+                {futureLeaseUnitIds.size > 0 && (
+                  <p className="text-amber-600 mt-0.5">
+                    {futureLeaseUnitIds.size} leased (not available) · {vacantUnits.length - futureLeaseUnitIds.size} available
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* ================================================================
           ZONE 2: TRENDS
@@ -831,6 +900,11 @@ export function Dashboard() {
                           >
                             <Home className="h-4 w-4 text-faint flex-shrink-0" />
                             <span className="text-sm text-ink w-24 sm:w-32 flex-shrink-0 truncate">Unit {unit.unitNumber}</span>
+                            {futureLeaseUnitIds.has(unit.id) ? (
+                              <Badge variant="default" className="text-[10px] flex-shrink-0">Leased</Badge>
+                            ) : (
+                              <Badge variant="warning" className="text-[10px] flex-shrink-0">Available</Badge>
+                            )}
                             <span className="text-sm text-muted flex-1">{unit.bedrooms} bd · {unit.bathrooms} ba</span>
                             <span className="text-sm font-semibold text-primary tnum">
                               {formatCurrency(unit.monthlyRent)}<span className="text-xs text-faint font-normal">/mo</span>
