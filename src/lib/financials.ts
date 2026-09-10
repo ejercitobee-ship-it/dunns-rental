@@ -23,7 +23,7 @@ import {
   Briefcase, MoreHorizontal, Users, Snowflake, Bug, HardHat, Building2,
   Sofa, RefreshCw, Hammer, AlertTriangle, Lightbulb,
   Monitor, FileText, Megaphone, Calculator, Scale, UserCog,
-  CreditCard, FolderCog, type LucideIcon,
+  CreditCard, FolderCog, Package, type LucideIcon,
 } from 'lucide-react';
 import { yearOf, monthOf } from './utils';
 
@@ -59,6 +59,7 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, CategoryMeta> = {
   maintenance:            { label: 'Maintenance',            icon: Wrench,        tier: 'property', taxCategory: 'cleaning_maintenance' },
   cleaning:               { label: 'Cleaning',               icon: Paintbrush,    tier: 'property', taxCategory: 'cleaning_maintenance' },
   common_area:            { label: 'Common Area',            icon: Building2,     tier: 'property', taxCategory: 'cleaning_maintenance' },
+  supplies:               { label: 'Supplies',               icon: Package,       tier: 'property', taxCategory: 'supplies' },
   property_improvements:  { label: 'Property Improvements',  icon: Lightbulb,     tier: 'property', taxCategory: 'depreciation' },
 
   // ── Unit-level ──────────────────────────────────────────────────────
@@ -134,7 +135,7 @@ export const ALWAYS_OPERATING_CATEGORIES = new Set<string>([
   'landscaping', 'snow_removal', 'pest_control', 'cleaning',
   'software', 'office_expenses', 'marketing', 'accounting', 'legal',
   'payroll', 'administrative', 'banking_fees', 'other_business',
-  'management', 'realtor_commission', 'common_area',
+  'management', 'realtor_commission', 'common_area', 'supplies',
 ]);
 
 /**

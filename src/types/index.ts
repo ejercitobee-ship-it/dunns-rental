@@ -271,7 +271,8 @@ export type PropertyExpenseCategory =
   | 'maintenance'
   | 'cleaning'
   | 'common_area'
-  | 'property_improvements';
+  | 'property_improvements'
+  | 'supplies';
 
 /** Unit-level expense categories. */
 export type UnitExpenseCategory =
