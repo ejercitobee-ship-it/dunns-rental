@@ -5,6 +5,13 @@ import { syncRentSheet } from '../../lib/sheets';
 import { generateReceipt } from '../../lib/receipts';
 import { logActivityStmt } from '../../lib/activity';
 
+/** Resolve a lease's property_id and unit_id for income records. */
+async function leaseContext(env: Env, leaseId: string) {
+  return env.DB.prepare('SELECT property_id, unit_id FROM leases WHERE id = ?')
+    .bind(leaseId)
+    .first<{ property_id: string | null; unit_id: string | null }>();
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requirePermission(env, request, 'rents_view');
@@ -104,6 +111,44 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       );
     }
 
+    // If a late fee was requested, add an income record in the same batch.
+    let lateFeeId: string | null = null;
+    const lf = body.lateFee as { amount?: number; tenantId?: string } | undefined;
+    if (lf && typeof lf.amount === 'number' && lf.amount > 0) {
+      lateFeeId = crypto.randomUUID();
+      const ctx = await leaseContext(env, body.leaseId as string);
+      const lateFeeDate = (body.receivedDate ?? body.paidDate ?? new Date().toISOString().slice(0, 10)) as string;
+      const mo = body.month as number;
+      const yr = body.year as number;
+      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO incomes (id, property_id, unit_id, tenant_id, source, amount, date, description, payment_method, related_payment_id, user_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          lateFeeId,
+          ctx?.property_id ?? null,
+          ctx?.unit_id ?? null,
+          lf.tenantId ?? body.paidByTenantId ?? null,
+          'late_fee',
+          lf.amount,
+          lateFeeDate,
+          `Late fee for ${MONTHS[mo - 1]} ${yr} rent`,
+          body.paymentMethod ?? null,
+          id,
+          auth.id
+        ),
+        logActivityStmt(env.DB, auth, {
+          module: 'finances',
+          action: 'Assessed a late fee',
+          targetType: 'income',
+          targetId: lateFeeId,
+          description: `$${lf.amount} late fee for ${mo}/${yr}`,
+          newValues: { amount: lf.amount, month: mo, year: yr, relatedPaymentId: id },
+        })
+      );
+    }
+
     await env.DB.batch(stmts);
 
     const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
@@ -120,7 +165,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         context.waitUntil(generateReceipt(env, id, auth.id).catch(() => {}));
       }
     }
-    return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>) }, 201);
+    return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>), lateFeeId }, 201);
   } catch {
     return serverError();
   }

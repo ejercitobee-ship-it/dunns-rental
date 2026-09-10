@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
   Search, Download, Upload,
   TrendingUp, TrendingDown, FileText, ChevronRight, ChevronDown,
-  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2, Edit2,
+  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2, Edit2, AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -12,7 +12,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi, leasesApi, tenantsApi } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi, tenantsApi, settingsApi, incomesApi, type AppSettings } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -143,6 +143,14 @@ export function Rents() {
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
   const [creditAmount, setCreditAmount] = useState('');
+
+  // Late fee state: loaded from Settings, toggled per payment.
+  const [rentSettings, setRentSettings] = useState<AppSettings['rent'] | null>(null);
+  useEffect(() => {
+    settingsApi.get().then(s => setRentSettings(s.rent)).catch(() => {});
+  }, []);
+  const [includeLateFee, setIncludeLateFee] = useState(false);
+  const [lateFeeAmount, setLateFeeAmount] = useState('');
 
   // Move-in fee collection.
   const [mifCollapsed, setMifCollapsed] = useState(true);
@@ -596,6 +604,26 @@ export function Rents() {
     setCreditBalance(0);
     setApplyCredit(false);
     setCreditAmount('');
+    // Auto-detect late payment: if the received date is past the due day + grace
+    // period for that month, suggest a late fee. The due day comes from the lease
+    // first, falling back to the global setting.
+    if (rentSettings) {
+      const dueDay = row.lease.rentDueDay ?? rentSettings.rentDueDay ?? 1;
+      const graceDay = dueDay + (rentSettings.lateFeeDay ?? 5);
+      const today = new Date();
+      const payMonth = row.month;
+      const payYear = row.year;
+      // The deadline is the grace day of the payment's month. If today is past
+      // that, the payment is late.
+      const deadline = new Date(payYear, payMonth - 1, graceDay);
+      const isLate = today > deadline;
+      setIncludeLateFee(isLate);
+      setLateFeeAmount(String(rentSettings.lateFeeAmount ?? 75));
+    } else {
+      setIncludeLateFee(false);
+      setLateFeeAmount('');
+    }
+
     // Fetch credit balance for the first occupant.
     const tenantId = row.occupants[0]?.id;
     if (tenantId) {
@@ -622,6 +650,8 @@ export function Rents() {
     setCreditBalance(0);
     setApplyCredit(false);
     setCreditAmount('');
+    setIncludeLateFee(false);
+    setLateFeeAmount('');
   };
 
   const handleRecordPayment = async () => {
@@ -671,6 +701,10 @@ export function Rents() {
       // Record the cash payment (skip if amount is 0 — credit covered everything).
       const cashAmount = Number(recordForm.amount);
       if (cashAmount > 0) {
+        // Attach late fee to the payment so both are created atomically.
+        const lfPayload = includeLateFee && Number(lateFeeAmount) > 0
+          ? { amount: Number(lateFeeAmount), tenantId: recordForm.paidByTenantId || undefined }
+          : undefined;
         await addRentPayment({
           leaseId: recordRow.lease.id,
           paidByTenantId: recordForm.paidByTenantId || undefined,
@@ -683,6 +717,21 @@ export function Rents() {
           paymentMethod: recordForm.paymentMethod,
           dueDate,
           notes: recordForm.notes.trim() || undefined,
+          lateFee: lfPayload,
+        } as any);
+      } else if (includeLateFee && Number(lateFeeAmount) > 0) {
+        // Credit covered rent entirely but there's still a late fee.
+        // Create the late fee income directly (no rent payment to attach to).
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        await incomesApi.create({
+          propertyId: recordRow.property?.id || '',
+          unitId: recordRow.unit?.id,
+          tenantId: recordForm.paidByTenantId || recordRow.occupants[0]?.id,
+          source: 'late_fee',
+          amount: Number(lateFeeAmount),
+          date: recordForm.receivedDate,
+          description: `Late fee for ${MONTHS[recordRow.month - 1]} ${recordRow.year} rent`,
+          paymentMethod: recordForm.paymentMethod,
         });
       }
 
@@ -709,7 +758,8 @@ export function Rents() {
           }
         }
       }
-      showToast(`Payment recorded.${proofNote}`, proofNote.includes('failed') ? 'error' : 'success');
+      const lfNote = includeLateFee && Number(lateFeeAmount) > 0 ? ` Late fee of ${formatCurrency(Number(lateFeeAmount))} added.` : '';
+      showToast(`Payment recorded.${lfNote}${proofNote}`, proofNote.includes('failed') ? 'error' : 'success');
       closeRecordModal();
     } catch (err) {
       showToast((err as Error).message, 'error');
@@ -1882,6 +1932,45 @@ export function Rents() {
                 className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
               />
             </div>
+
+            {/* Late fee toggle: shown when settings are loaded */}
+            {rentSettings && (
+              <div className={`rounded-lg border p-3 space-y-2 ${includeLateFee ? 'border-amber-300 bg-amber-50/60' : 'border-line bg-surface'}`}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeLateFee}
+                    onChange={(e) => setIncludeLateFee(e.target.checked)}
+                    className="h-4 w-4 rounded border-line text-primary focus:ring-primary/25"
+                  />
+                  <AlertTriangle className={`h-4 w-4 ${includeLateFee ? 'text-amber-600' : 'text-muted'}`} />
+                  <span className="text-sm font-medium text-ink">Include late fee</span>
+                </label>
+                {includeLateFee && (
+                  <div className="flex items-center gap-3 pl-6">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={lateFeeAmount}
+                        onChange={(e) => setLateFeeAmount(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      />
+                    </div>
+                    <p className="text-xs text-muted whitespace-nowrap">
+                      per Settings ({formatCurrency(rentSettings.lateFeeAmount ?? 75)})
+                    </p>
+                  </div>
+                )}
+                {includeLateFee && (
+                  <p className="text-xs text-amber-700 pl-6">
+                    This late fee will be recorded as rental income and appear on all financial reports.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-ink">Proof of payment</label>
