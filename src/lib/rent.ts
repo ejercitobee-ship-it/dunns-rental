@@ -560,12 +560,13 @@ export interface VacantUnitMonth {
 }
 
 /**
- * For each unit, for each elapsed month in the given year, check whether any
- * lease covers it. If no lease covers a unit-month, the unit was vacant and
- * the loss equals the unit's asking rent (monthlyRent).
+ * Vacancy loss = rent lost during turnover between tenants. For each unit that
+ * has at least one ended lease, count the months after that lease ended where
+ * no other lease covers the unit. Units with no lease history are skipped
+ * (no turnover = no loss). Units with $0 asking rent are also skipped.
  *
  * Only counts months up to `throughMonth` (inclusive), so mid-year calls don't
- * project future vacancy. Units with $0 asking rent are skipped (no loss).
+ * project future vacancy.
  */
 export function vacancyLossForYear(
   units: Unit[],
@@ -582,15 +583,38 @@ export function vacancyLossForYear(
     // All leases that ever touched this unit.
     const unitLeases = leases.filter(l => l.unitId === unit.id);
 
+    // Skip units with no lease history: no turnover, no vacancy loss.
+    if (unitLeases.length === 0) continue;
+
+    // Find the most recent ended lease to determine when vacancy started.
+    // If the unit has never had an ended lease (only active/future), there
+    // has been no turnover yet so no loss to count.
+    const endedLeases = unitLeases
+      .filter(l => l.status === 'ended' && l.endDate)
+      .sort((a, b) => yearMonthOf(b.endDate!) - yearMonthOf(a.endDate!));
+
+    if (endedLeases.length === 0) continue;
+
+    // Vacancy starts the month after the most recent lease ended.
+    const lastEndMonth = yearMonthOf(endedLeases[0].endDate!);
+    // +1 because the end month itself was still covered by the lease.
+    const vacancyStartOrd = lastEndMonth + 1;
+
     for (let month = 1; month <= throughMonth; month++) {
-      // A unit is vacant this month if no lease covers it.
+      const target = year * 12 + month;
+
+      // Only count months from when turnover vacancy began.
+      if (target < vacancyStartOrd) continue;
+      // Respect the app-wide tracking start.
+      if (target < RENT_TRACKING_START) continue;
+
+      // A unit is vacant this month if no active lease covers it.
       const covered = unitLeases.some(l => leaseCoversMonth(l, month, year));
       if (!covered) {
         const loss = unit.monthlyRent;
         // Check for a future lease: any non-ended, non-review lease whose
         // start date falls after this month. That unit is spoken for (not
         // available for new listings) even though it is losing rent now.
-        const target = year * 12 + month;
         const futureLease = unitLeases
           .filter(l => l.status !== 'ended' && !l.needsReview
             && l.renewalStatus !== 'pending' && l.renewalStatus !== 'rejected'
