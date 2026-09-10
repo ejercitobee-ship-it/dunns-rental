@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
@@ -12,7 +12,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi, leasesApi, tenantsApi, settingsApi, incomesApi, type AppSettings } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi, tenantsApi, incomesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -144,11 +144,7 @@ export function Rents() {
   const [applyCredit, setApplyCredit] = useState(false);
   const [creditAmount, setCreditAmount] = useState('');
 
-  // Late fee state: loaded from Settings, toggled per payment.
-  const [rentSettings, setRentSettings] = useState<AppSettings['rent'] | null>(null);
-  useEffect(() => {
-    settingsApi.get().then(s => setRentSettings(s.rent)).catch(() => {});
-  }, []);
+  // Late fee: manual toggle per payment, Belle enters the amount.
   const [includeLateFee, setIncludeLateFee] = useState(false);
   const [lateFeeAmount, setLateFeeAmount] = useState('');
 
@@ -604,25 +600,10 @@ export function Rents() {
     setCreditBalance(0);
     setApplyCredit(false);
     setCreditAmount('');
-    // Auto-detect late payment: if the received date is past the due day + grace
-    // period for that month, suggest a late fee. The due day comes from the lease
-    // first, falling back to the global setting.
-    if (rentSettings) {
-      const dueDay = row.lease.rentDueDay ?? rentSettings.rentDueDay ?? 1;
-      const graceDay = dueDay + (rentSettings.lateFeeDay ?? 5);
-      const today = new Date();
-      const payMonth = row.month;
-      const payYear = row.year;
-      // The deadline is the grace day of the payment's month. If today is past
-      // that, the payment is late.
-      const deadline = new Date(payYear, payMonth - 1, graceDay);
-      const isLate = today > deadline;
-      setIncludeLateFee(isLate);
-      setLateFeeAmount(String(rentSettings.lateFeeAmount ?? 75));
-    } else {
-      setIncludeLateFee(false);
-      setLateFeeAmount('');
-    }
+    // Late fee is always manual: off by default, Belle toggles it on and enters
+    // the amount when she wants to charge one.
+    setIncludeLateFee(false);
+    setLateFeeAmount('');
 
     // Fetch credit balance for the first occupant.
     const tenantId = row.occupants[0]?.id;
@@ -1933,44 +1914,38 @@ export function Rents() {
               />
             </div>
 
-            {/* Late fee toggle: shown when settings are loaded */}
-            {rentSettings && (
-              <div className={`rounded-lg border p-3 space-y-2 ${includeLateFee ? 'border-amber-300 bg-amber-50/60' : 'border-line bg-surface'}`}>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeLateFee}
-                    onChange={(e) => setIncludeLateFee(e.target.checked)}
-                    className="h-4 w-4 rounded border-line text-primary focus:ring-primary/25"
-                  />
-                  <AlertTriangle className={`h-4 w-4 ${includeLateFee ? 'text-amber-600' : 'text-muted'}`} />
-                  <span className="text-sm font-medium text-ink">Include late fee</span>
-                </label>
-                {includeLateFee && (
-                  <div className="flex items-center gap-3 pl-6">
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={lateFeeAmount}
-                        onChange={(e) => setLateFeeAmount(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
-                      />
-                    </div>
-                    <p className="text-xs text-muted whitespace-nowrap">
-                      per Settings ({formatCurrency(rentSettings.lateFeeAmount ?? 75)})
-                    </p>
+            {/* Late fee: manual toggle, Belle enters the amount */}
+            <div className={`rounded-lg border p-3 space-y-2 ${includeLateFee ? 'border-amber-300 bg-amber-50/60' : 'border-line bg-surface'}`}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeLateFee}
+                  onChange={(e) => setIncludeLateFee(e.target.checked)}
+                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary/25"
+                />
+                <AlertTriangle className={`h-4 w-4 ${includeLateFee ? 'text-amber-600' : 'text-muted'}`} />
+                <span className="text-sm font-medium text-ink">Include late fee</span>
+              </label>
+              {includeLateFee && (
+                <div className="pl-6 space-y-2">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={lateFeeAmount}
+                      onChange={(e) => setLateFeeAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    />
                   </div>
-                )}
-                {includeLateFee && (
-                  <p className="text-xs text-amber-700 pl-6">
-                    This late fee will be recorded as rental income and appear on all financial reports.
+                  <p className="text-xs text-amber-700">
+                    Recorded as rental income on all financial reports.
                   </p>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-ink">Proof of payment</label>
