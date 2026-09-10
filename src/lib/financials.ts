@@ -78,7 +78,7 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, CategoryMeta> = {
   legal:                  { label: 'Legal',                  icon: Scale,         tier: 'business', taxCategory: 'legal_professional' },
   payroll:                { label: 'Payroll',                icon: UserCog,       tier: 'business', taxCategory: 'management_fees' },
   administrative:         { label: 'Administrative',         icon: Briefcase,     tier: 'business', taxCategory: 'management_fees' },
-  banking_fees:           { label: 'Banking Fees',           icon: CreditCard,    tier: 'business', taxCategory: 'other' },
+  banking_fees:           { label: 'Banking Fees',           icon: CreditCard,    tier: 'business', taxCategory: 'management_fees' },
   other_business:         { label: 'Other Business',         icon: FolderCog,     tier: 'business', taxCategory: 'other' },
 
   // ── Legacy (still stored in older records) ──────────────────────────
