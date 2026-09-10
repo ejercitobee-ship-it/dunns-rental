@@ -305,7 +305,9 @@ export function Dashboard() {
     return units
       .filter(u => u.status !== 'maintenance')
       .filter(u => {
-        const unitLeases = leases.filter(l => l.unitId === u.id);
+        // Only non-ended leases matter: an ended lease means the unit is
+        // vacant now even if its date range still includes this month.
+        const unitLeases = leases.filter(l => l.unitId === u.id && l.status !== 'ended');
         return !unitLeases.some(l => leaseCoversMonth(l, currentMonth, currentYear));
       });
   }, [units, leases, currentMonth, currentYear]);
