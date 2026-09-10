@@ -54,23 +54,23 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, CategoryMeta> = {
   landscaping:            { label: 'Landscaping',            icon: Trees,         tier: 'property', taxCategory: 'cleaning_maintenance' },
   snow_removal:           { label: 'Snow Removal',           icon: Snowflake,     tier: 'property', taxCategory: 'cleaning_maintenance' },
   pest_control:           { label: 'Pest Control',           icon: Bug,           tier: 'property', taxCategory: 'cleaning_maintenance' },
-  capital_improvements:   { label: 'Capital Improvements',   icon: HardHat,       tier: 'property', taxCategory: 'other' },
+  capital_improvements:   { label: 'Capital Improvements',   icon: HardHat,       tier: 'property', taxCategory: 'depreciation' },
   repairs:                { label: 'Repairs',                icon: Wrench,        tier: 'property', taxCategory: 'repairs' },
   maintenance:            { label: 'Maintenance',            icon: Wrench,        tier: 'property', taxCategory: 'cleaning_maintenance' },
   cleaning:               { label: 'Cleaning',               icon: Paintbrush,    tier: 'property', taxCategory: 'cleaning_maintenance' },
   common_area:            { label: 'Common Area',            icon: Building2,     tier: 'property', taxCategory: 'cleaning_maintenance' },
-  property_improvements:  { label: 'Property Improvements',  icon: Lightbulb,     tier: 'property', taxCategory: 'other' },
+  property_improvements:  { label: 'Property Improvements',  icon: Lightbulb,     tier: 'property', taxCategory: 'depreciation' },
 
   // ── Unit-level ──────────────────────────────────────────────────────
   tenant_repairs:         { label: 'Tenant Repairs',         icon: Wrench,        tier: 'unit', taxCategory: 'repairs' },
-  appliance_replacement:  { label: 'Appliance Replacement',  icon: Sofa,          tier: 'unit', taxCategory: 'other' },
+  appliance_replacement:  { label: 'Appliance Replacement',  icon: Sofa,          tier: 'unit', taxCategory: 'repairs' },
   turnover_costs:         { label: 'Turnover Costs',         icon: RefreshCw,     tier: 'unit', taxCategory: 'cleaning_maintenance' },
   unit_maintenance:       { label: 'Unit Maintenance',       icon: Hammer,        tier: 'unit', taxCategory: 'cleaning_maintenance' },
   tenant_damage:          { label: 'Tenant Damage',          icon: AlertTriangle, tier: 'unit', taxCategory: 'repairs' },
-  unit_improvements:      { label: 'Unit Improvements',      icon: Lightbulb,     tier: 'unit', taxCategory: 'other' },
+  unit_improvements:      { label: 'Unit Improvements',      icon: Lightbulb,     tier: 'unit', taxCategory: 'depreciation' },
 
   // ── Business / management ───────────────────────────────────────────
-  software:               { label: 'Software',               icon: Monitor,       tier: 'business', taxCategory: 'other' },
+  software:               { label: 'Software',               icon: Monitor,       tier: 'business', taxCategory: 'supplies' },
   office_expenses:        { label: 'Office Expenses',        icon: FileText,      tier: 'business', taxCategory: 'supplies' },
   marketing:              { label: 'Marketing',              icon: Megaphone,     tier: 'business', taxCategory: 'advertising' },
   accounting:             { label: 'Accounting',             icon: Calculator,    tier: 'business', taxCategory: 'legal_professional' },
