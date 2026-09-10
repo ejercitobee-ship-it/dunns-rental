@@ -53,6 +53,27 @@ export interface UtilityAccount {
   notes?: string;
 }
 
+/** Possible occupancy states for a unit.
+ *  - `occupied` / `vacant`: derived from lease presence, never set by hand.
+ *  - `maintenance`: unit temporarily offline for routine work (counts as vacancy loss).
+ *  - `renovation`: major rehab; excluded from vacancy loss by default.
+ *  - `owner_hold`: owner using or holding the unit; excluded from vacancy loss.
+ *  - `unrentable`: unit cannot be rented (legal, structural); excluded from vacancy loss.
+ */
+export type UnitStatus =
+  | 'occupied'
+  | 'vacant'
+  | 'maintenance'
+  | 'renovation'
+  | 'owner_hold'
+  | 'unrentable';
+
+/** Statuses that exclude a unit from vacancy loss calculations. The unit is
+ *  intentionally unavailable, so the empty period is NOT market vacancy. */
+export const VACANCY_EXCLUDED_STATUSES: ReadonlySet<UnitStatus> = new Set([
+  'renovation', 'owner_hold', 'unrentable',
+]);
+
 export interface Unit {
   id: string;
   propertyId: string;
@@ -61,7 +82,7 @@ export interface Unit {
   bathrooms: number;
   squareFeet: number;
   monthlyRent: number;
-  status: 'occupied' | 'vacant' | 'maintenance';
+  status: UnitStatus;
   description?: string;
 }
 
@@ -455,10 +476,18 @@ export interface DashboardStats {
   totalOwed: number;
   occupancyRate: number;
   projectedYearlyIncome?: number;
-  /** Rent lost from vacant units this month. */
+  /** Daily-prorated rent lost from vacant units this month. */
   vacancyLossThisMonth: number;
-  /** Rent lost from vacant units year to date. */
+  /** Daily-prorated rent lost from vacant units year to date. */
   vacancyLossYTD: number;
+  /** Gross potential rent (what every unit COULD earn) for the current month. */
+  grossPotentialRentMonth: number;
+  /** Vacancy rate: vacant unit-days / total available unit-days × 100. */
+  vacancyRate: number;
+  /** Number of units currently vacant and available for listing. */
+  vacantAvailable: number;
+  /** Number of units currently vacant but with a future lease (not available). */
+  vacantPendingLease: number;
 }
 
 export type ViewType = 'dashboard' | 'properties' | 'tenants' | 'rents' | 'expenses' | 'income';

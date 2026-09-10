@@ -9,7 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
-import { activeLeases, monthlyRevenue, settleMonthWithCredit, leaseCoversMonth, type MonthSettlement } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonthWithCredit, leaseCoversMonth, vacancyLossForYear, type MonthSettlement } from '../lib/rent';
 import {
   expenseCategoryLabel, expensesByCategory, expensesByTier,
   EXPENSE_TIERS, propertyFinancials, maintenanceCosts,
@@ -261,9 +261,20 @@ export function Reports() {
   };
 
   // ── Income report ───────────────────────────────────────────────────
+  // Vacancy loss for the selected period (daily-prorated).
+  const vacancyData = useMemo(() => {
+    // Determine the through-month from the range.
+    const toStr = f.range.to || `${f.year}-12-31`;
+    const throughMonth = parseInt(toStr.slice(5, 7), 10) || 12;
+    return vacancyLossForYear(units, leases, f.year, throughMonth);
+  }, [units, leases, f.year, f.range]);
+
   const incomeData = useMemo(() => {
     const rent = rentCollected(filteredPayments, f.range);
     const other = otherIncome(filteredIncomes, f.range);
+    const vacancyLoss = vacancyData.total;
+    const grossPotentialRent = rent + vacancyLoss;
+    const netRentalIncome = rent; // rent collected is already the net
     const total = rent + other;
     const bySource: Record<string, number> = { rent };
     for (const i of filteredIncomes) {
@@ -287,8 +298,8 @@ export function Reports() {
       const pid = i.propertyId || 'unassigned';
       byProperty[pid] = (byProperty[pid] || 0) + i.amount;
     }
-    return { rent, other, total, bySource, byProperty };
-  }, [filteredPayments, filteredIncomes, leases, f.range]);
+    return { rent, other, total, bySource, byProperty, vacancyLoss, grossPotentialRent, netRentalIncome };
+  }, [filteredPayments, filteredIncomes, leases, f.range, vacancyData]);
 
   // ── Expense report ──────────────────────────────────────────────────
   const expenseData = useMemo(() => {
@@ -534,6 +545,31 @@ export function Reports() {
         <>
           <FilterBar f={f} properties={properties} />
 
+          {/* Gross Potential Rent → Vacancy Loss → Net Rental Income pipeline */}
+          {incomeData.vacancyLoss > 0 && (
+            <Card>
+              <div className="p-5">
+                <span className="eyebrow mb-3 block">Rental Income Pipeline</span>
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end text-center">
+                  <div>
+                    <p className="text-xs text-muted mb-1">Gross Potential Rent</p>
+                    <p className="font-display text-lg font-semibold text-ink tnum">{formatCurrency(incomeData.grossPotentialRent)}</p>
+                  </div>
+                  <div className="hidden sm:block text-muted text-lg">&minus;</div>
+                  <div>
+                    <p className="text-xs text-muted mb-1">Vacancy Loss</p>
+                    <p className="font-display text-lg font-semibold text-amber-600 tnum">({formatCurrency(incomeData.vacancyLoss)})</p>
+                  </div>
+                  <div className="hidden sm:block text-muted text-lg">=</div>
+                  <div>
+                    <p className="text-xs text-muted mb-1">Net Rental Income</p>
+                    <p className="font-display text-lg font-semibold text-positive tnum">{formatCurrency(incomeData.netRentalIncome)}</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-3">
             {[
               { label: 'Rental Income', value: incomeData.rent, color: 'text-positive', icon: <Building2 /> },
@@ -738,6 +774,22 @@ export function Reports() {
               </Card>
             ))}
           </div>
+
+          {/* Vacancy loss banner for profitability */}
+          {incomeData.vacancyLoss > 0 && (
+            <Card>
+              <div className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <span className="eyebrow text-amber-700">Vacancy Loss</span>
+                  <p className="font-display text-xl font-semibold text-amber-600 tnum mt-1">{formatCurrency(incomeData.vacancyLoss)}</p>
+                </div>
+                <div className="text-sm text-muted">
+                  <p>Gross Potential: <span className="font-semibold text-ink tnum">{formatCurrency(incomeData.grossPotentialRent)}</span></p>
+                  <p className="mt-0.5">Vacancy Rate: <span className="font-semibold text-ink tnum">{incomeData.grossPotentialRent > 0 ? ((incomeData.vacancyLoss / incomeData.grossPotentialRent) * 100).toFixed(1) : '0.0'}%</span></p>
+                </div>
+              </div>
+            </Card>
+          )}
 
           <Section id="profTable" title="Property Profitability" icon={Building2} collapsed={collapsed} toggle={toggle}>
             <div className="overflow-x-auto -mx-6 -mb-6">

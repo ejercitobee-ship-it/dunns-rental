@@ -16,7 +16,7 @@ import { rentSheetApi, documentsApi, leasesApi, tenantsApi, incomesApi } from '.
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonthWithCredit, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
+import { activeLeases, settleMonthWithCredit, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, vacancyLossForYear, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
 import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
@@ -453,6 +453,14 @@ export function Rents() {
 
     return { totalCollected, outstanding, collectionRate, overdueCount };
   }, [leases, rentPayments, yearFilter, leaseMonthRows]);
+
+  // Vacancy loss for the selected year.
+  const vacancyInfo = useMemo(() => {
+    const y = parseInt(yearFilter, 10);
+    const now = new Date();
+    const throughMonth = y === now.getFullYear() ? (now.getMonth() + 1) : 12;
+    return vacancyLossForYear(units, leases, y, throughMonth);
+  }, [units, leases, yearFilter]);
 
   const statCards = [
     { label: 'Total Collected', value: formatCurrency(yearStats.totalCollected), icon: <DollarSign />, valueClass: 'text-ink' },
@@ -1174,6 +1182,21 @@ export function Rents() {
               </Card>
             ))}
           </div>
+
+          {/* Vacancy loss summary */}
+          {vacancyInfo.total > 0 && (
+            <div className="flex items-center gap-4 px-5 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span className="text-amber-800">
+                <span className="font-semibold">Vacancy Loss ({yearFilter}):</span>{' '}
+                <span className="tnum">{formatCurrency(vacancyInfo.total)}</span>
+                {' · '}{vacancyInfo.periods.length} vacant {vacancyInfo.periods.length === 1 ? 'period' : 'periods'}
+                {vacancyInfo.grossPotentialRent > 0 && (
+                  <> · {((vacancyInfo.total / vacancyInfo.grossPotentialRent) * 100).toFixed(1)}% of potential rent</>
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Move-in fees: a one-time obligation per lease, collected here. */}
           {(() => {

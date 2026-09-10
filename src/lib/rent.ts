@@ -5,6 +5,7 @@
 // instead of declaring them.
 
 import type { Lease, RentPayment, Unit } from '../types';
+import { VACANCY_EXCLUDED_STATUSES } from '../types';
 export type { Lease, RentPayment };
 
 export interface MonthSettlement {
@@ -544,92 +545,359 @@ export function rentMonthsToShow(
   return out;
 }
 
-// ── Vacancy loss ─────────────────────────────────────────────────────────────
+// ── Vacancy loss (daily proration) ───────────────────────────────────────────
 
-export interface VacantUnitMonth {
-  unit: Unit;
-  month: number;
-  year: number;
-  /** The asking rent that was lost for this month. */
-  loss: number;
-  /** True when a lease exists that starts after this month (unit is spoken for
-   *  but not yet generating rent, so it should NOT be listed for new tenants). */
+/** Parse "YYYY-MM-DD" to [year, month, day] with no Date object / TZ shift. */
+function parseDateParts(d: string): [number, number, number] {
+  const [y, m, day] = d.split('-').map(Number);
+  return [y, m, day];
+}
+
+/** Days in a calendar month. */
+function daysInMonth(month: number, year: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/** Ordinal day count from a "YYYY-MM-DD" for simple day arithmetic. */
+function dayOrd(d: string): number {
+  const [y, m, day] = parseDateParts(d);
+  return Date.UTC(y, m - 1, day) / 86400000;
+}
+
+/** Format an ordinal back to "YYYY-MM-DD". */
+function ordToDate(ord: number): string {
+  const d = new Date(ord * 86400000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// ── Vacancy period detection ────────────────────────────────────────────────
+
+/** One contiguous period of vacancy for a unit. */
+export interface VacancyPeriod {
+  unitId: string;
+  /** Day AFTER the previous lease ended (or the unit's listing start). */
+  startDate: string;
+  /** Day BEFORE the next lease starts, or today/throughDate if still open. */
+  endDate: string;
+  /** Monthly rent used for the loss calculation (from the preceding lease,
+   *  falling back to the unit's market rent). */
+  monthlyRent: number;
+  /** True when a future lease covers the period after endDate. */
   hasFutureLease: boolean;
-  /** The earliest future lease start date, when applicable. */
   futureLeaseStart?: string;
 }
 
 /**
- * Vacancy loss = rent lost during turnover between tenants. For each unit that
- * has at least one ended lease, count the months after that lease ended where
- * no other lease covers the unit. Units with no lease history are skipped
- * (no turnover = no loss). Units with $0 asking rent are also skipped.
+ * Whether a lease is "real" for vacancy purposes: active or properly ended,
+ * not a draft/review/pending renewal.
+ */
+function isRealLease(l: Lease): boolean {
+  if (l.needsReview) return false;
+  if (l.renewalStatus === 'pending' || l.renewalStatus === 'rejected'
+    || l.renewalStatus === 'draft' || l.renewalStatus === 'cancelled') return false;
+  return true;
+}
+
+/**
+ * Build the list of vacancy periods for one unit, considering all its leases.
+ * Vacancy starts the day after one lease ends and runs until the day before
+ * the next lease starts (or `throughDate` if no next lease).
  *
- * Only counts months up to `throughMonth` (inclusive), so mid-year calls don't
- * project future vacancy.
+ * Only real leases are considered (not drafts/pending renewals).
+ * Only units with at least one ended lease generate vacancy periods.
+ */
+export function unitVacancyPeriods(
+  unit: Unit,
+  leases: Lease[],
+  throughDate: string,
+): VacancyPeriod[] {
+  // Only leases that actually lived on this unit.
+  const unitLeases = leases
+    .filter(l => l.unitId === unit.id && isRealLease(l) && l.startDate)
+    .sort((a, b) => a.startDate!.localeCompare(b.startDate!));
+
+  if (unitLeases.length === 0) return [];
+
+  // We need at least one ended lease to have a vacancy period.
+  const hasEnded = unitLeases.some(l => l.status === 'ended' && l.endDate);
+  if (!hasEnded) return [];
+
+  const periods: VacancyPeriod[] = [];
+
+  // Walk leases chronologically and find gaps between endDate and the next
+  // startDate where no other lease covers the gap.
+  for (let i = 0; i < unitLeases.length; i++) {
+    const current = unitLeases[i];
+    if (current.status !== 'ended' || !current.endDate) continue;
+
+    // The vacancy potentially starts the day after this lease ended.
+    const endOrd = dayOrd(current.endDate);
+    const vacStart = ordToDate(endOrd + 1);
+
+    // Find the next lease that starts after (or on) this end date.
+    const next = unitLeases.find(
+      l => l !== current && l.startDate! >= current.endDate! && l.id !== current.id
+    );
+
+    let vacEnd: string;
+    let hasFuture = false;
+    let futureStart: string | undefined;
+
+    if (next && next.startDate!) {
+      // Vacancy ends the day before the next lease starts.
+      const nextStartOrd = dayOrd(next.startDate!);
+      if (nextStartOrd <= endOrd + 1) continue; // same-day or next-day move-in = no vacancy
+      vacEnd = ordToDate(nextStartOrd - 1);
+      hasFuture = next.status !== 'ended';
+      futureStart = next.startDate!;
+    } else {
+      // No next lease: vacancy runs to throughDate.
+      vacEnd = throughDate;
+      // Check for any future (non-ended) lease.
+      const upcoming = unitLeases.find(
+        l => l.status !== 'ended' && l.startDate! > current.endDate!
+      );
+      if (upcoming) {
+        hasFuture = true;
+        futureStart = upcoming.startDate!;
+        const upcomingOrd = dayOrd(upcoming.startDate!);
+        vacEnd = ordToDate(upcomingOrd - 1);
+      }
+    }
+
+    if (vacStart > vacEnd) continue;
+    if (vacStart > throughDate) continue;
+    // Clamp end to throughDate.
+    const clampedEnd = vacEnd > throughDate ? throughDate : vacEnd;
+
+    // Monthly rent to use: the ended lease's rent, falling back to unit market rent.
+    const rent = current.monthlyRent > 0 ? current.monthlyRent : unit.monthlyRent;
+
+    periods.push({
+      unitId: unit.id,
+      startDate: vacStart,
+      endDate: clampedEnd,
+      monthlyRent: rent,
+      hasFutureLease: hasFuture,
+      futureLeaseStart: futureStart,
+    });
+  }
+
+  return periods;
+}
+
+// ── Per-month vacancy loss (daily prorated) ─────────────────────────────────
+
+/** Vacancy loss allocated to a single calendar month. */
+export interface VacancyMonthLoss {
+  unitId: string;
+  unit: Unit;
+  month: number;
+  year: number;
+  /** Vacant days in this calendar month. */
+  vacantDays: number;
+  /** Total days in this calendar month. */
+  calendarDays: number;
+  /** Daily rent = monthlyRent / calendarDays. */
+  dailyRent: number;
+  /** Prorated loss = dailyRent × vacantDays, rounded to the cent. */
+  loss: number;
+  /** The monthly rent used for the daily rate. */
+  monthlyRent: number;
+  /** Vacancy start date within or before this month. */
+  periodStart: string;
+  /** Vacancy end date within or after this month. */
+  periodEnd: string;
+  /** Unit has a future lease (not available for listing). */
+  hasFutureLease: boolean;
+  futureLeaseStart?: string;
+}
+
+/**
+ * Allocate a vacancy period's loss across calendar months, daily prorated.
+ *
+ * Daily rent = monthlyRent / days in that calendar month.
+ * Vacant days = overlap of [periodStart, periodEnd] with [monthStart, monthEnd].
+ * Loss = dailyRent × vacantDays, rounded to the nearest cent.
+ */
+function allocatePeriodToMonths(
+  period: VacancyPeriod,
+  unit: Unit,
+  fromYear: number,
+  throughYear: number,
+  throughMonth: number,
+  throughDay: number,
+): VacancyMonthLoss[] {
+  const results: VacancyMonthLoss[] = [];
+  const pStartOrd = dayOrd(period.startDate);
+  const pEndOrd = dayOrd(period.endDate);
+  const [startY, startM] = parseDateParts(period.startDate);
+  const [endY, endM] = parseDateParts(period.endDate);
+
+  for (let y = Math.max(startY, fromYear); y <= Math.min(endY, throughYear); y++) {
+    const mStart = (y === startY) ? startM : 1;
+    const mEnd = (y === endY) ? endM : 12;
+    for (let m = mStart; m <= mEnd; m++) {
+      // Don't go past throughMonth in throughYear.
+      if (y === throughYear && m > throughMonth) break;
+      // Respect tracking start.
+      if (y * 12 + m < RENT_TRACKING_START) continue;
+
+      const calDays = daysInMonth(m, y);
+      const monthStartOrd = dayOrd(`${y}-${String(m).padStart(2, '0')}-01`);
+      let monthEndOrd = dayOrd(`${y}-${String(m).padStart(2, '0')}-${String(calDays).padStart(2, '0')}`);
+
+      // In the through month of the through year, clamp to throughDay.
+      if (y === throughYear && m === throughMonth) {
+        const clampOrd = dayOrd(
+          `${y}-${String(m).padStart(2, '0')}-${String(throughDay).padStart(2, '0')}`
+        );
+        monthEndOrd = Math.min(monthEndOrd, clampOrd);
+      }
+
+      const overlapStart = Math.max(pStartOrd, monthStartOrd);
+      const overlapEnd = Math.min(pEndOrd, monthEndOrd);
+      if (overlapStart > overlapEnd) continue;
+
+      const vacantDays = overlapEnd - overlapStart + 1;
+      const dailyRent = round2(period.monthlyRent / calDays);
+      const loss = round2(dailyRent * vacantDays);
+
+      if (loss <= 0) continue;
+
+      results.push({
+        unitId: unit.id,
+        unit,
+        month: m,
+        year: y,
+        vacantDays,
+        calendarDays: calDays,
+        dailyRent,
+        loss,
+        monthlyRent: period.monthlyRent,
+        periodStart: period.startDate,
+        periodEnd: period.endDate,
+        hasFutureLease: period.hasFutureLease,
+        futureLeaseStart: period.futureLeaseStart,
+      });
+    }
+  }
+  return results;
+}
+
+// ── Main vacancy loss function ──────────────────────────────────────────────
+
+/** Summary returned by vacancyLossForYear. */
+export interface VacancyLossSummary {
+  /** Total daily-prorated vacancy loss for the period. */
+  total: number;
+  /** Vacancy loss for the throughMonth alone. */
+  thisMonth: number;
+  /** Per unit-month breakdown with daily proration details. */
+  items: VacancyMonthLoss[];
+  /** Raw vacancy periods per unit (for audit display). */
+  periods: VacancyPeriod[];
+  /** Gross potential rent: what all units COULD earn for the period. */
+  grossPotentialRent: number;
+  /** Gross potential rent for just the throughMonth. */
+  grossPotentialRentMonth: number;
+  /** Total vacant unit-days across all units in the period. */
+  totalVacantDays: number;
+  /** Total available unit-days across all units in the period (for vacancy rate). */
+  totalAvailableDays: number;
+}
+
+/**
+ * Daily-prorated vacancy loss for a year through a given month/day.
+ *
+ * For each unit with at least one ended lease, finds the gap periods between
+ * tenants and prorates the loss by actual calendar days. Units whose status
+ * is in VACANCY_EXCLUDED_STATUSES (renovation, owner_hold, unrentable) are
+ * excluded from the loss calculation. Units with no lease history or $0 rent
+ * are also skipped.
+ *
+ * `throughDay` defaults to today's day-of-month for the current year/month
+ * and to the last day of the month for past months.
  */
 export function vacancyLossForYear(
   units: Unit[],
   leases: Lease[],
   year: number,
-  throughMonth: number
-): { total: number; thisMonth: number; items: VacantUnitMonth[] } {
-  const items: VacantUnitMonth[] = [];
+  throughMonth: number,
+  throughDay?: number,
+): VacancyLossSummary {
+  const today = new Date();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  // Default throughDay: today's date for current month, else end of month.
+  const effectiveDay = throughDay ??
+    (year === todayYear && throughMonth === todayMonth
+      ? todayDay
+      : daysInMonth(throughMonth, year));
+
+  const throughDate = `${year}-${String(throughMonth).padStart(2, '0')}-${String(effectiveDay).padStart(2, '0')}`;
+
+  const allItems: VacancyMonthLoss[] = [];
+  const allPeriods: VacancyPeriod[] = [];
   let total = 0;
   let thisMonth = 0;
 
+  // Gross potential rent: every unit's monthly rent for every elapsed month.
+  let grossTotal = 0;
+  let grossMonth = 0;
+
+  // Vacancy rate: unit-days.
+  let totalVacantDays = 0;
+  let totalAvailableDays = 0;
+
   for (const unit of units) {
+    // Skip units with excluded statuses (not market vacancy).
+    if (VACANCY_EXCLUDED_STATUSES.has(unit.status)) continue;
     if (unit.monthlyRent <= 0) continue;
-    // All leases that ever touched this unit.
-    const unitLeases = leases.filter(l => l.unitId === unit.id);
 
-    // Skip units with no lease history: no turnover, no vacancy loss.
-    if (unitLeases.length === 0) continue;
+    // Accumulate gross potential rent for this unit.
+    for (let m = 1; m <= throughMonth; m++) {
+      if (year * 12 + m < RENT_TRACKING_START) continue;
+      const calDays = daysInMonth(m, year);
+      const effDays = (year === todayYear && m === todayMonth)
+        ? Math.min(todayDay, calDays)
+        : (m === throughMonth ? effectiveDay : calDays);
+      const monthGross = round2(unit.monthlyRent / calDays * effDays);
+      grossTotal += monthGross;
+      if (m === throughMonth) grossMonth += monthGross;
+      totalAvailableDays += effDays;
+    }
 
-    // Find the most recent ended lease to determine when vacancy started.
-    // If the unit has never had an ended lease (only active/future), there
-    // has been no turnover yet so no loss to count.
-    const endedLeases = unitLeases
-      .filter(l => l.status === 'ended' && l.endDate)
-      .sort((a, b) => yearMonthOf(b.endDate!) - yearMonthOf(a.endDate!));
+    // Calculate vacancy periods and allocate to months.
+    const periods = unitVacancyPeriods(unit, leases, throughDate);
+    allPeriods.push(...periods);
 
-    if (endedLeases.length === 0) continue;
-
-    // Vacancy starts the month after the most recent lease ended.
-    const lastEndMonth = yearMonthOf(endedLeases[0].endDate!);
-    // +1 because the end month itself was still covered by the lease.
-    const vacancyStartOrd = lastEndMonth + 1;
-
-    for (let month = 1; month <= throughMonth; month++) {
-      const target = year * 12 + month;
-
-      // Only count months from when turnover vacancy began.
-      if (target < vacancyStartOrd) continue;
-      // Respect the app-wide tracking start.
-      if (target < RENT_TRACKING_START) continue;
-
-      // A unit is vacant this month if no active lease covers it.
-      const covered = unitLeases.some(l => leaseCoversMonth(l, month, year));
-      if (!covered) {
-        const loss = unit.monthlyRent;
-        // Check for a future lease: any non-ended, non-review lease whose
-        // start date falls after this month. That unit is spoken for (not
-        // available for new listings) even though it is losing rent now.
-        const futureLease = unitLeases
-          .filter(l => l.status !== 'ended' && !l.needsReview
-            && l.renewalStatus !== 'pending' && l.renewalStatus !== 'rejected'
-            && l.renewalStatus !== 'draft' && l.renewalStatus !== 'cancelled')
-          .find(l => l.startDate && yearMonthOf(l.startDate) > target);
-        items.push({
-          unit, month, year, loss,
-          hasFutureLease: !!futureLease,
-          futureLeaseStart: futureLease?.startDate,
-        });
-        total += loss;
-        if (month === throughMonth) thisMonth += loss;
+    for (const p of periods) {
+      const monthItems = allocatePeriodToMonths(p, unit, year, year, throughMonth, effectiveDay);
+      for (const item of monthItems) {
+        allItems.push(item);
+        total = round2(total + item.loss);
+        totalVacantDays += item.vacantDays;
+        if (item.month === throughMonth && item.year === year) {
+          thisMonth = round2(thisMonth + item.loss);
+        }
       }
     }
   }
 
-  return { total, thisMonth, items };
+  return {
+    total,
+    thisMonth,
+    items: allItems,
+    periods: allPeriods,
+    grossPotentialRent: round2(grossTotal),
+    grossPotentialRentMonth: round2(grossMonth),
+    totalVacantDays,
+    totalAvailableDays,
+  };
 }

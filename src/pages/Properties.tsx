@@ -10,7 +10,7 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import type { Property, Unit, LeaseStatus, UtilityAccount, UtilityType } from '../types';
+import type { Property, Unit, UnitStatus, LeaseStatus, UtilityAccount, UtilityType } from '../types';
 
 const UTILITY_META: Record<UtilityType, { label: string; icon: typeof Droplet }> = {
   water: { label: 'Water', icon: Droplet },
@@ -18,11 +18,31 @@ const UTILITY_META: Record<UtilityType, { label: string; icon: typeof Droplet }>
   electric: { label: 'Electric', icon: Zap },
 };
 
-const statusColors = {
+const statusColors: Record<UnitStatus, 'success' | 'warning' | 'destructive' | 'secondary'> = {
   occupied: 'success',
   vacant: 'warning',
   maintenance: 'destructive',
-} as const;
+  renovation: 'secondary',
+  owner_hold: 'secondary',
+  unrentable: 'destructive',
+};
+
+const statusLabels: Record<UnitStatus, string> = {
+  occupied: 'Occupied',
+  vacant: 'Vacant',
+  maintenance: 'Maintenance',
+  renovation: 'Renovation',
+  owner_hold: 'Owner hold',
+  unrentable: 'Unrentable',
+};
+
+/** Statuses the owner can manually set (lease-independent). */
+const MANUAL_UNIT_STATUSES: { value: UnitStatus; label: string }[] = [
+  { value: 'maintenance', label: 'Under maintenance' },
+  { value: 'renovation', label: 'Renovation (not vacancy loss)' },
+  { value: 'owner_hold', label: 'Owner hold (not vacancy loss)' },
+  { value: 'unrentable', label: 'Unrentable (not vacancy loss)' },
+];
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -342,10 +362,15 @@ export function Properties() {
         // tenancy, never stored by hand, so every save re-derives them here
         // instead of trusting whatever the form last held. That keeps a
         // stale stored value from ever disagreeing with what the page
-        // displays. Maintenance is the one state a lease can't express, so
-        // it is the only piece of unitForm.status the owner actually chose.
-        const status: Unit['status'] = unitForm.status === 'maintenance'
-          ? 'maintenance'
+        // displays. Manual hold statuses (maintenance, renovation,
+        // owner_hold, unrentable) are the states a lease can't express, so
+        // they are the only pieces of unitForm.status the owner chose.
+        const isFormManualHold = unitForm.status === 'maintenance'
+          || unitForm.status === 'renovation'
+          || unitForm.status === 'owner_hold'
+          || unitForm.status === 'unrentable';
+        const status: Unit['status'] = isFormManualHold
+          ? unitForm.status
           : (getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant');
         await updateUnit({ ...selectedUnit, ...unitForm, status });
         showToast('Unit updated successfully!', 'success');
@@ -377,17 +402,20 @@ export function Properties() {
     }
   };
 
-  // Maintenance is the only unit state a lease cannot express, so it is the
-  // only status the owner ever sets by hand. Occupied and vacant are always
-  // derived from whether the unit currently has a lease.
-  const handleToggleMaintenance = async (unit: Unit) => {
-    const nextStatus: Unit['status'] = unit.status === 'maintenance'
+  // Manual hold statuses (maintenance, renovation, owner_hold, unrentable) are
+  // the only states the owner sets by hand. Occupied and vacant are always
+  // derived from whether the unit currently has a lease. Setting "none" clears
+  // the manual hold and falls back to the lease-derived status.
+  const handleSetUnitStatus = async (unit: Unit, nextStatus: UnitStatus | 'none') => {
+    const resolved: Unit['status'] = nextStatus === 'none'
       ? (getUnitLease(unit.id) ? 'occupied' : 'vacant')
-      : 'maintenance';
+      : nextStatus;
     try {
-      await updateUnit({ ...unit, status: nextStatus });
+      await updateUnit({ ...unit, status: resolved });
       showToast(
-        nextStatus === 'maintenance' ? 'Unit marked as under maintenance.' : 'Maintenance cleared.',
+        resolved === 'occupied' || resolved === 'vacant'
+          ? 'Unit status cleared.'
+          : `Unit marked as ${statusLabels[resolved].toLowerCase()}.`,
         'success'
       );
     } catch (error) {
@@ -572,14 +600,19 @@ export function Properties() {
                   {propertyUnits.map(unit => {
                     const lease = getUnitLease(unit.id);
                     const occupants = lease ? getLeaseTenants(lease.id) : [];
-                    const displayStatus: Unit['status'] = unit.status === 'maintenance'
-                      ? 'maintenance'
+                    // Derive display status: manual hold states are stored; occupied/vacant derived from lease.
+                    const isManualHold = unit.status === 'maintenance' || unit.status === 'renovation'
+                      || unit.status === 'owner_hold' || unit.status === 'unrentable';
+                    const displayStatus: UnitStatus = isManualHold
+                      ? unit.status
                       : (lease ? 'occupied' : 'vacant');
                     const accentColor = displayStatus === 'occupied'
                       ? 'border-l-positive'
-                      : displayStatus === 'maintenance'
+                      : displayStatus === 'maintenance' || displayStatus === 'unrentable'
                         ? 'border-l-danger'
-                        : 'border-l-warning';
+                        : displayStatus === 'renovation' || displayStatus === 'owner_hold'
+                          ? 'border-l-[#94a3b8]'
+                          : 'border-l-warning';
                     return (
                       <div
                         key={unit.id}
@@ -602,7 +635,7 @@ export function Properties() {
                             </div>
                             <div className="flex items-center gap-1">
                               <Badge variant={statusColors[displayStatus]} className="text-[10px] px-2">
-                                {displayStatus}
+                                {statusLabels[displayStatus]}
                               </Badge>
                               <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                                 {canEditUnit && (
@@ -663,21 +696,21 @@ export function Properties() {
                             </div>
                           )}
 
-                          {/* Maintenance toggle */}
+                          {/* Unit status selector */}
+                          {canEditUnit && (
                           <div className="mt-3 pt-2 border-t border-line/60">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleMaintenance(unit)}
-                              className={`w-full py-1.5 px-2 text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                                unit.status === 'maintenance'
-                                  ? 'bg-danger-soft text-danger font-medium'
-                                  : 'bg-canvas text-muted hover:bg-black/[0.05]'
-                              }`}
+                            <select
+                              value={isManualHold ? unit.status : 'none'}
+                              onChange={(e) => handleSetUnitStatus(unit, e.target.value as UnitStatus | 'none')}
+                              className="w-full py-1.5 px-2 text-xs rounded-lg bg-canvas border border-line text-ink transition-colors cursor-pointer hover:bg-black/[0.03] focus:outline-none focus:ring-1 focus:ring-primary/30"
                             >
-                              {unit.status === 'maintenance' && <Check className="h-3 w-3" />}
-                              {unit.status === 'maintenance' ? 'Under maintenance' : 'Mark as under maintenance'}
-                            </button>
+                              <option value="none">No hold (auto from lease)</option>
+                              {MANUAL_UNIT_STATUSES.map(s => (
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                              ))}
+                            </select>
                           </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1028,21 +1061,32 @@ export function Properties() {
           </div>
           
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium mb-1">
-              <input
-                type="checkbox"
-                checked={unitForm.status === 'maintenance'}
-                onChange={(e) => setUnitForm({
+            <label className="block text-sm font-medium mb-1">Unit Hold Status</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={
+                unitForm.status === 'maintenance' || unitForm.status === 'renovation'
+                  || unitForm.status === 'owner_hold' || unitForm.status === 'unrentable'
+                  ? unitForm.status
+                  : 'none'
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                setUnitForm({
                   ...unitForm,
-                  status: e.target.checked
-                    ? 'maintenance'
-                    : (selectedUnit && getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant'),
-                })}
-              />
-              Under maintenance
-            </label>
+                  status: v === 'none'
+                    ? (selectedUnit && getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant')
+                    : v as UnitStatus,
+                });
+              }}
+            >
+              <option value="none">None (auto from lease)</option>
+              {MANUAL_UNIT_STATUSES.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
             <p className="text-xs text-muted mt-1">
-              Occupied and vacant are set automatically from the unit's current tenancy and cannot be edited here.
+              Occupied and vacant are set automatically from the unit's current tenancy. Hold statuses override that.
             </p>
           </div>
 

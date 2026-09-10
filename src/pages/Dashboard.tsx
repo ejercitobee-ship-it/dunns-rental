@@ -156,8 +156,11 @@ export function Dashboard() {
 
     const projectedYearlyIncome = monthlyRevenue(leases) * 12;
 
-    // Vacancy loss: rent lost from units with no active lease.
+    // Vacancy loss: daily-prorated rent lost from vacant units.
     const vacancy = vacancyLossForYear(units, leases, currentYear, currentMonth);
+    const vacancyRate = vacancy.totalAvailableDays > 0
+      ? (vacancy.totalVacantDays / vacancy.totalAvailableDays) * 100
+      : 0;
 
     return {
       totalProperties,
@@ -172,6 +175,10 @@ export function Dashboard() {
       projectedYearlyIncome,
       vacancyLossThisMonth: vacancy.thisMonth,
       vacancyLossYTD: vacancy.total,
+      grossPotentialRentMonth: vacancy.grossPotentialRentMonth,
+      vacancyRate,
+      vacantAvailable: 0, // filled after vacantUnits computed
+      vacantPendingLease: 0, // filled after futureLeaseUnitIds computed
     };
   }, [properties, units, leases, expenses, incomes, rentPayments, getUnitLease]);
 
@@ -303,7 +310,8 @@ export function Dashboard() {
 
   const vacantUnits = useMemo(() => {
     return units
-      .filter(u => u.status !== 'maintenance')
+      .filter(u => u.status !== 'maintenance' && u.status !== 'renovation'
+        && u.status !== 'owner_hold' && u.status !== 'unrentable')
       .filter(u => {
         // Only non-ended leases matter: an ended lease means the unit is
         // vacant now even if its date range still includes this month.
@@ -497,32 +505,41 @@ export function Dashboard() {
       {/* Vacancy loss banner: only visible when there is vacancy */}
       {(stats.vacancyLossThisMonth > 0 || stats.vacancyLossYTD > 0) && (
         <Card className="border-amber-200 bg-amber-50/40">
-          <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-            <div className="flex items-center gap-2.5 flex-shrink-0">
-              <span className="w-[34px] h-[34px] rounded-[10px] bg-amber-100 text-amber-600 grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
-                <AlertTriangle />
-              </span>
-              <span className="text-sm font-medium text-ink">Vacancy loss</span>
-            </div>
-            <div className="flex items-center gap-6 flex-1">
-              {stats.vacancyLossThisMonth > 0 && (
-                <div>
-                  <p className="eyebrow !text-[10px] text-amber-700">This month</p>
-                  <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossThisMonth)}</p>
-                </div>
-              )}
-              <div>
-                <p className="eyebrow !text-[10px] text-amber-700">Year to date</p>
-                <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossYTD)}</p>
+          <div className="px-5 py-4 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+              <div className="flex items-center gap-2.5 flex-shrink-0">
+                <span className="w-[34px] h-[34px] rounded-[10px] bg-amber-100 text-amber-600 grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                  <AlertTriangle />
+                </span>
+                <span className="text-sm font-medium text-ink">Vacancy loss</span>
               </div>
-              <div className="text-xs text-amber-700 ml-auto hidden sm:block text-right">
-                <p>{vacantUnits.length} vacant {vacantUnits.length === 1 ? 'unit' : 'units'} at asking rent</p>
-                {futureLeaseUnitIds.size > 0 && (
-                  <p className="text-amber-600 mt-0.5">
-                    {futureLeaseUnitIds.size} leased (not available) · {vacantUnits.length - futureLeaseUnitIds.size} available
-                  </p>
+              <div className="flex items-center gap-6 flex-1 flex-wrap">
+                {stats.vacancyLossThisMonth > 0 && (
+                  <div>
+                    <p className="eyebrow !text-[10px] text-amber-700">This month</p>
+                    <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossThisMonth)}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="eyebrow !text-[10px] text-amber-700">Year to date</p>
+                  <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossYTD)}</p>
+                </div>
+                {stats.vacancyRate > 0 && (
+                  <div>
+                    <p className="eyebrow !text-[10px] text-amber-700">Vacancy rate</p>
+                    <p className="text-[17px] font-medium text-amber-800 tnum">{stats.vacancyRate.toFixed(1)}%</p>
+                  </div>
                 )}
               </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-amber-700 border-t border-amber-200/60 pt-2.5">
+              <span>{vacantUnits.length} vacant {vacantUnits.length === 1 ? 'unit' : 'units'}</span>
+              {futureLeaseUnitIds.size > 0 && (
+                <span>{futureLeaseUnitIds.size} leased (not available) · {vacantUnits.length - futureLeaseUnitIds.size} available</span>
+              )}
+              {stats.grossPotentialRentMonth > 0 && (
+                <span className="ml-auto hidden sm:block">Gross potential: {formatCurrency(stats.grossPotentialRentMonth)}/mo</span>
+              )}
             </div>
           </div>
         </Card>
