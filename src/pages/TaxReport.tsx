@@ -51,8 +51,18 @@ const PIE_OTHER_THRESHOLD = 0.03;
 // IRS 1099-NEC threshold: vendors paid ≥$600 in a calendar year need a 1099.
 const VENDOR_1099_THRESHOLD = 600;
 
-// IRS standard mileage rate for 2025 (cents per mile). Updated annually.
+// IRS standard mileage rate (cents per mile). Check irs.gov each December for
+// the next year's rate and update this value. 2025 = 70¢, 2026 = 70¢ (verify).
 const IRS_MILEAGE_RATE_CENTS = 70;
+
+// Section 199A QBI deduction: qualified rental landlords can deduct 20% of net
+// rental income on their federal return. Illinois does NOT allow this deduction
+// (IL starts from federal AGI, which is before QBI).
+const QBI_DEDUCTION_RATE = 0.20;
+
+// Net Investment Income Tax: an additional 3.8% surtax on rental income for
+// high earners (AGI > $200K single / $250K MFJ).
+const NIIT_RATE = 0.038;
 
 // Default marginal tax rates for estimated liability (user can adjust).
 const DEFAULT_FEDERAL_RATE = 24;
@@ -69,11 +79,34 @@ interface CapitalItem {
   id: string;
   date: string;
   amount: number;
+  category: string;
   categoryLabel: string;
   description?: string;
   propertyName?: string;
   capitalProjectId?: string;
   capitalProjectName?: string;
+}
+
+/** IRS recovery period (useful life) for capital asset depreciation. */
+function recoveryPeriod(category: string): string {
+  switch (category) {
+    case 'appliance_replacement': return '5 yr';
+    case 'capital_improvements':
+    case 'property_improvements':
+    case 'unit_improvements': return '27.5 yr';
+    default: return '—';
+  }
+}
+
+/** Tooltip explaining the recovery period for the capital items table. */
+function recoveryHint(category: string): string {
+  switch (category) {
+    case 'appliance_replacement': return 'Appliances: 5 year MACRS recovery';
+    case 'capital_improvements':
+    case 'property_improvements':
+    case 'unit_improvements': return 'Residential structure improvements: 27.5 year straight line';
+    default: return 'Ask your accountant for the correct recovery class';
+  }
 }
 
 interface DepreciationRow {
@@ -305,6 +338,7 @@ export function TaxReport() {
             id: e.id,
             date: e.date,
             amount: e.amount,
+            category: e.category,
             categoryLabel: TAX_CATEGORIES[taxCat]?.label || taxCat,
             description: e.description,
             propertyName: e.propertyId ? propertyNameById.get(e.propertyId) : undefined,
@@ -449,6 +483,22 @@ export function TaxReport() {
     return major;
   }, [main.expensesByCategory]);
 
+  // ── Mileage state (persisted per year in localStorage) ──
+  const [mileage, setMileage] = useState(() => {
+    const saved = localStorage.getItem(`mileage_${year}`);
+    return saved ? Number(saved) : 0;
+  });
+  useEffect(() => {
+    const saved = localStorage.getItem(`mileage_${year}`);
+    setMileage(saved ? Number(saved) : 0);
+  }, [year]);
+  const saveMileage = (val: number) => {
+    const clamped = Math.max(0, Math.round(val));
+    setMileage(clamped);
+    localStorage.setItem(`mileage_${year}`, String(clamped));
+  };
+  const mileageDeduction = mileage * (IRS_MILEAGE_RATE_CENTS / 100);
+
   // ── Estimated tax liability (configurable rates, persisted in localStorage) ──
   const [fedRate, setFedRate] = useState(() => {
     const saved = localStorage.getItem('tax_fed_rate');
@@ -461,8 +511,15 @@ export function TaxReport() {
   useEffect(() => { localStorage.setItem('tax_fed_rate', String(fedRate)); }, [fedRate]);
   useEffect(() => { localStorage.setItem('tax_state_rate', String(stateRate)); }, [stateRate]);
 
-  const estimatedFederal = Math.max(0, main.netIncome * (fedRate / 100));
-  const estimatedState = Math.max(0, main.netIncome * (stateRate / 100));
+  // Adjusted net income: subtract mileage deduction (Schedule E Line 6).
+  const adjustedNet = main.netIncome - mileageDeduction;
+  // QBI: 20% of net rental income (federal only, not Illinois).
+  const qbiDeduction = Math.max(0, adjustedNet * QBI_DEDUCTION_RATE);
+  // Federal taxable = net income minus QBI. State taxable = net income (no QBI in IL).
+  const federalTaxable = Math.max(0, adjustedNet - qbiDeduction);
+  const stateTaxable = Math.max(0, adjustedNet); // IL does not allow QBI
+  const estimatedFederal = federalTaxable * (fedRate / 100);
+  const estimatedState = stateTaxable * (stateRate / 100);
   const estimatedSelfEmployment = 0; // Rental income generally not subject to SE tax
   const estimatedTotal = estimatedFederal + estimatedState + estimatedSelfEmployment;
 
@@ -479,22 +536,6 @@ export function TaxReport() {
       };
     });
   }, [periodData, year]);
-
-  // ── Mileage state (persisted per year in localStorage) ──
-  const [mileage, setMileage] = useState(() => {
-    const saved = localStorage.getItem(`mileage_${year}`);
-    return saved ? Number(saved) : 0;
-  });
-  useEffect(() => {
-    const saved = localStorage.getItem(`mileage_${year}`);
-    setMileage(saved ? Number(saved) : 0);
-  }, [year]);
-  const saveMileage = (val: number) => {
-    const clamped = Math.max(0, Math.round(val));
-    setMileage(clamped);
-    localStorage.setItem(`mileage_${year}`, String(clamped));
-  };
-  const mileageDeduction = mileage * (IRS_MILEAGE_RATE_CENTS / 100);
 
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -673,7 +714,10 @@ export function TaxReport() {
       depreciation: main.depreciation,
       mortgage: { interestDeducted: main.mortgageInterestDeducted, principalExcluded: main.mortgagePrincipalExcluded },
       netIncome: main.netIncome,
-      estimatedTax: { federal: round2(estimatedFederal), state: round2(estimatedState), total: round2(estimatedTotal), federalRate: fedRate, stateRate: stateRate },
+      mileageDeduction: round2(mileageDeduction),
+      qbiDeduction: round2(qbiDeduction),
+      adjustedNetIncome: round2(adjustedNet),
+      estimatedTax: { federal: round2(estimatedFederal), state: round2(estimatedState), total: round2(estimatedTotal), federalRate: fedRate, stateRate: stateRate, note: 'Federal includes QBI deduction; Illinois does not allow QBI' },
     };
     zip.file(`tax-summary-${label}.json`, JSON.stringify(report, null, 2));
 
@@ -1237,6 +1281,7 @@ export function TaxReport() {
                             <th className="text-left py-2.5 px-4 font-medium">Category</th>
                             <th className="text-left py-2.5 px-4 font-medium">Item</th>
                             <th className="text-left py-2.5 px-4 font-medium">Property</th>
+                            <th className="text-center py-2.5 px-4 font-medium">Recovery</th>
                             <th className="text-right py-2.5 px-4 font-medium">Amount</th>
                           </tr>
                         </thead>
@@ -1247,12 +1292,15 @@ export function TaxReport() {
                               <td className="py-2.5 px-4">{item.categoryLabel}</td>
                               <td className="py-2.5 px-4 text-muted">{item.description || '—'}</td>
                               <td className="py-2.5 px-4 text-muted">{item.propertyName || '—'}</td>
+                              <td className="py-2.5 px-4 text-center" title={recoveryHint(item.category)}>
+                                <Badge variant="secondary" className="text-xs">{recoveryPeriod(item.category)}</Badge>
+                              </td>
                               <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(item.amount)}</td>
                             </tr>
                           ))}
                           {group.items.length > 1 && (
                             <tr className="bg-canvas font-semibold">
-                              <td colSpan={4} className="py-2 px-4 text-right text-xs text-muted uppercase">
+                              <td colSpan={5} className="py-2 px-4 text-right text-xs text-muted uppercase">
                                 {key ? 'Project Total' : 'Subtotal'}
                               </td>
                               <td className="py-2 px-4 text-right tnum">{formatCurrency(group.total)}</td>
@@ -1453,23 +1501,46 @@ export function TaxReport() {
         {!collapsed.has('tips') && <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <h4 className="font-semibold">Income to Report</h4>
+              <h4 className="font-semibold">Income to report</h4>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted">
                 <li>All rent payments received</li>
                 <li>Late fees and penalties</li>
                 <li>Move-in fees collected</li>
                 <li>Payments for repairs from tenants</li>
+                <li>Application fees, pet fees, parking fees</li>
+                <li>Security deposits you kept (forfeited)</li>
               </ul>
             </div>
             <div className="space-y-2">
-              <h4 className="font-semibold">Common Deductions</h4>
+              <h4 className="font-semibold">Common deductions</h4>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted">
                 <li>Mortgage interest and points</li>
                 <li>Property taxes</li>
                 <li>Operating expenses</li>
                 <li>Depreciation (residential: 27.5 years)</li>
                 <li>Repairs and maintenance</li>
+                <li>Mileage for property visits and supply runs</li>
               </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold">Forms to file</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted">
+                <li><strong className="text-ink font-medium">Schedule E</strong> (Form 1040): your rental income and expenses</li>
+                <li><strong className="text-ink font-medium">Form 4562</strong>: required when you claim depreciation (even if the amount has not changed from last year)</li>
+                <li><strong className="text-ink font-medium">Form 8995 or 8995-A</strong>: required if you claim the QBI deduction</li>
+                <li><strong className="text-ink font-medium">1099-NEC</strong>: for each vendor you paid $600+ (due Jan 31)</li>
+                <li><strong className="text-ink font-medium">IL-1040</strong>: Illinois uses federal AGI as the starting point (no separate rental schedule)</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold">Capital asset recovery periods</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted">
+                <li><strong className="text-ink font-medium">5 years:</strong> appliances, carpeting, furniture</li>
+                <li><strong className="text-ink font-medium">7 years:</strong> office furniture and equipment</li>
+                <li><strong className="text-ink font-medium">15 years:</strong> land improvements (fences, sidewalks, driveways, landscaping)</li>
+                <li><strong className="text-ink font-medium">27.5 years:</strong> residential building and structural improvements</li>
+              </ul>
+              <p className="text-xs text-muted">These items go on Form 4562, not as current year expenses on Schedule E.</p>
             </div>
           </div>
         </CardContent>}
@@ -1562,7 +1633,7 @@ export function TaxReport() {
               />
             </div>
             <div>
-              <label className="block text-xs text-muted mb-1">State rate (%)</label>
+              <label className="block text-xs text-muted mb-1">State rate (%) (IL: 4.95%)</label>
               <input
                 type="number" min={0} max={20} step={0.1}
                 value={stateRate}
@@ -1571,13 +1642,61 @@ export function TaxReport() {
               />
             </div>
           </div>
-          {main.netIncome <= 0 ? (
+
+          {/* ── Income waterfall ─────────────────────────────────── */}
+          <div className="rounded-xl border border-line p-4 mb-5">
+            <h4 className="text-sm font-semibold mb-3">How the estimate is calculated</h4>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-b border-line">
+                  <td className="py-2 text-muted">Net rental income</td>
+                  <td className="py-2 text-right tnum font-medium">{formatCurrency(main.netIncome)}</td>
+                </tr>
+                {mileageDeduction > 0 && (
+                  <tr className="border-b border-line">
+                    <td className="py-2 text-muted">Mileage deduction ({mileage.toLocaleString()} mi)</td>
+                    <td className="py-2 text-right tnum text-positive">({formatCurrency(mileageDeduction)})</td>
+                  </tr>
+                )}
+                <tr className="border-b border-line font-medium">
+                  <td className="py-2">Adjusted net income</td>
+                  <td className="py-2 text-right tnum">{formatCurrency(adjustedNet)}</td>
+                </tr>
+                {adjustedNet > 0 && (
+                  <>
+                    <tr className="border-b border-line">
+                      <td className="py-2 text-muted">QBI deduction (20%, federal only)</td>
+                      <td className="py-2 text-right tnum text-positive">({formatCurrency(qbiDeduction)})</td>
+                    </tr>
+                    <tr className="border-b border-line">
+                      <td className="py-2 text-muted">Federal taxable (after QBI)</td>
+                      <td className="py-2 text-right tnum">{formatCurrency(federalTaxable)}</td>
+                    </tr>
+                    <tr className="border-b border-line">
+                      <td className="py-2 text-muted">Illinois taxable (no QBI in IL)</td>
+                      <td className="py-2 text-right tnum">{formatCurrency(stateTaxable)}</td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {adjustedNet <= 0 ? (
             <div className="rounded-xl border border-line p-4 text-center">
               <p className="text-lg font-semibold text-positive">No estimated tax</p>
-              <p className="text-sm text-muted mt-1">
-                Your net rental income is {formatCurrency(main.netIncome)}. A net loss may offset
-                other income on your return (subject to passive activity rules).
+              <p className="text-sm text-muted mt-2">
+                Your adjusted net rental income is {formatCurrency(adjustedNet)}.
               </p>
+              <div className="mt-3 text-left rounded-lg bg-canvas p-3">
+                <p className="text-sm font-medium mb-1">Passive activity loss rules</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted">
+                  <li>Up to $25,000 of rental losses can offset your other income (W-2, business) if your AGI is under $100,000.</li>
+                  <li>The $25,000 allowance phases out between $100,000 and $150,000 AGI.</li>
+                  <li>Above $150,000 AGI: rental losses can only offset other passive income, unless you qualify as a real estate professional.</li>
+                  <li>Unused losses carry forward to future years.</li>
+                </ul>
+              </div>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-3">
@@ -1586,12 +1705,18 @@ export function TaxReport() {
                 <div className="mt-2 text-[22px] leading-none font-semibold text-ink tnum">
                   {formatCurrency(estimatedFederal)}
                 </div>
+                <p className="text-xs text-muted mt-1.5">
+                  On {formatCurrency(federalTaxable)} after QBI
+                </p>
               </div>
               <div className="rounded-xl border border-line p-4">
-                <span className="eyebrow">State ({stateRate}%)</span>
+                <span className="eyebrow">IL State ({stateRate}%)</span>
                 <div className="mt-2 text-[22px] leading-none font-semibold text-ink tnum">
                   {formatCurrency(estimatedState)}
                 </div>
+                <p className="text-xs text-muted mt-1.5">
+                  On {formatCurrency(stateTaxable)} (no QBI in IL)
+                </p>
               </div>
               <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-4">
                 <span className="eyebrow">Estimated Total</span>
@@ -1599,11 +1724,37 @@ export function TaxReport() {
                   {formatCurrency(estimatedTotal)}
                 </div>
                 <p className="text-xs text-muted mt-1.5">
-                  On {formatCurrency(main.netIncome)} net income
+                  {mileageDeduction > 0 ? 'Includes mileage deduction' : `On ${formatCurrency(adjustedNet)} net income`}
                 </p>
               </div>
             </div>
           )}
+
+          {/* NIIT callout */}
+          <div className="rounded-lg bg-canvas border border-line p-3 mt-4">
+            <p className="text-sm">
+              <span className="font-medium">Net Investment Income Tax (NIIT):</span>{' '}
+              <span className="text-muted">
+                If your total AGI exceeds $200,000 (single) or $250,000 (married filing jointly),
+                an additional 3.8% surtax applies to rental income. That would add{' '}
+                <span className="font-medium text-ink tnum">{formatCurrency(Math.max(0, adjustedNet) * NIIT_RATE)}</span> to
+                the estimate above. Consult your tax preparer if this applies to you.
+              </span>
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-canvas border border-line p-3 mt-3">
+            <p className="text-sm">
+              <span className="font-medium">Section 199A (QBI) eligibility:</span>{' '}
+              <span className="text-muted">
+                Most rental landlords qualify for the 20% QBI deduction on their federal return.
+                Exceptions include very high earners ($182,100+ single / $364,200+ MFJ) whose
+                deduction may be limited. The deduction does NOT apply to Illinois state tax because
+                IL starts from federal AGI, which is calculated before QBI.
+              </span>
+            </p>
+          </div>
+
           <p className="text-xs text-muted mt-3">
             Rental income is generally passive and not subject to self-employment tax.
             Your effective rate depends on your total taxable income. These rates are saved
@@ -1683,7 +1834,7 @@ export function TaxReport() {
         {!collapsed.has('mileage') && <CardContent>
           <p className="text-sm text-muted mb-4">
             Track business miles driven for rental activities (property visits, supply runs, bank trips).
-            The IRS standard mileage rate for 2025 is ${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}/mile.
+            The IRS standard mileage rate is ${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}/mile. Verify the current year's rate at irs.gov.
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
@@ -1716,7 +1867,8 @@ export function TaxReport() {
           <p className="text-xs text-muted mt-3">
             Keep a log of each trip (date, destination, purpose, miles). You can deduct either
             standard mileage OR actual expenses (gas, maintenance, depreciation) for vehicle use,
-            not both. The mileage shown here is not included in the deductible expenses total above.
+            not both. The mileage deduction is factored into the Estimated Tax Liability section.
+            On your actual return, it goes on Schedule E Line 6 (Auto and travel).
           </p>
         </CardContent>}
       </Card>
