@@ -13,6 +13,10 @@ export interface MonthSettlement {
   paid: number;
   balance: number;
   status: 'paid' | 'partial' | 'unpaid';
+  /** Amount of carry-forward credit applied to this month (0 when none). */
+  creditApplied: number;
+  /** Credit remaining after this month that will carry to the next (0 when none). */
+  creditRemaining: number;
 }
 
 /** Money is compared to the cent; anything closer than half a cent is equal. */
@@ -228,19 +232,21 @@ export function settleMonth(
   // A draft lease a realtor created (awaiting review) owes nothing until Belle
   // finalizes it, enforced here too so no caller can bill it by skipping the
   // leasesOwingMonth gate.
-  if (lease.needsReview) return { due: 0, paid: 0, balance: 0, status: 'paid' };
+  if (lease.needsReview) return { due: 0, paid: 0, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: 0 };
   // Same safety net for unapproved renewals: a pending/rejected/draft renewal
   // must never bill rent, even if a caller bypasses leasesOwingMonth.
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
-    return { due: 0, paid: 0, balance: 0, status: 'paid' };
+    return { due: 0, paid: 0, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: 0 };
   const due = round2(lease.monthlyRent || 0);
   const paid = round2(
     paymentsForMonth(lease.id, payments, month, year).reduce((sum, p) => sum + (p.amount || 0), 0)
   );
 
-  if (paid <= 0) return { due, paid: 0, balance: due, status: 'unpaid' };
-  if (paid + EPSILON >= due) return { due, paid, balance: 0, status: 'paid' };
-  return { due, paid, balance: round2(due - paid), status: 'partial' };
+  if (paid <= 0) return { due, paid: 0, balance: due, status: 'unpaid', creditApplied: 0, creditRemaining: 0 };
+  // Overpayment: credit will be picked up by settleWithCarryForward if called.
+  const surplus = paid > due + EPSILON ? round2(paid - due) : 0;
+  if (paid + EPSILON >= due) return { due, paid, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: surplus };
+  return { due, paid, balance: round2(due - paid), status: 'partial', creditApplied: 0, creditRemaining: 0 };
 }
 
 /** A lease is flagged past due once it owes this many months or more. */
@@ -324,14 +330,19 @@ export function settleWithCarryForward(
           paid: effectivePaid,
           balance: Math.max(0, newBalance),
           status: newBalance <= EPSILON ? 'paid' : 'partial',
+          creditApplied: applied,
+          creditRemaining: credit,
         },
       });
     } else {
-      out.push({ ym: t, settlement: base });
       // Accumulate any overpayment as credit for the next month.
       if (base.paid > base.due + EPSILON) {
         credit = round2(credit + base.paid - base.due);
       }
+      out.push({
+        ym: t,
+        settlement: { ...base, creditApplied: 0, creditRemaining: credit },
+      });
     }
   }
 

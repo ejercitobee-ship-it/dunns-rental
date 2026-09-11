@@ -168,6 +168,8 @@ export function TenantHome() {
           amount={lease.monthlyRent}
           status={thisMonth?.status ?? null}
           balance={thisMonth?.balance ?? 0}
+          creditApplied={thisMonth?.creditApplied ?? 0}
+          creditRemaining={thisMonth?.creditRemaining ?? 0}
           dueDay={dueDay}
           daysToDue={daysToDue}
           greeting={greetingFor()}
@@ -260,12 +262,14 @@ export function TenantHome() {
 // The signature surface of the tenant app: this month's rent, its status, and
 // how close the due date is, on a rich evergreen card.
 function RentHero({
-  monthLabel, amount, status, balance, dueDay, daysToDue, greeting, firstName, initials, photoUrl, pastDue,
+  monthLabel, amount, status, balance, creditApplied, creditRemaining, dueDay, daysToDue, greeting, firstName, initials, photoUrl, pastDue,
 }: {
   monthLabel: string;
   amount: number;
   status: 'paid' | 'partial' | 'unpaid' | null;
   balance: number;
+  creditApplied: number;
+  creditRemaining: number;
   dueDay: number;
   daysToDue: number;
   greeting: string;
@@ -333,6 +337,22 @@ function RentHero({
             </>
           )}
         </div>
+
+        {/* Credit info: show when credit was applied or is remaining */}
+        {(creditApplied > 0 || creditRemaining > 0) && (
+          <div className="mt-3 rounded-xl bg-[#a9e0c3]/15 border border-[#a9e0c3]/25 px-4 py-3">
+            {creditApplied > 0 && (
+              <p className="text-[13px] text-[#a9e0c3] font-medium">
+                {formatCurrency(creditApplied)} credit applied this month
+              </p>
+            )}
+            {creditRemaining > 0 && (
+              <p className={`text-[12px] text-white/70 ${creditApplied > 0 ? 'mt-1' : ''}`}>
+                {formatCurrency(creditRemaining)} credit available for next month
+              </p>
+            )}
+          </div>
+        )}
 
         {pastDue && (
           <div className="mt-4 rounded-xl bg-[#c0342a]/20 border border-[#c0342a]/30 px-4 py-3 flex items-start gap-2.5">

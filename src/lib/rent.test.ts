@@ -444,7 +444,7 @@ describe('rentIncomeForYear', () => {
 
 describe('groupLeaseMonthRows', () => {
   const settle = (over: Partial<MonthSettlement> = {}): MonthSettlement => ({
-    due: 1000, paid: 0, balance: 1000, status: 'unpaid', ...over,
+    due: 1000, paid: 0, balance: 1000, status: 'unpaid', creditApplied: 0, creditRemaining: 0, ...over,
   });
   const paid = settle({ paid: 1000, balance: 0, status: 'paid' });
   // Minimal row: the helper only reads lease/month/settlement, plus whatever

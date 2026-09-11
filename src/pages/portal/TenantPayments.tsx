@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DollarSign, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { DollarSign, CheckCircle, Clock, AlertCircle, ArrowDownCircle } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { portalApi, type PortalLease, type PortalMoveInFee } from '../../lib/api';
@@ -16,6 +16,7 @@ const statusConfig = {
   paid: { label: 'Paid', variant: 'success', icon: CheckCircle },
   partial: { label: 'Partial', variant: 'warning', icon: Clock },
   unpaid: { label: 'Unpaid', variant: 'destructive', icon: AlertCircle },
+  credit: { label: 'Credit', variant: 'secondary', icon: ArrowDownCircle },
 } as const;
 
 // The rent-math functions expect a full Lease. The portal serializer carries
@@ -97,7 +98,7 @@ export function TenantPayments() {
     amount: number;
     method: string;
     paidOn?: string;
-    status: 'paid' | 'partial' | 'unpaid';
+    status: 'paid' | 'partial' | 'unpaid' | 'credit';
     receiptDocId?: string;
     generatePaymentId?: string;
   }
@@ -128,9 +129,12 @@ export function TenantPayments() {
         });
       }
 
-      const balance = settleMonthWithCredit(fullLease, payments, month, year).balance;
-      if (balance > 0) {
-        out.push({ key: `${year}-${month}-due`, label, amount: balance, method: '', status: 'unpaid' });
+      const settlement = settleMonthWithCredit(fullLease, payments, month, year);
+      if (settlement.creditApplied > 0) {
+        out.push({ key: `${year}-${month}-credit`, label, amount: settlement.creditApplied, method: 'From overpayment', status: 'credit' });
+      }
+      if (settlement.balance > 0) {
+        out.push({ key: `${year}-${month}-due`, label, amount: settlement.balance, method: '', status: 'unpaid' });
       }
     }
 
@@ -190,6 +194,23 @@ export function TenantPayments() {
         <p className="text-sm text-muted mt-1">Your month-by-month rent history and receipts.</p>
       </div>
 
+      {/* Credit balance banner */}
+      {lease && (() => {
+        const fullLease = toLease(lease);
+        const now = new Date();
+        const s = settleMonthWithCredit(fullLease, payments, now.getMonth() + 1, now.getFullYear());
+        if (s.creditRemaining <= 0) return null;
+        return (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#e8f5e9] border border-[#a5d6a7]">
+            <ArrowDownCircle className="h-5 w-5 text-[#2e7d32] flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-[#1b5e20]">You have {formatCurrency(s.creditRemaining)} in credit</p>
+              <p className="text-xs text-[#388e3c]">This will be applied automatically to your next month's rent.</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {!lease ? (
         <Card>
           <CardContent className="p-6">
@@ -214,7 +235,9 @@ export function TenantPayments() {
                 const StatusIcon = status.icon;
                 const sub = row.status === 'unpaid'
                   ? 'Not yet paid'
-                  : [row.method, row.paidOn ? formatDate(row.paidOn) : ''].filter(Boolean).join(' · ');
+                  : row.status === 'credit'
+                    ? row.method || 'Credit applied from prior overpayment'
+                    : [row.method, row.paidOn ? formatDate(row.paidOn) : ''].filter(Boolean).join(' · ');
                 return (
                   <div key={row.key} className="flex items-center gap-3 px-2.5 py-3.5">
                     <span className={`w-10 h-10 rounded-xl grid place-items-center flex-shrink-0 ${statusChip[row.status]}`}>
@@ -228,8 +251,8 @@ export function TenantPayments() {
                       {sub && <p className="text-xs text-muted mt-0.5 truncate">{sub}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className={`tnum font-semibold ${row.status === 'unpaid' ? 'text-danger' : 'text-ink'}`}>
-                        {formatCurrency(row.amount)}
+                      <p className={`tnum font-semibold ${row.status === 'unpaid' ? 'text-danger' : row.status === 'credit' ? 'text-[#2e7d32]' : 'text-ink'}`}>
+                        {row.status === 'credit' ? `−${formatCurrency(row.amount)}` : formatCurrency(row.amount)}
                       </p>
                       {row.receiptDocId ? (
                         <a
@@ -263,8 +286,9 @@ export function TenantPayments() {
 }
 
 // Soft icon-chip background per payment status.
-const statusChip = {
+const statusChip: Record<string, string> = {
   paid: 'bg-primary-soft text-primary',
   partial: 'bg-warning-soft text-warning',
   unpaid: 'bg-danger-soft text-danger',
-} as const;
+  credit: 'bg-[#e8f5e9] text-[#2e7d32]',
+};
