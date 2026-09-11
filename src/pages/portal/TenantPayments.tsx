@@ -6,7 +6,7 @@ import { portalApi, type PortalLease, type PortalMoveInFee } from '../../lib/api
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
 import { settleMonthWithCredit, rentMonthsToShow } from '../../lib/rent';
-import type { Lease, RentPayment, PortalPayment } from '../../types';
+import type { Lease, RentPayment, PaymentAllocation, PortalPayment } from '../../types';
 
 // This app has had a React #310 white screen from a useMemo called after an
 // early return, so every hook below runs unconditionally before the
@@ -59,6 +59,7 @@ export function TenantPayments() {
   // The raw rows (with real id + receiptDocumentId) kept alongside, so a month
   // can offer its receipt; `payments` above stays the id-less shape settleMonth uses.
   const [rawPayments, setRawPayments] = useState<PortalPayment[]>([]);
+  const [allocations, setAllocations] = useState<PaymentAllocation[]>([]);
   const [moveInFee, setMoveInFee] = useState<PortalMoveInFee | null>(null);
   const [receiptOverrides, setReceiptOverrides] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export function TenantPayments() {
         setLease(res.lease);
         setPayments(res.lease ? toRentPayments(res.lease.id, res.payments) : []);
         setRawPayments(res.lease ? res.payments : []);
+        setAllocations(res.allocations ?? []);
         setMoveInFee(res.moveInFee ?? null);
       })
       .catch((err) => {
@@ -129,7 +131,7 @@ export function TenantPayments() {
         });
       }
 
-      const settlement = settleMonthWithCredit(fullLease, payments, month, year);
+      const settlement = settleMonthWithCredit(fullLease, payments, month, year, undefined, allocations);
       if (settlement.creditApplied > 0) {
         out.push({ key: `${year}-${month}-credit`, label, amount: settlement.creditApplied, method: 'From overpayment', status: 'credit' });
       }
@@ -151,7 +153,7 @@ export function TenantPayments() {
       });
     }
     return out;
-  }, [lease, payments, rawPayments, receiptOverrides, moveInFee]);
+  }, [lease, payments, rawPayments, allocations, receiptOverrides, moveInFee]);
 
   const handleGenerateReceipt = async (paymentId: string) => {
     if (generating) return;
@@ -198,7 +200,7 @@ export function TenantPayments() {
       {lease && (() => {
         const fullLease = toLease(lease);
         const now = new Date();
-        const s = settleMonthWithCredit(fullLease, payments, now.getMonth() + 1, now.getFullYear());
+        const s = settleMonthWithCredit(fullLease, payments, now.getMonth() + 1, now.getFullYear(), undefined, allocations);
         if (s.creditRemaining <= 0) return null;
         return (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#e8f5e9] border border-[#a5d6a7]">

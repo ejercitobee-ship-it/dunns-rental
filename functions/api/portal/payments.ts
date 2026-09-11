@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib/session';
 import { tenantIdForUser, leasePauses } from '../../lib/portal';
-import { serializePortalLease } from '../../lib/serializers';
+import { serializePortalLease, serializeAllocation } from '../../lib/serializers';
 
 /**
  * GET /api/portal/payments — the payment history of the caller's own lease.
@@ -45,6 +45,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         ORDER BY year DESC, month DESC`
     ).bind(lease.id).all();
 
+    // Allocations for this lease's payments, so the portal settlement math
+    // correctly handles multi-month payments and carry-forward credit.
+    const { results: allocResults } = await env.DB.prepare(
+      'SELECT * FROM payment_allocations WHERE lease_id = ? ORDER BY year, month'
+    ).bind(lease.id).all();
+
     // The move-in fee, when paid, shows in the tenant's payment history too,
     // with its receipt. Derived from the lease, not a rent_payment.
     const l = lease as Record<string, unknown>;
@@ -73,6 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           paymentMethod: r.payment_method ?? undefined,
           receiptDocumentId: r.receipt_document_id ?? undefined,
         })),
+        allocations: (allocResults || []).map(serializeAllocation),
       },
     });
   } catch {

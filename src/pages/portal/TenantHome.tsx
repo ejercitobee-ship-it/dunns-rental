@@ -10,7 +10,7 @@ import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMembe
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonthWithCredit, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
-import type { Lease, RentPayment, Tenant } from '../../types';
+import type { Lease, RentPayment, PaymentAllocation, Tenant } from '../../types';
 
 // Time-of-day greeting for the home header.
 function greetingFor(d = new Date()): string {
@@ -37,6 +37,7 @@ function toLease(pl: PortalLease): Lease {
 export function TenantHome() {
   const [me, setMe] = useState<PortalMeResponse | null>(null);
   const [payments, setPayments] = useState<RentPayment[]>([]);
+  const [allocations, setAllocations] = useState<PaymentAllocation[]>([]);
   const [realtors, setRealtors] = useState<RealtorContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function TenantHome() {
             ? paymentsRes.payments.map((p, i) => ({ id: `${leaseId}-${i}`, leaseId, ...p }))
             : []
         );
+        setAllocations(paymentsRes.allocations ?? []);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -95,16 +97,16 @@ export function TenantHome() {
     const year = now.getFullYear();
     const owing = leasesOwingMonth(allLeases, month, year);
     if (!owing.some(l => l.id === lease.id)) return null;
-    return settleMonthWithCredit(lease, payments, month, year, allLeases);
-  }, [me, payments, allLeases]);
+    return settleMonthWithCredit(lease, payments, month, year, allLeases, allocations);
+  }, [me, payments, allLeases, allocations]);
 
   const pastDue = useMemo(() => {
     if (!me?.lease) return null;
     const now = new Date();
     const threshold = me.pastDueMonths ?? PAST_DUE_MONTHS;
-    const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear(), allLeases);
+    const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear(), allLeases, allocations);
     return pd.months >= threshold ? pd : null;
-  }, [me, payments, allLeases]);
+  }, [me, payments, allLeases, allocations]);
 
   // Nudge the tenant when their lease is within a month of expiring (or has
   // expired), so they know to reach out about renewing.

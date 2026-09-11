@@ -788,6 +788,7 @@ export interface PortalMoveInFee {
 export interface PortalPaymentsResponse {
   lease: PortalLease | null;
   payments: PortalPayment[];
+  allocations?: PaymentAllocation[];
   moveInFee?: PortalMoveInFee | null;
 }
 
