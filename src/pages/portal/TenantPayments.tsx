@@ -41,6 +41,7 @@ function toRentPayments(leaseId: string, payments: PortalPayment[]): RentPayment
     month: p.month,
     year: p.year,
     paymentMethod: p.paymentMethod,
+    type: p.type,
   }));
 }
 

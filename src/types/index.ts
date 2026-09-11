@@ -591,6 +591,8 @@ export interface PortalPayment {
   // still never who paid, so the shared-lease privacy rule holds.
   paymentMethod?: PaymentMethod;
   receiptDocumentId?: string;
+  /** 'payment' (default) or 'credit' (admin-applied balance reduction). */
+  type?: 'payment' | 'credit';
 }
 
 /** Comprehensive property profile returned by GET /api/properties/:id/profile. */
