@@ -214,6 +214,41 @@ export interface RentPayment {
 
 export type CreditReason = 'proration' | 'maintenance' | 'balance' | 'other';
 
+/** Links a portion of a payment to a specific rent period or late fee. */
+export interface PaymentAllocation {
+  id: string;
+  paymentId: string;
+  leaseId: string;
+  month: number;
+  year: number;
+  amount: number;
+  /** 'rent' = applied to monthly rent; 'late_fee' = applied to a late fee charge. */
+  type: 'rent' | 'late_fee';
+  createdAt?: number;
+}
+
+export type LateFeeStatus = 'outstanding' | 'paid' | 'partial' | 'waived';
+
+/** A manually assessed late fee charge. */
+export interface LateFee {
+  id: string;
+  leaseId: string;
+  tenantId?: string;
+  propertyId?: string;
+  unitId?: string;
+  month: number;
+  year: number;
+  amount: number;
+  assessedDate: string;
+  status: LateFeeStatus;
+  waivedAt?: number;
+  waivedBy?: string;
+  waiveReason?: string;
+  notes?: string;
+  createdBy: string;
+  createdAt?: number;
+}
+
 export type PaymentMethod =
   | 'check'
   | 'money_order'

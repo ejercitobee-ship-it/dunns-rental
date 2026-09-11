@@ -168,7 +168,7 @@ function Section({ id, title, icon: Icon, badge, collapsed, toggle, children }: 
 // ---------------------------------------------------------------------------
 
 export function Reports() {
-  const { properties, units, leases, rentPayments, expenses, incomes, maintenance, getLeaseTenants } = useApp();
+  const { properties, units, leases, rentPayments, expenses, incomes, maintenance, paymentAllocations, getLeaseTenants } = useApp();
   const [tab, setTab] = useState<ReportTab>('overview');
   const f = useReportFilters();
 
@@ -229,12 +229,12 @@ export function Reports() {
           occupants: getLeaseTenants(lease.id),
           rent: lease.monthlyRent || 0,
           leaseEnd: lease.endDate,
-          settlement: covers ? settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, leases) : null,
+          settlement: covers ? settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, leases, paymentAllocations) : null,
         };
       })
       .sort((a, b) => a.property.localeCompare(b.property));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leases, rentPayments, properties, units, getLeaseTenants, currentMonth, currentYear]);
+  }, [leases, rentPayments, paymentAllocations, properties, units, getLeaseTenants, currentMonth, currentYear]);
 
   const totals = useMemo(() => {
     const scheduled = monthlyRevenue(leases);

@@ -1,16 +1,9 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { serializePayment } from '../../lib/serializers';
+import { serializePayment, serializeAllocation } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { generateReceipt } from '../../lib/receipts';
 import { logActivityStmt } from '../../lib/activity';
-
-/** Resolve a lease's property_id and unit_id for income records. */
-async function leaseContext(env: Env, leaseId: string) {
-  return env.DB.prepare('SELECT property_id, unit_id FROM leases WHERE id = ?')
-    .bind(leaseId)
-    .first<{ property_id: string | null; unit_id: string | null }>();
-}
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -111,47 +104,73 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       );
     }
 
-    // If a late fee was requested, add an income record in the same batch.
-    let lateFeeId: string | null = null;
-    const lf = body.lateFee as { amount?: number; tenantId?: string } | undefined;
-    if (lf && typeof lf.amount === 'number' && lf.amount > 0) {
-      lateFeeId = crypto.randomUUID();
-      const ctx = await leaseContext(env, body.leaseId as string);
-      const lateFeeDate = (body.receivedDate ?? body.paidDate ?? new Date().toISOString().slice(0, 10)) as string;
-      const mo = body.month as number;
-      const yr = body.year as number;
-      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      stmts.push(
-        env.DB.prepare(
-          `INSERT INTO incomes (id, property_id, unit_id, tenant_id, source, amount, date, description, payment_method, related_payment_id, user_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          lateFeeId,
-          ctx?.property_id ?? null,
-          ctx?.unit_id ?? null,
-          lf.tenantId ?? body.paidByTenantId ?? null,
-          'late_fee',
-          lf.amount,
-          lateFeeDate,
-          `Late fee for ${MONTHS[mo - 1]} ${yr} rent`,
-          body.paymentMethod ?? null,
-          id,
-          auth.id
-        ),
-        logActivityStmt(env.DB, auth, {
-          module: 'finances',
-          action: 'Assessed a late fee',
-          targetType: 'income',
-          targetId: lateFeeId,
-          description: `$${lf.amount} late fee for ${mo}/${yr}`,
-          newValues: { amount: lf.amount, month: mo, year: yr, relatedPaymentId: id },
-        })
-      );
+    // Insert payment allocations when provided.
+    // Each allocation links this payment to a specific (month, year) rent period.
+    const allocations = body.allocations as Array<{ month: number; year: number; amount: number; type?: string }> | undefined;
+    if (Array.isArray(allocations) && allocations.length > 0) {
+      let allocTotal = 0;
+      for (const alloc of allocations) {
+        if (!Number.isFinite(alloc.amount) || alloc.amount <= 0) {
+          return jsonError('Each allocation amount must be a positive number', 400);
+        }
+        if (!Number.isInteger(alloc.month) || alloc.month < 1 || alloc.month > 12) {
+          return jsonError('Each allocation month must be between 1 and 12', 400);
+        }
+        if (!Number.isInteger(alloc.year) || alloc.year < 2000) {
+          return jsonError('Each allocation year is invalid', 400);
+        }
+        allocTotal += alloc.amount;
+      }
+      // Allocation total must not exceed payment amount (rounding tolerance).
+      if (Math.round(allocTotal * 100) > Math.round(amount * 100)) {
+        return jsonError('Allocation total cannot exceed payment amount', 400);
+      }
+      for (const alloc of allocations) {
+        stmts.push(
+          env.DB.prepare(
+            `INSERT INTO payment_allocations (id, payment_id, lease_id, month, year, amount, type)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            crypto.randomUUID(),
+            id,
+            body.leaseId,
+            alloc.month,
+            alloc.year,
+            alloc.amount,
+            alloc.type === 'late_fee' ? 'late_fee' : 'rent'
+          )
+        );
+      }
+    }
+
+    // If any allocation targets a late fee, update the matching late_fees record
+    // status. This runs in the same batch so the payment + allocation + status
+    // update are atomic.
+    if (Array.isArray(allocations)) {
+      const lateFeeAllocs = allocations.filter(a => a.type === 'late_fee');
+      for (const lfa of lateFeeAllocs) {
+        // Look up the late fee for this lease+period to decide paid vs partial.
+        const existing = await env.DB.prepare(
+          'SELECT id, amount, status FROM late_fees WHERE lease_id = ? AND month = ? AND year = ? AND status IN (\'outstanding\', \'partial\')'
+        ).bind(body.leaseId, lfa.month, lfa.year).first<{ id: string; amount: number; status: string }>();
+        if (existing) {
+          const newStatus = lfa.amount >= existing.amount ? 'paid' : 'partial';
+          stmts.push(
+            env.DB.prepare(
+              'UPDATE late_fees SET status = ? WHERE id = ?'
+            ).bind(newStatus, existing.id)
+          );
+        }
+      }
     }
 
     await env.DB.batch(stmts);
 
-    const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
+    // Fetch allocations for the response.
+    const [row, allocRows] = await Promise.all([
+      env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first(),
+      env.DB.prepare('SELECT * FROM payment_allocations WHERE payment_id = ? ORDER BY year, month').bind(id).all(),
+    ]);
     // A bulk CSV import posts one row at a time with ?deferSheetSync=1: it skips
     // both the per-row spreadsheet rebuild (dozens of redundant rebuilds that
     // could hit the Sheets rate limit; it rebuilds once at the end) AND per-row
@@ -165,7 +184,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         context.waitUntil(generateReceipt(env, id, auth.id).catch(() => {}));
       }
     }
-    return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>), lateFeeId }, 201);
+    const serializedAllocations = (allocRows?.results || []).map(serializeAllocation);
+    return jsonOk({ success: true, data: { ...serializePayment(row as Record<string, unknown>), allocations: serializedAllocations } }, 201);
   } catch {
     return serverError();
   }

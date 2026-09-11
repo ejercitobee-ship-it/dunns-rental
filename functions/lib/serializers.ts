@@ -197,6 +197,40 @@ export function serializePayment(r: Row) {
   };
 }
 
+export function serializeAllocation(r: Row) {
+  return {
+    id: r.id,
+    paymentId: r.payment_id,
+    leaseId: r.lease_id,
+    month: r.month,
+    year: r.year,
+    amount: r.amount,
+    type: r.type ?? 'rent',
+    createdAt: r.created_at ?? undefined,
+  };
+}
+
+export function serializeLateFee(r: Row) {
+  return {
+    id: r.id,
+    leaseId: r.lease_id,
+    tenantId: r.tenant_id ?? undefined,
+    propertyId: r.property_id ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    month: r.month,
+    year: r.year,
+    amount: r.amount,
+    assessedDate: r.assessed_date,
+    status: r.status,
+    waivedAt: r.waived_at ?? undefined,
+    waivedBy: r.waived_by ?? undefined,
+    waiveReason: r.waive_reason ?? undefined,
+    notes: r.notes ?? undefined,
+    createdBy: r.created_by,
+    createdAt: r.created_at ?? undefined,
+  };
+}
+
 export function serializeExpense(r: Row) {
   return {
     id: r.id,

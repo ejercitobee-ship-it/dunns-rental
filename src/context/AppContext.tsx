@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
-import type { Property, Unit, Tenant, Lease, RentPayment, Expense, Income, MaintenanceRequest, UtilityAccount } from '../types';
+import type { Property, Unit, Tenant, Lease, RentPayment, PaymentAllocation, LateFee, Expense, Income, MaintenanceRequest, UtilityAccount } from '../types';
 import {
   propertiesApi,
+  allocationsApi,
+  lateFeesApi,
+  type PaymentCreateData,
+  type PaymentUpdateData,
   unitsApi,
   tenantsApi,
   leasesApi,
@@ -20,6 +24,8 @@ interface AppState {
   tenants: Tenant[];
   leases: Lease[];
   rentPayments: RentPayment[];
+  paymentAllocations: PaymentAllocation[];
+  lateFees: LateFee[];
   expenses: Expense[];
   incomes: Income[];
   maintenance: MaintenanceRequest[];
@@ -58,7 +64,13 @@ type Action =
   | { type: 'DELETE_MAINTENANCE'; payload: string }
   | { type: 'ADD_UTILITY'; payload: UtilityAccount }
   | { type: 'UPDATE_UTILITY'; payload: UtilityAccount }
-  | { type: 'DELETE_UTILITY'; payload: string };
+  | { type: 'DELETE_UTILITY'; payload: string }
+  | { type: 'SET_ALLOCATIONS'; payload: PaymentAllocation[] }
+  | { type: 'ADD_ALLOCATIONS'; payload: PaymentAllocation[] }
+  | { type: 'SET_LATE_FEES'; payload: LateFee[] }
+  | { type: 'ADD_LATE_FEE'; payload: LateFee }
+  | { type: 'UPDATE_LATE_FEE'; payload: LateFee }
+  | { type: 'DELETE_LATE_FEE'; payload: string };
 
 const initialState: AppState = {
   properties: [],
@@ -66,6 +78,8 @@ const initialState: AppState = {
   tenants: [],
   leases: [],
   rentPayments: [],
+  paymentAllocations: [],
+  lateFees: [],
   expenses: [],
   incomes: [],
   maintenance: [],
@@ -182,6 +196,22 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'DELETE_UTILITY':
       return { ...state, utilityAccounts: state.utilityAccounts.filter(u => u.id !== action.payload) };
+    case 'SET_ALLOCATIONS':
+      return { ...state, paymentAllocations: action.payload };
+    case 'ADD_ALLOCATIONS': {
+      // Replace any existing allocations for the same payment, then add new ones.
+      const newPaymentIds = new Set(action.payload.map(a => a.paymentId));
+      const kept = state.paymentAllocations.filter(a => !newPaymentIds.has(a.paymentId));
+      return { ...state, paymentAllocations: [...kept, ...action.payload] };
+    }
+    case 'SET_LATE_FEES':
+      return { ...state, lateFees: action.payload };
+    case 'ADD_LATE_FEE':
+      return { ...state, lateFees: [...state.lateFees, action.payload] };
+    case 'UPDATE_LATE_FEE':
+      return { ...state, lateFees: state.lateFees.map(lf => lf.id === action.payload.id ? action.payload : lf) };
+    case 'DELETE_LATE_FEE':
+      return { ...state, lateFees: state.lateFees.filter(lf => lf.id !== action.payload) };
     default:
       return state;
   }
@@ -215,10 +245,14 @@ interface AppContextType extends AppState {
   addIncome: (income: Omit<Income, 'id'>) => Promise<void>;
   updateIncome: (income: Income) => Promise<void>;
   deleteIncome: (id: string) => Promise<void>;
-  addRentPayment: (payment: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }) => Promise<void>;
+  addRentPayment: (payment: PaymentCreateData, opts?: { deferSheetSync?: boolean }) => Promise<void>;
   updatePaymentStatus: (id: string, status: RentPayment['status'], paymentDetails?: { receivedDate?: string; paymentMethod?: RentPayment['paymentMethod']; uploadedBy?: string }) => Promise<void>;
-  updateRentPayment: (payment: RentPayment) => Promise<void>;
+  updateRentPayment: (payment: PaymentUpdateData) => Promise<void>;
   deleteRentPayment: (id: string) => Promise<void>;
+  addLateFee: (data: { leaseId: string; month: number; year: number; amount: number; assessedDate: string; tenantId?: string; notes?: string }) => Promise<void>;
+  updateLateFee: (data: Partial<LateFee> & { id: string }) => Promise<void>;
+  waiveLateFee: (id: string, reason?: string) => Promise<void>;
+  deleteLateFee: (id: string) => Promise<void>;
   addMaintenance: (request: Omit<MaintenanceRequest, 'id'>) => Promise<void>;
   updateMaintenance: (request: MaintenanceRequest) => Promise<void>;
   deleteMaintenance: (id: string) => Promise<void>;
@@ -235,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const [properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, utilityAccounts] = await Promise.all([
+      const [properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, utilityAccounts, paymentAllocations, lateFees] = await Promise.all([
         propertiesApi.getAll(),
         unitsApi.getAll(),
         tenantsApi.getAll(),
@@ -245,10 +279,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         incomesApi.getAll(),
         maintenanceApi.getAll(),
         utilityAccountsApi.getAll(),
+        allocationsApi.getAll().catch(() => [] as PaymentAllocation[]),
+        lateFeesApi.getAll().catch(() => [] as LateFee[]),
       ]);
       dispatch({
         type: 'SET_STATE',
-        payload: { properties, units, tenants, leases, rentPayments, expenses, incomes, maintenance, utilityAccounts, isLoading: false },
+        payload: { properties, units, tenants, leases, rentPayments, paymentAllocations, lateFees, expenses, incomes, maintenance, utilityAccounts, isLoading: false },
       });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: (error as Error).message });
@@ -265,7 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({
         type: 'SET_STATE',
         payload: {
-          properties: [], units: [], tenants: [], leases: [], rentPayments: [], expenses: [], incomes: [], maintenance: [], utilityAccounts: [],
+          properties: [], units: [], tenants: [], leases: [], rentPayments: [], paymentAllocations: [], lateFees: [], expenses: [], incomes: [], maintenance: [], utilityAccounts: [],
           isLoading: false, error: null,
         },
       });
@@ -404,9 +440,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_INCOME', payload: id });
   };
 
-  const addRentPayment = async (payment: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }) => {
-    const newPayment = await paymentsApi.create(payment, opts);
-    dispatch({ type: 'ADD_RENT_PAYMENT', payload: newPayment });
+  const addRentPayment = async (payment: PaymentCreateData, opts?: { deferSheetSync?: boolean }) => {
+    const result = await paymentsApi.create(payment, opts);
+    const { allocations: allocs, ...paymentData } = result as RentPayment & { allocations?: PaymentAllocation[] };
+    dispatch({ type: 'ADD_RENT_PAYMENT', payload: paymentData });
+    if (allocs && allocs.length > 0) {
+      dispatch({ type: 'ADD_ALLOCATIONS', payload: allocs });
+    }
   };
 
   const updatePaymentStatus = async (
@@ -428,9 +468,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
   };
 
-  const updateRentPayment = async (payment: RentPayment) => {
-    const updated = await paymentsApi.update(payment.id, payment);
-    dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: updated });
+  const updateRentPayment = async (payment: PaymentUpdateData) => {
+    const result = await paymentsApi.update(payment.id, payment);
+    const { allocations: allocs, ...paymentData } = result as RentPayment & { allocations?: PaymentAllocation[] };
+    dispatch({ type: 'UPDATE_PAYMENT_STATUS', payload: paymentData });
+    if (allocs) {
+      dispatch({ type: 'ADD_ALLOCATIONS', payload: allocs });
+    }
   };
 
   const deleteRentPayment = async (id: string) => {
@@ -451,6 +495,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMaintenance = async (id: string) => {
     await maintenanceApi.delete(id);
     dispatch({ type: 'DELETE_MAINTENANCE', payload: id });
+  };
+
+  const addLateFee = async (data: { leaseId: string; month: number; year: number; amount: number; assessedDate: string; tenantId?: string; notes?: string }) => {
+    const created = await lateFeesApi.create(data);
+    dispatch({ type: 'ADD_LATE_FEE', payload: created });
+  };
+
+  const updateLateFee = async (data: Partial<LateFee> & { id: string }) => {
+    const updated = await lateFeesApi.update(data.id, data);
+    dispatch({ type: 'UPDATE_LATE_FEE', payload: updated });
+  };
+
+  const waiveLateFee = async (id: string, reason?: string) => {
+    const updated = await lateFeesApi.waive(id, reason);
+    dispatch({ type: 'UPDATE_LATE_FEE', payload: updated });
+  };
+
+  const deleteLateFee = async (id: string) => {
+    await lateFeesApi.delete(id);
+    dispatch({ type: 'DELETE_LATE_FEE', payload: id });
   };
 
   const resetData = () => {
@@ -492,6 +556,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updatePaymentStatus,
         updateRentPayment,
         deleteRentPayment,
+        addLateFee,
+        updateLateFee,
+        waiveLateFee,
+        deleteLateFee,
         addMaintenance,
         updateMaintenance,
         deleteMaintenance,

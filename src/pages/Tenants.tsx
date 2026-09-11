@@ -66,7 +66,7 @@ const leaseStatusLabel: Record<LeaseStatus, string> = {
 
 export function Tenants() {
   const {
-    tenants, properties, units, leases, rentPayments,
+    tenants, properties, units, leases, rentPayments, paymentAllocations,
     getLeaseTenants, getTenantLeases, getUnitLease,
     addTenant, addLease,
   } = useApp();
@@ -281,7 +281,7 @@ export function Tenants() {
       // Current month settlement
       let owed = '', paid = '', balance = '', monthStatus = '';
       if (lease && owingLeaseIds.has(lease.id)) {
-        const s = settleMonthWithCredit(lease, rentPayments, curMonth, curYear, leases);
+        const s = settleMonthWithCredit(lease, rentPayments, curMonth, curYear, leases, paymentAllocations);
         owed = formatCurrency(s.due);
         paid = formatCurrency(s.paid);
         balance = formatCurrency(s.balance);

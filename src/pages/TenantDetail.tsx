@@ -58,7 +58,7 @@ export function TenantDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
-    tenants, properties, units, rentPayments,
+    tenants, properties, units, rentPayments, paymentAllocations,
     updateTenant, deleteTenant, addTenant, updateLease, getLeaseTenants, getTenantLeases,
     refreshData,
   } = useApp();
@@ -237,18 +237,18 @@ export function TenantDetail() {
     // excluded from that month because the old lease already covers it.
     const owing = leasesOwingMonth(allTenantLeases, month, year);
     if (!owing.some(l => l.id === lease.id)) return undefined;
-    return settleMonthWithCredit(lease, rentPayments, month, year, allTenantLeases);
-  }, [lease, allTenantLeases, rentPayments]);
+    return settleMonthWithCredit(lease, rentPayments, month, year, allTenantLeases, paymentAllocations);
+  }, [lease, allTenantLeases, rentPayments, paymentAllocations]);
 
   // Every month this tenancy still owes (oldest first), with the amount, so the
   // profile shows exactly which months are behind, not just a total.
   const owed = useMemo(() => {
     if (!lease) return { months: [] as { month: number; year: number; amount: number }[], total: 0 };
     const now = new Date();
-    const months = unsettledMonths(lease, rentPayments, now.getMonth() + 1, now.getFullYear(), allTenantLeases);
+    const months = unsettledMonths(lease, rentPayments, now.getMonth() + 1, now.getFullYear(), allTenantLeases, paymentAllocations);
     const total = Math.round(months.reduce((s, m) => s + m.amount, 0) * 100) / 100;
     return { months, total };
-  }, [lease, allTenantLeases, rentPayments]);
+  }, [lease, allTenantLeases, rentPayments, paymentAllocations]);
 
   const payments = useMemo(() => {
     if (!id) return [];

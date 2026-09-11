@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { serializePayment } from '../../lib/serializers';
+import { serializePayment, serializeAllocation } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { deleteDriveFile } from '../../lib/google';
 import { logActivityStmt } from '../../lib/activity';
@@ -11,11 +11,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?')
-      .bind(params.id as string)
-      .first();
+    const id = params.id as string;
+    const [row, allocRows] = await Promise.all([
+      env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first(),
+      env.DB.prepare('SELECT * FROM payment_allocations WHERE payment_id = ? ORDER BY year, month').bind(id).all(),
+    ]);
     if (!row) return jsonError('Payment not found', 404);
-    return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>) });
+    const allocs = (allocRows?.results || []).map(serializeAllocation);
+    return jsonOk({ success: true, data: { ...serializePayment(row as Record<string, unknown>), allocations: allocs } });
   } catch {
     return serverError();
   }
@@ -49,7 +52,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       return jsonError('Year is required', 400);
     }
 
-    await env.DB.batch([
+    const stmts = [
       env.DB.prepare(
         `UPDATE rent_payments SET
           lease_id = ?, paid_by_tenant_id = ?, amount = ?, due_date = ?, paid_date = ?,
@@ -82,12 +85,64 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         previousValues: { amount: before.amount, status: before.status, month: before.month, year: before.year },
         newValues: { amount: body.amount, status: body.status ?? 'pending', month: body.month, year: body.year },
       }),
-    ]);
+    ];
 
-    const row = await env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first();
+    // Replace allocations if provided.
+    const allocations = body.allocations as Array<{ month: number; year: number; amount: number; type?: string }> | undefined;
+    if (Array.isArray(allocations)) {
+      // Delete existing allocations, then insert new ones.
+      stmts.push(
+        env.DB.prepare('DELETE FROM payment_allocations WHERE payment_id = ?').bind(id)
+      );
+      const paymentAmount = Number(body.amount);
+      let allocTotal = 0;
+      for (const alloc of allocations) {
+        if (!Number.isFinite(alloc.amount) || alloc.amount <= 0) continue;
+        allocTotal += alloc.amount;
+        stmts.push(
+          env.DB.prepare(
+            `INSERT INTO payment_allocations (id, payment_id, lease_id, month, year, amount, type)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            crypto.randomUUID(),
+            id,
+            body.leaseId,
+            alloc.month,
+            alloc.year,
+            alloc.amount,
+            alloc.type === 'late_fee' ? 'late_fee' : 'rent'
+          )
+        );
+      }
+      if (Math.round(allocTotal * 100) > Math.round(paymentAmount * 100)) {
+        return jsonError('Allocation total cannot exceed payment amount', 400);
+      }
+
+      // Update late_fees status for any late_fee allocations.
+      const lateFeeAllocs = allocations.filter(a => a.type === 'late_fee' && a.amount > 0);
+      for (const lfa of lateFeeAllocs) {
+        const existing = await env.DB.prepare(
+          'SELECT id, amount, status FROM late_fees WHERE lease_id = ? AND month = ? AND year = ? AND status IN (\'outstanding\', \'partial\')'
+        ).bind(body.leaseId, lfa.month, lfa.year).first<{ id: string; amount: number; status: string }>();
+        if (existing) {
+          const newStatus = lfa.amount >= existing.amount ? 'paid' : 'partial';
+          stmts.push(
+            env.DB.prepare('UPDATE late_fees SET status = ? WHERE id = ?').bind(newStatus, existing.id)
+          );
+        }
+      }
+    }
+
+    await env.DB.batch(stmts);
+
+    const [row, allocRows] = await Promise.all([
+      env.DB.prepare('SELECT * FROM rent_payments WHERE id = ?').bind(id).first(),
+      env.DB.prepare('SELECT * FROM payment_allocations WHERE payment_id = ? ORDER BY year, month').bind(id).all(),
+    ]);
     if (!row) return jsonError('Payment not found', 404);
     syncRentSheet(context);
-    return jsonOk({ success: true, data: serializePayment(row as Record<string, unknown>) });
+    const serializedAllocations = (allocRows?.results || []).map(serializeAllocation);
+    return jsonOk({ success: true, data: { ...serializePayment(row as Record<string, unknown>), allocations: serializedAllocations } });
   } catch {
     return serverError();
   }

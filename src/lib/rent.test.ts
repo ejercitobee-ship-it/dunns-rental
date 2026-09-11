@@ -97,7 +97,7 @@ describe('activeLeases', () => {
 describe('settleMonth', () => {
   it('settles when one person pays in full', () => {
     const s = settleMonth(lease(), [payment()], 7, 2026);
-    expect(s).toEqual({ due: 1325, paid: 1325, balance: 0, status: 'paid' });
+    expect(s).toEqual({ due: 1325, paid: 1325, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: 0 });
   });
 
   it('settles when roommates split the month and it adds up', () => {
@@ -113,12 +113,12 @@ describe('settleMonth', () => {
 
   it('reports partial with the remaining balance when short', () => {
     const s = settleMonth(lease(), [payment({ amount: 700 })], 7, 2026);
-    expect(s).toEqual({ due: 1325, paid: 700, balance: 625, status: 'partial' });
+    expect(s).toEqual({ due: 1325, paid: 700, balance: 625, status: 'partial', creditApplied: 0, creditRemaining: 0 });
   });
 
   it('reports unpaid when nothing was paid', () => {
     const s = settleMonth(lease(), [], 7, 2026);
-    expect(s).toEqual({ due: 1325, paid: 0, balance: 1325, status: 'unpaid' });
+    expect(s).toEqual({ due: 1325, paid: 0, balance: 1325, status: 'unpaid', creditApplied: 0, creditRemaining: 0 });
   });
 
   it('ignores payments from other months, years and leases', () => {
@@ -582,7 +582,7 @@ describe('settleWithCarryForward', () => {
     ];
     const result = settleWithCarryForward(L, payments, 2026 * 12 + 1, 2026 * 12 + 2, [L]);
     // Jan: due 1325, paid 2000, balance 0, status paid (overpaid by 675)
-    expect(result[0].settlement).toEqual({ due: 1325, paid: 2000, balance: 0, status: 'paid' });
+    expect(result[0].settlement).toEqual({ due: 1325, paid: 2000, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: 675 });
     // Feb: due 1325, paid 0 + 675 credit = 675, balance 650, status partial
     expect(result[1].settlement.due).toBe(1325);
     expect(result[1].settlement.paid).toBe(675);
@@ -655,7 +655,7 @@ describe('settleMonthWithCredit', () => {
   it('falls back to settleMonth for a lease with no startDate', () => {
     const noStart = lease({ startDate: undefined });
     const s = settleMonthWithCredit(noStart, [], 7, 2026);
-    expect(s).toEqual({ due: 1325, paid: 0, balance: 1325, status: 'unpaid' });
+    expect(s).toEqual({ due: 1325, paid: 0, balance: 1325, status: 'unpaid', creditApplied: 0, creditRemaining: 0 });
   });
 });
 

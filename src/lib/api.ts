@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, PaymentAllocation, LateFee, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
 
 const API_BASE = '/api';
 
@@ -431,21 +431,50 @@ export const leasesApi = {
 };
 
 // Payments API
+export interface PaymentCreateData extends Omit<RentPayment, 'id'> {
+  debitCreditBalance?: boolean;
+  allocations?: Array<{ month: number; year: number; amount: number; type?: 'rent' | 'late_fee' }>;
+}
+
+export interface PaymentUpdateData extends RentPayment {
+  allocations?: Array<{ month: number; year: number; amount: number; type?: 'rent' | 'late_fee' }>;
+}
+
 export const paymentsApi = {
   getAll: (): Promise<RentPayment[]> => apiRequest('/payments'),
-  getById: (id: string): Promise<RentPayment> => apiRequest(`/payments/${id}`),
+  getById: (id: string): Promise<RentPayment & { allocations?: PaymentAllocation[] }> => apiRequest(`/payments/${id}`),
   // deferSheetSync lets a bulk import skip the per-row master-spreadsheet
   // rebuild and trigger a single rebuild once, at the end.
-  create: (data: Omit<RentPayment, 'id'> & { debitCreditBalance?: boolean }, opts?: { deferSheetSync?: boolean }): Promise<RentPayment> =>
+  create: (data: PaymentCreateData, opts?: { deferSheetSync?: boolean }): Promise<RentPayment & { allocations?: PaymentAllocation[] }> =>
     apiRequest(`/payments${opts?.deferSheetSync ? '?deferSheetSync=1' : ''}`, { method: 'POST', body: JSON.stringify(data) }),
   // Generate (or refresh) the PDF receipt for a paid payment; returns its
   // document id so the UI can link to the download.
   generateReceipt: (id: string): Promise<{ receiptDocumentId: string }> =>
     apiRequest(`/payments/${id}/receipt`, { method: 'POST' }),
-  update: (id: string, data: RentPayment): Promise<RentPayment> =>
+  update: (id: string, data: PaymentUpdateData): Promise<RentPayment & { allocations?: PaymentAllocation[] }> =>
     apiRequest(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/payments/${id}`, { method: 'DELETE' }),
+};
+
+// Allocations API
+export const allocationsApi = {
+  getAll: (): Promise<PaymentAllocation[]> => apiRequest('/allocations'),
+};
+
+// Late Fees API
+export const lateFeesApi = {
+  getAll: (leaseId?: string): Promise<LateFee[]> =>
+    apiRequest(`/late-fees${leaseId ? `?leaseId=${leaseId}` : ''}`),
+  getById: (id: string): Promise<LateFee> => apiRequest(`/late-fees/${id}`),
+  create: (data: { leaseId: string; month: number; year: number; amount: number; assessedDate: string; tenantId?: string; notes?: string }): Promise<LateFee> =>
+    apiRequest('/late-fees', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<LateFee>): Promise<LateFee> =>
+    apiRequest(`/late-fees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  waive: (id: string, waiveReason?: string): Promise<LateFee> =>
+    apiRequest(`/late-fees/${id}`, { method: 'PUT', body: JSON.stringify({ action: 'waive', waiveReason }) }),
+  delete: (id: string) =>
+    apiRequest(`/late-fees/${id}`, { method: 'DELETE' }),
 };
 
 // Expenses API

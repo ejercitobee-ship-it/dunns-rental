@@ -105,7 +105,7 @@ type AttentionTab = 'pastDue' | 'overdue' | 'expiring' | 'vacant' | 'deposits';
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { properties, units, leases, rentPayments, expenses, incomes, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
+  const { properties, units, leases, rentPayments, expenses, incomes, paymentAllocations, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
   const pastDueMonths = usePastDueMonths();
   const [expenseView, setExpenseView] = useState<'monthly' | 'annual'>('monthly');
   const [drillTitle, setDrillTitle] = useState('');
@@ -150,7 +150,7 @@ export function Dashboard() {
     let totalOwed = 0;
     for (const month of elapsedMonths) {
       for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        totalOwed += settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases).balance;
+        totalOwed += settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases, paymentAllocations).balance;
       }
     }
 
@@ -180,7 +180,7 @@ export function Dashboard() {
       vacantAvailable: 0, // filled after vacantUnits computed
       vacantPendingLease: 0, // filled after futureLeaseUnitIds computed
     };
-  }, [properties, units, leases, expenses, incomes, rentPayments, getUnitLease]);
+  }, [properties, units, leases, expenses, incomes, rentPayments, paymentAllocations, getUnitLease]);
 
   const monthlyData = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -233,7 +233,7 @@ export function Dashboard() {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
     return activeLeases(leases)
-      .map(lease => ({ lease, ...monthsBehind(lease, rentPayments, month, year, leases) }))
+      .map(lease => ({ lease, ...monthsBehind(lease, rentPayments, month, year, leases, paymentAllocations) }))
       .filter(x => x.months >= pastDueMonths)
       .map(x => ({
         ...x,
@@ -242,7 +242,7 @@ export function Dashboard() {
         occupants: getLeaseTenants(x.lease.id),
       }))
       .sort((a, b) => b.months - a.months || b.balance - a.balance);
-  }, [leases, rentPayments, properties, units, getLeaseTenants, pastDueMonths]);
+  }, [leases, rentPayments, paymentAllocations, properties, units, getLeaseTenants, pastDueMonths]);
 
   // Overdue rent as a flat list: one row per overdue tenancy, most owed first.
   interface OverdueUnit {
@@ -259,7 +259,7 @@ export function Dashboard() {
     const perLease = new Map<string, { lease: ReturnType<typeof leasesOwingMonth>[number]; months: number; total: number }>();
     for (const month of elapsed) {
       for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        const s = settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases);
+        const s = settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases, paymentAllocations);
         if (s.status === 'paid') continue;
         let e = perLease.get(lease.id);
         if (!e) { e = { lease, months: 0, total: 0 }; perLease.set(lease.id, e); }
@@ -285,7 +285,7 @@ export function Dashboard() {
       });
     }
     return rows.sort((a, b) => b.total - a.total);
-  }, [leases, rentPayments, properties, units, getLeaseTenants]);
+  }, [leases, rentPayments, paymentAllocations, properties, units, getLeaseTenants]);
 
   // Leases expiring within 60 days.
   const expiringSoon = useMemo(() => {
@@ -429,10 +429,10 @@ export function Dashboard() {
     const currentLeases = leasesOwingMonth(leases.filter(l => l.status !== 'ended'), currentMonth, currentYear);
     let paid = 0;
     for (const lease of currentLeases) {
-      if (settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, currentLeases).status === 'paid') paid++;
+      if (settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, currentLeases, paymentAllocations).status === 'paid') paid++;
     }
     return { paid, total: currentLeases.length };
-  }, [leases, rentPayments]);
+  }, [leases, rentPayments, paymentAllocations]);
 
   if (isLoading) return <DashboardSkeleton />;
 

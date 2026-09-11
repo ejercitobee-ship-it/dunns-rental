@@ -4,9 +4,9 @@
 // Task 6 moves Lease and RentPayment into src/types and this file imports them
 // instead of declaring them.
 
-import type { Lease, RentPayment, Unit } from '../types';
+import type { Lease, RentPayment, PaymentAllocation, Unit } from '../types';
 import { VACANCY_EXCLUDED_STATUSES } from '../types';
-export type { Lease, RentPayment };
+export type { Lease, RentPayment, PaymentAllocation };
 
 export interface MonthSettlement {
   due: number;
@@ -153,6 +153,64 @@ export function leasesOwingMonth(leases: Lease[], month: number, year: number): 
 }
 
 /**
+ * Compute the total rent amount allocated to a specific lease+month+year.
+ *
+ * When allocations are provided, sums `payment_allocations` rows where
+ * `(lease_id, month, year, type='rent')` match and the parent payment is paid.
+ * When no allocations are provided (or none match), falls back to the legacy
+ * behavior: sum of paid payments whose own `(month, year)` matches.
+ *
+ * This is the bridge that makes the new allocation system backward compatible
+ * with existing payments that have no allocation records.
+ */
+export function allocatedRentForMonth(
+  leaseId: string,
+  payments: RentPayment[],
+  allocations: PaymentAllocation[] | undefined,
+  month: number,
+  year: number
+): number {
+  if (allocations && allocations.length > 0) {
+    // Build a set of paid payment ids for this lease.
+    const paidIds = new Set(
+      payments.filter(p => p.leaseId === leaseId && p.status === 'paid').map(p => p.id)
+    );
+    // Sum allocations whose parent payment is paid and that target this period.
+    const fromAllocations = allocations
+      .filter(a =>
+        a.leaseId === leaseId &&
+        a.month === month &&
+        a.year === year &&
+        a.type === 'rent' &&
+        paidIds.has(a.paymentId)
+      )
+      .reduce((sum, a) => sum + a.amount, 0);
+
+    // Also include paid payments for this lease+month that have NO allocations
+    // (legacy payments). A payment has allocations if any allocation row
+    // references its id.
+    const allocatedPaymentIds = new Set(allocations.map(a => a.paymentId));
+    const legacyPaid = payments
+      .filter(p =>
+        p.leaseId === leaseId &&
+        p.month === month &&
+        p.year === year &&
+        p.status === 'paid' &&
+        !allocatedPaymentIds.has(p.id)
+      )
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    return round2(fromAllocations + legacyPaid);
+  }
+
+  // No allocations at all: pure legacy path.
+  return round2(
+    paymentsForMonth(leaseId, payments, month, year)
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
+  );
+}
+
+/**
  * Total rent per month across active leases. Counted once per lease, which is
  * what stops income doubling when more than one person lives in a unit.
  */
@@ -227,7 +285,8 @@ export function settleMonth(
   lease: Lease,
   payments: RentPayment[],
   month: number,
-  year: number
+  year: number,
+  allocations?: PaymentAllocation[]
 ): MonthSettlement {
   // A draft lease a realtor created (awaiting review) owes nothing until Belle
   // finalizes it, enforced here too so no caller can bill it by skipping the
@@ -238,9 +297,7 @@ export function settleMonth(
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
     return { due: 0, paid: 0, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: 0 };
   const due = round2(lease.monthlyRent || 0);
-  const paid = round2(
-    paymentsForMonth(lease.id, payments, month, year).reduce((sum, p) => sum + (p.amount || 0), 0)
-  );
+  const paid = allocatedRentForMonth(lease.id, payments, allocations, month, year);
 
   if (paid <= 0) return { due, paid: 0, balance: due, status: 'unpaid', creditApplied: 0, creditRemaining: 0 };
   // Overpayment: credit will be picked up by settleWithCarryForward if called.
@@ -304,7 +361,8 @@ export function settleWithCarryForward(
   payments: RentPayment[],
   from: number,
   through: number,
-  leaseSet: Lease[]
+  leaseSet: Lease[],
+  allocations?: PaymentAllocation[]
 ): Array<{ ym: number; settlement: MonthSettlement }> {
   const out: Array<{ ym: number; settlement: MonthSettlement }> = [];
   let credit = 0;
@@ -315,7 +373,7 @@ export function settleWithCarryForward(
     const owing = leasesOwingMonth(leaseSet, month, year);
     if (!owing.some(l => l.id === lease.id)) continue;
 
-    const base = settleMonth(lease, payments, month, year);
+    const base = settleMonth(lease, payments, month, year, allocations);
 
     // Apply accumulated credit to an unpaid or partial month.
     if (credit > EPSILON && base.balance > EPSILON) {
@@ -360,14 +418,15 @@ export function settleMonthWithCredit(
   payments: RentPayment[],
   month: number,
   year: number,
-  leaseSet?: Lease[]
+  leaseSet?: Lease[],
+  allocations?: PaymentAllocation[]
 ): MonthSettlement {
-  if (!lease.startDate) return settleMonth(lease, payments, month, year);
+  if (!lease.startDate) return settleMonth(lease, payments, month, year, allocations);
   const target = year * 12 + month;
   const from = Math.max(yearMonthOf(lease.startDate), RENT_TRACKING_START);
-  const all = settleWithCarryForward(lease, payments, from, target, leaseSet || [lease]);
+  const all = settleWithCarryForward(lease, payments, from, target, leaseSet || [lease], allocations);
   const found = all.find(e => e.ym === target);
-  return found ? found.settlement : settleMonth(lease, payments, month, year);
+  return found ? found.settlement : settleMonth(lease, payments, month, year, allocations);
 }
 
 /**
@@ -390,7 +449,8 @@ export function monthsBehind(
   payments: RentPayment[],
   currentMonth: number,
   currentYear: number,
-  siblingLeases?: Lease[]
+  siblingLeases?: Lease[],
+  allocations?: PaymentAllocation[]
 ): PastDue {
   if (!lease.startDate || lease.needsReview) return { months: 0, balance: 0 };
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
@@ -401,7 +461,7 @@ export function monthsBehind(
 
   let months = 0;
   let balance = 0;
-  for (const { settlement } of settleWithCarryForward(lease, payments, from, currentTarget, leaseSet)) {
+  for (const { settlement } of settleWithCarryForward(lease, payments, from, currentTarget, leaseSet, allocations)) {
     if (settlement.balance > EPSILON) {
       months += 1;
       balance = round2(balance + settlement.balance);
@@ -433,7 +493,8 @@ export function unsettledMonths(
   payments: RentPayment[],
   throughMonth: number,
   throughYear: number,
-  siblingLeases?: Lease[]
+  siblingLeases?: Lease[],
+  allocations?: PaymentAllocation[]
 ): Array<{ month: number; year: number; amount: number }> {
   if (!lease.startDate || lease.needsReview) return [];
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
@@ -441,7 +502,7 @@ export function unsettledMonths(
   const leaseSet = siblingLeases || [lease];
   const from = yearMonthOf(lease.startDate);
   const through = throughYear * 12 + throughMonth;
-  const settled = settleWithCarryForward(lease, payments, from, through, leaseSet);
+  const settled = settleWithCarryForward(lease, payments, from, through, leaseSet, allocations);
   const out: Array<{ month: number; year: number; amount: number }> = [];
   for (const { ym, settlement } of settled) {
     if (settlement.balance > EPSILON) {
@@ -554,6 +615,55 @@ export function rentMonthsToShow(
     if (ym <= nowYM || paidYMs.has(ym)) out.push({ month, year });
   }
   return out;
+}
+
+/**
+ * Accrual-based rental income: how much rent was ALLOCATED to a set of months,
+ * regardless of when the cash was received. A $12,000 payment received in
+ * September that covers Sep through Feb shows $2,000 in each of those months.
+ *
+ * When allocations are available, sums allocation amounts grouped by month.
+ * Falls back to the legacy cash-basis path (payment.month/year) when no
+ * allocations exist.
+ */
+export function rentIncomeForMonthsAccrual(
+  payments: RentPayment[],
+  allocations: PaymentAllocation[] | undefined,
+  months: number[],
+  year: number
+): number {
+  if (allocations && allocations.length > 0) {
+    const paidIds = new Set(
+      payments.filter(p => p.status === 'paid' && p.type !== 'credit').map(p => p.id)
+    );
+    const allocatedPaymentIds = new Set(allocations.map(a => a.paymentId));
+
+    // Sum from allocations for payments that are paid.
+    const fromAlloc = allocations
+      .filter(a =>
+        a.type === 'rent' &&
+        a.year === year &&
+        months.includes(a.month) &&
+        paidIds.has(a.paymentId)
+      )
+      .reduce((sum, a) => sum + a.amount, 0);
+
+    // Add legacy payments (no allocation rows) by their own month/year.
+    const fromLegacy = payments
+      .filter(p =>
+        p.status === 'paid' &&
+        p.type !== 'credit' &&
+        p.year === year &&
+        months.includes(p.month) &&
+        !allocatedPaymentIds.has(p.id)
+      )
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    return round2(fromAlloc + fromLegacy);
+  }
+
+  // No allocations: pure legacy (cash basis by payment month/year).
+  return rentIncomeForMonths(payments, months, year);
 }
 
 // ── Vacancy loss (daily proration) ───────────────────────────────────────────

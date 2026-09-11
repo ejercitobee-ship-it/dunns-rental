@@ -12,12 +12,12 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi, leasesApi, tenantsApi, incomesApi } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi, tenantsApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { activeLeases, settleMonthWithCredit, leasesOwingMonth, rentIncomeForYear, rentIncomeForMonths, groupLeaseMonthRows, unsettledMonths, vacancyLossForYear, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
-import type { Lease, RentPayment, PaymentMethod, Property, Unit, Tenant } from '../types';
+import { activeLeases, settleMonthWithCredit, leasesOwingMonth, rentIncomeForMonthsAccrual, groupLeaseMonthRows, unsettledMonths, vacancyLossForYear, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
+import type { Lease, RentPayment, LateFee, PaymentMethod, Property, Unit, Tenant } from '../types';
 import {
   BarChart,
   Bar,
@@ -106,14 +106,16 @@ function matchSinglePayer(cell: string, occupants: Tenant[]): Tenant | undefined
 
 export function Rents() {
   const {
-    properties, units, leases, rentPayments,
-    getLeaseTenants, addRentPayment, updateRentPayment, deleteRentPayment, deleteLease, refreshData,
+    properties, units, leases, rentPayments, paymentAllocations, lateFees,
+    getLeaseTenants, addRentPayment, updateRentPayment, deleteRentPayment, deleteLease,
+    addLateFee, waiveLateFee, deleteLateFee,
+    refreshData,
   } = useApp();
   const { hasPermission } = useAuth();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
-  const [view, setView] = useState<'payments' | 'annual' | 'tax'>('payments');
+  const [view, setView] = useState<'payments' | 'annual' | 'tax' | 'late_fees'>('payments');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importData, setImportData] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -147,6 +149,81 @@ export function Rents() {
   // Late fee: manual toggle per payment, Belle enters the amount.
   const [includeLateFee, setIncludeLateFee] = useState(false);
   const [lateFeeAmount, setLateFeeAmount] = useState('');
+
+  // Allocation mode: 'auto' distributes payment across months automatically,
+  // 'manual' lets the user edit amounts per month in a grid.
+  const [allocMode, setAllocMode] = useState<'auto' | 'manual'>('auto');
+  const [manualAllocations, setManualAllocations] = useState<Array<{ month: number; year: number; amount: string; due: number }>>([]);
+
+  // Late Fee management state
+  const [lfModalOpen, setLfModalOpen] = useState(false);
+  const [lfForm, setLfForm] = useState({ leaseId: '', month: '', year: '', amount: '', assessedDate: todayLocalDate(), notes: '' });
+  const [lfBusy, setLfBusy] = useState(false);
+  const [lfWaiveId, setLfWaiveId] = useState<string | null>(null);
+  const [lfWaiveReason, setLfWaiveReason] = useState('');
+
+  const handleAssessLateFee = async () => {
+    if (lfBusy) return;
+    const amount = Number(lfForm.amount);
+    if (!lfForm.leaseId) { showToast('Select a tenancy.', 'error'); return; }
+    if (!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount.', 'error'); return; }
+    if (!lfForm.month || !lfForm.year) { showToast('Select the rent period.', 'error'); return; }
+    if (!lfForm.assessedDate) { showToast('Enter the date assessed.', 'error'); return; }
+    setLfBusy(true);
+    try {
+      const lease = leases.find(l => l.id === lfForm.leaseId);
+      const occupants = lease ? getLeaseTenants(lease.id) : [];
+      await addLateFee({
+        leaseId: lfForm.leaseId,
+        month: Number(lfForm.month),
+        year: Number(lfForm.year),
+        amount,
+        assessedDate: lfForm.assessedDate,
+        tenantId: occupants[0]?.id,
+        notes: lfForm.notes.trim() || undefined,
+      });
+      showToast('Late fee assessed.', 'success');
+      setLfModalOpen(false);
+      setLfForm({ leaseId: '', month: '', year: '', amount: '', assessedDate: todayLocalDate(), notes: '' });
+    } catch (err) {
+      showToast((err as Error).message || 'Could not assess late fee.', 'error');
+    } finally {
+      setLfBusy(false);
+    }
+  };
+
+  const handleWaiveLateFee = async () => {
+    if (!lfWaiveId || lfBusy) return;
+    setLfBusy(true);
+    try {
+      await waiveLateFee(lfWaiveId, lfWaiveReason.trim() || undefined);
+      showToast('Late fee waived.', 'success');
+      setLfWaiveId(null);
+      setLfWaiveReason('');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not waive late fee.', 'error');
+    } finally {
+      setLfBusy(false);
+    }
+  };
+
+  const handleDeleteLateFee = (fee: LateFee) => {
+    setConfirmState({
+      open: true,
+      title: 'Delete late fee',
+      message: `Remove the ${formatCurrency(fee.amount)} late fee for ${formatMonthYear(fee.month, fee.year)}? This cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger' as const,
+      onConfirm: async () => {
+        try {
+          await deleteLateFee(fee.id);
+          showToast('Late fee deleted.', 'success');
+        } catch (err) {
+          showToast((err as Error).message || 'Could not delete late fee.', 'error');
+        }
+      },
+    });
+  };
 
   // Move-in fee collection.
   const [mifCollapsed, setMifCollapsed] = useState(true);
@@ -221,7 +298,7 @@ export function Rents() {
       let collected = 0;
       let outstanding = 0;
       for (const lease of leasesOwingMonth(leases, month, year)) {
-        const s = settleMonthWithCredit(lease, rentPayments, month, year, leases);
+        const s = settleMonthWithCredit(lease, rentPayments, month, year, leases, paymentAllocations);
         expected += s.due;
         collected += s.paid;
         outstanding += s.balance;
@@ -236,7 +313,7 @@ export function Rents() {
         collectionRate: expected > 0 ? (collected / expected) * 100 : 0,
       };
     });
-  }, [leases, rentPayments, yearFilter]);
+  }, [leases, rentPayments, paymentAllocations, yearFilter]);
 
   // Tax summary data. "Expected" and "Outstanding" still walk leasesOwingMonth
   // like annualData above, because those answer what was owed against the
@@ -261,10 +338,11 @@ export function Rents() {
       let qExpected = 0;
       for (const month of q.months) {
         for (const lease of leasesOwingMonth(leases, month, year)) {
-          qExpected += settleMonthWithCredit(lease, rentPayments, month, year, leases).due;
+          qExpected += settleMonthWithCredit(lease, rentPayments, month, year, leases, paymentAllocations).due;
         }
       }
-      const qCollected = rentIncomeForMonths(rentPayments, q.months, year);
+      // Use accrual-based income when allocations are available.
+      const qCollected = rentIncomeForMonthsAccrual(rentPayments, paymentAllocations, q.months, year);
       return {
         name: q.name,
         collected: qCollected,
@@ -273,7 +351,7 @@ export function Rents() {
       };
     });
 
-    const totalRentIncome = rentIncomeForYear(rentPayments, year);
+    const totalRentIncome = rentIncomeForMonthsAccrual(rentPayments, paymentAllocations, [1,2,3,4,5,6,7,8,9,10,11,12], year);
     const totalExpected = quarterlyData.reduce((sum, q) => sum + q.expected, 0);
     const totalOutstanding = quarterlyData.reduce((sum, q) => sum + q.outstanding, 0);
 
@@ -283,7 +361,7 @@ export function Rents() {
       totalOutstanding,
       quarterlyData,
     };
-  }, [leases, rentPayments, yearFilter]);
+  }, [leases, rentPayments, paymentAllocations, yearFilter]);
 
   // One row per lease per month of the selected year that the lease OWED
   // rent for (leasesOwingMonth), whether or not it has since ended. This,
@@ -306,7 +384,7 @@ export function Rents() {
           occupants,
           month,
           year,
-          settlement: settleMonthWithCredit(lease, rentPayments, month, year, leases),
+          settlement: settleMonthWithCredit(lease, rentPayments, month, year, leases, paymentAllocations),
         });
       }
     }
@@ -315,7 +393,7 @@ export function Rents() {
       (a.property?.name || '').localeCompare(b.property?.name || '') ||
       (a.unit?.unitNumber || '').localeCompare(b.unit?.unitNumber || '')
     );
-  }, [leases, units, properties, rentPayments, yearFilter, getLeaseTenants]);
+  }, [leases, units, properties, rentPayments, paymentAllocations, yearFilter, getLeaseTenants]);
 
   const filteredRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -437,7 +515,7 @@ export function Rents() {
 
     for (const month of elapsedMonths) {
       for (const lease of leasesOwingMonth(leases, month, year)) {
-        const s = settleMonthWithCredit(lease, rentPayments, month, year, leases);
+        const s = settleMonthWithCredit(lease, rentPayments, month, year, leases, paymentAllocations);
         totalDue += s.due;
         totalPaidElapsed += s.paid;
         outstanding += s.balance;
@@ -452,7 +530,7 @@ export function Rents() {
     const collectionRate = totalDue > 0 ? (totalPaidElapsed / totalDue) * 100 : 0;
 
     return { totalCollected, outstanding, collectionRate, overdueCount };
-  }, [leases, rentPayments, yearFilter, leaseMonthRows]);
+  }, [leases, rentPayments, paymentAllocations, yearFilter, leaseMonthRows]);
 
   // Vacancy loss for the selected year.
   const vacancyInfo = useMemo(() => {
@@ -612,6 +690,8 @@ export function Rents() {
     // the amount when she wants to charge one.
     setIncludeLateFee(false);
     setLateFeeAmount('');
+    setAllocMode('auto');
+    setManualAllocations([]);
 
     // Fetch credit balance for the first occupant.
     const tenantId = row.occupants[0]?.id;
@@ -641,7 +721,85 @@ export function Rents() {
     setCreditAmount('');
     setIncludeLateFee(false);
     setLateFeeAmount('');
+    setAllocMode('auto');
+    setManualAllocations([]);
   };
+
+  /** Build auto-apply allocations: current month balance first, then past due,
+   *  then future months from the lease schedule. Returns allocations that sum
+   *  to exactly `totalAmount` (or less if the lease ends before it's used up). */
+  const buildAutoAllocations = (
+    row: LeaseMonthRow,
+    totalAmount: number,
+    creditAmt: number
+  ): Array<{ month: number; year: number; amount: number }> => {
+    const amount = totalAmount + creditAmt;
+    if (amount <= 0) return [];
+    const rent = row.lease.monthlyRent || 0;
+    if (rent <= 0) return [{ month: row.month, year: row.year, amount }];
+
+    // 1. Current month balance
+    const currentBalance = row.settlement.balance;
+    const allocs: Array<{ month: number; year: number; amount: number }> = [];
+    let remaining = amount;
+
+    if (currentBalance > 0 && remaining > 0) {
+      const apply = Math.min(remaining, currentBalance);
+      allocs.push({ month: row.month, year: row.year, amount: Math.round(apply * 100) / 100 });
+      remaining = Math.round((remaining - apply) * 100) / 100;
+    }
+
+    if (remaining <= 0.005) return allocs;
+
+    // 2. Past due months (oldest first)
+    const pastDue = unsettledMonths(row.lease, rentPayments, row.month, row.year, leases, paymentAllocations)
+      .filter(u => !(u.month === row.month && u.year === row.year)); // already handled
+    for (const pd of pastDue) {
+      if (remaining <= 0.005) break;
+      const apply = Math.min(remaining, pd.amount);
+      allocs.push({ month: pd.month, year: pd.year, amount: Math.round(apply * 100) / 100 });
+      remaining = Math.round((remaining - apply) * 100) / 100;
+    }
+
+    if (remaining <= 0.005) return allocs;
+
+    // 3. Future months from the lease schedule
+    const startYM = row.year * 12 + row.month + 1;
+    // Look ahead up to 24 months (2 years).
+    for (let ym = startYM; ym < startYM + 24 && remaining > 0.005; ym++) {
+      const y = Math.floor((ym - 1) / 12);
+      const m = ym - y * 12;
+      if (!leasesOwingMonth(leases, m, y).some(l => l.id === row.lease.id)) continue;
+      // Skip months already fully paid.
+      const existingSettlement = settleMonthWithCredit(row.lease, rentPayments, m, y, leases, paymentAllocations);
+      if (existingSettlement.balance <= 0.005) continue;
+      const apply = Math.min(remaining, existingSettlement.balance);
+      allocs.push({ month: m, year: y, amount: Math.round(apply * 100) / 100 });
+      remaining = Math.round((remaining - apply) * 100) / 100;
+    }
+
+    // If there's still remaining, put it on the current month as prepaid/overpayment.
+    if (remaining > 0.005 && allocs.length > 0) {
+      allocs[allocs.length - 1].amount = Math.round((allocs[allocs.length - 1].amount + remaining) * 100) / 100;
+    } else if (remaining > 0.005) {
+      allocs.push({ month: row.month, year: row.year, amount: Math.round(remaining * 100) / 100 });
+    }
+
+    return allocs;
+  };
+
+  /** Compute auto allocations for display in the modal. */
+  const autoAllocPreview = useMemo(() => {
+    if (!recordRow) return [];
+    const cashAmount = Number(recordForm.amount) || 0;
+    const creditAmt = applyCredit ? Math.min(Number(creditAmount) || 0, creditBalance) : 0;
+    if (cashAmount <= 0 && creditAmt <= 0) return [];
+    return buildAutoAllocations(recordRow, cashAmount, creditAmt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordRow, recordForm.amount, applyCredit, creditAmount, creditBalance, rentPayments, leases, paymentAllocations]);
+
+  /** Whether the payment covers more than just the current month. */
+  const isMultiMonth = autoAllocPreview.length > 1;
 
   const handleRecordPayment = async () => {
     // Bail out synchronously if a submit is already in flight so a fast
@@ -690,10 +848,19 @@ export function Rents() {
       // Record the cash payment (skip if amount is 0 — credit covered everything).
       const cashAmount = Number(recordForm.amount);
       if (cashAmount > 0) {
-        // Attach late fee to the payment so both are created atomically.
-        const lfPayload = includeLateFee && Number(lateFeeAmount) > 0
-          ? { amount: Number(lateFeeAmount), tenantId: recordForm.paidByTenantId || undefined }
-          : undefined;
+        // Build allocations: use manual allocations if in manual mode,
+        // otherwise auto-apply.
+        let allocs: Array<{ month: number; year: number; amount: number; type?: 'rent' | 'late_fee' }> | undefined;
+        if (allocMode === 'manual' && manualAllocations.length > 0) {
+          allocs = manualAllocations
+            .filter(a => Number(a.amount) > 0)
+            .map(a => ({ month: a.month, year: a.year, amount: Number(a.amount) }));
+        } else if (isMultiMonth) {
+          allocs = autoAllocPreview;
+        }
+        // For single-month payments, skip allocations (backward compat: the
+        // payment's own month/year is the implicit allocation).
+
         await addRentPayment({
           leaseId: recordRow.lease.id,
           paidByTenantId: recordForm.paidByTenantId || undefined,
@@ -706,22 +873,26 @@ export function Rents() {
           paymentMethod: recordForm.paymentMethod,
           dueDate,
           notes: recordForm.notes.trim() || undefined,
-          lateFee: lfPayload,
-        } as any);
-      } else if (includeLateFee && Number(lateFeeAmount) > 0) {
-        // Credit covered rent entirely but there's still a late fee.
-        // Create the late fee income directly (no rent payment to attach to).
-        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        await incomesApi.create({
-          propertyId: recordRow.property?.id || '',
-          unitId: recordRow.unit?.id,
-          tenantId: recordForm.paidByTenantId || recordRow.occupants[0]?.id,
-          source: 'late_fee',
-          amount: Number(lateFeeAmount),
-          date: recordForm.receivedDate,
-          description: `Late fee for ${MONTHS[recordRow.month - 1]} ${recordRow.year} rent`,
-          paymentMethod: recordForm.paymentMethod,
+          allocations: allocs,
         });
+      }
+
+      // Assess a late fee if the checkbox is on and amount is entered.
+      // This creates a standalone late_fees record separate from the payment.
+      if (includeLateFee && Number(lateFeeAmount) > 0) {
+        try {
+          await addLateFee({
+            leaseId: recordRow.lease.id,
+            month: recordRow.month,
+            year: recordRow.year,
+            amount: Number(lateFeeAmount),
+            assessedDate: recordForm.receivedDate,
+            tenantId: recordForm.paidByTenantId || recordRow.occupants[0]?.id,
+            notes: recordForm.notes.trim() || undefined,
+          });
+        } catch {
+          // A duplicate late fee for this period is OK (409), just skip.
+        }
       }
 
       // Save the proof of payment to the tenant's Drive folder. Best-effort:
@@ -785,7 +956,7 @@ export function Rents() {
     if (!settleTarget || !settleThrough) return [] as { month: number; year: number; amount: number }[];
     const [y, m] = settleThrough.split('-').map(Number);
     if (!y || !m) return [];
-    return unsettledMonths(settleTarget.lease, rentPayments, m, y);
+    return unsettledMonths(settleTarget.lease, rentPayments, m, y, undefined, paymentAllocations);
   })();
   const settleTotal = settlePreview.reduce((sum, r) => sum + r.amount, 0);
 
@@ -1128,7 +1299,7 @@ export function Rents() {
 
       {/* View Toggle */}
       <div className="rounded-xl border border-line bg-surface p-1 inline-flex overflow-x-auto">
-        {([['payments', 'Payments'], ['annual', 'Annual Overview'], ['tax', 'Tax Report']] as const).map(([key, label]) => (
+        {([['payments', 'Payments'], ['annual', 'Annual Overview'], ['tax', 'Tax Report'], ['late_fees', 'Late Fees']] as const).map(([key, label]) => (
           <button
             key={key}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
@@ -1713,6 +1884,285 @@ export function Rents() {
         </>
       )}
 
+      {/* ─── Late Fees Tab ─── */}
+      {view === 'late_fees' && (() => {
+        // Enrich late fees with tenant/property/unit names for display.
+        const enrichedFees = lateFees.map(lf => {
+          const lease = leases.find(l => l.id === lf.leaseId);
+          const prop = lf.propertyId ? properties.find(p => p.id === lf.propertyId) : undefined;
+          const unit = lf.unitId ? units.find(u => u.id === lf.unitId) : undefined;
+          const occupants = lease ? getLeaseTenants(lease.id) : [];
+          return { ...lf, lease, property: prop, unit, occupants };
+        });
+
+        // Summary stats
+        const outstanding = lateFees.filter(f => f.status === 'outstanding');
+        const totalOutstanding = outstanding.reduce((s, f) => s + f.amount, 0);
+        const totalWaived = lateFees.filter(f => f.status === 'waived').reduce((s, f) => s + f.amount, 0);
+        const totalPaid = lateFees.filter(f => f.status === 'paid').reduce((s, f) => s + f.amount, 0);
+
+        const curMonth = new Date().getMonth() + 1;
+        const curYear = new Date().getFullYear();
+
+        return (
+          <>
+            {/* Summary Cards */}
+            <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-warning" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-warning">{formatCurrency(totalOutstanding)}</div>
+                  <p className="text-xs text-muted">{outstanding.length} {outstanding.length === 1 ? 'fee' : 'fees'} pending</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Collected</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-positive" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-positive">{formatCurrency(totalPaid)}</div>
+                  <p className="text-xs text-muted">Late fee income</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Waived</CardTitle>
+                  <XCircle className="h-4 w-4 text-muted" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(totalWaived)}</div>
+                  <p className="text-xs text-muted">Forgiven</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Assessed</CardTitle>
+                  <DollarSign className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(lateFees.reduce((s, f) => s + f.amount, 0))}</div>
+                  <p className="text-xs text-muted">{lateFees.length} total</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Assess Late Fee Button */}
+            {hasPermission('rents_record') && (
+              <div className="flex justify-end">
+                <Button onClick={() => {
+                  setLfForm({ leaseId: '', month: String(curMonth), year: String(curYear), amount: '', assessedDate: todayLocalDate(), notes: '' });
+                  setLfModalOpen(true);
+                }}>
+                  <AlertTriangle className="h-4 w-4 mr-1.5" /> Assess Late Fee
+                </Button>
+              </div>
+            )}
+
+            {/* Late Fees List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Late Fee History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {enrichedFees.length === 0 ? (
+                  <p className="text-sm text-muted py-8 text-center">No late fees have been assessed.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-line text-left">
+                          <th className="pb-2 font-medium text-muted">Period</th>
+                          <th className="pb-2 font-medium text-muted">Tenant</th>
+                          <th className="pb-2 font-medium text-muted">Property / Unit</th>
+                          <th className="pb-2 font-medium text-muted text-right">Amount</th>
+                          <th className="pb-2 font-medium text-muted">Assessed</th>
+                          <th className="pb-2 font-medium text-muted">Status</th>
+                          <th className="pb-2 font-medium text-muted text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {enrichedFees.map(lf => {
+                          const statusColor = lf.status === 'outstanding' ? 'warning'
+                            : lf.status === 'paid' ? 'success'
+                            : lf.status === 'partial' ? 'default'
+                            : 'secondary';
+                          const statusLabel = lf.status === 'outstanding' ? 'Outstanding'
+                            : lf.status === 'paid' ? 'Paid'
+                            : lf.status === 'partial' ? 'Partial'
+                            : 'Waived';
+                          return (
+                            <tr key={lf.id} className="hover:bg-surface-alt/50">
+                              <td className="py-3">
+                                <span className="font-medium">{formatMonthYear(lf.month, lf.year)}</span>
+                                {lf.notes && <p className="text-xs text-muted mt-0.5">{lf.notes}</p>}
+                              </td>
+                              <td className="py-3 text-muted">
+                                {lf.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Unknown'}
+                              </td>
+                              <td className="py-3 text-muted">
+                                {lf.property?.name || lf.property?.address || ''}
+                                {lf.unit ? ` / Unit ${lf.unit.unitNumber}` : ''}
+                              </td>
+                              <td className="py-3 text-right font-medium">{formatCurrency(lf.amount)}</td>
+                              <td className="py-3 text-muted">{formatDate(lf.assessedDate)}</td>
+                              <td className="py-3">
+                                <Badge variant={statusColor}>{statusLabel}</Badge>
+                              </td>
+                              <td className="py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  {lf.status === 'outstanding' && hasPermission('rents_edit') && (
+                                    <>
+                                      <button
+                                        onClick={() => { setLfWaiveId(lf.id); setLfWaiveReason(''); }}
+                                        className="text-xs text-muted hover:text-ink px-2 py-1 rounded hover:bg-surface-alt transition-colors"
+                                        title="Waive"
+                                      >
+                                        Waive
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteLateFee(lf)}
+                                        className="text-xs text-danger hover:text-danger-hover px-2 py-1 rounded hover:bg-danger-soft transition-colors"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                  {lf.status === 'waived' && (
+                                    <span className="text-xs text-muted" title={lf.waiveReason || ''}>
+                                      {lf.waiveReason ? `Reason: ${lf.waiveReason}` : 'Waived'}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        );
+      })()}
+
+      {/* Assess Late Fee Modal */}
+      <Modal isOpen={lfModalOpen} onClose={() => !lfBusy && setLfModalOpen(false)} title="Assess Late Fee">
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-ink">Tenancy</label>
+            <select
+              className="w-full mt-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
+              value={lfForm.leaseId}
+              onChange={e => setLfForm({ ...lfForm, leaseId: e.target.value })}
+            >
+              <option value="">Select a tenancy</option>
+              {activeLeases(leases).map(l => {
+                const occ = getLeaseTenants(l.id);
+                const prop = l.propertyId ? properties.find(p => p.id === l.propertyId) : undefined;
+                const unit = l.unitId ? units.find(u => u.id === l.unitId) : undefined;
+                const name = occ.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Unnamed';
+                const loc = [prop?.name || prop?.address, unit ? `Unit ${unit.unitNumber}` : ''].filter(Boolean).join(' / ');
+                return <option key={l.id} value={l.id}>{name}{loc ? ` (${loc})` : ''}</option>;
+              })}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-ink">Month</label>
+              <select
+                className="w-full mt-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
+                value={lfForm.month}
+                onChange={e => setLfForm({ ...lfForm, month: e.target.value })}
+              >
+                <option value="">Month</option>
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>{new Date(2000, i).toLocaleDateString('en-US', { month: 'long' })}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-ink">Year</label>
+              <input
+                type="number"
+                className="w-full mt-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
+                value={lfForm.year}
+                onChange={e => setLfForm({ ...lfForm, year: e.target.value })}
+                min={2020}
+                max={2099}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-ink">Amount</label>
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-2 text-muted text-sm">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg text-sm bg-surface"
+                value={lfForm.amount}
+                onChange={e => setLfForm({ ...lfForm, amount: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-ink">Date Assessed</label>
+            <input
+              type="date"
+              className="w-full mt-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
+              value={lfForm.assessedDate}
+              onChange={e => setLfForm({ ...lfForm, assessedDate: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-ink">Notes (optional)</label>
+            <textarea
+              className="w-full mt-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
+              rows={2}
+              value={lfForm.notes}
+              onChange={e => setLfForm({ ...lfForm, notes: e.target.value })}
+              placeholder="e.g. Rent was 10 days past due"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setLfModalOpen(false)} disabled={lfBusy}>Cancel</Button>
+            <Button onClick={handleAssessLateFee} disabled={lfBusy}>{lfBusy ? 'Assessing...' : 'Assess Late Fee'}</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Waive Late Fee Modal */}
+      <Modal isOpen={!!lfWaiveId} onClose={() => !lfBusy && setLfWaiveId(null)} title="Waive Late Fee">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            This will waive the late fee. The tenant will no longer owe this amount. A record of the waiver is kept for your audit trail.
+          </p>
+          <div>
+            <label className="text-sm font-medium text-ink">Reason (optional)</label>
+            <textarea
+              className="w-full mt-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
+              rows={2}
+              value={lfWaiveReason}
+              onChange={e => setLfWaiveReason(e.target.value)}
+              placeholder="e.g. First-time courtesy, payment was only 1 day late"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setLfWaiveId(null)} disabled={lfBusy}>Cancel</Button>
+            <Button variant="destructive" onClick={handleWaiveLateFee} disabled={lfBusy}>{lfBusy ? 'Waiving...' : 'Waive Late Fee'}</Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Import Modal */}
       <Modal
         isOpen={isImportModalOpen}
@@ -1877,6 +2327,105 @@ export function Rents() {
               )}
             </div>
 
+            {/* Allocation preview: shown when payment covers multiple months */}
+            {isMultiMonth && (
+              <div className="rounded-lg border border-primary-line bg-primary-soft p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm font-semibold text-primary">Payment Allocation</h5>
+                  <div className="flex gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => { setAllocMode('auto'); setManualAllocations([]); }}
+                      className={`px-2 py-1 rounded ${allocMode === 'auto' ? 'bg-primary text-white' : 'bg-surface text-muted hover:text-ink'}`}
+                    >Auto Apply</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAllocMode('manual');
+                        setManualAllocations(autoAllocPreview.map(a => {
+                          const s = settleMonthWithCredit(recordRow.lease, rentPayments, a.month, a.year, leases, paymentAllocations);
+                          return { month: a.month, year: a.year, amount: String(a.amount), due: s.due };
+                        }));
+                      }}
+                      className={`px-2 py-1 rounded ${allocMode === 'manual' ? 'bg-primary text-white' : 'bg-surface text-muted hover:text-ink'}`}
+                    >Manual</button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-primary-hover">
+                  This payment covers {allocMode === 'auto' ? autoAllocPreview.length : manualAllocations.filter(a => Number(a.amount) > 0).length} months. One transaction, {allocMode === 'auto' ? autoAllocPreview.length : manualAllocations.filter(a => Number(a.amount) > 0).length} allocation records.
+                </p>
+
+                <div className="bg-surface rounded border border-line overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-wash text-xs text-muted">
+                        <th className="text-left px-3 py-1.5 font-medium">Period</th>
+                        <th className="text-right px-3 py-1.5 font-medium">Due</th>
+                        <th className="text-right px-3 py-1.5 font-medium">Allocated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(allocMode === 'auto' ? autoAllocPreview : manualAllocations).map((alloc, i) => {
+                        const m = alloc.month;
+                        const y = alloc.year;
+                        const s = settleMonthWithCredit(recordRow.lease, rentPayments, m, y, leases, paymentAllocations);
+                        return (
+                          <tr key={`${m}-${y}`} className="border-t border-line">
+                            <td className="px-3 py-1.5 text-ink">{formatMonthYear(m, y)}</td>
+                            <td className="px-3 py-1.5 text-right text-muted">{formatCurrency(s.balance > 0 ? s.balance : s.due)}</td>
+                            <td className="px-3 py-1.5 text-right">
+                              {allocMode === 'manual' ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={(alloc as typeof manualAllocations[number]).amount}
+                                  onChange={(e) => {
+                                    const updated = [...manualAllocations];
+                                    updated[i] = { ...updated[i], amount: e.target.value };
+                                    setManualAllocations(updated);
+                                  }}
+                                  className="w-24 text-right px-2 py-1 border border-line rounded bg-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary/25"
+                                />
+                              ) : (
+                                <span className="font-medium text-primary">{formatCurrency(Number(alloc.amount) || 0)}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-line bg-wash">
+                        <td className="px-3 py-1.5 text-xs font-semibold text-ink" colSpan={2}>Total</td>
+                        <td className="px-3 py-1.5 text-right font-semibold text-primary">
+                          {formatCurrency(
+                            (allocMode === 'auto' ? autoAllocPreview : manualAllocations)
+                              .reduce((sum, a) => sum + (Number(a.amount) || 0), 0)
+                          )}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {allocMode === 'manual' && (() => {
+                  const totalAlloc = manualAllocations.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+                  const cashAmount = Number(recordForm.amount) || 0;
+                  const diff = Math.round((cashAmount - totalAlloc) * 100) / 100;
+                  if (Math.abs(diff) > 0.005) {
+                    return (
+                      <p className={`text-xs font-medium ${diff > 0 ? 'text-amber-600' : 'text-danger'}`}>
+                        {diff > 0 ? `${formatCurrency(diff)} unallocated` : `Over-allocated by ${formatCurrency(Math.abs(diff))}`}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-ink">Who Paid</label>
               <select
@@ -1938,7 +2487,7 @@ export function Rents() {
             </div>
 
             {/* Late fee: manual toggle, Belle enters the amount */}
-            <div className={`rounded-lg border p-3 space-y-2 ${includeLateFee ? 'border-amber-300 bg-amber-50/60' : 'border-line bg-surface'}`}>
+            <div className={`rounded-lg border p-3 space-y-2 ${includeLateFee ? 'border-amber-300 bg-amber-50/60 dark:bg-amber-950/30' : 'border-line bg-surface'}`}>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1947,7 +2496,7 @@ export function Rents() {
                   className="h-4 w-4 rounded border-line text-primary focus:ring-primary/25"
                 />
                 <AlertTriangle className={`h-4 w-4 ${includeLateFee ? 'text-amber-600' : 'text-muted'}`} />
-                <span className="text-sm font-medium text-ink">Include late fee</span>
+                <span className="text-sm font-medium text-ink">Assess late fee</span>
               </label>
               {includeLateFee && (
                 <div className="pl-6 space-y-2">
@@ -1960,11 +2509,11 @@ export function Rents() {
                       value={lateFeeAmount}
                       onChange={(e) => setLateFeeAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white dark:bg-ink/10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
                     />
                   </div>
-                  <p className="text-xs text-amber-700">
-                    Recorded as rental income on all financial reports.
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Recorded as a separate late fee charge (Late Fee Income on reports).
                   </p>
                 </div>
               )}
