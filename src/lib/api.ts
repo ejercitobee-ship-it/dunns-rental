@@ -5,13 +5,15 @@ const API_BASE = '/api';
 async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
   
+  // FormData requests must NOT set Content-Type (the browser adds it with the
+  // multipart boundary). Every other request is JSON.
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(url, {
     ...options,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: isFormData
+      ? { ...options.headers }
+      : { 'Content-Type': 'application/json', ...options.headers },
   });
   
   if (response.status === 401) {

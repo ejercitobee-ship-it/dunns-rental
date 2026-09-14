@@ -6,6 +6,7 @@ import { ToastProvider } from './context/ToastContext';
 import { Layout } from './components/Layout';
 import { PortalLayout } from './components/PortalLayout';
 import { ScrollToTop } from './components/ScrollToTop';
+import { ChunkErrorBoundary } from './components/ChunkErrorBoundary';
 import { Login } from './pages/Login';
 import { isPortalRole } from './types';
 
@@ -166,6 +167,7 @@ function AppRoutes() {
   }
 
   return (
+    <ChunkErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/login" element={
@@ -386,6 +388,7 @@ function AppRoutes() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
+    </ChunkErrorBoundary>
   );
 }
 
