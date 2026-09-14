@@ -4,7 +4,7 @@ import {
   ArrowLeft, Building, Home, MapPin, Calendar, DollarSign,
   FileText, Users, ChevronDown, ChevronRight,
   Download, Zap, Droplets, Flame, Plus, Pencil, Trash2,
-  ShieldCheck, AlertTriangle, XCircle, X,
+  ShieldCheck, AlertTriangle, XCircle, X, Camera,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -220,6 +220,7 @@ export function PropertyProfile() {
   );
 
   const { property, units, maintenance, documents, utilityAccounts, calendarEvents } = data;
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const toggleLease = (leaseId: string) => {
     setExpandedLeases(prev => {
@@ -229,23 +230,110 @@ export function PropertyProfile() {
     });
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id || photoUploading) return;
+    setPhotoUploading(true);
+    try {
+      const { image } = await propertiesApi.uploadPhoto(id, file);
+      setData(prev => prev ? { ...prev, property: { ...prev.property, image } } : prev);
+      showToast('Property photo uploaded.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not upload photo.', 'error');
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    if (!id || photoUploading) return;
+    setPhotoUploading(true);
+    try {
+      await propertiesApi.removePhoto(id);
+      setData(prev => prev ? { ...prev, property: { ...prev.property, image: undefined } } : prev);
+      showToast('Photo removed.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not remove photo.', 'error');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <Link to="/properties" className="mt-1 p-1.5 rounded-lg hover:bg-line/50 text-muted hover:text-ink transition-colors">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <p className="eyebrow !text-[10px]">Property</p>
-          <h1 className="font-display text-[26px] sm:text-[30px] text-ink">{property.name}</h1>
-          <div className="flex items-center gap-2 mt-1 text-sm text-muted">
-            <MapPin className="h-3.5 w-3.5" />
-            <span>{property.address}, {property.city}, {property.state} {property.zipCode}</span>
+      {/* Hero image */}
+      {property.image ? (
+        <div className="relative rounded-2xl overflow-hidden shadow-md group">
+          <img
+            src={property.image}
+            alt={property.name}
+            className="w-full h-48 sm:h-64 object-cover"
+          />
+          {/* Gradient overlay for legibility */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+          {/* Back button on the image */}
+          <Link
+            to="/properties"
+            className="absolute top-4 left-4 p-2 rounded-xl bg-black/30 backdrop-blur-sm text-white/90 hover:bg-black/50 transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          {/* Photo actions */}
+          <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <label className="p-2 rounded-xl bg-black/30 backdrop-blur-sm text-white/90 hover:bg-black/50 transition-colors cursor-pointer">
+              <Camera className="h-4 w-4" />
+              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
+            </label>
+            <button
+              type="button"
+              onClick={handlePhotoRemove}
+              disabled={photoUploading}
+              className="p-2 rounded-xl bg-black/30 backdrop-blur-sm text-white/90 hover:bg-red-500/70 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+          {/* Property info overlaid on image */}
+          <div className="absolute bottom-0 left-0 right-0 p-5">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.18em] font-semibold text-white/60">Property</p>
+                <h1 className="font-display text-[26px] sm:text-[30px] text-white leading-tight">{property.name}</h1>
+                <div className="flex items-center gap-2 mt-1 text-sm text-white/80">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span>{property.address}, {property.city}, {property.state} {property.zipCode}</span>
+                </div>
+              </div>
+              <Badge variant="secondary" className="flex-shrink-0">{property.type}</Badge>
+            </div>
           </div>
         </div>
-        <Badge variant="secondary">{property.type}</Badge>
-      </div>
+      ) : (
+        <>
+          {/* Header (no photo) */}
+          <div className="flex items-start gap-4">
+            <Link to="/properties" className="mt-1 p-1.5 rounded-lg hover:bg-line/50 text-muted hover:text-ink transition-colors">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div className="flex-1 min-w-0">
+              <p className="eyebrow !text-[10px]">Property</p>
+              <h1 className="font-display text-[26px] sm:text-[30px] text-ink">{property.name}</h1>
+              <div className="flex items-center gap-2 mt-1 text-sm text-muted">
+                <MapPin className="h-3.5 w-3.5" />
+                <span>{property.address}, {property.city}, {property.state} {property.zipCode}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <label className="p-2 rounded-lg hover:bg-line/50 text-muted hover:text-ink transition-colors cursor-pointer" title="Add property photo">
+                <Camera className="h-5 w-5" />
+                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
+              </label>
+              <Badge variant="secondary">{property.type}</Badge>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

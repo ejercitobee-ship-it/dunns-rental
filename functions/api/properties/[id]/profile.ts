@@ -187,6 +187,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           zipCode: property.zip_code,
           type: property.type,
           description: property.description,
+          image: property.photo_drive_id ? `/api/photo/${property.photo_drive_id}` : undefined,
           purchaseDate: property.purchase_date,
           purchasePrice: property.purchase_price,
           landValue: property.land_value,

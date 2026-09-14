@@ -606,6 +606,7 @@ export interface PropertyProfile {
     zipCode: string;
     type: string;
     description?: string;
+    image?: string;
     purchaseDate?: string;
     purchasePrice?: number;
     landValue?: number;

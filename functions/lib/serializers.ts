@@ -14,6 +14,7 @@ export function serializeProperty(r: Row) {
     zipCode: r.zip_code,
     type: r.type,
     description: r.description ?? undefined,
+    image: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : undefined,
     purchaseDate: r.purchase_date ?? undefined,
     purchasePrice: r.purchase_price ?? undefined,
     landValue: r.land_value ?? undefined,

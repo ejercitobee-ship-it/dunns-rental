@@ -197,6 +197,13 @@ export const propertiesApi = {
     apiRequest(`/properties/${id}`, { method: 'DELETE' }),
   getProfile: (id: string): Promise<PropertyProfile> =>
     apiRequest(`/properties/${id}/profile`),
+  uploadPhoto: (id: string, file: File): Promise<{ image: string }> => {
+    const form = new FormData();
+    form.append('photo', file);
+    return apiRequest(`/properties/${id}/photo`, { method: 'POST', body: form });
+  },
+  removePhoto: (id: string) =>
+    apiRequest(`/properties/${id}/photo`, { method: 'DELETE' }),
 };
 
 // Property Notes API
