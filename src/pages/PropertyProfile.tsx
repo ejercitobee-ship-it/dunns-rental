@@ -4,7 +4,7 @@ import {
   ArrowLeft, Building, Home, MapPin, Calendar, DollarSign,
   FileText, Users, ChevronDown, ChevronRight,
   Download, Zap, Droplets, Flame, Plus, Pencil, Trash2,
-  ShieldCheck, AlertTriangle, XCircle, X, Camera,
+  ShieldCheck, AlertTriangle, XCircle, X, Camera, Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -235,11 +235,17 @@ export function PropertyProfile() {
     if (!file || !id || photoUploading) return;
     setPhotoUploading(true);
     try {
-      const { image } = await propertiesApi.uploadPhoto(id, file);
-      setData(prev => prev ? { ...prev, property: { ...prev.property, image } } : prev);
+      const result = await propertiesApi.uploadPhoto(id, file);
+      if (!result?.image) {
+        showToast('Upload completed but no image URL was returned. Please try again.', 'error');
+        return;
+      }
+      setData(prev => prev ? { ...prev, property: { ...prev.property, image: result.image } } : prev);
       showToast('Property photo uploaded.', 'success');
     } catch (err) {
-      showToast((err as Error).message || 'Could not upload photo.', 'error');
+      const msg = (err as Error).message || 'Could not upload photo.';
+      console.error('Photo upload failed:', msg);
+      showToast(msg, 'error');
     } finally {
       setPhotoUploading(false);
       e.target.value = '';
@@ -325,10 +331,17 @@ export function PropertyProfile() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <label className="p-2 rounded-lg hover:bg-line/50 text-muted hover:text-ink transition-colors cursor-pointer" title="Add property photo">
-                <Camera className="h-5 w-5" />
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
-              </label>
+              {photoUploading ? (
+                <div className="flex items-center gap-2 text-sm text-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Uploading...</span>
+                </div>
+              ) : (
+                <label className="p-2 rounded-lg hover:bg-line/50 text-muted hover:text-ink transition-colors cursor-pointer" title="Add property photo">
+                  <Camera className="h-5 w-5" />
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
+                </label>
+              )}
               <Badge variant="secondary">{property.type}</Badge>
             </div>
           </div>
