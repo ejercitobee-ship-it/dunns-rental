@@ -116,6 +116,7 @@ export function PropertyProfile() {
   const [drillExpenses, setDrillExpenses] = useState<ProfileData['expenses']>([]);
   const [drillOpen, setDrillOpen] = useState(false);
   const [capitalProjects, setCapitalProjects] = useState<CapitalProject[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   // Fetch capital projects for this property.
   useEffect(() => {
@@ -220,7 +221,6 @@ export function PropertyProfile() {
   );
 
   const { property, units, maintenance, documents, utilityAccounts, calendarEvents } = data;
-  const [photoUploading, setPhotoUploading] = useState(false);
 
   const toggleLease = (leaseId: string) => {
     setExpandedLeases(prev => {
