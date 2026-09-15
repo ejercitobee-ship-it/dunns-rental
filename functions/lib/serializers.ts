@@ -271,6 +271,8 @@ export function serializeCapitalProject(r: Row, totalCost = 0, expenseCount = 0)
     createdBy: r.created_by ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    recoveryYears: r.recovery_years ?? undefined,
+    placedInServiceDate: r.placed_in_service_date ?? undefined,
     totalCost,
     expenseCount,
   };

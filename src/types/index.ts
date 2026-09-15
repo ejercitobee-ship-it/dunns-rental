@@ -840,6 +840,8 @@ export interface CapitalProject {
   createdBy?: string;
   createdAt: number;
   updatedAt: number;
+  recoveryYears?: number;
+  placedInServiceDate?: string;
   /** Rolled-up total of all linked expenses (server-computed). */
   totalCost: number;
   /** Count of linked expenses (server-computed). */

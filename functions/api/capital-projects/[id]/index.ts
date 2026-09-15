@@ -56,6 +56,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       ['name', 'name'], ['description', 'description'], ['status', 'status'],
       ['startDate', 'start_date'], ['completionDate', 'completion_date'],
       ['budget', 'budget'], ['unitId', 'unit_id'], ['propertyId', 'property_id'],
+      ['recoveryYears', 'recovery_years'], ['placedInServiceDate', 'placed_in_service_date'],
     ];
     for (const [jsKey, dbCol] of fields) {
       if (jsKey in body) {

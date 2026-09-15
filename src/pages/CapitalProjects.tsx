@@ -40,7 +40,7 @@ export function CapitalProjects() {
   // Forms
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  const [form, setForm] = useState({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress' as CapitalProjectStatus, startDate: '', completionDate: '', budget: '' });
+  const [form, setForm] = useState({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress' as CapitalProjectStatus, startDate: '', completionDate: '', budget: '', recoveryYears: '', placedInServiceDate: '' });
 
   // Link expenses modal
   const [showLink, setShowLink] = useState(false);
@@ -129,6 +129,8 @@ export function CapitalProjects() {
         startDate: form.startDate || undefined,
         completionDate: form.completionDate || undefined,
         budget: form.budget ? Number(form.budget) : undefined,
+        recoveryYears: form.recoveryYears ? Number(form.recoveryYears) : undefined,
+        placedInServiceDate: form.placedInServiceDate || undefined,
       });
       showToast('Capital project created.', 'success');
       setShowCreate(false);
@@ -151,6 +153,8 @@ export function CapitalProjects() {
         startDate: form.startDate || undefined,
         completionDate: form.completionDate || undefined,
         budget: form.budget ? Number(form.budget) : undefined,
+        recoveryYears: form.recoveryYears ? Number(form.recoveryYears) : undefined,
+        placedInServiceDate: form.placedInServiceDate || undefined,
       });
       showToast('Project updated.', 'success');
       setShowEdit(false);
@@ -214,7 +218,7 @@ export function CapitalProjects() {
       .catch(err => showToast(err instanceof Error ? err.message : 'Upload failed', 'error'));
   };
 
-  const resetForm = () => setForm({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress', startDate: '', completionDate: '', budget: '' });
+  const resetForm = () => setForm({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress', startDate: '', completionDate: '', budget: '', recoveryYears: '', placedInServiceDate: '' });
 
   const openEdit = () => {
     if (!detail) return;
@@ -227,6 +231,8 @@ export function CapitalProjects() {
       startDate: detail.startDate || '',
       completionDate: detail.completionDate || '',
       budget: detail.budget != null ? String(detail.budget) : '',
+      recoveryYears: detail.recoveryYears != null ? String(detail.recoveryYears) : '',
+      placedInServiceDate: detail.placedInServiceDate || '',
     });
     setShowEdit(true);
   };
@@ -586,7 +592,7 @@ export function CapitalProjects() {
 function ProjectForm({
   form, setForm, properties, units, onSubmit, onCancel, submitLabel,
 }: {
-  form: { name: string; propertyId: string; unitId: string; description: string; status: CapitalProjectStatus; startDate: string; completionDate: string; budget: string };
+  form: { name: string; propertyId: string; unitId: string; description: string; status: CapitalProjectStatus; startDate: string; completionDate: string; budget: string; recoveryYears: string; placedInServiceDate: string };
   setForm: (f: typeof form) => void;
   properties: { id: string; name: string }[];
   units: { id: string; propertyId: string; unitNumber: string }[];
@@ -677,6 +683,35 @@ function ProjectForm({
           />
         </div>
       </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-muted mb-1">MACRS Recovery Period</label>
+          <select
+            className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm"
+            value={form.recoveryYears}
+            onChange={e => setForm({ ...form, recoveryYears: e.target.value })}
+          >
+            <option value="">Select recovery period...</option>
+            <option value="5">5 yr: Appliances, carpeting</option>
+            <option value="7">7 yr: Furniture, fixtures</option>
+            <option value="15">15 yr: Land improvements (parking, fencing)</option>
+            <option value="27.5">27.5 yr: Residential structure improvements</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Placed in Service Date</label>
+          <input
+            type="date"
+            className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm"
+            value={form.placedInServiceDate}
+            onChange={e => setForm({ ...form, placedInServiceDate: e.target.value })}
+          />
+        </div>
+      </div>
+      <p className="text-xs text-muted">
+        Recovery period and placed in service date are used to calculate MACRS depreciation on your tax report. Set these once the project is completed and in use.
+      </p>
 
       <div>
         <label className="block text-xs text-muted mb-1">Budget</label>

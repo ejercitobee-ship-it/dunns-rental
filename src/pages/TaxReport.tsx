@@ -20,6 +20,9 @@ import {
   depreciableBasis,
   landValueFor,
   canDepreciate,
+  projectDepreciationForYear,
+  accumulatedProjectDepreciation,
+  canDepreciateProject,
 } from '../lib/depreciation';
 import { buildScheduleE, buildScheduleETotals, type ScheduleEProperty } from '../lib/schedule-e';
 import JSZip from 'jszip';
@@ -118,6 +121,8 @@ interface DepreciationRow {
   currentYear: number;
   accumulated: number;
   ready: boolean;
+  recoveryYears?: number;
+  isProject?: boolean;
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -354,14 +359,15 @@ export function TaxReport() {
     });
     capitalItems.sort((a, b) => b.amount - a.amount);
 
-    // Depreciation: a non-cash deduction, spread over 27.5 years. It's an annual
-    // figure, so for a sub-year period we prorate it by the share of months
-    // shown. The full-year schedule below stays un-prorated for reference.
+    // Depreciation: a non-cash deduction. Property depreciation is straight-line
+    // over 27.5 years (mid-month convention). Capital projects use their assigned
+    // MACRS recovery period (5/7/15/27.5 yr). For sub-year periods we prorate
+    // by the share of months shown. The schedule below stays un-prorated.
     const periodFactor = months.length / 12;
     const depreciationByProperty = new Map(
       properties.map(p => [p.id, depreciationForYear(p, y)])
     );
-    const depreciationSchedule: DepreciationRow[] = properties
+    const propertyRows: DepreciationRow[] = properties
       .filter(p => p.purchasePrice && p.purchasePrice > 0)
       .map(p => ({
         name: p.name,
@@ -372,10 +378,31 @@ export function TaxReport() {
         currentYear: depreciationByProperty.get(p.id) || 0,
         accumulated: accumulatedDepreciation(p, y),
         ready: canDepreciate(p),
+        recoveryYears: 27.5,
       }));
-    const depreciation = round2(
-      properties.reduce((s, p) => s + (depreciationByProperty.get(p.id) || 0), 0) * periodFactor
-    );
+
+    const projectRows: DepreciationRow[] = capitalProjects
+      .filter(cp => cp.totalCost > 0 && cp.recoveryYears && cp.placedInServiceDate)
+      .map(cp => {
+        const input = { totalCost: cp.totalCost, placedInServiceDate: cp.placedInServiceDate, recoveryYears: cp.recoveryYears };
+        return {
+          name: cp.name,
+          placedInService: cp.placedInServiceDate,
+          purchasePrice: cp.totalCost,
+          landValue: 0,
+          depreciableBasis: cp.totalCost,
+          currentYear: projectDepreciationForYear(input, y),
+          accumulated: accumulatedProjectDepreciation(input, y),
+          ready: canDepreciateProject(input),
+          recoveryYears: cp.recoveryYears,
+          isProject: true,
+        };
+      });
+    const depreciationSchedule: DepreciationRow[] = [...propertyRows, ...projectRows];
+
+    const propertyDepr = properties.reduce((s, p) => s + (depreciationByProperty.get(p.id) || 0), 0);
+    const projectDepr = projectRows.reduce((s, r) => s + r.currentYear, 0);
+    const depreciation = round2((propertyDepr + projectDepr) * periodFactor);
     if (depreciation > 0) {
       expensesByCategory['depreciation'] = (expensesByCategory['depreciation'] || 0) + depreciation;
       totalDeductibleExpenses += depreciation;
@@ -383,10 +410,21 @@ export function TaxReport() {
 
     const netIncome = totalIncome - totalDeductibleExpenses;
 
+    // Capital project depreciation grouped by property (used in breakdown + Schedule E).
+    const projectDeprByProperty = new Map<string, number>();
+    capitalProjects.forEach(cp => {
+      if (cp.totalCost > 0 && cp.recoveryYears && cp.placedInServiceDate) {
+        const pd = projectDepreciationForYear({ totalCost: cp.totalCost, placedInServiceDate: cp.placedInServiceDate, recoveryYears: cp.recoveryYears }, y);
+        projectDeprByProperty.set(cp.propertyId, (projectDeprByProperty.get(cp.propertyId) || 0) + pd);
+      }
+    });
+
     const leasePropertyId = new Map(leases.map(l => [l.id, l.propertyId]));
     const propertyBreakdown = properties.map(p => {
       const cashExpenses = pExpenses.filter(e => e.propertyId === p.id).reduce((s, e) => s + deductibleAmount(e), 0);
-      const propDepreciation = round2((depreciationByProperty.get(p.id) || 0) * periodFactor);
+      const bldgDepr = depreciationByProperty.get(p.id) || 0;
+      const projDepr = projectDeprByProperty.get(p.id) || 0;
+      const propDepreciation = round2((bldgDepr + projDepr) * periodFactor);
       const propertyExpenses = cashExpenses + propDepreciation;
       const propertyRent = pPaidRent.filter(pmt => leasePropertyId.get(pmt.leaseId) === p.id).reduce((s, pmt) => s + pmt.amount, 0);
       // Property income excludes deposits (not taxable) and source==='rent' (already in propertyRent via rent_payments).
@@ -444,7 +482,9 @@ export function TaxReport() {
       const propOtherInc = pIncome
         .filter(i => i.propertyId === p.id && i.source !== 'deposit' && i.source !== 'rent')
         .reduce((s, i) => s + i.amount, 0);
-      const propDepreciation = round2((depreciationByPropertyMap.get(p.id) || 0) * periodFactor);
+      const bldgDepr = depreciationByPropertyMap.get(p.id) || 0;
+      const projDepr = projectDeprByProperty.get(p.id) || 0;
+      const propDepreciation = round2((bldgDepr + projDepr) * periodFactor);
       return buildScheduleE({
         property: p,
         expenses: pExpenses,
@@ -692,9 +732,10 @@ export function TaxReport() {
 
     // 4) Depreciation schedule
     if (main.depreciationSchedule.length > 0) {
-      const depHeader = 'Property,Placed In Service,Cost Basis,Land Value,Depreciable Basis,This Year,Accumulated';
+      const depHeader = 'Asset,Type,Recovery Period,Placed In Service,Cost Basis,Land Value,Depreciable Basis,This Year,Accumulated';
       const depRows = main.depreciationSchedule.map(d => [
-        csvEscape(d.name), d.placedInService || '', d.purchasePrice.toFixed(2), d.landValue.toFixed(2),
+        csvEscape(d.name), d.isProject ? 'Project' : 'Property', d.recoveryYears ? `${d.recoveryYears} yr` : '',
+        d.placedInService || '', d.purchasePrice.toFixed(2), d.landValue.toFixed(2),
         d.depreciableBasis.toFixed(2), d.currentYear.toFixed(2), d.accumulated.toFixed(2),
       ].join(','));
       zip.file(`depreciation-${label}.csv`, [depHeader, ...depRows].join('\n'));
@@ -1361,14 +1402,15 @@ export function TaxReport() {
           </p>
           {main.depreciationSchedule.length === 0 ? (
             <p className="text-sm text-muted">
-              Add a purchase price and purchase date to your properties (Properties page) to calculate depreciation.
+              Add a purchase price and purchase date to your properties (Properties page), or set a recovery period on capital projects, to calculate depreciation.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-2.5 px-4 font-medium">Property</th>
+                    <th className="text-left py-2.5 px-4 font-medium">Asset</th>
+                    <th className="text-left py-2.5 px-4 font-medium">Recovery</th>
                     <th className="text-left py-2.5 px-4 font-medium">Placed in service</th>
                     <th className="text-right py-2.5 px-4 font-medium">Cost basis</th>
                     <th className="text-right py-2.5 px-4 font-medium">Land</th>
@@ -1380,14 +1422,18 @@ export function TaxReport() {
                 <tbody>
                   {main.depreciationSchedule.map(d => (
                     <tr key={d.name} className="border-b border-line last:border-0">
-                      <td className="py-2.5 px-4 font-medium text-ink">{d.name}</td>
+                      <td className="py-2.5 px-4 font-medium text-ink">
+                        {d.name}
+                        {d.isProject && <Badge variant="outline" className="ml-2 text-[10px]">Project</Badge>}
+                      </td>
+                      <td className="py-2.5 px-4 text-muted">{d.recoveryYears ? `${d.recoveryYears} yr` : '—'}</td>
                       <td className="py-2.5 px-4">
                         {d.ready
                           ? (d.placedInService ? formatDate(d.placedInService) : '—')
-                          : <span className="text-warning">Add purchase date</span>}
+                          : <span className="text-warning">{d.isProject ? 'Set placed in service' : 'Add purchase date'}</span>}
                       </td>
                       <td className="py-2.5 px-4 text-right tnum">{formatCurrency(d.purchasePrice)}</td>
-                      <td className="py-2.5 px-4 text-right tnum text-muted">{formatCurrency(d.landValue)}</td>
+                      <td className="py-2.5 px-4 text-right tnum text-muted">{d.landValue > 0 ? formatCurrency(d.landValue) : '—'}</td>
                       <td className="py-2.5 px-4 text-right tnum">{formatCurrency(d.depreciableBasis)}</td>
                       <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(d.currentYear)}</td>
                       <td className="py-2.5 px-4 text-right tnum text-muted">{formatCurrency(d.accumulated)}</td>
@@ -1396,7 +1442,7 @@ export function TaxReport() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-line-strong">
-                    <td className="py-2.5 px-4 font-bold" colSpan={5}>Total annual depreciation</td>
+                    <td className="py-2.5 px-4 font-bold" colSpan={6}>Total annual depreciation</td>
                     <td className="py-2.5 px-4 text-right font-bold tnum">
                       {formatCurrency(main.depreciationSchedule.reduce((s, d) => s + d.currentYear, 0))}
                     </td>
@@ -1409,8 +1455,8 @@ export function TaxReport() {
             </div>
           )}
           <p className="text-xs text-muted mt-3">
-            Land value defaults to 20% of the purchase price when left blank on a property. Set the assessed land
-            value on each property (from your county tax bill) for accuracy, and confirm the basis with your accountant.
+            Properties use 27.5 year straight line with mid-month convention. Capital projects use MACRS with half-year convention (5/7/15 yr) or mid-month (27.5 yr).
+            Land value defaults to 20% of the purchase price when left blank. Set the assessed land value on each property for accuracy.
           </p>
         </CardContent>}
       </Card>
