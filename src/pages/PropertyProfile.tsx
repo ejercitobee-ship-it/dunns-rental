@@ -270,14 +270,14 @@ export function PropertyProfile() {
     <div className="space-y-6">
       {/* Hero image */}
       {property.image ? (
-        <div className="relative rounded-2xl overflow-hidden shadow-md group">
+        <div className="relative rounded-2xl overflow-hidden shadow-md group bg-black/5">
           <img
             src={property.image}
             alt={property.name}
-            className="w-full h-48 sm:h-64 object-cover"
+            className="w-full h-52 sm:h-72 lg:h-96 object-cover"
           />
           {/* Gradient overlay for legibility */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
           {/* Back button on the image */}
           <Link
             to="/properties"
