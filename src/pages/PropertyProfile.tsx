@@ -274,7 +274,7 @@ export function PropertyProfile() {
           <img
             src={property.image}
             alt={property.name}
-            className="w-full h-52 sm:h-72 lg:h-96 object-cover"
+            className="w-full h-56 sm:h-80 lg:h-[480px] object-cover"
           />
           {/* Gradient overlay for legibility */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
