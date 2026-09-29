@@ -20,6 +20,10 @@ export interface Env {
   CRON_SECRET?: string;
   /** Anthropic API key for the AI Assistant (optional fallback). */
   ANTHROPIC_API_KEY?: string;
+  /** Stripe secret key for ACH rent collection. */
+  STRIPE_SECRET_KEY?: string;
+  /** Stripe webhook signing secret. */
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 export interface SessionUser {

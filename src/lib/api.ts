@@ -952,6 +952,13 @@ export function placeLabel(
   return [prop, unit].filter(Boolean).join(', ');
 }
 
+export interface StripePaymentMethod {
+  id: string;
+  bankName: string;
+  last4: string;
+  accountType: string;
+}
+
 export interface PortalAnnouncement {
   id: string;
   title: string;
@@ -1091,6 +1098,16 @@ export const portalApi = {
   sendVendorMessage: (body: string, file?: File | null): Promise<VendorMessage> =>
     postMessageForm('/portal/handyman/messages', body, file),
   announcements: (): Promise<PortalAnnouncement[]> => apiRequest('/portal/announcements'),
+  stripe: {
+    createSetupIntent: (): Promise<{ clientSecret: string }> =>
+      apiRequest('/portal/stripe/setup-intent', { method: 'POST' }),
+    paymentMethods: (): Promise<StripePaymentMethod[]> =>
+      apiRequest('/portal/stripe/payment-methods'),
+    removePaymentMethod: (paymentMethodId: string): Promise<{ success: boolean }> =>
+      apiRequest('/portal/stripe/payment-methods', { method: 'DELETE', body: JSON.stringify({ paymentMethodId }) }),
+    payRent: (data: { paymentMethodId: string; amount: number; month: number; year: number; leaseId: string }): Promise<{ paymentIntentId: string; clientSecret: string; status: string }> =>
+      apiRequest('/portal/stripe/pay-rent', { method: 'POST', body: JSON.stringify(data) }),
+  },
 };
 
 export const photoApi = {

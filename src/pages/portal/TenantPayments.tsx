@@ -17,6 +17,8 @@ const statusConfig = {
   partial: { label: 'Partial', variant: 'warning', icon: Clock },
   unpaid: { label: 'Unpaid', variant: 'destructive', icon: AlertCircle },
   credit: { label: 'Credit', variant: 'secondary', icon: ArrowDownCircle },
+  processing: { label: 'Processing', variant: 'warning', icon: Clock },
+  failed: { label: 'Failed', variant: 'destructive', icon: AlertCircle },
 } as const;
 
 // The rent-math functions expect a full Lease. The portal serializer carries

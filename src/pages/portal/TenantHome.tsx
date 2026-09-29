@@ -10,6 +10,7 @@ import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMembe
 import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
 import { settleMonthWithCredit, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
+import { PayRent } from '../../components/portal/PayRent';
 import type { Lease, RentPayment, PaymentAllocation, Tenant } from '../../types';
 
 // Time-of-day greeting for the home header.
@@ -248,6 +249,17 @@ export function TenantHome() {
       ) : (
         <>
           <HomeCard property={property} unit={unit} lease={lease} />
+          {import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY && (
+            <PayRent
+              leaseId={lease.id}
+              amount={thisMonth?.due ?? lease.monthlyRent}
+              month={nowD.getMonth() + 1}
+              year={nowD.getFullYear()}
+              monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
+              status={thisMonth?.status ?? null}
+              balance={thisMonth?.balance ?? 0}
+            />
+          )}
           <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
         </>
       )}
