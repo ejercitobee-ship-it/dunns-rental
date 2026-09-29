@@ -20,10 +20,11 @@ interface PayRentProps {
   monthLabel: string;
   status: 'paid' | 'partial' | 'unpaid' | null;
   balance: number;
+  tenantName: string;
   onPaymentStarted?: () => void;
 }
 
-export function PayRent({ leaseId, amount, month, year, monthLabel, status, balance, onPaymentStarted }: PayRentProps) {
+export function PayRent({ leaseId, amount, month, year, monthLabel, status, balance, tenantName, onPaymentStarted }: PayRentProps) {
   const { showToast } = useToast();
   const [methods, setMethods] = useState<StripePaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +69,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
         clientSecret,
         params: {
           payment_method_type: 'us_bank_account',
-          payment_method_data: { billing_details: { name: '' } },
+          payment_method_data: { billing_details: { name: tenantName } },
         },
       });
 

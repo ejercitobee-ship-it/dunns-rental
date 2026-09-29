@@ -258,6 +258,7 @@ export function TenantHome() {
               monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
               status={thisMonth?.status ?? null}
               balance={thisMonth?.balance ?? 0}
+              tenantName={`${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim() || 'Tenant'}
             />
           )}
           <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
