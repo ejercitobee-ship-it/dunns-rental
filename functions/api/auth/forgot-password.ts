@@ -33,6 +33,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const now = Math.floor(Date.now() / 1000);
       const expiresAt = now + 60 * 60; // 1 hour
 
+      await env.DB.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?')
+        .bind(user.id)
+        .run();
+
       await env.DB.prepare(
         'INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
       )

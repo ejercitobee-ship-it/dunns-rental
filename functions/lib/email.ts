@@ -73,7 +73,7 @@ export function officeTenantEmail(body: string, name?: string) {
 }
 
 /** Minimal HTML escape so a typed message can't inject markup into the email. */
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -218,7 +218,7 @@ export function rentReminderEmail(opts: {
       <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
         This is a friendly reminder that your rent for <strong>${opts.monthLabel}</strong> is due today.
       </p>
-      ${instructions ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:14px 16px;">${instructions}</p>` : ''}
+      ${instructions ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:14px 16px;">${escapeHtml(instructions)}</p>` : ''}
       <p style="margin:0 0 24px;">
         <a href="${opts.portalUrl}"
            style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">

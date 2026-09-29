@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, getSessionUser, jsonOk, jsonError, serverError } from '../../lib/session';
+import { type Env, getSessionUser, jsonOk, jsonError, serverError, constantTimeStrEqual } from '../../lib/session';
 
 /** Illinois: 30 days for 5+ unit buildings, 45 days otherwise. Default to 30. */
 function calculateDeadline(moveOutDate: string): string {
@@ -32,7 +32,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   const auth = request.headers.get('Authorization') || '';
   const presented = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  const cronOk = !!env.CRON_SECRET && presented === env.CRON_SECRET;
+  const cronOk = !!env.CRON_SECRET && constantTimeStrEqual(presented, env.CRON_SECRET);
   if (!cronOk) {
     const user = await getSessionUser(env, request);
     if (!user) return jsonError('Not authorized', 401);

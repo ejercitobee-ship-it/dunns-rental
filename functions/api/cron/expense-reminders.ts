@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, getSessionUser, jsonOk, jsonError, serverError } from '../../lib/session';
 import { getSetting, putSetting } from '../../lib/google';
-import { sendEmail } from '../../lib/email';
+import { sendEmail, escapeHtml } from '../../lib/email';
 import { sendPushToUser } from '../../lib/push';
 
 const STATE_KEY = 'expenseReminderState';
@@ -284,10 +284,10 @@ function buildReminderEmail(items: UpcomingExpense[]): { subject: string; html: 
 
     htmlRows += `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e7e4dd;font-size:14px;">${label}${vendor ? `<br><span style="color:#8a887f;font-size:12px;">${vendor}</span>` : ''}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e7e4dd;font-size:14px;">${escapeHtml(label)}${vendor ? `<br><span style="color:#8a887f;font-size:12px;">${escapeHtml(vendor)}</span>` : ''}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e7e4dd;font-size:14px;text-align:right;white-space:nowrap;">${money(u.expense.amount)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e7e4dd;font-size:13px;color:#3a382f;white-space:nowrap;">${prettyDate(u.dueDate)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e7e4dd;font-size:12px;color:#8a887f;">${prop}<br>${freq}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e7e4dd;font-size:12px;color:#8a887f;">${escapeHtml(prop)}<br>${freq}</td>
       </tr>`;
   }
 

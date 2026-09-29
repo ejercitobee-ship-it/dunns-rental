@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, jsonOk, jsonError, serverError } from '../../lib/session';
+import { type Env, jsonOk, jsonError, serverError, constantTimeStrEqual } from '../../lib/session';
 import { ensureRootFolder, findFolder, createFolder, uploadToDrive } from '../../lib/google';
 
 /**
@@ -98,7 +98,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const cronSecret = env.CRON_SECRET;
   if (!cronSecret) return jsonError('CRON_SECRET not configured', 500);
   const auth = request.headers.get('Authorization');
-  if (auth !== `Bearer ${cronSecret}`) return jsonError('Unauthorized', 401);
+  if (!constantTimeStrEqual(auth || '', `Bearer ${cronSecret}`)) return jsonError('Unauthorized', 401);
 
   try {
     const backup: Record<string, unknown[]> = {};

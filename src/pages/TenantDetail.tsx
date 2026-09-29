@@ -1412,7 +1412,14 @@ export function TenantDetail() {
                 </div>
                 {(lease.securityDeposit ?? 0) > 0 && (
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-line">
-                    <span className="text-sm text-muted">Move-in fee {formatCurrency(lease.securityDeposit ?? 0)}</span>
+                    <span className="text-sm text-muted flex items-center gap-1">
+                      Move-in fee {formatCurrency(lease.securityDeposit ?? 0)}
+                      {canEditMoveIn && (
+                        <button onClick={() => openEditMoveInFee(lease)} className="text-faint hover:text-primary" title="Edit move-in fee">
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </span>
                     {lease.moveInFeePaid === false ? (
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Badge variant="destructive">Owed</Badge>

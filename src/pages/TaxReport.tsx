@@ -421,7 +421,7 @@ export function TaxReport() {
 
     const leasePropertyId = new Map(leases.map(l => [l.id, l.propertyId]));
     const propertyBreakdown = properties.map(p => {
-      const cashExpenses = pExpenses.filter(e => e.propertyId === p.id).reduce((s, e) => s + deductibleAmount(e), 0);
+      const cashExpenses = pExpenses.filter(e => e.propertyId === p.id && !isCapitalExpense(e, capitalThreshold)).reduce((s, e) => s + deductibleAmount(e), 0);
       const bldgDepr = depreciationByProperty.get(p.id) || 0;
       const projDepr = projectDeprByProperty.get(p.id) || 0;
       const propDepreciation = round2((bldgDepr + projDepr) * periodFactor);
@@ -500,12 +500,13 @@ export function TaxReport() {
     // Vacancy loss: potential rent from units with no active lease.
     const throughMonth = months[months.length - 1] ?? 12;
     const vacancyData = vacancyLossForYear(units, leases, y, throughMonth);
-    const vacancyLoss = vacancyData.total;
+    const monthSet = new Set(months);
+    const vacancyLoss = vacancyData.items.filter(item => monthSet.has(item.month)).reduce((s, item) => s + item.loss, 0);
     const grossPotentialRent = rentIncome + vacancyLoss;
 
     return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent, vendors1099, scheduleEPerProperty, scheduleETotals, vacancyLoss, grossPotentialRent };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, incomes, properties, units, rentPayments, leases, capitalProjects]);
+  }, [expenses, incomes, properties, units, rentPayments, leases, capitalProjects, capitalThreshold]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
   const comp = useMemo(() => (compare ? periodData(cYear, monthsFor(scope, cQuarter, cMonth)) : null), [compare, periodData, cYear, scope, cQuarter, cMonth]);

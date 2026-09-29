@@ -475,16 +475,33 @@ export function PropertyNotes({ propertyId }: Props) {
   );
 }
 
-/**
- * Very minimal HTML sanitizer: strips <script>, on* attributes, and
- * javascript: URLs. For a property management note, the content is written
- * by the same admin team, so the risk surface is small, but we still clean
- * it defensively.
- */
+const ALLOWED_TAGS = new Set([
+  'a','b','blockquote','br','code','dd','div','dl','dt','em','h1','h2','h3',
+  'h4','h5','h6','hr','i','li','ol','p','pre','span','strong','sub','sup',
+  'table','tbody','td','th','thead','tr','u','ul',
+]);
+const ALLOWED_ATTRS = new Set(['href','src','alt','title','class','style','colspan','rowspan']);
+
 function sanitize(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/href\s*=\s*["']?\s*javascript:/gi, 'href="')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const walk = (node: Node) => {
+    const children = Array.from(node.childNodes);
+    for (const child of children) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as Element;
+        if (!ALLOWED_TAGS.has(el.tagName.toLowerCase())) {
+          el.remove();
+          continue;
+        }
+        for (const attr of Array.from(el.attributes)) {
+          if (!ALLOWED_ATTRS.has(attr.name.toLowerCase()) || /^\s*javascript:/i.test(attr.value)) {
+            el.removeAttribute(attr.name);
+          }
+        }
+        walk(el);
+      }
+    }
+  };
+  walk(doc.body);
+  return doc.body.innerHTML;
 }
