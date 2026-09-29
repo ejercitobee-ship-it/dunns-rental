@@ -1105,8 +1105,12 @@ export const portalApi = {
       apiRequest('/portal/stripe/payment-methods'),
     removePaymentMethod: (paymentMethodId: string): Promise<{ success: boolean }> =>
       apiRequest('/portal/stripe/payment-methods', { method: 'DELETE', body: JSON.stringify({ paymentMethodId }) }),
-    payRent: (data: { paymentMethodId: string; amount: number; month: number; year: number; leaseId: string }): Promise<{ paymentIntentId: string; clientSecret: string; status: string }> =>
+    payRent: (data: { paymentMethodId: string; amount: number; month: number; year: number; leaseId: string }): Promise<{ paymentIntentId: string; clientSecret: string; status: string; fee: number; totalAmount: number }> =>
       apiRequest('/portal/stripe/pay-rent', { method: 'POST', body: JSON.stringify(data) }),
+    getAutopay: (): Promise<{ enabled: boolean; paymentMethodId: string | null }> =>
+      apiRequest('/portal/stripe/autopay'),
+    setAutopay: (data: { enabled: boolean; paymentMethodId?: string }): Promise<{ success: boolean; enabled: boolean }> =>
+      apiRequest('/portal/stripe/autopay', { method: 'POST', body: JSON.stringify(data) }),
   },
 };
 

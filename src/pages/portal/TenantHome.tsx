@@ -293,7 +293,10 @@ function RentHero({
   pastDue: { months: number; balance: number } | null;
 }) {
   const scrollToPay = () => {
-    document.getElementById('how-to-pay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const target = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+      ? document.getElementById('pay-rent-online')
+      : document.getElementById('how-to-pay');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const dueText =
@@ -387,7 +390,7 @@ function RentHero({
           onClick={scrollToPay}
           className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#f1ecdf] text-[#1c3e30] text-sm font-semibold py-3 transition-transform hover:-translate-y-0.5"
         >
-          <DollarSign className="h-4 w-4" /> How to pay
+          <DollarSign className="h-4 w-4" /> {import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ? 'Pay now' : 'How to pay'}
         </button>
       </div>
     </div>

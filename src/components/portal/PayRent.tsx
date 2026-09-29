@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CreditCard, Building2, Trash2, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { CreditCard, Building2, Trash2, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { portalApi, type StripePaymentMethod } from '../../lib/api';
 import { getStripeJs } from '../../lib/stripe';
 import { formatCurrency } from '../../lib/utils';
 import { useToast } from '../../context/ToastContext';
+
+/** ACH processing fee: 0.8% capped at $5. Matches functions/lib/stripe-fee.ts. */
+function achFee(amount: number): number {
+  return Math.min(Math.round(amount * 0.008 * 100) / 100, 5);
+}
 
 interface PayRentProps {
   leaseId: string;
@@ -26,6 +31,10 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   const [paying, setPaying] = useState(false);
   const [payResult, setPayResult] = useState<'processing' | 'failed' | null>(null);
 
+  const [autopayEnabled, setAutopayEnabled] = useState(false);
+  const [autopayMethodId, setAutopayMethodId] = useState<string | null>(null);
+  const [autopayBusy, setAutopayBusy] = useState(false);
+
   const loadMethods = useCallback(async () => {
     try {
       const data = await portalApi.stripe.paymentMethods();
@@ -37,7 +46,15 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     }
   }, []);
 
-  useEffect(() => { loadMethods(); }, [loadMethods]);
+  const loadAutopay = useCallback(async () => {
+    try {
+      const data = await portalApi.stripe.getAutopay();
+      setAutopayEnabled(data.enabled);
+      setAutopayMethodId(data.paymentMethodId);
+    } catch { /* not critical */ }
+  }, []);
+
+  useEffect(() => { loadMethods(); loadAutopay(); }, [loadMethods, loadAutopay]);
 
   const handleLinkBank = async () => {
     setLinking(true);
@@ -79,6 +96,11 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     try {
       await portalApi.stripe.removePaymentMethod(pmId);
       setMethods(prev => prev.filter(m => m.id !== pmId));
+      if (autopayMethodId === pmId) {
+        await portalApi.stripe.setAutopay({ enabled: false });
+        setAutopayEnabled(false);
+        setAutopayMethodId(null);
+      }
       showToast('Bank account removed.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not remove bank account.', 'error');
@@ -118,6 +140,27 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     }
   };
 
+  const handleToggleAutopay = async (pmId: string) => {
+    setAutopayBusy(true);
+    try {
+      if (autopayEnabled && autopayMethodId === pmId) {
+        await portalApi.stripe.setAutopay({ enabled: false });
+        setAutopayEnabled(false);
+        setAutopayMethodId(null);
+        showToast('Autopay turned off.', 'success');
+      } else {
+        await portalApi.stripe.setAutopay({ enabled: true, paymentMethodId: pmId });
+        setAutopayEnabled(true);
+        setAutopayMethodId(pmId);
+        showToast('Autopay is on. Your rent will be charged automatically on the due date.', 'success');
+      }
+    } catch (err) {
+      showToast((err as Error).message || 'Could not update autopay.', 'error');
+    } finally {
+      setAutopayBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <Card>
@@ -131,49 +174,86 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
 
   const isPaid = status === 'paid';
   const payAmount = status === 'partial' ? balance : amount;
+  const fee = achFee(payAmount);
+  const totalWithFee = payAmount + fee;
 
   return (
-    <Card>
+    <Card id="pay-rent-online">
       <CardContent className="p-5 space-y-4">
         <p className="eyebrow">Pay rent online</p>
 
         {methods.length > 0 ? (
           <div className="space-y-3">
-            {methods.map(pm => (
-              <div key={pm.id} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-canvas p-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="w-10 h-10 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
-                    <Building2 className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink truncate">{pm.bankName}</p>
-                    <p className="text-xs text-muted">····{pm.last4} · {pm.accountType}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {!isPaid && !payResult && (
-                    <Button
-                      size="sm"
-                      disabled={paying}
-                      onClick={() => handlePayRent(pm.id)}
-                    >
-                      {paying ? (
-                        <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Paying...</>
-                      ) : (
-                        <>Pay {formatCurrency(payAmount)}</>
+            {methods.map(pm => {
+              const isAutopayMethod = autopayEnabled && autopayMethodId === pm.id;
+              return (
+                <div key={pm.id} className="rounded-xl border border-line bg-canvas p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-10 h-10 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+                        <Building2 className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink truncate">{pm.bankName}</p>
+                        <p className="text-xs text-muted">····{pm.last4} · {pm.accountType}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {!isPaid && !payResult && (
+                        <Button
+                          size="sm"
+                          disabled={paying}
+                          onClick={() => handlePayRent(pm.id)}
+                        >
+                          {paying ? (
+                            <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Paying...</>
+                          ) : (
+                            <>Pay {formatCurrency(totalWithFee)}</>
+                          )}
+                        </Button>
                       )}
-                    </Button>
+                      <button
+                        onClick={() => handleRemoveMethod(pm.id)}
+                        className="text-faint hover:text-danger p-1.5 rounded-lg hover:bg-danger-soft transition"
+                        title="Remove bank account"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fee breakdown */}
+                  {!isPaid && !payResult && (
+                    <div className="text-xs text-muted pl-[52px]">
+                      {formatCurrency(payAmount)} rent + {formatCurrency(fee)} processing fee
+                    </div>
                   )}
-                  <button
-                    onClick={() => handleRemoveMethod(pm.id)}
-                    className="text-faint hover:text-danger p-1.5 rounded-lg hover:bg-danger-soft transition"
-                    title="Remove bank account"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+
+                  {/* Autopay toggle */}
+                  <div className="flex items-center justify-between pl-[52px]">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className={`h-3.5 w-3.5 ${isAutopayMethod ? 'text-primary' : 'text-faint'}`} />
+                      <span className="text-xs font-medium text-ink">
+                        {isAutopayMethod ? 'Autopay is on' : 'Autopay'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAutopay(pm.id)}
+                      disabled={autopayBusy}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isAutopayMethod ? 'bg-primary' : 'bg-muted/30'} ${autopayBusy ? 'opacity-50' : ''}`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${isAutopayMethod ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  {isAutopayMethod && (
+                    <p className="text-xs text-muted pl-[52px]">
+                      Rent will be charged automatically on the due date each month. A {formatCurrency(fee)} processing fee applies.
+                    </p>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {payResult === 'processing' && (
               <div className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary-soft p-4">

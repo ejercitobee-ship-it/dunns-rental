@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { tenantIdForUser } from '../../../lib/portal';
 import { getStripe, getOrCreateCustomer } from '../../../lib/stripe';
+import { achFee } from '../../../lib/stripe-fee';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -47,7 +48,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const customerId = await getOrCreateCustomer(env, auth.id, tenant?.email || auth.email, name);
 
     const stripe = getStripe(env);
-    const amountCents = Math.round(body.amount * 100);
+    const fee = achFee(body.amount);
+    const totalAmount = body.amount + fee;
+    const amountCents = Math.round(totalAmount * 100);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountCents,
@@ -71,6 +74,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         month: String(body.month),
         year: String(body.year),
         userId: auth.id,
+        rentAmount: String(body.amount),
+        processingFee: String(fee),
       },
     });
 
@@ -101,6 +106,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         paymentIntentId: paymentIntent.id,
         clientSecret: paymentIntent.client_secret,
         status: paymentIntent.status,
+        fee,
+        totalAmount,
       },
     });
   } catch (err) {
