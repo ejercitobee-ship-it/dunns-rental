@@ -51,11 +51,10 @@ function yearMonthOf(dateStr: string): number {
 }
 
 /**
- * Whether a lease's term overlaps a given month at all, no proration: a
- * lease that starts or ends mid-month owes the whole month on either end.
- * A missing `startDate` means no lower bound; a missing `endDate` means the
- * lease is ongoing and has no upper bound. The start and end months are
- * both inclusive.
+ * Whether a lease's term overlaps a given month at all. A missing
+ * `startDate` means no lower bound; a missing `endDate` means the lease is
+ * ongoing and has no upper bound. The start and end months are both
+ * inclusive; partial months are prorated in `proratedDue`.
  */
 export function leaseCoversMonth(lease: Lease, month: number, year: number): boolean {
   // A draft lease a realtor created (awaiting Belle's review) owes no rent
@@ -278,6 +277,43 @@ export function rentIncomeForMonths(
 }
 
 /**
+ * The rent owed for a single month, prorated when the lease starts or ends
+ * mid-month. A lease starting on the 15th of a 30-day month owes 16/30 of
+ * the monthly rent (the 15th through the 30th). A lease ending on the 10th
+ * owes 10/30. A full month returns the unmodified monthly rent.
+ */
+export function proratedDue(lease: Lease, month: number, year: number): number {
+  const fullRent = round2(lease.monthlyRent || 0);
+  if (fullRent <= 0) return 0;
+
+  const target = year * 12 + month;
+  const totalDays = daysInMonth(month, year);
+  let startDay = 1;
+  let endDay = totalDays;
+
+  if (lease.startDate) {
+    const startYM = yearMonthOf(lease.startDate);
+    if (startYM === target) {
+      const [, , d] = parseDateParts(lease.startDate);
+      startDay = d;
+    }
+  }
+
+  if (lease.endDate) {
+    const endYM = yearMonthOf(lease.endDate);
+    if (endYM === target) {
+      const [, , d] = parseDateParts(lease.endDate);
+      endDay = d;
+    }
+  }
+
+  if (startDay === 1 && endDay === totalDays) return fullRent;
+
+  const owedDays = Math.max(0, endDay - startDay + 1);
+  return round2(fullRent * owedDays / totalDays);
+}
+
+/**
  * What is owed, what came in, and whether the month is settled. Several
  * payments may add up to one month's rent (roommates splitting it).
  */
@@ -296,9 +332,10 @@ export function settleMonth(
   // must never bill rent, even if a caller bypasses leasesOwingMonth.
   if (lease.renewalStatus === 'pending' || lease.renewalStatus === 'rejected' || lease.renewalStatus === 'draft' || lease.renewalStatus === 'cancelled')
     return { due: 0, paid: 0, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: 0 };
-  const due = round2(lease.monthlyRent || 0);
+  const due = proratedDue(lease, month, year);
   const paid = allocatedRentForMonth(lease.id, payments, allocations, month, year);
 
+  if (due < EPSILON) return { due: 0, paid, balance: 0, status: 'paid', creditApplied: 0, creditRemaining: paid > EPSILON ? round2(paid) : 0 };
   if (paid <= 0) return { due, paid: 0, balance: due, status: 'unpaid', creditApplied: 0, creditRemaining: 0 };
   // Overpayment: credit will be picked up by settleWithCarryForward if called.
   const surplus = paid > due + EPSILON ? round2(paid - due) : 0;
