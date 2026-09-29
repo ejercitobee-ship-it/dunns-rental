@@ -18,6 +18,14 @@ export default {
         }
 
         try {
+          const res = await fetch(`${base}/autopay`, { method: 'POST', headers });
+          const body = await res.text();
+          console.log(`autopay: HTTP ${res.status} ${body}`);
+        } catch (err) {
+          console.error(`autopay: request failed: ${err && err.message ? err.message : err}`);
+        }
+
+        try {
           const res = await fetch(`${base}/calendar-reminders`, { method: 'POST', headers });
           const body = await res.text();
           console.log(`calendar-reminders: HTTP ${res.status} ${body}`);
