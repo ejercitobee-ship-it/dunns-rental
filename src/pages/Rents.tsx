@@ -1169,11 +1169,14 @@ export function Rents() {
     interface DelinquentRow {
       property: string; unit: string; occupants: string;
       phone: string; email: string;
+      status: string;
       monthsBehind: number; oldestUnpaid: string; totalOwed: number;
     }
     const rows: DelinquentRow[] = [];
 
     for (const group of tenantGroups) {
+      if (group.lease.status === 'ended') continue;
+
       let totalOwed = 0;
       let monthsBehind = 0;
       let oldest: LeaseMonthRow | null = null;
@@ -1188,12 +1191,16 @@ export function Rents() {
 
       const head = group.monthRows[0];
       const occupants = head?.occupants ?? [];
+      const leaseStatus = group.lease.status === 'active' ? 'Active'
+        : group.lease.status === 'paused' ? 'Paused'
+        : 'Ended';
       rows.push({
         property: head?.property?.name || '',
         unit: head?.unit?.unitNumber || '',
         occupants: occupants.map(t => `${t.firstName} ${t.lastName}`).join(', '),
         phone: occupants.map(t => t.phone).filter(Boolean).join(', '),
         email: occupants.map(t => t.email).filter(Boolean).join(', '),
+        status: leaseStatus,
         monthsBehind,
         oldestUnpaid: oldest ? formatMonthYear(oldest.month, oldest.year) : '',
         totalOwed,
@@ -1208,11 +1215,11 @@ export function Rents() {
     // Biggest balance first — the order the office wants to work the list in.
     rows.sort((a, b) => b.totalOwed - a.totalOwed);
 
-    const headers = ['Property', 'Unit', 'Occupants', 'Phone', 'Email', 'Months Behind', 'Oldest Unpaid', 'Total Owed'];
+    const headers = ['Property', 'Unit', 'Occupants', 'Phone', 'Email', 'Status', 'Months Behind', 'Oldest Unpaid', 'Total Owed'];
     const csv = [
       headers.join(','),
       ...rows.map(r => [
-        r.property, r.unit, r.occupants, r.phone, r.email,
+        r.property, r.unit, r.occupants, r.phone, r.email, r.status,
         r.monthsBehind, r.oldestUnpaid, r.totalOwed,
       ].map(csvField).join(',')),
     ].join('\n');
