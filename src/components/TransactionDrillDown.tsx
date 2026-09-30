@@ -23,7 +23,7 @@ import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { expenseCategoryLabel } from '../lib/financials';
-import type { Expense, Income, RentPayment, Property, Unit } from '../types';
+import type { Expense, Income, RentPayment, Property, Unit, Tenant, Lease } from '../types';
 
 export interface DrillDownProps {
   isOpen: boolean;
@@ -34,6 +34,8 @@ export interface DrillDownProps {
   rentPayments?: RentPayment[];
   properties: Property[];
   units: Unit[];
+  tenants?: Tenant[];
+  leases?: Lease[];
   /** When set, only show this tab. Otherwise show all non-empty tabs. */
   forceTab?: 'expenses' | 'income' | 'rent';
 }
@@ -41,12 +43,27 @@ export interface DrillDownProps {
 export function TransactionDrillDown({
   isOpen, onClose, title,
   expenses = [], incomes = [], rentPayments = [],
-  properties, units, forceTab,
+  properties, units, tenants = [], leases = [], forceTab,
 }: DrillDownProps) {
   const [search, setSearch] = useState('');
 
   const propertyName = (id?: string) => properties.find(p => p.id === id)?.name || '—';
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber || '';
+  const tenantName = (id?: string) => {
+    if (!id) return '';
+    const t = tenants.find(t => t.id === id);
+    return t ? `${t.firstName} ${t.lastName}` : '';
+  };
+  const tenantNamesForIncome = (income: Income): string => {
+    if (income.tenantId) return tenantName(income.tenantId);
+    // Move-in fee incomes use id = "movein-{leaseId}"
+    if (income.id.startsWith('movein-')) {
+      const leaseId = income.id.slice(7);
+      const lease = leases.find(l => l.id === leaseId);
+      if (lease) return lease.tenantIds.map(tid => tenantName(tid)).filter(Boolean).join(', ');
+    }
+    return '';
+  };
 
   const tabs = useMemo(() => {
     const t: ('expenses' | 'income' | 'rent')[] = [];
@@ -82,7 +99,9 @@ export function TransactionDrillDown({
     const q = search.toLowerCase();
     return incomes.filter(i =>
       i.description?.toLowerCase().includes(q) ||
-      propertyName(i.propertyId).toLowerCase().includes(q)
+      propertyName(i.propertyId).toLowerCase().includes(q) ||
+      unitNumber(i.unitId).toLowerCase().includes(q) ||
+      tenantNamesForIncome(i).toLowerCase().includes(q)
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomes, search]);
@@ -112,9 +131,9 @@ export function TransactionDrillDown({
           .join(',')
       ).join('\n');
     } else if (activeTab === 'income') {
-      csv = 'Date,Property,Source,Description,Amount\n';
+      csv = 'Date,Property,Unit,Tenant,Source,Description,Amount\n';
       csv += filteredIncomes.map(i =>
-        [i.date, propertyName(i.propertyId), i.source, i.description, i.amount]
+        [i.date, propertyName(i.propertyId), unitNumber(i.unitId), tenantNamesForIncome(i), i.source, i.description, i.amount]
           .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`)
           .join(',')
       ).join('\n');
@@ -225,11 +244,13 @@ export function TransactionDrillDown({
           )}
 
           {activeTab === 'income' && (
-            <table className="w-full min-w-[500px]">
+            <table className="w-full min-w-[640px]">
               <thead className="sticky top-0 bg-surface z-10">
                 <tr className="border-b border-line">
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted">Date</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted">Property</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted">Unit</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted">Tenant</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted">Source</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted">Description</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted">Amount</th>
@@ -240,6 +261,8 @@ export function TransactionDrillDown({
                   <tr key={i.id} className="border-b border-line last:border-0 hover:bg-black/[0.02]">
                     <td className="py-2.5 px-3 text-sm text-muted">{formatDate(i.date)}</td>
                     <td className="py-2.5 px-3 text-sm">{propertyName(i.propertyId)}</td>
+                    <td className="py-2.5 px-3 text-sm text-muted">{unitNumber(i.unitId) || '—'}</td>
+                    <td className="py-2.5 px-3 text-sm">{tenantNamesForIncome(i) || '—'}</td>
                     <td className="py-2.5 px-3 text-sm">
                       <Badge variant="secondary">{i.source.replace(/_/g, ' ')}</Badge>
                     </td>
@@ -251,7 +274,7 @@ export function TransactionDrillDown({
                 ))}
                 {filteredIncomes.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-sm text-muted">No transactions found</td>
+                    <td colSpan={7} className="py-8 text-center text-sm text-muted">No transactions found</td>
                   </tr>
                 )}
               </tbody>

@@ -54,9 +54,11 @@ const PIE_OTHER_THRESHOLD = 0.03;
 // IRS 1099-NEC threshold: vendors paid ≥$600 in a calendar year need a 1099.
 const VENDOR_1099_THRESHOLD = 600;
 
-// IRS standard mileage rate (cents per mile). Check irs.gov each December for
-// the next year's rate and update this value. 2025 = 70¢, 2026 = 70¢ (verify).
-const IRS_MILEAGE_RATE_CENTS = 70;
+// IRS standard mileage rate (cents per mile) by year. Check irs.gov each
+// December for the next year's rate and add it here.
+const IRS_MILEAGE_RATES: Record<number, number> = { 2024: 67, 2025: 70 };
+const irsMileageRateCents = (yr: number): number =>
+  IRS_MILEAGE_RATES[yr] ?? IRS_MILEAGE_RATES[Math.max(...Object.keys(IRS_MILEAGE_RATES).map(Number).filter(y => y <= yr))] ?? 70;
 
 // Section 199A QBI deduction: qualified rental landlords can deduct 20% of net
 // rental income on their federal return. Illinois does NOT allow this deduction
@@ -150,7 +152,7 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
 import { mapToTaxCategory, isCapitalExpense } from '../lib/financials';
 
 export function TaxReport() {
-  const { expenses, incomes, properties, units, rentPayments, leases } = useApp();
+  const { expenses, incomes, properties, units, tenants, rentPayments, leases } = useApp();
   const { showToast } = useToast();
   const now = new Date();
   // Main period.
@@ -306,11 +308,11 @@ export function TaxReport() {
     let mortgagePrincipalExcluded = 0;
     let mortgageNeedsSplit = 0;
     // The deductible amount of one expense: for a mortgage that's the interest
-    // portion (principal is never deductible); everything else is the full
+    // portion only (principal is never deductible); everything else is the full
     // amount unless flagged non-deductible.
     const deductibleAmount = (e: typeof pExpenses[number]): number => {
       if (e.taxDeductible === false) return 0;
-      if (e.category === 'mortgage') return e.interestAmount != null ? e.interestAmount : e.amount;
+      if (e.category === 'mortgage') return e.interestAmount ?? 0;
       return e.amount;
     };
     pExpenses.forEach(e => {
@@ -443,7 +445,7 @@ export function TaxReport() {
       const mExp = pExpenses.filter(e => monthOf(e.date) === m).reduce((s, e) => {
         if (e.taxDeductible === false) return s;
         if (isCapitalExpense(e, capitalThreshold)) return s;
-        if (e.category === 'mortgage') return s + (e.interestAmount != null ? e.interestAmount : e.amount);
+        if (e.category === 'mortgage') return s + (e.interestAmount ?? 0);
         return s + e.amount;
       }, 0);
       return { name: getMonthName(m), income: mInc, expenses: mExp, netIncome: mInc - mExp };
@@ -544,7 +546,8 @@ export function TaxReport() {
     setMileage(clamped);
     localStorage.setItem(`mileage_${year}`, String(clamped));
   };
-  const mileageDeduction = mileage * (IRS_MILEAGE_RATE_CENTS / 100);
+  const mileageRate = irsMileageRateCents(year);
+  const mileageDeduction = mileage * (mileageRate / 100);
 
   // ── Estimated tax liability (configurable rates, persisted in localStorage) ──
   const [fedRate, setFedRate] = useState(() => {
@@ -1456,7 +1459,9 @@ export function TaxReport() {
             </div>
           )}
           <p className="text-xs text-muted mt-3">
-            Properties use 27.5 year straight line with mid-month convention. Capital projects use MACRS with half-year convention (5/7/15 yr) or mid-month (27.5 yr).
+            All assets use straight-line depreciation: 27.5 yr with mid-month convention for residential property, and half-year convention
+            for 5/7/15 yr personal property. Standard MACRS GDS tables use accelerated (declining balance) rates for 5/7/15 yr assets, which
+            yield larger deductions in earlier years. Consult your tax preparer if you prefer the accelerated method.
             Land value defaults to 20% of the purchase price when left blank. Set the assessed land value on each property for accuracy.
           </p>
         </CardContent>}
@@ -1495,10 +1500,10 @@ export function TaxReport() {
               <div className="flex items-start gap-2 rounded-lg bg-warning-soft text-warning p-3 text-sm">
                 <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>
-                  {main.mortgageNeedsSplit} mortgage {main.mortgageNeedsSplit === 1 ? 'entry has' : 'entries have'} no
-                  interest portion entered, so the full amount is being treated as deductible. If any of that is
-                  principal, it is not deductible. When you log a mortgage payment, enter the interest portion (from
-                  your Form 1098) so this stays accurate.
+                  {main.mortgageNeedsSplit} mortgage {main.mortgageNeedsSplit === 1 ? 'entry is' : 'entries are'} missing
+                  the interest portion, so {main.mortgageNeedsSplit === 1 ? 'it is' : 'they are'} excluded from your
+                  deductions. Enter the interest amount (from your Form 1098 or monthly statement) on each mortgage
+                  expense so the interest can be deducted.
                 </span>
               </div>
             )}
@@ -1822,7 +1827,7 @@ export function TaxReport() {
               <span className="font-medium">Section 199A (QBI) eligibility:</span>{' '}
               <span className="text-muted">
                 Most rental landlords qualify for the 20% QBI deduction on their federal return.
-                Exceptions include very high earners ($182,100+ single / $364,200+ MFJ) whose
+                Exceptions include very high earners ($197,300+ single / $394,600+ MFJ for 2025) whose
                 deduction may be limited. The deduction does NOT apply to Illinois state tax because
                 IL starts from federal AGI, which is calculated before QBI.
               </span>
@@ -1908,7 +1913,7 @@ export function TaxReport() {
         {!collapsed.has('mileage') && <CardContent>
           <p className="text-sm text-muted mb-4">
             Track business miles driven for rental activities (property visits, supply runs, bank trips).
-            The IRS standard mileage rate is ${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}/mile. Verify the current year's rate at irs.gov.
+            The IRS standard mileage rate for {year} is ${(mileageRate / 100).toFixed(2)}/mile. Verify the current year's rate at irs.gov.
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
@@ -1924,7 +1929,7 @@ export function TaxReport() {
             <div className="rounded-xl border border-line p-4">
               <span className="eyebrow">Rate</span>
               <div className="mt-2 text-[18px] leading-none font-semibold text-ink tnum">
-                ${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}/mi
+                ${(mileageRate / 100).toFixed(2)}/mi
               </div>
               <p className="text-xs text-muted mt-1">IRS standard rate</p>
             </div>
@@ -1934,7 +1939,7 @@ export function TaxReport() {
                 {formatCurrency(mileageDeduction)}
               </div>
               <p className="text-xs text-muted mt-1">
-                {mileage > 0 ? `${mileage.toLocaleString()} miles × $${(IRS_MILEAGE_RATE_CENTS / 100).toFixed(2)}` : 'Enter miles above'}
+                {mileage > 0 ? `${mileage.toLocaleString()} miles × $${(mileageRate / 100).toFixed(2)}` : 'Enter miles above'}
               </p>
             </div>
           </div>
@@ -2070,7 +2075,9 @@ export function TaxReport() {
         incomes={drillModalIncomes}
         rentPayments={drillModalPayments}
         properties={properties}
-        units={[]}
+        units={units}
+        tenants={tenants}
+        leases={leases}
         forceTab={drillModalTab}
       />
     </div>

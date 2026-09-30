@@ -317,7 +317,16 @@ export function portalInviteEmail(
     ? `Here is a fresh link to set your password for your ${companyName} ${noun}.`
     : account
     ? `${companyName} has created your account for the management app. Set your password below to sign in.`
-    : `${companyName} has set up your online portal. Sign in to see your information and keep your own details up to date.`;
+    : `${companyName} has set up your online portal. Set your password below, then sign in to manage everything in one place.`;
+  const showBenefits = !account && !opts?.resend;
+
+  const benefitsText = showBenefits ? `
+What you can do in your portal:
+- View your rent balance and payment history
+- Submit and track maintenance requests
+- Message the office directly
+- Access your lease and documents anytime
+` : '';
 
   const text = `${greeting}
 
@@ -326,7 +335,7 @@ ${intro}
 Set your password: ${inviteUrl}
 
 This link expires in 7 days.
-
+${benefitsText}
 If you do not see this email in your inbox, please check your spam or junk folder, and add info@mhdunnproperty.net to your contacts so future messages arrive.
 
 ${companyName}${contact ? `\n${contact}` : ''}`;
@@ -346,6 +355,16 @@ ${companyName}${contact ? `\n${contact}` : ''}`;
         <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#24503f;border-radius:8px;">
           <a href="${inviteUrl}" style="display:inline-block;padding:12px 26px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Set your password</a>
         </td></tr></table>
+        ${showBenefits ? `
+        <div style="margin:24px 0 0;padding:16px 20px;background:#f4f5f3;border:1px solid #e2e0d8;border-radius:10px;">
+          <p style="font-size:13px;font-weight:bold;color:#1c1a17;margin:0 0 10px;">What you can do in your portal:</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+            <tr><td style="padding:4px 0;font-size:13px;color:#3a382f;">💰 View your rent balance and payment history</td></tr>
+            <tr><td style="padding:4px 0;font-size:13px;color:#3a382f;">🔧 Submit and track maintenance requests</td></tr>
+            <tr><td style="padding:4px 0;font-size:13px;color:#3a382f;">💬 Message the office directly</td></tr>
+            <tr><td style="padding:4px 0;font-size:13px;color:#3a382f;">📄 Access your lease and documents anytime</td></tr>
+          </table>
+        </div>` : ''}
         <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:20px 0 0;">This link expires in 7 days. If the button doesn't work, paste this address into your browser:<br><a href="${inviteUrl}" style="color:#24503f;word-break:break-all;">${inviteUrl}</a></p>
         <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:12px 0 0;">Not in your inbox? Check your spam or junk folder, and add info@mhdunnproperty.net to your contacts so future messages arrive.</p>
       </td></tr>
@@ -586,6 +605,83 @@ export function vendorSubmissionStatusEmail(opts: {
 </div>`.trim();
 
   return { subject: `${heading} — MH Dunn Property`, html, text };
+}
+
+/**
+ * Portal welcome email sent to existing tenants who already have a login,
+ * introducing the features available in their portal.
+ */
+export function portalWelcomeEmail(opts: {
+  name?: string;
+  portalUrl: string;
+  companyName?: string;
+  contact?: string;
+}) {
+  const companyName = opts.companyName || 'MH Dunn Property';
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+
+  const benefits = [
+    { icon: '💰', title: 'View Your Balance', desc: 'See your rent balance, payment history, and upcoming amounts at a glance.' },
+    { icon: '🔧', title: 'Submit Maintenance Requests', desc: 'Report issues directly from your phone. Track progress and get updates.' },
+    { icon: '💬', title: 'Message the Office', desc: 'Send and receive messages without phone calls or email chains.' },
+    { icon: '📄', title: 'Access Your Documents', desc: 'View your lease, receipts, and other important documents anytime.' },
+  ];
+
+  const text = [
+    greeting,
+    '',
+    `Welcome to the ${companyName} tenant portal. Here is what you can do:`,
+    '',
+    ...benefits.map(b => `${b.icon} ${b.title}: ${b.desc}`),
+    '',
+    `Sign in anytime at: ${opts.portalUrl}`,
+    '',
+    `If you have questions, just reply to this email or contact the office.`,
+    '',
+    companyName,
+    opts.contact || '',
+  ].filter(l => l !== '').join('\n');
+
+  const benefitRows = benefits.map(b =>
+    `<tr><td style="padding:10px 14px 10px 0;vertical-align:top;font-size:22px;width:36px;">${b.icon}</td>` +
+    `<td style="padding:10px 0;"><strong style="font-size:14px;color:#1c1a17;">${b.title}</strong>` +
+    `<br><span style="font-size:13px;color:#6b6a63;line-height:1.5;">${b.desc}</span></td></tr>`
+  ).join('');
+
+  const html = `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">${companyName}</div>
+        ${opts.contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${opts.contact}</div>` : ''}
+      </td></tr>
+      <tr><td style="padding:26px 32px 6px;">
+        <div style="font-size:17px;font-weight:bold;color:#1c1a17;">Welcome to Your Tenant Portal</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:14px 0 6px;">${greeting}</p>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:0 0 20px;">
+          Your tenant portal is ready. Here is everything you can do from your phone or computer:
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;">
+          ${benefitRows}
+        </table>
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#24503f;border-radius:8px;">
+          <a href="${opts.portalUrl}" style="display:inline-block;padding:12px 26px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Open Your Portal</a>
+        </td></tr></table>
+        <p style="font-size:12px;color:#8a887f;line-height:1.6;margin:20px 0 0;">Questions? Just reply to this email or contact the office.</p>
+      </td></tr>
+      <tr><td style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        ${companyName}${opts.contact ? ` &nbsp;&middot;&nbsp; ${opts.contact}` : ''}
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+
+  return {
+    subject: `Welcome to your ${companyName} portal`,
+    html,
+    text,
+  };
 }
 
 function formatUSD(n: number) { return `$${n.toFixed(2)}`; }
