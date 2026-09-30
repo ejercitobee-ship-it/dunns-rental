@@ -75,6 +75,7 @@ export function TenantPayments() {
   const [rawPayments, setRawPayments] = useState<PortalPayment[]>([]);
   const [allocations, setAllocations] = useState<PaymentAllocation[]>([]);
   const [moveInFee, setMoveInFee] = useState<PortalMoveInFee | null>(null);
+  const [creditBalance, setCreditBalance] = useState(0);
   const [receiptOverrides, setReceiptOverrides] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +92,7 @@ export function TenantPayments() {
         setRawPayments(res.lease ? res.payments : []);
         setAllocations(res.allocations ?? []);
         setMoveInFee(res.moveInFee ?? null);
+        setCreditBalance(res.creditBalance ?? 0);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -214,21 +216,15 @@ export function TenantPayments() {
       </div>
 
       {/* Credit balance banner */}
-      {(() => {
-        const totalCredits = rawPayments
-          .filter(p => p.type === 'credit')
-          .reduce((sum, p) => sum + p.amount, 0);
-        if (totalCredits <= 0) return null;
-        return (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#e8f5e9] border border-[#a5d6a7]">
-            <ArrowDownCircle className="h-5 w-5 text-[#2e7d32] flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-[#1b5e20]">Credit Balance: {formatCurrency(totalCredits)}</p>
-              <p className="text-xs text-[#388e3c]">Credits have been applied to your account.</p>
-            </div>
+      {creditBalance > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#e8f5e9] border border-[#a5d6a7]">
+          <ArrowDownCircle className="h-5 w-5 text-[#2e7d32] flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-[#1b5e20]">Credit Balance: {formatCurrency(creditBalance)}</p>
+            <p className="text-xs text-[#388e3c]">This will be applied when recording your next rent payment.</p>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {!lease ? (
         <Card>

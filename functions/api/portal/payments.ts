@@ -63,11 +63,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         }
       : null;
 
+    // The tenant's usable credit balance from admin-added credits.
+    const creditRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS balance FROM tenant_credits WHERE tenant_id = ?`
+    ).bind(tenantId).first<{ balance: number }>();
+    const creditBalance = Math.round((creditRow?.balance ?? 0) * 100) / 100;
+
     return jsonOk({
       success: true,
       data: {
         lease: serializePortalLease(lease as Record<string, unknown>),
         moveInFee,
+        creditBalance,
         payments: (results || []).map(r => ({
           id: r.id,
           amount: r.amount,

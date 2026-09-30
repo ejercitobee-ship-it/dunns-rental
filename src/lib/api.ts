@@ -799,6 +799,7 @@ export interface PortalPaymentsResponse {
   payments: PortalPayment[];
   allocations?: PaymentAllocation[];
   moveInFee?: PortalMoveInFee | null;
+  creditBalance?: number;
 }
 
 /**
