@@ -432,12 +432,16 @@ export function announcementEmail(opts: {
 }) {
   const greeting = opts.tenantName ? `Hi ${opts.tenantName},` : 'Hi,';
   const propLine = opts.propertyName ? `\nProperty: ${opts.propertyName}` : '';
-  const text = [greeting, '', opts.title, '', opts.body, propLine, '', '— MH Dunn Property'].join('\n');
+  const isHtml = /<[a-z][\s\S]*>/i.test(opts.body);
+  const plainBody = isHtml ? opts.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : opts.body;
+  const text = [greeting, '', opts.title, '', plainBody, propLine, '', '— MH Dunn Property'].join('\n');
 
-  const bodyParas = opts.body
-    .split(/\n{2,}/)
-    .map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(p)}</p>`)
-    .join('');
+  const bodyParas = isHtml
+    ? `<div style="font-size:15px;line-height:1.55;">${opts.body}</div>`
+    : opts.body
+      .split(/\n{2,}/)
+      .map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(p)}</p>`)
+      .join('');
 
   const propertyBadge = opts.propertyName
     ? `<div style="margin-bottom:18px;font-size:12px;color:#8a887f;">${escapeHtml(opts.propertyName)}</div>`

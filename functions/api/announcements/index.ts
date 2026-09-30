@@ -134,9 +134,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
         // Push
         try {
+          const pushBody = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           await sendPushToTenant(env, tenant.tenant_id, {
             title: `📢 ${title}`,
-            body: text.length > 120 ? text.slice(0, 117) + '...' : text,
+            body: pushBody.length > 120 ? pushBody.slice(0, 117) + '...' : pushBody,
             url: `${SITE_URL}/portal`,
           });
           pushSent++;
