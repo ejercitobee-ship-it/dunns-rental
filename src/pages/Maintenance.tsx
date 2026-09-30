@@ -240,15 +240,24 @@ export function Maintenance() {
         : statusFilter === 'needs_invoice_review' ? m.status === 'invoice_submitted'
         : m.status === statusFilter;
       const q = search.toLowerCase();
+      const mt = m.tenantId ? tenants.find(t => t.id === m.tenantId) : null;
       const matchesSearch =
         !q ||
         m.title.toLowerCase().includes(q) ||
         propertyName(m.propertyId).toLowerCase().includes(q) ||
-        (m.vendor || '').toLowerCase().includes(q);
+        (m.vendor || '').toLowerCase().includes(q) ||
+        (mt && (
+          `${mt.firstName} ${mt.lastName}`.toLowerCase().includes(q) ||
+          (mt.email || '').toLowerCase().includes(q) ||
+          (mt.phone || '').toLowerCase().includes(q) ||
+          (mt.notes || '').toLowerCase().includes(q) ||
+          (mt.emergencyContact?.name || '').toLowerCase().includes(q) ||
+          (mt.emergencyContact?.phone || '').toLowerCase().includes(q)
+        ));
       return matchesStatus && matchesSearch;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maintenance, statusFilter, search, properties]);
+  }, [maintenance, statusFilter, search, properties, tenants]);
 
   // Map vendor submissions by their linked maintenance request ID for inline display.
   const subsByRequest = useMemo(() => {

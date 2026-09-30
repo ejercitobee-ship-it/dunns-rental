@@ -363,6 +363,7 @@ export function Expenses() {
     description: string;
     amount: number;
     tenantName?: string;
+    tenantId?: string;
     rentMonth?: string;
   }
   const incomeRows = useMemo<IncomeRow[]>(() => {
@@ -380,7 +381,7 @@ export function Expenses() {
       }
       return {
         id: i.id, date: i.date, propertyId: i.propertyId, unitId: i.unitId,
-        source: i.source, description: i.description, amount: i.amount, tenantName,
+        source: i.source, description: i.description, amount: i.amount, tenantName, tenantId: i.tenantId,
       };
     });
     const rent: IncomeRow[] = rentPayments
@@ -400,6 +401,7 @@ export function Expenses() {
           description: `Rent`,
           amount: p.amount,
           tenantName,
+          tenantId: p.paidByTenantId || undefined,
           rentMonth: formatMonthYear(p.month, p.year),
         };
       });
@@ -420,13 +422,22 @@ export function Expenses() {
       const property = properties.find(p => p.id === income.propertyId);
       const unit = income.unitId ? units.find(u => u.id === income.unitId) : null;
 
+      const incomeTenant = income.tenantId ? tenants.find(t => t.id === income.tenantId) : null;
+      const sq = searchTerm.toLowerCase();
       const matchesSearch =
         !searchTerm ||
-        income.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        income.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (income.tenantName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        unit?.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
+        income.description.toLowerCase().includes(sq) ||
+        income.source.toLowerCase().includes(sq) ||
+        (income.tenantName || '').toLowerCase().includes(sq) ||
+        property?.name.toLowerCase().includes(sq) ||
+        unit?.unitNumber.toLowerCase().includes(sq) ||
+        (incomeTenant && (
+          (incomeTenant.notes || '').toLowerCase().includes(sq) ||
+          (incomeTenant.emergencyContact?.name || '').toLowerCase().includes(sq) ||
+          (incomeTenant.emergencyContact?.phone || '').toLowerCase().includes(sq) ||
+          (incomeTenant.address?.city || '').toLowerCase().includes(sq) ||
+          (incomeTenant.address?.state || '').toLowerCase().includes(sq)
+        ));
 
       const matchesProperty = propertyFilter === 'all' || income.propertyId === propertyFilter;
       const matchesSource = sourceFilter === 'all' || income.source === sourceFilter;

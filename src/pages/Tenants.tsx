@@ -175,9 +175,14 @@ export function Tenants() {
         `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
         (t.email || '').toLowerCase().includes(q) ||
         (t.phone || '').toLowerCase().includes(q) ||
-        // Search the private notes too, so a rent payer (or anyone) recorded
-        // in a tenant's notes turns up when you search their name.
-        (t.notes || '').toLowerCase().includes(q)
+        (t.notes || '').toLowerCase().includes(q) ||
+        (t.emergencyContact?.name || '').toLowerCase().includes(q) ||
+        (t.emergencyContact?.phone || '').toLowerCase().includes(q) ||
+        (t.emergencyContact?.relationship || '').toLowerCase().includes(q) ||
+        (t.address?.line1 || '').toLowerCase().includes(q) ||
+        (t.address?.city || '').toLowerCase().includes(q) ||
+        (t.address?.state || '').toLowerCase().includes(q) ||
+        (t.address?.zip || '').toLowerCase().includes(q)
       ) ||
       (g.property?.name || '').toLowerCase().includes(q) ||
       (g.unit ? `unit ${g.unit.unitNumber}`.toLowerCase().includes(q) : false)

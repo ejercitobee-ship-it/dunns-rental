@@ -400,7 +400,16 @@ export function Rents() {
     if (!q) return leaseMonthRows;
     return leaseMonthRows.filter(row => {
       const matchesOccupant = row.occupants.some(t =>
-        `${t.firstName} ${t.lastName}`.toLowerCase().includes(q)
+        `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
+        (t.email || '').toLowerCase().includes(q) ||
+        (t.phone || '').toLowerCase().includes(q) ||
+        (t.notes || '').toLowerCase().includes(q) ||
+        (t.emergencyContact?.name || '').toLowerCase().includes(q) ||
+        (t.emergencyContact?.phone || '').toLowerCase().includes(q) ||
+        (t.address?.line1 || '').toLowerCase().includes(q) ||
+        (t.address?.city || '').toLowerCase().includes(q) ||
+        (t.address?.state || '').toLowerCase().includes(q) ||
+        (t.address?.zip || '').toLowerCase().includes(q)
       );
       return (
         (row.unit?.unitNumber || '').toLowerCase().includes(q) ||
