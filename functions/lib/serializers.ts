@@ -66,10 +66,17 @@ export function serializeTenant(r: Row) {
           relationship: r.emergency_contact_relationship ?? '',
         }
       : undefined,
+    address: (r.address_line1 || r.address_line2 || r.city || r.state || r.zip)
+      ? {
+          line1: r.address_line1 ?? '',
+          line2: r.address_line2 ?? '',
+          city: r.city ?? '',
+          state: r.state ?? '',
+          zip: r.zip ?? '',
+        }
+      : undefined,
     photoUrl: r.photo_drive_id ? `/api/photo/${r.photo_drive_id}` : null,
-    // Whether this tenant already has a portal login (drives Invite vs Resend).
     hasLogin: !!r.user_id,
-    // Whether they have actually signed in at least once (the "Verified" badge).
     verified: !!r.last_login_at,
   };
 }

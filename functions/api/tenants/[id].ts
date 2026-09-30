@@ -50,10 +50,12 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       if (clash) return jsonError('That email is already used by another login account.', 409);
     }
 
+    const addr = (body.address as Record<string, unknown>) || {};
     await env.DB.prepare(
       `UPDATE tenants SET
         first_name = ?, last_name = ?, email = ?, phone = ?, notes = ?,
         emergency_contact_name = ?, emergency_contact_phone = ?, emergency_contact_relationship = ?,
+        address_line1 = ?, address_line2 = ?, city = ?, state = ?, zip = ?,
         updated_at = unixepoch()
        WHERE id = ?`
     )
@@ -66,6 +68,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         ec.name ?? null,
         ec.phone ?? null,
         ec.relationship ?? null,
+        addr.line1 ?? null,
+        addr.line2 ?? null,
+        addr.city ?? null,
+        addr.state ?? null,
+        addr.zip ?? null,
         id
       )
       .run();

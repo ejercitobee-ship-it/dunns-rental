@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
-  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download, UserPlus,
+  Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download, UserPlus, MapPin,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -87,6 +87,11 @@ export function TenantDetail() {
     emergencyName: '',
     emergencyPhone: '',
     emergencyRelationship: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    zip: '',
   });
   const [docs, setDocs] = useState<AppDocument[]>([]);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -318,6 +323,11 @@ export function TenantDetail() {
       emergencyName: tenant.emergencyContact?.name || '',
       emergencyPhone: tenant.emergencyContact?.phone || '',
       emergencyRelationship: tenant.emergencyContact?.relationship || '',
+      addressLine1: tenant.address?.line1 || '',
+      addressLine2: tenant.address?.line2 || '',
+      city: tenant.address?.city || '',
+      state: tenant.address?.state || '',
+      zip: tenant.address?.zip || '',
     });
     setIsEditOpen(true);
   };
@@ -849,6 +859,7 @@ export function TenantDetail() {
     try {
       const hasEmergencyContact =
         form.emergencyName.trim() || form.emergencyPhone.trim() || form.emergencyRelationship.trim();
+      const hasAddress = form.addressLine1.trim() || form.city.trim() || form.state.trim() || form.zip.trim();
       await updateTenant({
         ...tenant,
         firstName: form.firstName,
@@ -861,6 +872,15 @@ export function TenantDetail() {
               name: form.emergencyName.trim(),
               phone: form.emergencyPhone.trim(),
               relationship: form.emergencyRelationship.trim(),
+            }
+          : undefined,
+        address: hasAddress
+          ? {
+              line1: form.addressLine1.trim(),
+              line2: form.addressLine2.trim(),
+              city: form.city.trim(),
+              state: form.state.trim(),
+              zip: form.zip.trim(),
             }
           : undefined,
       });
@@ -3013,6 +3033,67 @@ export function TenantDetail() {
             <p className="text-xs text-muted mt-1">
               Private to the office, never shown to the tenant. Searchable from the Tenants page.
             </p>
+          </div>
+
+          <hr className="border-line" />
+
+          <h3 className="font-semibold text-ink flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-faint" /> Mailing Address
+          </h3>
+
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Street Address</label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              placeholder="123 Main St"
+              value={form.addressLine1}
+              onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">Apt / Suite / Unit</label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              value={form.addressLine2}
+              onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+            />
+          </div>
+
+          <div className="grid grid-cols-6 gap-4">
+            <div className="col-span-3">
+              <label className="block text-sm font-medium text-ink mb-1.5">City</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+              />
+            </div>
+            <div className="col-span-1">
+              <label className="block text-sm font-medium text-ink mb-1.5">State</label>
+              <input
+                type="text"
+                maxLength={2}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="IL"
+                value={form.state}
+                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-ink mb-1.5">ZIP</label>
+              <input
+                type="text"
+                maxLength={10}
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="60630"
+                value={form.zip}
+                onChange={(e) => setForm({ ...form, zip: e.target.value })}
+              />
+            </div>
           </div>
 
           <hr className="border-line" />

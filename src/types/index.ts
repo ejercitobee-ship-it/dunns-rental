@@ -184,6 +184,13 @@ export interface Tenant {
     phone: string;
     relationship: string;
   };
+  address?: {
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
   photoUrl?: string | null;
   hasLogin?: boolean;
   /** True once the tenant has successfully signed in to their portal at least once. */
