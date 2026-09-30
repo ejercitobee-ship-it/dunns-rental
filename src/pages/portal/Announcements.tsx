@@ -132,7 +132,7 @@ export function Announcements() {
                 </div>
                 {isHtml(a.body) ? (
                   <div
-                    className="announcement-html pl-12 text-sm text-muted leading-relaxed"
+                    className="announcement-html text-sm text-muted leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: a.body }}
                   />
                 ) : (
