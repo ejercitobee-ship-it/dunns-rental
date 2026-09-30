@@ -612,7 +612,9 @@ export function Announcements() {
                   {filtered.map(g => {
                     const expired = isExpired(g);
                     const bodyIsHtml = /<[a-z][\s\S]*>/i.test(g.body);
-                    const plainBody = bodyIsHtml ? g.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : g.body;
+                    const plainBody = bodyIsHtml
+                      ? g.body.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim()
+                      : g.body;
                     const isLong = plainBody.length > TRUNCATE_AT;
                     const expandKey = g.ids[0];
                     const isExpanded = expandedIds.has(expandKey);
