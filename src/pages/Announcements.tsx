@@ -122,6 +122,7 @@ export function Announcements() {
   // Form state
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [expiresAt, setExpiresAt] = useState('');
   const [sending, setSending] = useState(false);
@@ -359,11 +360,74 @@ export function Announcements() {
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
               Message
             </label>
+            <div className="flex items-center gap-1 mb-1.5">
+              <button
+                type="button"
+                title="Bold"
+                className="px-2.5 py-1 text-xs font-bold rounded border border-line bg-surface hover:bg-canvas text-ink transition-colors"
+                onClick={() => {
+                  const ta = bodyRef.current;
+                  if (!ta) return;
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = body.slice(start, end);
+                  const wrapped = selected ? `**${selected}**` : '**bold text**';
+                  const next = body.slice(0, start) + wrapped + body.slice(end);
+                  setBody(next);
+                  setTimeout(() => {
+                    ta.focus();
+                    const cursor = selected ? start + wrapped.length : start + 2;
+                    const selectEnd = selected ? cursor : cursor + 9;
+                    ta.setSelectionRange(cursor, selectEnd);
+                  }, 0);
+                }}
+              >
+                B
+              </button>
+              <button
+                type="button"
+                title="Bullet list"
+                className="px-2.5 py-1 text-xs rounded border border-line bg-surface hover:bg-canvas text-ink transition-colors"
+                onClick={() => {
+                  const ta = bodyRef.current;
+                  if (!ta) return;
+                  const start = ta.selectionStart;
+                  const before = body.slice(0, start);
+                  const needsNewline = before.length > 0 && !before.endsWith('\n');
+                  const insert = (needsNewline ? '\n' : '') + '- ';
+                  const next = before + insert + body.slice(start);
+                  setBody(next);
+                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + insert.length, start + insert.length); }, 0);
+                }}
+              >
+                &bull; List
+              </button>
+              <button
+                type="button"
+                title="Numbered list"
+                className="px-2.5 py-1 text-xs rounded border border-line bg-surface hover:bg-canvas text-ink transition-colors"
+                onClick={() => {
+                  const ta = bodyRef.current;
+                  if (!ta) return;
+                  const start = ta.selectionStart;
+                  const before = body.slice(0, start);
+                  const needsNewline = before.length > 0 && !before.endsWith('\n');
+                  const insert = (needsNewline ? '\n' : '') + '1. ';
+                  const next = before + insert + body.slice(start);
+                  setBody(next);
+                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + insert.length, start + insert.length); }, 0);
+                }}
+              >
+                1. List
+              </button>
+              <span className="text-xs text-muted ml-2">Formatting shows on the tenant portal</span>
+            </div>
             <textarea
+              ref={bodyRef}
               value={body}
               onChange={e => setBody(e.target.value)}
               placeholder="Write your announcement here..."
-              rows={4}
+              rows={6}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y"
             />
           </div>
