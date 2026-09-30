@@ -214,17 +214,17 @@ export function TenantPayments() {
       </div>
 
       {/* Credit balance banner */}
-      {lease && (() => {
-        const fullLease = toLease(lease);
-        const now = new Date();
-        const s = settleMonthWithCredit(fullLease, payments, now.getMonth() + 1, now.getFullYear(), undefined, allocations);
-        if (s.creditRemaining <= 0) return null;
+      {(() => {
+        const totalCredits = rawPayments
+          .filter(p => p.type === 'credit')
+          .reduce((sum, p) => sum + p.amount, 0);
+        if (totalCredits <= 0) return null;
         return (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#e8f5e9] border border-[#a5d6a7]">
             <ArrowDownCircle className="h-5 w-5 text-[#2e7d32] flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-[#1b5e20]">You have {formatCurrency(s.creditRemaining)} in credit</p>
-              <p className="text-xs text-[#388e3c]">This will be applied automatically to your next month's rent.</p>
+              <p className="text-sm font-semibold text-[#1b5e20]">Credit Balance: {formatCurrency(totalCredits)}</p>
+              <p className="text-xs text-[#388e3c]">Credits have been applied to your account.</p>
             </div>
           </div>
         );
