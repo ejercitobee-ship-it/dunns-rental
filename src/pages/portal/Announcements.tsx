@@ -5,6 +5,68 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { portalApi, type PortalAnnouncement } from '../../lib/api';
 
+function renderAnnouncementBody(body: string) {
+  const lines = body.split('\n');
+  const elements: React.ReactNode[] = [];
+  let bulletBuffer: string[] = [];
+  const flushBullets = () => {
+    if (bulletBuffer.length === 0) return;
+    elements.push(
+      <ul key={`ul-${elements.length}`} className="space-y-1.5 my-2">
+        {bulletBuffer.map((b, i) => (
+          <li key={i} className="flex gap-2 text-sm text-muted leading-relaxed">
+            <span className="text-primary mt-0.5 flex-shrink-0">&#8226;</span>
+            <span>{renderInline(b)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+    bulletBuffer = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const bulletMatch = line.match(/^[-•]\s+(.+)/);
+    const numMatch = line.match(/^(\d+)\.\s+(.+)/);
+    if (bulletMatch) {
+      bulletBuffer.push(bulletMatch[1]);
+      continue;
+    }
+    flushBullets();
+    if (numMatch) {
+      elements.push(
+        <div key={i} className="flex gap-2 text-sm text-muted leading-relaxed my-1">
+          <span className="text-primary font-semibold flex-shrink-0 w-5 text-right">{numMatch[1]}.</span>
+          <span>{renderInline(numMatch[2])}</span>
+        </div>
+      );
+    } else if (line.trim() === '') {
+      elements.push(<div key={i} className="h-2" />);
+    } else {
+      const isHeader = /\*\*(.+)\*\*:?$/.test(line.trim());
+      if (isHeader) {
+        elements.push(
+          <p key={i} className="text-sm font-semibold text-ink mt-3 mb-1">{renderInline(line.trim())}</p>
+        );
+      } else {
+        elements.push(
+          <p key={i} className="text-sm text-muted leading-relaxed">{renderInline(line)}</p>
+        );
+      }
+    }
+  }
+  flushBullets();
+  return <div className="pl-12 space-y-0.5">{elements}</div>;
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    const bold = part.match(/^\*\*(.+)\*\*$/);
+    if (bold) return <strong key={i} className="font-semibold text-ink">{bold[1]}</strong>;
+    return <span key={i}>{part}</span>;
+  });
+}
+
 export function Announcements() {
   const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,9 +126,7 @@ export function Announcements() {
                     </p>
                   </div>
                 </div>
-                <p className="text-sm text-muted whitespace-pre-line leading-relaxed pl-12">
-                  {a.body}
-                </p>
+                {renderAnnouncementBody(a.body)}
               </CardContent>
             </Card>
           ))}
