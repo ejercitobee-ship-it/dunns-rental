@@ -157,6 +157,14 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       }
     }
 
+    // Regenerate the receipt so the PDF reflects the updated amount/date.
+    let receiptDocumentId: string | null = null;
+    if (newData.amount !== undefined || newData.paidDate !== undefined) {
+      try {
+        receiptDocumentId = await generateMoveInFeeReceipt(env, leaseId, auth.id);
+      } catch { /* fee is updated regardless */ }
+    }
+
     context.waitUntil(
       logLeaseChange(env, {
         leaseId,
@@ -169,7 +177,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       }).catch(() => {})
     );
 
-    return jsonOk({ success: true });
+    return jsonOk({ success: true, receiptDocumentId });
   } catch {
     return serverError();
   }
