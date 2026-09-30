@@ -16,9 +16,9 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi, leasesApi,
+  documentsApi, tenantsApi, householdApi, photoApi, paymentsApi, messagesApi, leasesApi, tenantNotesApi,
   type AppDocument, type TenantRealtorLink, type RealtorUserOption, type HouseholdMember, type Message, type TenantEmail,
-  type TenantCreditEntry,
+  type TenantCreditEntry, type TenantNote,
 } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { leasesOwingMonth, settleMonthWithCredit, unsettledMonths } from '../lib/rent';
@@ -2098,6 +2098,9 @@ export function TenantDetail() {
         </Card>
       )}
 
+      {/* Agent notes: timestamped staff notes with audit trail */}
+      {id && <AgentNotesCard tenantId={id} />}
+
       {/* Conversation history with this tenant, from the portal messaging. */}
       {id && <MessagesCard tenantId={id} />}
 
@@ -3420,6 +3423,172 @@ function messageWhen(createdAt: number): string {
   return new Date(createdAt * 1000).toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
+}
+
+// ── Agent Notes: timestamped notes from staff with full audit trail ──────────
+function AgentNotesCard({ tenantId }: { tenantId: string }) {
+  const { showToast } = useToast();
+  const [notes, setNotes] = useState<TenantNote[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<TenantNote | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const fetchNotes = useCallback(async () => {
+    try {
+      const data = await tenantNotesApi.list(tenantId);
+      setNotes(data);
+    } catch { /* quiet */ }
+    finally { setLoading(false); }
+  }, [tenantId]);
+
+  useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+  const handleAdd = async () => {
+    if (!draft.trim() || saving) return;
+    setSaving(true);
+    try {
+      const note = await tenantNotesApi.add(tenantId, draft.trim());
+      setNotes(prev => [note, ...prev]);
+      setDraft('');
+      showToast('Note added.', 'success');
+    } catch {
+      showToast('Could not save note.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingId || !editBody.trim() || saving) return;
+    setSaving(true);
+    try {
+      await tenantNotesApi.update(tenantId, editingId, editBody.trim());
+      setNotes(prev => prev.map(n => n.id === editingId ? { ...n, body: editBody.trim(), updatedAt: Math.floor(Date.now() / 1000) } : n));
+      setEditingId(null);
+      setEditBody('');
+      showToast('Note updated.', 'success');
+    } catch {
+      showToast('Could not update note.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      await tenantNotesApi.remove(tenantId, deleteTarget.id);
+      setNotes(prev => prev.filter(n => n.id !== deleteTarget.id));
+      showToast('Note deleted.', 'success');
+    } catch {
+      showToast('Could not delete note.', 'error');
+    } finally { setDeleting(false); setDeleteTarget(null); }
+  };
+
+  const formatNoteDate = (ts: number) =>
+    new Date(ts * 1000).toLocaleString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <h3 className="font-semibold text-ink flex items-center gap-2">
+          <FileText className="h-4 w-4 text-faint" /> Agent Notes
+        </h3>
+
+        {/* Compose */}
+        <div className="space-y-2">
+          <textarea
+            rows={2}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="Add a note about this tenant..."
+            className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+          />
+          <div className="flex justify-end">
+            <Button size="sm" onClick={handleAdd} disabled={!draft.trim() || saving}>
+              {saving && !editingId ? 'Saving...' : 'Add Note'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Notes list */}
+        {loading ? (
+          <p className="text-sm text-muted">Loading...</p>
+        ) : notes.length === 0 ? (
+          <p className="text-sm text-faint text-center py-3">No notes yet.</p>
+        ) : (
+          <div className="space-y-3 border-t border-line pt-3">
+            {notes.map(note => (
+              <div key={note.id} className="group relative border border-line rounded-lg p-3">
+                {editingId === note.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={3}
+                      value={editBody}
+                      onChange={e => setEditBody(e.target.value)}
+                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setEditBody(''); }}>Cancel</Button>
+                      <Button size="sm" onClick={handleUpdate} disabled={!editBody.trim() || saving}>
+                        {saving ? 'Saving...' : 'Save'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-ink whitespace-pre-wrap leading-relaxed">{note.body}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-faint">
+                      <span className="font-medium text-muted">{note.authorName || 'Staff'}</span>
+                      <span>&middot;</span>
+                      <span>{formatNoteDate(note.createdAt)}</span>
+                      {note.updatedAt && (
+                        <>
+                          <span>&middot;</span>
+                          <span className="italic">edited {formatNoteDate(note.updatedAt)}</span>
+                        </>
+                      )}
+                    </div>
+                    {/* Edit / Delete (visible on hover) */}
+                    <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1">
+                      <button
+                        onClick={() => { setEditingId(note.id); setEditBody(note.body); }}
+                        className="p-1 rounded text-faint hover:text-primary hover:bg-primary-soft transition-colors"
+                        title="Edit note"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(note)}
+                        className="p-1 rounded text-faint hover:text-danger hover:bg-danger-soft transition-colors"
+                        title="Delete note"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        onConfirm={handleDelete}
+        title="Delete Note"
+        message="This note will be permanently removed. The deletion will be recorded in the activity log."
+        confirmText="Delete"
+        variant="danger"
+        loading={deleting}
+      />
+    </Card>
+  );
 }
 
 // Quick-glance messages summary with a link to the full conversation on the

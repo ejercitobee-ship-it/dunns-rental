@@ -357,6 +357,27 @@ export const tenantsApi = {
     apiRequest(`/tenants/${tenantId}/credits/${creditId}`, { method: 'DELETE' }),
 };
 
+export interface TenantNote {
+  id: string;
+  tenantId: string;
+  body: string;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number | null;
+  authorName: string | null;
+}
+
+export const tenantNotesApi = {
+  list: (tenantId: string): Promise<TenantNote[]> =>
+    apiRequest(`/tenants/${tenantId}/notes`),
+  add: (tenantId: string, body: string): Promise<TenantNote> =>
+    apiRequest(`/tenants/${tenantId}/notes`, { method: 'POST', body: JSON.stringify({ body }) }),
+  update: (tenantId: string, noteId: string, body: string): Promise<{ success: boolean }> =>
+    apiRequest(`/tenants/${tenantId}/notes`, { method: 'PUT', body: JSON.stringify({ noteId, body }) }),
+  remove: (tenantId: string, noteId: string): Promise<{ success: boolean }> =>
+    apiRequest(`/tenants/${tenantId}/notes`, { method: 'DELETE', body: JSON.stringify({ noteId }) }),
+};
+
 export interface TenantCreditEntry {
   id: string;
   tenantId: string;
