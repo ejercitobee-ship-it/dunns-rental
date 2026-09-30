@@ -58,7 +58,7 @@ export function TenantDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
-    tenants, properties, units, rentPayments, paymentAllocations,
+    tenants, properties, units, leases, rentPayments, paymentAllocations,
     updateTenant, deleteTenant, addTenant, updateLease, getLeaseTenants, getTenantLeases,
     refreshData,
   } = useApp();
@@ -785,6 +785,40 @@ export function TenantDetail() {
     }
   };
 
+  // ── Transfer tenant to a different unit ──────────────────────────────
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferUnitId, setTransferUnitId] = useState('');
+  const [transferring, setTransferring] = useState(false);
+
+  const vacantUnits = useMemo(() => {
+    const occupiedUnitIds = new Set(
+      leases.filter(l => l.status === 'active' && l.unitId).map(l => l.unitId!)
+    );
+    return units.filter(u => !occupiedUnitIds.has(u.id));
+  }, [leases, units]);
+
+  const handleTransfer = async () => {
+    if (!lease || !transferUnitId || transferring) return;
+    const targetUnit = units.find(u => u.id === transferUnitId);
+    if (!targetUnit) return;
+    setTransferring(true);
+    try {
+      await updateLease({
+        ...lease,
+        unitId: targetUnit.id,
+        propertyId: targetUnit.propertyId,
+      });
+      await refreshData();
+      showToast('Tenant transferred successfully.', 'success');
+      setTransferOpen(false);
+      setTransferUnitId('');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not transfer tenant.', 'error');
+    } finally {
+      setTransferring(false);
+    }
+  };
+
   // ── Add housemate to an existing lease ──────────────────────────────
   const [hmOpen, setHmOpen] = useState(false);
   const [hmSaving, setHmSaving] = useState(false);
@@ -1396,6 +1430,13 @@ export function TenantDetail() {
                     className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
                   >
                     <Edit2 className="h-3.5 w-3.5" /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTransferUnitId(''); setTransferOpen(true); }}
+                    className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
+                  >
+                    <Home className="h-3.5 w-3.5" /> Transfer
                   </button>
                 </div>
               )}
@@ -2716,6 +2757,57 @@ export function TenantDetail() {
             </Button>
             <Button type="button" className="flex-1" onClick={handleSaveTenancy} disabled={savingTenancy}>
               {savingTenancy ? 'Saving…' : 'Save tenancy'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Transfer tenant modal */}
+      <Modal isOpen={transferOpen} onClose={() => (transferring ? undefined : setTransferOpen(false))} title="Transfer tenant" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Move {tenant?.firstName} to a different unit. The lease and payment history stay the same.
+          </p>
+
+          {lease && (
+            <div className="bg-canvas rounded-lg p-3 text-sm space-y-1">
+              <p className="font-medium text-ink">Current unit</p>
+              <p className="text-muted">{property?.name || '—'} &middot; Unit {unit?.unitNumber || '—'}</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">Move to</label>
+            {vacantUnits.length === 0 ? (
+              <p className="text-sm text-muted">No vacant units available.</p>
+            ) : (
+              <select
+                className="input"
+                value={transferUnitId}
+                onChange={e => setTransferUnitId(e.target.value)}
+              >
+                <option value="">Select a vacant unit</option>
+                {properties.map(p => {
+                  const pUnits = vacantUnits.filter(u => u.propertyId === p.id);
+                  if (pUnits.length === 0) return null;
+                  return (
+                    <optgroup key={p.id} label={p.name}>
+                      {pUnits.map(u => (
+                        <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setTransferOpen(false)} disabled={transferring}>
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleTransfer} disabled={transferring || !transferUnitId}>
+              {transferring ? 'Transferring...' : 'Transfer'}
             </Button>
           </div>
         </div>
