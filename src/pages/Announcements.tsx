@@ -15,6 +15,8 @@ import {
   CircleX,
   Filter,
 } from 'lucide-react';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -22,6 +24,25 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { announcementsApi, type Announcement } from '../lib/api';
+
+const quillModules = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ color: [] }, { background: [] }],
+    [{ align: [] }],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['blockquote'],
+    ['link'],
+    ['clean'],
+  ],
+};
+
+const quillFormats = [
+  'header', 'bold', 'italic', 'underline', 'strike',
+  'color', 'background', 'align',
+  'list', 'blockquote', 'link',
+];
 
 // ---------------------------------------------------------------------------
 // Grouping: the DB stores one row per property, but the UI shows one card
@@ -122,7 +143,6 @@ export function Announcements() {
   // Form state
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [expiresAt, setExpiresAt] = useState('');
   const [sending, setSending] = useState(false);
@@ -211,7 +231,8 @@ export function Announcements() {
   };
 
   const handleSend = async () => {
-    if (!title.trim() || !body.trim()) {
+    const bodyPlain = body.replace(/<[^>]+>/g, '').trim();
+    if (!title.trim() || !bodyPlain) {
       showToast('Title and message are required.', 'error');
       return;
     }
@@ -355,81 +376,21 @@ export function Announcements() {
             />
           </div>
 
-          {/* Body */}
+          {/* Body — rich text editor */}
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
               Message
             </label>
-            <div className="flex items-center gap-1 mb-1.5">
-              <button
-                type="button"
-                title="Bold"
-                className="px-2.5 py-1 text-xs font-bold rounded border border-line bg-surface hover:bg-canvas text-ink transition-colors"
-                onClick={() => {
-                  const ta = bodyRef.current;
-                  if (!ta) return;
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const selected = body.slice(start, end);
-                  const wrapped = selected ? `**${selected}**` : '**bold text**';
-                  const next = body.slice(0, start) + wrapped + body.slice(end);
-                  setBody(next);
-                  setTimeout(() => {
-                    ta.focus();
-                    const cursor = selected ? start + wrapped.length : start + 2;
-                    const selectEnd = selected ? cursor : cursor + 9;
-                    ta.setSelectionRange(cursor, selectEnd);
-                  }, 0);
-                }}
-              >
-                B
-              </button>
-              <button
-                type="button"
-                title="Bullet list"
-                className="px-2.5 py-1 text-xs rounded border border-line bg-surface hover:bg-canvas text-ink transition-colors"
-                onClick={() => {
-                  const ta = bodyRef.current;
-                  if (!ta) return;
-                  const start = ta.selectionStart;
-                  const before = body.slice(0, start);
-                  const needsNewline = before.length > 0 && !before.endsWith('\n');
-                  const insert = (needsNewline ? '\n' : '') + '- ';
-                  const next = before + insert + body.slice(start);
-                  setBody(next);
-                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + insert.length, start + insert.length); }, 0);
-                }}
-              >
-                &bull; List
-              </button>
-              <button
-                type="button"
-                title="Numbered list"
-                className="px-2.5 py-1 text-xs rounded border border-line bg-surface hover:bg-canvas text-ink transition-colors"
-                onClick={() => {
-                  const ta = bodyRef.current;
-                  if (!ta) return;
-                  const start = ta.selectionStart;
-                  const before = body.slice(0, start);
-                  const needsNewline = before.length > 0 && !before.endsWith('\n');
-                  const insert = (needsNewline ? '\n' : '') + '1. ';
-                  const next = before + insert + body.slice(start);
-                  setBody(next);
-                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + insert.length, start + insert.length); }, 0);
-                }}
-              >
-                1. List
-              </button>
-              <span className="text-xs text-muted ml-2">Formatting shows on the tenant portal</span>
+            <div className="announcement-editor rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={body}
+                onChange={setBody}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="Write your announcement here..."
+              />
             </div>
-            <textarea
-              ref={bodyRef}
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              placeholder="Write your announcement here..."
-              rows={6}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y"
-            />
           </div>
 
           {/* Property + Expiration row */}
@@ -652,13 +613,14 @@ export function Announcements() {
                 <div className="space-y-3">
                   {filtered.map(g => {
                     const expired = isExpired(g);
-                    const isLong = g.body.length > TRUNCATE_AT;
-                    // Use the first ID as a stable key for expand/collapse.
+                    const bodyIsHtml = /<[a-z][\s\S]*>/i.test(g.body);
+                    const plainBody = bodyIsHtml ? g.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : g.body;
+                    const isLong = plainBody.length > TRUNCATE_AT;
                     const expandKey = g.ids[0];
                     const isExpanded = expandedIds.has(expandKey);
                     const displayBody = isLong && !isExpanded
-                      ? g.body.slice(0, TRUNCATE_AT).trimEnd() + '...'
-                      : g.body;
+                      ? plainBody.slice(0, TRUNCATE_AT).trimEnd() + '...'
+                      : plainBody;
 
                     return (
                       <div
@@ -705,11 +667,18 @@ export function Announcements() {
                             </div>
 
                             {/* Body with truncation */}
-                            <p className={`text-sm mt-2 whitespace-pre-line leading-relaxed ${
-                              expired ? 'text-faint' : 'text-muted'
-                            }`}>
-                              {displayBody}
-                            </p>
+                            {bodyIsHtml && isExpanded ? (
+                              <div
+                                className={`announcement-html text-sm mt-2 leading-relaxed ${expired ? 'text-faint' : 'text-muted'}`}
+                                dangerouslySetInnerHTML={{ __html: g.body }}
+                              />
+                            ) : (
+                              <p className={`text-sm mt-2 whitespace-pre-line leading-relaxed ${
+                                expired ? 'text-faint' : 'text-muted'
+                              }`}>
+                                {displayBody}
+                              </p>
+                            )}
                             {isLong && (
                               <button
                                 onClick={() => toggleExpand(expandKey)}

@@ -5,7 +5,11 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { portalApi, type PortalAnnouncement } from '../../lib/api';
 
-function renderAnnouncementBody(body: string) {
+function isHtml(text: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(text);
+}
+
+function renderPlainBody(body: string) {
   const lines = body.split('\n');
   const elements: React.ReactNode[] = [];
   let bulletBuffer: string[] = [];
@@ -126,7 +130,14 @@ export function Announcements() {
                     </p>
                   </div>
                 </div>
-                {renderAnnouncementBody(a.body)}
+                {isHtml(a.body) ? (
+                  <div
+                    className="announcement-html pl-12 text-sm text-muted leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: a.body }}
+                  />
+                ) : (
+                  renderPlainBody(a.body)
+                )}
               </CardContent>
             </Card>
           ))}
