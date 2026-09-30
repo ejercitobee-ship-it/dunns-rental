@@ -51,7 +51,7 @@ function isInMonth(dateStr: string, month: number, year: number): boolean {
 
 export function Expenses() {
   const { expenses, incomes, properties, units, rentPayments, leases, tenants, getLeaseTenants, maintenance, utilityAccounts, addExpense, updateExpense, addIncome, updateIncome, deleteExpense, deleteIncome, dispatch } = useApp();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const canAddExpense = hasPermission('finances_expenses');
   const canAddIncome = hasPermission('finances_income');
@@ -877,7 +877,7 @@ export function Expenses() {
                                 </button>
                               )}
                               {canAddExpense && <ExpenseReceiptButton expense={expense} />}
-                              {canDelete && (linkedMaintenanceExpenseIds.has(expense.id) ? (
+                              {isSuperAdmin() && canDelete && (linkedMaintenanceExpenseIds.has(expense.id) ? (
                                 <span
                                   className="text-xs text-muted"
                                   title="This came from a maintenance job. Delete it from the Maintenance page."
@@ -963,7 +963,7 @@ export function Expenses() {
                                   </button>
                                 ) : null;
                               })()}
-                              {!canDelete ? null : income.id.startsWith('rent-') ? (
+                              {!(isSuperAdmin() && canDelete) ? null : income.id.startsWith('rent-') ? (
                                 <span
                                   className="text-xs text-muted"
                                   title="This rent came from a recorded payment. Delete it in Rent Management."

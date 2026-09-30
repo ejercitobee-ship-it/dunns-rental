@@ -1347,7 +1347,7 @@ export function TenantDetail() {
               Terminate
             </Button>
           )}
-          {hasPermission('tenants_delete') && (
+          {isSuperAdmin() && hasPermission('tenants_delete') && (
             <Button
               variant="destructive"
               className="flex-1 sm:flex-none"
@@ -1754,9 +1754,11 @@ export function TenantDetail() {
                           <button type="button" title="Edit" onClick={() => openEditCredit(entry)} className="p-1 rounded hover:bg-surface-raised text-faint hover:text-primary transition-colors">
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
-                          <button type="button" title="Delete" onClick={() => setDeletingCredit(entry)} className="p-1 rounded hover:bg-surface-raised text-faint hover:text-destructive transition-colors">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {isSuperAdmin() && (
+                            <button type="button" title="Delete" onClick={() => setDeletingCredit(entry)} className="p-1 rounded hover:bg-surface-raised text-faint hover:text-destructive transition-colors">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1946,13 +1948,15 @@ export function TenantDetail() {
                     <FileText className="h-4 w-4 text-faint flex-shrink-0" />
                     <span className="truncate">{doc.name}</span>
                   </a>
-                  <button
-                    onClick={() => handleDeleteDoc(doc.id)}
-                    className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 ml-1"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {isSuperAdmin() && (
+                    <button
+                      onClick={() => handleDeleteDoc(doc.id)}
+                      className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors flex-shrink-0 ml-1"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2051,14 +2055,16 @@ export function TenantDetail() {
                         <p className="text-sm text-ink">{r.name}</p>
                         <p className="text-xs text-muted">Access ends {formatDate(r.accessEndsOn)}</p>
                       </div>
-                      <button
-                        onClick={() => handleRemoveRealtor(r.realtorUserId)}
-                        disabled={removingRealtorId === r.realtorUserId}
-                        className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
-                        title="Remove"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {isSuperAdmin() && (
+                        <button
+                          onClick={() => handleRemoveRealtor(r.realtorUserId)}
+                          disabled={removingRealtorId === r.realtorUserId}
+                          className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors disabled:opacity-50"
+                          title="Remove"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
