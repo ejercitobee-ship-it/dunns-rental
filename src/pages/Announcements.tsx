@@ -134,7 +134,7 @@ function relativeTime(unixSeconds: number): string {
 // ---------------------------------------------------------------------------
 
 export function Announcements() {
-  const { properties, leases, tenants } = useApp();
+  const { properties, leases } = useApp();
   const { showToast } = useToast();
 
   const [rawList, setRawList] = useState<Announcement[]>([]);
@@ -201,14 +201,12 @@ export function Announcements() {
     const tenantIds = new Set<string>();
     for (const lease of activeLeases) {
       if (selectedPropertyIds.length > 0 && (!lease.propertyId || !selectedPropertyIds.includes(lease.propertyId))) continue;
-      for (const t of tenants) {
-        if ((t as unknown as { leaseId?: string }).leaseId === lease.id) {
-          tenantIds.add(t.id);
-        }
+      for (const tid of lease.tenantIds ?? []) {
+        tenantIds.add(tid);
       }
     }
     return tenantIds.size;
-  }, [leases, tenants, selectedPropertyIds]);
+  }, [leases, selectedPropertyIds]);
 
   const startEdit = (g: GroupedAnnouncement) => {
     setEditingAnnouncement(g);
