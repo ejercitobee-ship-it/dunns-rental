@@ -593,6 +593,8 @@ export interface PortalPayment {
   receiptDocumentId?: string;
   /** 'payment' (default) or 'credit' (admin-applied balance reduction). */
   type?: 'payment' | 'credit';
+  /** Reason for the credit. */
+  creditReason?: CreditReason;
 }
 
 /** Comprehensive property profile returned by GET /api/properties/:id/profile. */

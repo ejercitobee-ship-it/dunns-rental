@@ -47,6 +47,17 @@ function toRentPayments(leaseId: string, payments: PortalPayment[]): RentPayment
   }));
 }
 
+const creditReasonLabels: Record<string, string> = {
+  proration: 'Proration adjustment',
+  maintenance: 'Repair reimbursement',
+  balance: 'Balance adjustment',
+  other: 'Credit applied',
+};
+
+function prettyCreditReason(reason?: string): string {
+  return (reason && creditReasonLabels[reason]) || 'Credit applied';
+}
+
 // Turn a stored method value (cash, bank_transfer) into a readable label.
 function prettyMethod(method: string): string {
   return method
@@ -121,16 +132,19 @@ export function TenantPayments() {
         .sort((a, b) => (a.paidDate || '').localeCompare(b.paidDate || ''));
 
       for (const p of monthPayments) {
+        const isCredit = p.type === 'credit';
         const receiptDocId = (p.id && receiptOverrides[p.id]) || p.receiptDocumentId;
         out.push({
           key: `${year}-${month}-${p.id ?? out.length}`,
           label,
           amount: p.amount,
-          method: p.paymentMethod ? prettyMethod(p.paymentMethod) : '',
+          method: isCredit
+            ? prettyCreditReason(p.creditReason)
+            : (p.paymentMethod ? prettyMethod(p.paymentMethod) : ''),
           paidOn: p.paidDate,
-          status: 'paid',
+          status: isCredit ? 'credit' : 'paid',
           receiptDocId,
-          generatePaymentId: !receiptDocId && p.id ? p.id : undefined,
+          generatePaymentId: !receiptDocId && !isCredit && p.id ? p.id : undefined,
         });
       }
 

@@ -39,7 +39,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // OWN lease, and are what let them download or generate their receipt. The
     // sensitive field (paid_by_tenant_id) is still never selected.
     const { results } = await env.DB.prepare(
-      `SELECT id, amount, due_date, paid_date, status, month, year, payment_method, receipt_document_id, type
+      `SELECT id, amount, due_date, paid_date, status, month, year, payment_method, receipt_document_id, type, credit_reason
          FROM rent_payments
         WHERE lease_id = ?
         ORDER BY year DESC, month DESC`
@@ -79,6 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           paymentMethod: r.payment_method ?? undefined,
           receiptDocumentId: r.receipt_document_id ?? undefined,
           type: r.type ?? undefined,
+          creditReason: r.credit_reason ?? undefined,
         })),
         allocations: (allocResults || []).map(serializeAllocation),
       },
