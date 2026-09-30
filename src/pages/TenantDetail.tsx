@@ -62,7 +62,7 @@ export function TenantDetail() {
     updateTenant, deleteTenant, addTenant, updateLease, getLeaseTenants, getTenantLeases,
     refreshData,
   } = useApp();
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
 
   const tenant = tenants.find(t => t.id === id);
@@ -1431,13 +1431,15 @@ export function TenantDetail() {
                   >
                     <Edit2 className="h-3.5 w-3.5" /> Edit
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => { setTransferUnitId(''); setTransferOpen(true); }}
-                    className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
-                  >
-                    <Home className="h-3.5 w-3.5" /> Transfer
-                  </button>
+                  {isSuperAdmin() && (
+                    <button
+                      type="button"
+                      onClick={() => { setTransferUnitId(''); setTransferOpen(true); }}
+                      className="text-sm font-medium text-primary hover:text-primary-hover inline-flex items-center gap-1"
+                    >
+                      <Home className="h-3.5 w-3.5" /> Transfer
+                    </button>
+                  )}
                 </div>
               )}
             </div>
