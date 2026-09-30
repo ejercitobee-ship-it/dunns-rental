@@ -32,7 +32,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'tenants_view', 'tenants_create', 'tenants_edit', 'tenants_delete',
     'rents_view', 'rents_record', 'rents_edit', 'rents_export',
     'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
-    'settings_view',
+    'settings_view', 'activity_view',
   ],
   manager: [
     'dashboard_view',
@@ -41,16 +41,19 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'tenants_view', 'tenants_create', 'tenants_edit',
     'rents_view', 'rents_record',
     'finances_view', 'finances_expenses', 'finances_income',
+    'activity_view',
   ],
   accountant: [
     'dashboard_view',
     'properties_view', 'units_view', 'tenants_view',
     'rents_view', 'rents_record', 'rents_export',
     'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
+    'activity_view',
   ],
   viewer: [
     'dashboard_view', 'properties_view', 'units_view', 'tenants_view',
     'rents_view', 'finances_view',
+    'activity_view',
   ],
 };
 

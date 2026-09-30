@@ -3427,6 +3427,7 @@ function messageWhen(createdAt: number): string {
 
 // ── Agent Notes: timestamped notes from staff with full audit trail ──────────
 function AgentNotesCard({ tenantId }: { tenantId: string }) {
+  const { isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [notes, setNotes] = useState<TenantNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3552,23 +3553,25 @@ function AgentNotesCard({ tenantId }: { tenantId: string }) {
                         </>
                       )}
                     </div>
-                    {/* Edit / Delete (visible on hover) */}
-                    <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1">
-                      <button
-                        onClick={() => { setEditingId(note.id); setEditBody(note.body); }}
-                        className="p-1 rounded text-faint hover:text-primary hover:bg-primary-soft transition-colors"
-                        title="Edit note"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(note)}
-                        className="p-1 rounded text-faint hover:text-danger hover:bg-danger-soft transition-colors"
-                        title="Delete note"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    {/* Edit / Delete — super admin only */}
+                    {isSuperAdmin() && (
+                      <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1">
+                        <button
+                          onClick={() => { setEditingId(note.id); setEditBody(note.body); }}
+                          className="p-1 rounded text-faint hover:text-primary hover:bg-primary-soft transition-colors"
+                          title="Edit note"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(note)}
+                          className="p-1 rounded text-faint hover:text-danger hover:bg-danger-soft transition-colors"
+                          title="Delete note"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
