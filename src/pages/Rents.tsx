@@ -365,16 +365,15 @@ export function Rents() {
   }, [leases, rentPayments, paymentAllocations, yearFilter]);
 
   // One row per lease per month of the selected year that the lease OWED
-  // rent for (leasesOwingMonth), whether or not it has since ended. This,
-  // not the raw payment list, is what the Payments table renders: rent is
-  // owed once per lease per month regardless of how many payments (or
-  // people) it took to settle it, and a lease that ended at turnover still
-  // owed, and shows, every month it covered before that.
+  // rent for. Ended (terminated) leases are excluded so the Payments tab
+  // shows only current tenants; their historical data is preserved in the
+  // database and still appears in the Annual Overview and Tax Report tabs.
   const leaseMonthRows = useMemo(() => {
     const year = parseInt(yearFilter, 10);
     const rows: LeaseMonthRow[] = [];
     for (let month = 1; month <= 12; month++) {
       for (const lease of leasesOwingMonth(leases, month, year)) {
+        if (lease.status === 'ended') continue;
         const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : undefined;
         const property = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : undefined;
         const occupants = getLeaseTenants(lease.id);
@@ -525,6 +524,7 @@ export function Rents() {
 
     for (const month of elapsedMonths) {
       for (const lease of leasesOwingMonth(leases, month, year)) {
+        if (lease.status === 'ended') continue;
         const s = settleMonthWithCredit(lease, rentPayments, month, year, leases, paymentAllocations);
         totalDue += s.due;
         totalPaidElapsed += s.paid;
@@ -1903,8 +1903,14 @@ export function Rents() {
 
       {/* ─── Late Fees Tab ─── */}
       {view === 'late_fees' && (() => {
+        // Exclude late fees for ended (terminated) leases.
+        const activeFees = lateFees.filter(lf => {
+          const lease = leases.find(l => l.id === lf.leaseId);
+          return !lease || lease.status !== 'ended';
+        });
+
         // Enrich late fees with tenant/property/unit names for display.
-        const enrichedFees = lateFees.map(lf => {
+        const enrichedFees = activeFees.map(lf => {
           const lease = leases.find(l => l.id === lf.leaseId);
           const prop = lf.propertyId ? properties.find(p => p.id === lf.propertyId) : undefined;
           const unit = lf.unitId ? units.find(u => u.id === lf.unitId) : undefined;
@@ -1913,10 +1919,10 @@ export function Rents() {
         });
 
         // Summary stats
-        const outstanding = lateFees.filter(f => f.status === 'outstanding');
+        const outstanding = activeFees.filter(f => f.status === 'outstanding');
         const totalOutstanding = outstanding.reduce((s, f) => s + f.amount, 0);
-        const totalWaived = lateFees.filter(f => f.status === 'waived').reduce((s, f) => s + f.amount, 0);
-        const totalPaid = lateFees.filter(f => f.status === 'paid').reduce((s, f) => s + f.amount, 0);
+        const totalWaived = activeFees.filter(f => f.status === 'waived').reduce((s, f) => s + f.amount, 0);
+        const totalPaid = activeFees.filter(f => f.status === 'paid').reduce((s, f) => s + f.amount, 0);
 
         const curMonth = new Date().getMonth() + 1;
         const curYear = new Date().getFullYear();
