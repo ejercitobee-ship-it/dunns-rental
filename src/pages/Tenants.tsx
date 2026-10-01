@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Users, UserCheck, Home, DoorOpen, Mail, Phone, Calendar, DollarSign,
-  Plus, Trash2, UserPlus, Check, X, ChevronDown, Download, Send, Loader2,
+  Plus, Trash2, UserPlus, Check, X, ChevronDown, Download,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -97,7 +97,6 @@ export function Tenants() {
   // Invite people with an email to the portal as soon as the tenancy is created,
   // so it's never a forgotten second step. Only those with an email are invited.
   const [inviteOnCreate, setInviteOnCreate] = useState(true);
-  const [sendingWelcome, setSendingWelcome] = useState(false);
 
   const rows = useMemo(() => {
     return tenants.map(tenant => {
@@ -336,26 +335,6 @@ export function Tenants() {
     URL.revokeObjectURL(url);
   };
 
-  const handleSendWelcome = async () => {
-    const eligible = tenants.filter(t => t.email);
-    if (eligible.length === 0) {
-      showToast('No tenants with email addresses', 'warning');
-      return;
-    }
-    setSendingWelcome(true);
-    try {
-      const result = await tenantsApi.sendWelcomeEmails(eligible.map(t => t.id));
-      if (result.sent > 0) {
-        showToast(`Portal welcome sent to ${result.sent} tenant${result.sent === 1 ? '' : 's'}${result.skipped ? ` (${result.skipped} skipped, no email)` : ''}`, 'success');
-      } else {
-        showToast('No emails were sent. Check that Resend is configured.', 'warning');
-      }
-    } catch {
-      showToast('Failed to send welcome emails', 'error');
-    } finally {
-      setSendingWelcome(false);
-    }
-  };
 
   const stats = useMemo(() => {
     const totalPeople = tenants.length;
@@ -571,12 +550,6 @@ export function Tenants() {
             <Button variant="outline" onClick={exportActiveCSV} className="w-full sm:w-auto">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
-            </Button>
-          )}
-          {canCreateTenant && view === 'active' && (
-            <Button variant="outline" onClick={handleSendWelcome} disabled={sendingWelcome} className="w-full sm:w-auto">
-              {sendingWelcome ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-              Portal Welcome
             </Button>
           )}
           {canCreateTenant && view === 'active' && (

@@ -12,6 +12,9 @@ import {
 import { throttleLockedUntil, recordLoginFailure, clearLoginThrottle } from '../../../../lib/throttle';
 import { verifyUserTwoFactor } from '../../../../lib/two-factor';
 import { issueAndSendEmailCode, verifyEmailCode, checkTrustedDevice, issueTrustedDevice, trustedDeviceCookie } from '../../../../lib/email-otp';
+import { sendEmail, portalWelcomeEmail } from '../../../../lib/email';
+import { companySettings } from '../../../../lib/receipts';
+import { SITE_URL } from '../../../../lib/site';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
@@ -34,9 +37,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError(`Too many sign in attempts. Please try again in ${mins} minute${mins === 1 ? '' : 's'}.`, 429);
     }
 
-    const user = await env.DB.prepare('SELECT id, name, email, is_active, totp_secret, totp_enabled, backup_codes FROM user WHERE email = ?')
+    const user = await env.DB.prepare('SELECT id, name, email, is_active, last_login_at, totp_secret, totp_enabled, backup_codes FROM user WHERE email = ?')
       .bind(email)
-      .first<{ id: string; name: string; email: string; is_active: number | null; totp_secret: string | null; totp_enabled: number | null; backup_codes: string | null }>();
+      .first<{ id: string; name: string; email: string; is_active: number | null; last_login_at: number | null; totp_secret: string | null; totp_enabled: number | null; backup_codes: string | null }>();
 
     if (!user) {
       await recordLoginFailure(env, ip);
@@ -145,6 +148,31 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // A good sign in clears this IP's failure streak.
     context.waitUntil(clearLoginThrottle(env, ip));
+
+    // First login for a tenant: send a portal welcome email in the background.
+    if (user.last_login_at == null && userRole?.role === 'tenant') {
+      context.waitUntil((async () => {
+        try {
+          const tenant = await env.DB.prepare('SELECT first_name, email FROM tenants WHERE user_id = ?')
+            .bind(user.id).first<{ first_name: string; email: string | null }>();
+          if (tenant?.email) {
+            const c = await companySettings(env);
+            const cityStateZip = [[c.city, c.state].filter(Boolean).join(', '), c.zipCode].filter(Boolean).join(' ');
+            const contact = [c.address, cityStateZip, [c.phone, c.email].filter(Boolean).join(' · ')]
+              .filter(s => s && s.trim()).join(' · ');
+            const mail = portalWelcomeEmail({
+              name: tenant.first_name,
+              portalUrl: `${SITE_URL}/portal`,
+              companyName: c.companyName,
+              contact,
+            });
+            await sendEmail(env, { to: tenant.email, ...mail });
+          }
+        } catch (e) {
+          console.error('Welcome email failed:', e);
+        }
+      })());
+    }
 
     // Two cookies may be set (session + remembered device), so build the headers
     // by hand: a plain object cannot carry two Set-Cookie entries.

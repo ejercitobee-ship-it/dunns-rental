@@ -346,8 +346,6 @@ export const tenantsApi = {
   // side, so it works for any staff member who can link a realtor, not only
   // those who also hold users_view.
   listRealtorUsers: (): Promise<RealtorUserOption[]> => apiRequest('/realtors'),
-  sendWelcomeEmails: (tenantIds: string[]): Promise<{ sent: number; skipped: number; failed: number; errors: string[] }> =>
-    apiRequest('/tenants/welcome-emails', { method: 'POST', body: JSON.stringify({ tenantIds }) }),
   // Tenant credit balance ledger.
   getCredits: (id: string): Promise<TenantCreditsResponse> =>
     apiRequest(`/tenants/${id}/credits`),
