@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { MessageSquare, ArrowLeft, ExternalLink, Inbox } from 'lucide-react';
+import { MessageSquare, ArrowLeft, ExternalLink, Inbox, PenSquare, Search, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
-import { messagesApi, vendorMessagesApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread } from '../lib/api';
+import { Button } from '../components/ui/Button';
+import { messagesApi, vendorMessagesApi, tenantsApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { MessageThread as ThreadView, type ChatItem } from '../components/MessageThread';
+import type { Tenant } from '../types';
 
 type Channel = 'tenant' | 'vendor';
 type AnyMessage = Message | VendorMessage;
@@ -39,6 +41,11 @@ export function Messages() {
   const threadsPollRef = useRef(false);
   const openPollRef = useRef(false);
 
+  const [showPicker, setShowPicker] = useState(false);
+  const [allTenants, setAllTenants] = useState<Tenant[]>([]);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+
   const rows: InboxRow[] = channel === 'tenant'
     ? tenantThreads.map((t) => ({
         id: t.tenantId,
@@ -56,6 +63,32 @@ export function Messages() {
         lastBody: v.lastBody,
         lastSender: v.lastSender,
       }));
+
+  const openNewMessage = async () => {
+    setShowPicker(true);
+    setPickerSearch('');
+    if (allTenants.length === 0) {
+      try {
+        const tenants = await tenantsApi.getAll();
+        setAllTenants(tenants);
+      } catch { /* ignore */ }
+    }
+  };
+
+  const pickTenant = (t: Tenant) => {
+    setShowPicker(false);
+    setChannel('tenant');
+    openThread(t.id);
+  };
+
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPicker]);
 
   const refreshThreads = useCallback(async () => {
     if (threadsPollRef.current) return;
@@ -191,9 +224,68 @@ export function Messages() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="eyebrow">Inbox</p>
-        <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Messages</h1>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="eyebrow">Inbox</p>
+          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Messages</h1>
+        </div>
+        <div className="relative" ref={pickerRef}>
+          <Button variant="outline" onClick={openNewMessage}>
+            <PenSquare className="h-4 w-4 mr-2" />
+            New Message
+          </Button>
+          {showPicker && (
+            <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-line rounded-xl shadow-lg z-50 overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-line">
+                <Search className="h-4 w-4 text-faint flex-shrink-0" />
+                <input
+                  type="text"
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  placeholder="Search tenants..."
+                  className="flex-1 bg-transparent text-sm text-ink placeholder:text-faint outline-none"
+                  autoFocus
+                />
+                {pickerSearch && (
+                  <button type="button" onClick={() => setPickerSearch('')} className="text-faint hover:text-ink">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                {allTenants.length === 0 ? (
+                  <p className="text-sm text-muted p-4 text-center">Loading tenants...</p>
+                ) : (() => {
+                  const q = pickerSearch.toLowerCase();
+                  const filtered = allTenants.filter(t =>
+                    `${t.firstName} ${t.lastName}`.toLowerCase().includes(q)
+                    || (t.email || '').toLowerCase().includes(q)
+                  );
+                  return filtered.length === 0 ? (
+                    <p className="text-sm text-muted p-4 text-center">No tenants found.</p>
+                  ) : (
+                    filtered.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => pickTenant(t)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-canvas transition-colors flex items-center gap-3"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-medium flex-shrink-0">
+                          {t.firstName?.[0]}{t.lastName?.[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-ink truncate">{t.firstName} {t.lastName}</p>
+                          {t.email && <p className="text-xs text-muted truncate">{t.email}</p>}
+                        </div>
+                      </button>
+                    ))
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Channel tabs */}
