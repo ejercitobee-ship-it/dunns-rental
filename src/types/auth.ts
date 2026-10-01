@@ -38,6 +38,8 @@ export interface User {
   /** Merged permissions from the server: role permissions + per-user overrides.
    *  When present, permission checks use this instead of `role.permissions`. */
   effectivePermissions?: string[];
+  tenancyEndDate?: string;
+  tenancyEndReason?: string;
 }
 
 export interface AuthState {

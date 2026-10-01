@@ -456,20 +456,31 @@ export function Users() {
                     </td>
                     
                     <td className="py-4 px-4 text-center">
-                      <button
-                        onClick={() => handleToggleStatus(user)}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                          user.isActive
-                            ? 'bg-positive-soft text-positive'
-                            : 'bg-[#efece5] text-muted'
-                        }`}
-                      >
-                        {user.isActive ? (
-                          <><UserCheck className="h-3 w-3" /> Active</>
-                        ) : (
-                          <><UserX className="h-3 w-3" /> Inactive</>
-                        )}
-                      </button>
+                      {tab === 'tenant' && user.tenancyEndDate ? (
+                        <div className="inline-flex flex-col items-center gap-0.5">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-[#efece5] text-muted">
+                            <UserX className="h-3 w-3" /> Inactive
+                          </span>
+                          <span className="text-[10px] text-faint">
+                            {new Date(user.tenancyEndDate + 'T00:00:00').toLocaleDateString()}
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleStatus(user)}
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            user.isActive
+                              ? 'bg-positive-soft text-positive'
+                              : 'bg-[#efece5] text-muted'
+                          }`}
+                        >
+                          {user.isActive ? (
+                            <><UserCheck className="h-3 w-3" /> Active</>
+                          ) : (
+                            <><UserX className="h-3 w-3" /> Inactive</>
+                          )}
+                        </button>
+                      )}
                     </td>
                     
                     <td className="py-4 px-4 text-right">

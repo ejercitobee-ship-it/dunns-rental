@@ -291,9 +291,6 @@ export function Rents() {
     const elapsedCount = year < today.getFullYear() ? 12 : year > today.getFullYear() ? 0 : today.getMonth() + 1;
     return MONTHS.map((monthName, index) => {
       const month = index + 1;
-      if (month > elapsedCount) {
-        return { name: monthName.substring(0, 3), month, collected: 0, expected: 0, outstanding: 0, collectionRate: 0 };
-      }
       let expected = 0;
       let collected = 0;
       let outstanding = 0;
@@ -302,6 +299,10 @@ export function Rents() {
         expected += s.due;
         collected += s.paid;
         outstanding += s.balance;
+      }
+
+      if (month > elapsedCount) {
+        return { name: monthName.substring(0, 3), month, collected, expected: 0, outstanding: 0, collectionRate: 0 };
       }
 
       return {

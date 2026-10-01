@@ -24,6 +24,8 @@ interface UserRow {
   created_at: number | null;
   role: string | null;
   image: string | null;
+  tenancy_end_date?: string | null;
+  tenancy_end_reason?: string | null;
 }
 
 export function serializeUser(r: UserRow) {
@@ -41,6 +43,8 @@ export function serializeUser(r: UserRow) {
     isActive: r.is_active !== 0,
     createdAt: r.created_at ? new Date(r.created_at * 1000).toISOString() : new Date().toISOString(),
     photoUrl: r.image ? `/api/photo/${r.image}` : null,
+    tenancyEndDate: r.tenancy_end_date ?? undefined,
+    tenancyEndReason: r.tenancy_end_reason ?? undefined,
   };
 }
 
@@ -65,9 +69,21 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const { results } = await env.DB.prepare(
-      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate, u.created_at, u.image, r.role AS role
+      `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate,
+              u.created_at, u.image, r.role AS role,
+              latest_lease.end_date AS tenancy_end_date,
+              latest_lease.end_reason AS tenancy_end_reason
          FROM user u
          LEFT JOIN user_roles r ON r.user_id = u.id
+         LEFT JOIN tenants t ON t.user_id = u.id
+         LEFT JOIN (
+           SELECT lt.tenant_id,
+                  l.end_date,
+                  l.end_reason,
+                  ROW_NUMBER() OVER (PARTITION BY lt.tenant_id ORDER BY l.created_at DESC) AS rn
+             FROM lease_tenants lt
+             JOIN leases l ON l.id = lt.lease_id
+         ) latest_lease ON latest_lease.tenant_id = t.id AND latest_lease.rn = 1
         ORDER BY u.created_at DESC`
     ).all<UserRow>();
     return jsonOk({ success: true, data: (results || []).map(serializeUser) });
