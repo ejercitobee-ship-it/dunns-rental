@@ -182,6 +182,20 @@ export async function createFolder(env: Env, name: string, parentId?: string): P
   return data.id;
 }
 
+async function folderExists(env: Env, folderId: string): Promise<boolean> {
+  try {
+    const token = await getAccessToken(env);
+    const res = await fetch(`${DRIVE_API}/files/${folderId}?fields=id,trashed`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return res.status !== 404;
+    const data = (await res.json()) as { trashed?: boolean };
+    return !data.trashed;
+  } catch {
+    return true;
+  }
+}
+
 export type FolderStatus = 'alive' | 'gone' | 'unknown';
 
 /**
@@ -432,11 +446,12 @@ export async function ensureTenantFolder(env: Env, tenantId: string): Promise<st
     .first<{ id: string; first_name: string; last_name: string; drive_folder_id: string | null }>();
   if (!tenant) throw new Error('Tenant not found');
 
-  // Trust the cached folder id — skip the folderStatus Drive API call.
-  // Only walk the parent chain when we actually need to create a new folder.
-  if (tenant.drive_folder_id) return tenant.drive_folder_id;
+  if (tenant.drive_folder_id) {
+    const ok = await folderExists(env, tenant.drive_folder_id);
+    if (ok) return tenant.drive_folder_id;
+    await env.DB.prepare('UPDATE tenants SET drive_folder_id = NULL WHERE id = ?').bind(tenantId).run();
+  }
 
-  // The tenant's folder lives inside their unit folder (or the root if unplaced).
   const parent = (await ensureUnitFolderForTenant(env, tenantId)) ?? (await ensureRootFolder(env));
   const name = `${tenant.first_name} ${tenant.last_name}`.trim() || tenant.id;
   const id = await createFolder(env, name, parent);

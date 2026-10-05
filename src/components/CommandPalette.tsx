@@ -106,22 +106,25 @@ export function CommandPalette() {
       }
     }
 
-    // Tenants: search by name, email, or phone.
+    // Tenants: search by name, email, phone, or tenant ID.
     for (const t of tenants) {
       const fullName = `${t.firstName} ${t.lastName}`.toLowerCase();
       const email = (t.email || '').toLowerCase();
       const phone = (t.phone || '').replace(/\D/g, '');
+      const tenantNum = (t.tenantNumber || '').toLowerCase();
       const qDigits = q.replace(/\D/g, '');
 
       if (
         fullName.includes(q) ||
         email.includes(q) ||
+        tenantNum.includes(q) ||
         (qDigits.length >= 3 && phone.includes(qDigits))
       ) {
         const lease = leases.find(
           l => l.status !== 'ended' && l.tenantIds?.includes(t.id)
         );
         const parts: string[] = [];
+        if (t.tenantNumber) parts.push(t.tenantNumber);
         if (lease) {
           const prop = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : null;
           const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : null;
