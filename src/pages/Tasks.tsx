@@ -3,6 +3,7 @@ import {
   Plus, Search, ListChecks, Clock, AlertTriangle, CheckCircle2,
   Calendar, User, Building2, MessageSquare, ChevronRight,
   Filter, FolderKanban, Loader2, X, Send, Pause, Circle,
+  LayoutList, Columns3, GripVertical,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -118,6 +119,7 @@ export function Tasks() {
 
   // View & filters
   const [view, setView] = useState<ViewMode>('my');
+  const [layout, setLayout] = useState<'list' | 'board'>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -439,6 +441,26 @@ export function Tasks() {
             <TabButton label="Projects" active={view === 'projects'} onClick={() => setView('projects')} />
           </div>
 
+          {/* Layout toggle */}
+          {view !== 'projects' && (
+            <div className="flex items-center p-1 rounded-xl bg-surface border border-line">
+              <button
+                onClick={() => setLayout('list')}
+                className={`p-1.5 rounded-lg transition-all ${layout === 'list' ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'}`}
+                title="List view"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setLayout('board')}
+                className={`p-1.5 rounded-lg transition-all ${layout === 'board' ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'}`}
+                title="Board view"
+              >
+                <Columns3 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Filter toggle */}
           <button
             onClick={() => setShowFilters(f => !f)}
@@ -487,6 +509,13 @@ export function Tasks() {
         <ProjectsList projects={projects} />
       ) : tasks.length === 0 ? (
         <EmptyState view={view} />
+      ) : layout === 'board' ? (
+        <KanbanBoard
+          tasks={tasks}
+          today={today}
+          onStatusChange={canEdit ? handleStatusChange : undefined}
+          onCardClick={id => openDetail(id)}
+        />
       ) : (
         <Card className="overflow-hidden">
           {/* Column headers */}
@@ -1157,6 +1186,168 @@ function ProjectsList({ projects }: { projects: Project[] }) {
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Kanban Board
+// ---------------------------------------------------------------------------
+
+const KANBAN_COLUMNS: { status: TaskStatus; label: string; accent: string; dotColor: string }[] = [
+  { status: 'todo',        label: 'To Do',       accent: 'border-t-line-strong', dotColor: 'bg-line-strong' },
+  { status: 'in_progress', label: 'In Progress', accent: 'border-t-primary',     dotColor: 'bg-primary' },
+  { status: 'waiting',     label: 'Waiting',     accent: 'border-t-warning',     dotColor: 'bg-warning' },
+  { status: 'completed',   label: 'Completed',   accent: 'border-t-positive',    dotColor: 'bg-positive' },
+];
+
+function KanbanBoard({ tasks, today, onStatusChange, onCardClick }: {
+  tasks: Task[];
+  today: string;
+  onStatusChange?: (task: Task, status: TaskStatus) => void;
+  onCardClick: (id: string) => void;
+}) {
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
+
+  const grouped = useMemo(() => {
+    const map: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], waiting: [], completed: [], cancelled: [] };
+    for (const t of tasks) (map[t.status] || map.todo).push(t);
+    return map;
+  }, [tasks]);
+
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    setDragTaskId(taskId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', taskId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, status: TaskStatus) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverCol(status);
+  };
+
+  const handleDragLeave = () => setDragOverCol(null);
+
+  const handleDrop = (e: React.DragEvent, status: TaskStatus) => {
+    e.preventDefault();
+    setDragOverCol(null);
+    const taskId = e.dataTransfer.getData('text/plain') || dragTaskId;
+    if (!taskId || !onStatusChange) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (task && task.status !== status) onStatusChange(task, status);
+    setDragTaskId(null);
+  };
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
+      {KANBAN_COLUMNS.map(col => {
+        const colTasks = grouped[col.status];
+        return (
+          <div
+            key={col.status}
+            className={`flex-1 min-w-[260px] max-w-[340px] flex flex-col rounded-2xl border border-t-[3px] ${col.accent} ${
+              dragOverCol === col.status ? 'border-primary bg-primary-soft/30' : 'border-line bg-canvas'
+            } transition-colors`}
+            onDragOver={e => handleDragOver(e, col.status)}
+            onDragLeave={handleDragLeave}
+            onDrop={e => handleDrop(e, col.status)}
+          >
+            {/* Column header */}
+            <div className="flex items-center gap-2 px-4 py-3">
+              <span className={`w-2 h-2 rounded-full ${col.dotColor}`} />
+              <span className="text-xs font-semibold text-ink uppercase tracking-wider">{col.label}</span>
+              <span className="ml-auto text-[11px] font-medium text-faint tnum">{colTasks.length}</span>
+            </div>
+
+            {/* Cards */}
+            <div className="flex-1 px-2.5 pb-2.5 space-y-2 min-h-[80px]">
+              {colTasks.map(task => (
+                <KanbanCard
+                  key={task.id}
+                  task={task}
+                  today={today}
+                  draggable={!!onStatusChange}
+                  onDragStart={e => handleDragStart(e, task.id)}
+                  onClick={() => onCardClick(task.id)}
+                />
+              ))}
+              {colTasks.length === 0 && (
+                <div className="flex items-center justify-center h-16 rounded-xl border border-dashed border-line text-xs text-faint">
+                  No tasks
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KanbanCard({ task, today, draggable, onDragStart, onClick }: {
+  task: Task;
+  today: string;
+  draggable: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onClick: () => void;
+}) {
+  const isOverdue = task.dueDate && task.dueDate < today && task.status !== 'completed' && task.status !== 'cancelled';
+
+  return (
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onClick={onClick}
+      className="group rounded-xl border border-line bg-surface p-3 cursor-pointer hover:border-line-strong hover:shadow-[0_2px_8px_rgba(27,26,23,0.06)] transition-all active:shadow-none"
+    >
+      <div className="flex items-start gap-2">
+        {draggable && (
+          <GripVertical className="w-3.5 h-3.5 text-line-strong mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-medium leading-snug ${task.status === 'completed' ? 'line-through text-faint' : 'text-ink'}`}>
+            {task.title}
+          </p>
+
+          {/* Meta row */}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_DOT[task.priority]}`} />
+              <span className={`text-[11px] capitalize ${PRIORITY_COLOR[task.priority]}`}>{task.priority}</span>
+            </span>
+
+            {task.dueDate && (
+              <span className={`text-[11px] ${isOverdue ? 'text-danger font-medium' : 'text-muted'}`}>
+                {safeDateLabel(task.dueDate)}
+              </span>
+            )}
+
+            <span className="text-[11px] text-faint">
+              {CATEGORY_OPTIONS.find(c => c.value === task.category)?.label}
+            </span>
+          </div>
+
+          {/* Assignee + property */}
+          <div className="flex items-center gap-2 mt-1.5">
+            {task.assignedToName && (
+              <div className="flex items-center gap-1">
+                <span className="w-5 h-5 rounded-full bg-primary-soft text-primary text-[9px] font-bold grid place-items-center flex-shrink-0">
+                  {initials(task.assignedToName)}
+                </span>
+                <span className="text-[11px] text-muted truncate max-w-[80px]">{task.assignedToName.split(' ')[0]}</span>
+              </div>
+            )}
+            {task.propertyName && (
+              <span className="flex items-center gap-0.5 text-[11px] text-faint truncate">
+                <Building2 className="w-3 h-3 flex-shrink-0" />
+                {task.propertyName}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
