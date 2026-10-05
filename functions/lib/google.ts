@@ -18,6 +18,7 @@ const KEY_PROSPECTIVE_FOLDER = 'google_prospective_folder_id';
 const KEY_VENDORS_FOLDER = 'google_vendors_folder_id';
 const KEY_MGMT_EXPENSES_FOLDER = 'google_mgmt_expenses_folder_id';
 const KEY_TEMPLATES_FOLDER = 'google_templates_folder_id';
+const KEY_REALTORS_FOLDER = 'google_realtors_folder_id';
 
 /** The single top-level folder that holds every tenant's folder. */
 const ROOT_FOLDER_NAME = 'MH Dunn Property Documents';
@@ -27,6 +28,7 @@ const PROSPECTIVE_FOLDER_NAME = 'Prospective Tenants';
 const VENDORS_FOLDER_NAME = 'Vendors';
 const MGMT_EXPENSES_NAME = 'Management Expenses';
 const TEMPLATES_FOLDER_NAME = 'Document Templates';
+const REALTORS_FOLDER_NAME = 'Realtors';
 
 /** Thrown when Belle has not connected Drive. Endpoints turn this into a 503. */
 export class DriveNotConnected extends Error {
@@ -353,6 +355,39 @@ export async function ensureVendorFolder(env: Env, handymanId: string): Promise<
   const parent = await ensureVendorsRoot(env);
   const id = await createFolder(env, (h.name || 'Vendor').trim() || 'Vendor', parent);
   await env.DB.prepare('UPDATE handymen SET drive_folder_id = ? WHERE id = ?').bind(id, h.id).run();
+  return id;
+}
+
+async function ensureRealtorsRoot(env: Env): Promise<string> {
+  const existing = await getSetting(env, KEY_REALTORS_FOLDER);
+  if (existing) return existing;
+  const root = await ensureRootFolder(env);
+  const id = (await findFolder(env, REALTORS_FOLDER_NAME, root)) ?? (await createFolder(env, REALTORS_FOLDER_NAME, root));
+  await putSetting(env, KEY_REALTORS_FOLDER, id);
+  return id;
+}
+
+/**
+ * A realtor's own Drive folder under "Realtors", for files exchanged in
+ * messaging. Folder id is cached in user_metadata as drive_folder_id.
+ */
+export async function ensureRealtorFolder(env: Env, realtorUserId: string): Promise<string | null> {
+  const u = await env.DB.prepare(
+    `SELECT u.id, u.name, ur.role FROM user u
+       JOIN user_roles ur ON ur.user_id = u.id
+      WHERE u.id = ? AND ur.role = 'realtor'`
+  ).bind(realtorUserId).first<{ id: string; name: string | null; role: string }>();
+  if (!u) return null;
+  const cached = await env.DB.prepare(
+    `SELECT value FROM user_metadata WHERE user_id = ? AND key = 'drive_folder_id'`
+  ).bind(realtorUserId).first<{ value: string }>();
+  if (cached?.value) return cached.value;
+  const parent = await ensureRealtorsRoot(env);
+  const id = await createFolder(env, (u.name || 'Realtor').trim() || 'Realtor', parent);
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    `INSERT INTO user_metadata (id, user_id, key, value, created_at, updated_at) VALUES (?, ?, 'drive_folder_id', ?, ?, ?)`
+  ).bind(crypto.randomUUID(), realtorUserId, id, now, now).run();
   return id;
 }
 

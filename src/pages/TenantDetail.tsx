@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
-  FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check,
+  FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check, CheckCircle,
   Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download, UserPlus, MapPin,
   ChevronDown,
 } from 'lucide-react';
@@ -248,13 +248,42 @@ export function TenantDetail() {
 
   // Every month this tenancy still owes (oldest first), with the amount, so the
   // profile shows exactly which months are behind, not just a total.
+  // Only include the current month if today is on or past the rent due day.
   const owed = useMemo(() => {
     if (!lease) return { months: [] as { month: number; year: number; amount: number }[], total: 0 };
     const now = new Date();
-    const months = unsettledMonths(lease, rentPayments, now.getMonth() + 1, now.getFullYear(), allTenantLeases, paymentAllocations);
+    let throughMonth = now.getMonth() + 1;
+    let throughYear = now.getFullYear();
+    const dueDay = lease.rentDueDay ?? 1;
+    if (now.getDate() < dueDay) {
+      throughMonth -= 1;
+      if (throughMonth <= 0) { throughMonth = 12; throughYear -= 1; }
+    }
+    const months = unsettledMonths(lease, rentPayments, throughMonth, throughYear, allTenantLeases, paymentAllocations);
     const total = Math.round(months.reduce((s, m) => s + m.amount, 0) * 100) / 100;
     return { months, total };
   }, [lease, allTenantLeases, rentPayments, paymentAllocations]);
+
+  const nextDue = useMemo(() => {
+    if (!lease || owed.months.length > 0) return null;
+    const now = new Date();
+    const dueDay = lease.rentDueDay ?? 1;
+    let lookMonth = now.getMonth() + 4;
+    let lookYear = now.getFullYear();
+    while (lookMonth > 12) { lookMonth -= 12; lookYear += 1; }
+    const months = unsettledMonths(lease, rentPayments, lookMonth, lookYear, allTenantLeases, paymentAllocations);
+    if (months.length === 0) return null;
+    const next = months[0];
+    let dueDateMonth = now.getMonth() + 1;
+    let dueDateYear = now.getFullYear();
+    if (now.getDate() >= dueDay) {
+      dueDateMonth += 1;
+      if (dueDateMonth > 12) { dueDateMonth = 1; dueDateYear += 1; }
+    }
+    const dueDateLabel = new Date(dueDateYear, dueDateMonth - 1, dueDay)
+      .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return { month: next.month, year: next.year, amount: next.amount, dueDateLabel };
+  }, [lease, owed, rentPayments, allTenantLeases, paymentAllocations]);
 
   const payments = useMemo(() => {
     if (!id) return [];
@@ -1248,6 +1277,18 @@ export function TenantDetail() {
         </div>
       )}
 
+      {owed.months.length === 0 && nextDue && (
+        <div className="rounded-xl border border-primary/20 bg-[#f2f5f2] p-4 flex items-start gap-3">
+          <CheckCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-ink">Paid up</p>
+            <p className="text-sm text-muted mt-1">
+              {formatCurrency(nextDue.amount)} due {nextDue.dueDateLabel} for {formatMonthYear(nextDue.month, nextDue.year)}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="flex flex-col items-center gap-1.5">
@@ -1291,6 +1332,9 @@ export function TenantDetail() {
             <h1 className="font-display text-[26px] sm:text-[30px] font-medium text-ink leading-tight">
               {tenant.firstName} {tenant.lastName}
             </h1>
+            {tenant.tenantNumber && (
+              <p className="text-xs text-muted font-medium tracking-wide mt-0.5">{tenant.tenantNumber}</p>
+            )}
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {lease ? (
                 /* While a realtor's placement is under review it is not yet a

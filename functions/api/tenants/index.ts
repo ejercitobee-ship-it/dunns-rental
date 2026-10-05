@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { serializeTenant } from '../../lib/serializers';
+import { serializeTenant, nextTenantNumber } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { logActivityStmt } from '../../lib/activity';
 
@@ -55,14 +55,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // tenant with `WHERE user_id = ?` and takes the first match, so that would
     // have handed whoever it matched an arbitrary tenant's documents.
     const id = crypto.randomUUID();
+    const tenantNumber = await nextTenantNumber(env.DB);
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO tenants (id, first_name, last_name, email, phone, notes,
+        `INSERT INTO tenants (id, tenant_number, first_name, last_name, email, phone, notes,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relationship)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
+          tenantNumber,
           body.firstName,
           body.lastName,
           body.email ?? null,

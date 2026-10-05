@@ -14,11 +14,12 @@ interface UserRow {
   created_at: number | null;
   role: string | null;
   image: string | null;
+  company_name: string | null;
 }
 
 async function loadUser(env: Env, id: string) {
   return env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate, u.created_at, u.image, r.role AS role
+    `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate, u.created_at, u.image, u.company_name, r.role AS role
        FROM user u
        LEFT JOIN user_roles r ON r.user_id = u.id
       WHERE u.id = ?`

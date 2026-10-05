@@ -232,6 +232,38 @@
   animation: page-enter 0.25s ease-out both;
 }
 
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s ease-out both;
+}
+
+/* Form input: consistent field styling across modals */
+.form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  background-color: var(--color-surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary-line);
+  box-shadow: 0 0 0 3px rgba(36, 80, 63, 0.08);
+}
+.form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.form-input::placeholder {
+  color: var(--color-faint);
+}
+
 /*
   Reduced motion: replace slides/springs with short opacity fades, not
   no feedback at all. Opacity and color changes that aid comprehension

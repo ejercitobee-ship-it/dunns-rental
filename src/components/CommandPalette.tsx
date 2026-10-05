@@ -4,10 +4,14 @@ import {
   LayoutDashboard, Building2, Users, DollarSign, Receipt, FileText,
   Wrench, ClipboardList, ScrollText, MessageSquare, CalendarDays,
   Settings, Shield, Upload, Search, Megaphone, User, Home, Bot,
+  HardHat, Briefcase, ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useExitAnimation } from '../lib/useExitAnimation';
+import { handymenApi, tenantsApi } from '../lib/api';
+import type { RealtorUserOption } from '../lib/api';
+import type { Handyman } from '../types';
 
 const ROUTES: { name: string; path: string; icon: LucideIcon; keywords: string }[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard, keywords: 'home overview stats' },
@@ -26,10 +30,11 @@ const ROUTES: { name: string; path: string; icon: LucideIcon; keywords: string }
   { name: 'Activity', path: '/activity', icon: ScrollText, keywords: 'log audit history' },
   { name: 'Announcements', path: '/announcements', icon: Megaphone, keywords: 'broadcast notice tenants' },
   { name: 'AI Assistant', path: '/ai-assistant', icon: Bot, keywords: 'ai chat ask question intelligence' },
+  { name: 'Tasks', path: '/tasks', icon: ListChecks, keywords: 'tasks projects todo checklist work management' },
 ];
 
 interface SearchResult {
-  kind: 'page' | 'tenant' | 'property';
+  kind: 'page' | 'tenant' | 'property' | 'handyman' | 'realtor';
   label: string;
   sublabel?: string;
   path: string;
@@ -45,6 +50,17 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const { tenants, properties, units, leases } = useApp();
   const { mounted, phase } = useExitAnimation(open, 160);
+  const [handymen, setHandymen] = useState<Handyman[]>([]);
+  const [realtors, setRealtors] = useState<RealtorUserOption[]>([]);
+
+  // Fetch handymen & realtors once on first open.
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (!open || fetchedRef.current) return;
+    fetchedRef.current = true;
+    handymenApi.getAll().then(setHandymen).catch(() => {});
+    tenantsApi.listRealtorUsers().then(setRealtors).catch(() => {});
+  }, [open]);
 
   // Listen for Ctrl+K / Cmd+K
   useEffect(() => {
@@ -102,24 +118,23 @@ export function CommandPalette() {
         email.includes(q) ||
         (qDigits.length >= 3 && phone.includes(qDigits))
       ) {
-        // Build sublabel: unit + property.
         const lease = leases.find(
           l => l.status !== 'ended' && l.tenantIds?.includes(t.id)
         );
-        let sublabel = t.email || '';
+        const parts: string[] = [];
         if (lease) {
-          const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : null;
           const prop = lease.propertyId ? properties.find(p => p.id === lease.propertyId) : null;
-          const parts: string[] = [];
-          if (prop) parts.push(prop.name);
+          const unit = lease.unitId ? units.find(u => u.id === lease.unitId) : null;
+          if (prop) parts.push(prop.address);
           if (unit) parts.push(`Unit ${unit.unitNumber}`);
-          if (parts.length) sublabel = parts.join(', ');
         }
+        if (t.phone) parts.push(t.phone);
+        if (!parts.length && t.email) parts.push(t.email);
 
         out.push({
           kind: 'tenant',
           label: `${t.firstName} ${t.lastName}`,
-          sublabel,
+          sublabel: parts.join(' · ') || undefined,
           path: `/tenants/${t.id}`,
           icon: User,
         });
@@ -141,8 +156,60 @@ export function CommandPalette() {
       }
     }
 
+    // Handymen: search by name, email, phone, or company.
+    for (const h of handymen) {
+      const name = h.name.toLowerCase();
+      const email = (h.email || '').toLowerCase();
+      const phone = (h.phone || '').replace(/\D/g, '');
+      const company = (h.companyName || '').toLowerCase();
+      const qDigits = q.replace(/\D/g, '');
+
+      if (
+        name.includes(q) ||
+        email.includes(q) ||
+        company.includes(q) ||
+        (qDigits.length >= 3 && phone.includes(qDigits))
+      ) {
+        const hParts: string[] = [];
+        if (h.companyName) hParts.push(h.companyName);
+        if (h.phone) hParts.push(h.phone);
+        if (!hParts.length && h.email) hParts.push(h.email);
+        out.push({
+          kind: 'handyman',
+          label: h.name,
+          sublabel: hParts.join(' · ') || undefined,
+          path: '/maintenance',
+          icon: HardHat,
+        });
+      }
+    }
+
+    // Realtors: search by name, email, or phone.
+    for (const r of realtors) {
+      const name = r.name.toLowerCase();
+      const email = r.email.toLowerCase();
+      const rPhone = (r.phone || '').replace(/\D/g, '');
+      const qDigits = q.replace(/\D/g, '');
+
+      if (
+        name.includes(q) ||
+        email.includes(q) ||
+        (qDigits.length >= 3 && rPhone.includes(qDigits))
+      ) {
+        const rParts: string[] = [r.email];
+        if (r.phone) rParts.push(r.phone);
+        out.push({
+          kind: 'realtor',
+          label: r.name,
+          sublabel: rParts.join(' · '),
+          path: '/users',
+          icon: Briefcase,
+        });
+      }
+    }
+
     return out;
-  }, [query, tenants, properties, units, leases]);
+  }, [query, tenants, properties, units, leases, handymen, realtors]);
 
   // Keep the selected item scrolled into view.
   useEffect(() => {
@@ -171,10 +238,12 @@ export function CommandPalette() {
   const pages = results.filter(r => r.kind === 'page');
   const tenantResults = results.filter(r => r.kind === 'tenant');
   const propertyResults = results.filter(r => r.kind === 'property');
+  const handymanResults = results.filter(r => r.kind === 'handyman');
+  const realtorResults = results.filter(r => r.kind === 'realtor');
   const hasQuery = query.trim().length > 0;
 
   // Flat ordered list for keyboard index tracking.
-  const ordered = [...pages, ...tenantResults, ...propertyResults];
+  const ordered = [...pages, ...tenantResults, ...propertyResults, ...handymanResults, ...realtorResults];
 
   return (
     <>
@@ -196,7 +265,7 @@ export function CommandPalette() {
               value={query}
               onChange={e => { setQuery(e.target.value); setSelected(0); }}
               onKeyDown={handleKeyDown}
-              placeholder="Search pages, tenants, properties..."
+              placeholder="Search pages, tenants, properties, vendors..."
               className="flex-1 bg-transparent text-sm text-ink placeholder:text-faint outline-none"
             />
             <kbd className="hidden sm:inline-flex px-1.5 py-0.5 rounded border border-line bg-canvas text-[10px] text-muted font-mono">
@@ -241,6 +310,28 @@ export function CommandPalette() {
                     {propertyResults.map(r => {
                       const idx = ordered.indexOf(r);
                       return <ResultRow key={r.path} result={r} isSelected={idx === selected} onSelect={() => { navigate(r.path); setOpen(false); }} onHover={() => setSelected(idx)} />;
+                    })}
+                  </>
+                )}
+
+                {/* Handymen section */}
+                {handymanResults.length > 0 && (
+                  <>
+                    <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">Handymen</p>
+                    {handymanResults.map((r, i) => {
+                      const idx = ordered.indexOf(r);
+                      return <ResultRow key={`handyman-${i}`} result={r} isSelected={idx === selected} onSelect={() => { navigate(r.path); setOpen(false); }} onHover={() => setSelected(idx)} />;
+                    })}
+                  </>
+                )}
+
+                {/* Realtors section */}
+                {realtorResults.length > 0 && (
+                  <>
+                    <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">Realtors</p>
+                    {realtorResults.map((r, i) => {
+                      const idx = ordered.indexOf(r);
+                      return <ResultRow key={`realtor-${i}`} result={r} isSelected={idx === selected} onSelect={() => { navigate(r.path); setOpen(false); }} onHover={() => setSelected(idx)} />;
                     })}
                   </>
                 )}

@@ -21,6 +21,8 @@ export const ALL_PERMISSIONS = [
   'settings_view', 'settings_edit', 'activity_view',
   'announcements_send',
   'ai_assistant_use',
+  'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_delete', 'tasks_assign',
+  'projects_manage',
 ] as const;
 
 export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
@@ -33,6 +35,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'rents_view', 'rents_record', 'rents_edit', 'rents_export',
     'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
     'settings_view', 'activity_view',
+    'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_assign', 'projects_manage',
   ],
   manager: [
     'dashboard_view',
@@ -42,6 +45,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'rents_view', 'rents_record',
     'finances_view', 'finances_expenses', 'finances_income',
     'activity_view',
+    'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_assign',
   ],
   accountant: [
     'dashboard_view',
@@ -49,11 +53,13 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'rents_view', 'rents_record', 'rents_export',
     'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
     'activity_view',
+    'tasks_view',
   ],
   viewer: [
     'dashboard_view', 'properties_view', 'units_view', 'tenants_view',
     'rents_view', 'finances_view',
     'activity_view',
+    'tasks_view',
   ],
 };
 

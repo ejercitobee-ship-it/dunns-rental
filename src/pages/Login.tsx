@@ -262,20 +262,11 @@ export function Login() {
           </form>
         </div>
 
-        {/* Existing tenants without a login yet: the portal is invitation only,
-            so point them to the access request form. */}
         <div className="mt-6 rounded-2xl border border-line bg-primary-soft/50 p-5 text-center">
-          <p className="text-sm font-medium text-ink">Active tenant? Your portal is invitation only.</p>
+          <p className="text-sm font-medium text-ink">Need help logging in or need access?</p>
           <p className="text-sm text-muted mt-1">
-            Request your sign in and we will set up your account.{' '}
-            <a
-              href="https://docs.google.com/forms/d/e/1FAIpQLScmhjlJoOsNg3u4gmECajZJy8MXPXcGNm0osf3_QxmOmAf2xw/viewform?usp=header"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:text-primary-hover font-medium underline"
-            >
-              Request access here
-            </a>
+            Call or text{' '}
+            <a href="tel:+17732346422" className="text-primary hover:text-primary-hover font-medium">(773) 234-6422</a>
           </p>
         </div>
 

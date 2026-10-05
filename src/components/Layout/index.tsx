@@ -27,10 +27,11 @@ import {
   FolderKanban,
   Megaphone,
   Bot,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { messagesApi, vendorMessagesApi } from '../../lib/api';
+import { messagesApi, vendorMessagesApi, realtorMessagesApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useScrolled } from '../../lib/useScrolled';
 import { Avatar } from '../ui/Avatar';
@@ -133,9 +134,9 @@ export function Layout({ children }: LayoutProps) {
     if (!canSeeMessages) return;
     let cancelled = false;
     const load = () =>
-      Promise.all([messagesApi.unreadCount(), vendorMessagesApi.unreadCount()])
-        .then(([t, v]) => {
-          if (!cancelled) setUnreadMessages(t.count + v.count);
+      Promise.all([messagesApi.unreadCount(), vendorMessagesApi.unreadCount(), realtorMessagesApi.unreadCount()])
+        .then(([t, v, r]) => {
+          if (!cancelled) setUnreadMessages(t.count + v.count + r.count);
         })
         .catch(() => {});
     load();
@@ -161,6 +162,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
     { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
+    { name: 'Tasks', path: '/tasks', icon: ListChecks, show: hasModuleAccess('tasks'), badge: 0 },
     { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
     // Finances group
     {

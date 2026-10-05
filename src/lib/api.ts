@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, PaymentAllocation, LateFee, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, PaymentAllocation, LateFee, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice, Task, TaskComment, TaskActivityEntry, Project } from '../types';
 
 const API_BASE = '/api';
 
@@ -99,6 +99,7 @@ export interface ApiUser {
   isActive: boolean;
   createdAt: string;
   photoUrl?: string | null;
+  companyName?: string;
 }
 
 export const adminApi = {
@@ -398,6 +399,8 @@ export interface RealtorUserOption {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
+  company_name?: string | null;
 }
 
 // Realtors API (staff side: acting on a realtor's behalf).
@@ -406,14 +409,16 @@ export const realtorsApi = {
   addTenant: (realtorUserId: string, data: { firstName: string; lastName: string; email?: string; phone?: string }): Promise<Tenant> =>
     apiRequest(`/realtors/${realtorUserId}/tenants`, { method: 'POST', body: JSON.stringify(data) }),
   // Add a realtor: creates their portal login with the realtor role and invites them.
-  create: (data: { firstName: string; lastName: string; email: string; phone?: string }): Promise<{ userId: string; emailSent: boolean; inviteUrl?: string }> =>
+  create: (data: { firstName: string; lastName: string; email: string; phone?: string; companyName?: string }): Promise<{ userId: string; emailSent: boolean; inviteUrl?: string }> =>
     apiRequest('/realtors', { method: 'POST', body: JSON.stringify(data) }),
   // Resend the set-password invite to an existing realtor.
   resendInvite: (userId: string): Promise<{ emailSent: boolean; inviteUrl?: string }> =>
     apiRequest(`/realtors/${userId}/invite`, { method: 'POST' }),
   // Edit a realtor's own details (never changes their role).
-  update: (userId: string, data: { firstName: string; lastName: string; email: string; phone?: string }): Promise<unknown> =>
+  update: (userId: string, data: { firstName: string; lastName: string; email: string; phone?: string; companyName?: string }): Promise<unknown> =>
     apiRequest(`/realtors/${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  payCommission: (userId: string, data: { amount: number; description: string; propertyId?: string; unitId?: string; paymentMethod?: string }): Promise<{ expenseId: string }> =>
+    apiRequest(`/realtors/${userId}/pay-commission`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Household API (admin side: household members for a given tenant's lease).
@@ -874,6 +879,7 @@ export interface RealtorContact {
   name: string | null;
   email: string;
   phone: string | null;
+  companyName?: string | null;
 }
 export interface RealtorMe {
   profile: RealtorContact & { photoUrl: string | null };
@@ -947,6 +953,31 @@ export interface VendorThread {
   phone: string | null;
   lastBody: string | null;
   lastSender: 'office' | 'handyman' | null;
+  lastAt: number | null;
+  unread: number;
+}
+
+/** One message in an office<->realtor thread. */
+export interface RealtorMessage {
+  id: string;
+  realtorUserId: string;
+  senderRole: 'office' | 'realtor';
+  senderName?: string;
+  body: string;
+  createdAt: number;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: string;
+}
+
+/** A row in the office's realtor inbox. */
+export interface RealtorThread {
+  realtorUserId: string;
+  name: string;
+  phone: string | null;
+  companyName: string | null;
+  lastBody: string | null;
+  lastSender: 'office' | 'realtor' | null;
   lastAt: number | null;
   unread: number;
 }
@@ -1119,6 +1150,11 @@ export const portalApi = {
   vendorMessagesUnread: (): Promise<{ count: number }> => apiRequest('/portal/handyman/messages?count=1'),
   sendVendorMessage: (body: string, file?: File | null): Promise<VendorMessage> =>
     postMessageForm('/portal/handyman/messages', body, file),
+  // A realtor's own thread with the office.
+  realtorMessages: (): Promise<{ messages: RealtorMessage[] }> => apiRequest('/portal/realtor/messages'),
+  realtorMessagesUnread: (): Promise<{ count: number }> => apiRequest('/portal/realtor/messages?count=1'),
+  sendRealtorMessage: (body: string, file?: File | null): Promise<RealtorMessage> =>
+    postMessageForm('/portal/realtor/messages', body, file),
   announcements: (): Promise<PortalAnnouncement[]> => apiRequest('/portal/announcements'),
   stripe: {
     createSetupIntent: (): Promise<{ clientSecret: string }> =>
@@ -1475,6 +1511,15 @@ export const vendorMessagesApi = {
     postMessageForm(`/handyman-messages/${handymanId}`, body, file),
 };
 
+export const realtorMessagesApi = {
+  threads: (): Promise<{ threads: RealtorThread[] }> => apiRequest('/realtor-messages'),
+  unreadCount: (): Promise<{ count: number }> => apiRequest('/realtor-messages?count=1'),
+  thread: (realtorId: string): Promise<{ realtorId: string; realtorName: string; messages: RealtorMessage[] }> =>
+    apiRequest(`/realtor-messages/${realtorId}`),
+  reply: (realtorId: string, body: string, file?: File | null): Promise<RealtorMessage> =>
+    postMessageForm(`/realtor-messages/${realtorId}`, body, file),
+};
+
 export const expenseImportApi = {
   list: (): Promise<ExpenseImport[]> => apiRequest('/expense-imports'),
   upload: async (file: File, columnMapping?: Record<string, string>): Promise<{ id: string; fileName: string; totalRows: number; validRows: number; errorRows: number; duplicateRows: number; columnMapping: Record<string, string> }> => {
@@ -1618,4 +1663,94 @@ export const aiApi = {
   /** Delete a conversation. */
   deleteConversation: (id: string): Promise<void> =>
     apiRequest(`/ai/conversations/${id}`, { method: 'DELETE' }),
+};
+
+// ---------------------------------------------------------------------------
+// Task Management
+// ---------------------------------------------------------------------------
+
+export interface TaskStats {
+  open: number;
+  overdue: number;
+  dueToday: number;
+  dueThisWeek: number;
+  completedThisMonth: number;
+  activeProjects: number;
+  myOpen: number;
+  myOverdue: number;
+  waiting: number;
+}
+
+export interface TaskFilters {
+  view?: string;
+  status?: string;
+  priority?: string;
+  category?: string;
+  project_id?: string;
+  property_id?: string;
+  assigned_to?: string;
+  due?: string;
+  search?: string;
+}
+
+export interface TaskDetail {
+  task: Task;
+  tags: { id: string; name: string }[];
+  comments: TaskComment[];
+  activity: TaskActivityEntry[];
+}
+
+export const tasksApi = {
+  list: (filters?: TaskFilters): Promise<Task[]> => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    const qs = params.toString();
+    return apiRequest(`/tasks${qs ? `?${qs}` : ''}`);
+  },
+
+  get: (id: string): Promise<TaskDetail> =>
+    apiRequest(`/tasks/${id}`),
+
+  create: (data: Partial<Task>): Promise<Task> =>
+    apiRequest('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: string, data: Partial<Task>): Promise<Task> =>
+    apiRequest(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  delete: (id: string): Promise<void> =>
+    apiRequest(`/tasks/${id}`, { method: 'DELETE' }),
+
+  stats: (): Promise<TaskStats> =>
+    apiRequest('/tasks/stats'),
+
+  addComment: (taskId: string, body: string): Promise<TaskComment> =>
+    apiRequest(`/tasks/${taskId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+
+  setTags: (taskId: string, tags: string[]): Promise<{ id: string; name: string }[]> =>
+    apiRequest(`/tasks/${taskId}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags }),
+    }),
+};
+
+export const projectsApi = {
+  list: (): Promise<Project[]> =>
+    apiRequest('/projects'),
+
+  get: (id: string): Promise<{ project: Project; tasks: Task[] }> =>
+    apiRequest(`/projects/${id}`),
+
+  create: (data: Partial<Project>): Promise<Project> =>
+    apiRequest('/projects', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: string, data: Partial<Project>): Promise<Project> =>
+    apiRequest(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  delete: (id: string): Promise<void> =>
+    apiRequest(`/projects/${id}`, { method: 'DELETE' }),
 };

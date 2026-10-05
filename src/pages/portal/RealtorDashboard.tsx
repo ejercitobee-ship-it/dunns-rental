@@ -125,6 +125,7 @@ export function RealtorDashboard() {
           </div>
           <div className="space-y-1">
             <p className="text-ink font-medium">{profile.name || 'Realtor'}</p>
+            {profile.companyName && <p className="text-muted text-sm">{profile.companyName}</p>}
             <p className="text-muted text-sm">{profile.email}</p>
             {profile.phone && <p className="text-muted text-sm">{profile.phone}</p>}
           </div>

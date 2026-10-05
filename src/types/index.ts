@@ -174,6 +174,7 @@ export interface LeaseNotification {
 /** A person. Rent and lease dates live on the Lease. */
 export interface Tenant {
   id: string;
+  tenantNumber?: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -969,4 +970,131 @@ export interface Notice {
   tenantName?: string;
   propertyName?: string;
   unitNumber?: string;
+}
+
+// ── Task Management ──
+
+export type TaskStatus = 'todo' | 'in_progress' | 'waiting' | 'completed' | 'cancelled';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TaskCategory =
+  | 'maintenance' | 'tenant' | 'leasing' | 'finance' | 'vendor'
+  | 'compliance' | 'management' | 'administrative' | 'marketing'
+  | 'technology' | 'projects' | 'other';
+
+export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected';
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  category: TaskCategory;
+  status: TaskStatus;
+  priority: TaskPriority;
+  waitingFor?: string;
+  assignedTo?: string;
+  assignedToName?: string;
+  createdBy: string;
+  createdByName?: string;
+  dueDate?: string;
+  dueTime?: string;
+  startDate?: string;
+  estimatedMinutes?: number;
+  actualMinutes?: number;
+  projectId?: string;
+  projectName?: string;
+  propertyId?: string;
+  propertyName?: string;
+  unitId?: string;
+  unitNumber?: string;
+  tenantId?: string;
+  tenantName?: string;
+  vendorId?: string;
+  vendorName?: string;
+  leaseId?: string;
+  maintenanceRequestId?: string;
+  expenseId?: string;
+  inspectionId?: string;
+  requiresApproval: boolean;
+  approvalStatus: ApprovalStatus;
+  approvedBy?: string;
+  approvedAt?: number;
+  isRecurring: boolean;
+  recurrenceRule?: string;
+  recurrenceEndDate?: string;
+  parentTaskId?: string;
+  completedAt?: number;
+  completedBy?: string;
+  tags?: TaskTag[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TaskTag {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  userId: string;
+  userName?: string;
+  body: string;
+  createdAt: number;
+}
+
+export interface TaskActivityEntry {
+  id: string;
+  taskId: string;
+  action: string;
+  fromValue?: string;
+  toValue?: string;
+  userId: string;
+  userName?: string;
+  createdAt: number;
+}
+
+export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  status: ProjectStatus;
+  priority: TaskPriority;
+  ownerId?: string;
+  ownerName?: string;
+  startDate?: string;
+  dueDate?: string;
+  propertyId?: string;
+  propertyName?: string;
+  createdBy: string;
+  createdByName?: string;
+  taskCount?: number;
+  completedCount?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  createdBy: string;
+  items?: TaskTemplateItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TaskTemplateItem {
+  id: string;
+  templateId: string;
+  title: string;
+  description?: string;
+  category?: string;
+  priority: TaskPriority;
+  sortOrder: number;
+  estimatedMinutes?: number;
 }

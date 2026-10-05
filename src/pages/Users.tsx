@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Users as UsersIcon, Shield, ShieldCheck } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Users as UsersIcon, Shield, ShieldCheck, DollarSign } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -8,7 +8,8 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { adminApi, realtorsApi, tenantsApi, handymenApi } from '../lib/api';
+import { adminApi, realtorsApi, tenantsApi, handymenApi, propertiesApi, unitsApi } from '../lib/api';
+import type { Property, Unit } from '../types';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 import { HandymenManager } from '../components/HandymenManager';
@@ -54,8 +55,13 @@ export function Users() {
   const [handymanCount, setHandymanCount] = useState(0);
   const [isAddRealtorOpen, setAddRealtorOpen] = useState(false);
   const [editingRealtorId, setEditingRealtorId] = useState<string | null>(null);
-  const [realtorForm, setRealtorForm] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+  const [realtorForm, setRealtorForm] = useState({ firstName: '', lastName: '', email: '', phone: '', companyName: '' });
   const [realtorSaving, setRealtorSaving] = useState(false);
+  const [commissionTarget, setCommissionTarget] = useState<User | null>(null);
+  const [commissionForm, setCommissionForm] = useState({ amount: '', description: '', propertyId: '', unitId: '', paymentMethod: 'bank_transfer' });
+  const [commissionSaving, setCommissionSaving] = useState(false);
+  const [commissionProperties, setCommissionProperties] = useState<Property[]>([]);
+  const [commissionUnits, setCommissionUnits] = useState<Unit[]>([]);
 
   useEffect(() => {
     handymenApi.getAll().then(h => setHandymanCount(h.length)).catch(() => {});
@@ -63,7 +69,7 @@ export function Users() {
 
   const openAddRealtor = () => {
     setEditingRealtorId(null);
-    setRealtorForm({ firstName: '', lastName: '', email: '', phone: '' });
+    setRealtorForm({ firstName: '', lastName: '', email: '', phone: '', companyName: '' });
     setAddRealtorOpen(true);
   };
 
@@ -74,6 +80,7 @@ export function Users() {
       lastName: user.lastName || '',
       email: user.email || '',
       phone: user.phone || '',
+      companyName: user.companyName || '',
     });
     setAddRealtorOpen(true);
   };
@@ -87,6 +94,7 @@ export function Users() {
       lastName: realtorForm.lastName.trim(),
       email: realtorForm.email.trim(),
       phone: realtorForm.phone.trim() || undefined,
+      companyName: realtorForm.companyName.trim() || undefined,
     };
     const done = () => setRealtorSaving(false);
     if (editingRealtorId) {
@@ -123,6 +131,40 @@ export function Users() {
         else showToast('Invite sent', 'success');
       })
       .catch((err) => showToast((err as Error).message || 'Could not resend invite', 'error'));
+  };
+
+  const openPayCommission = (user: User) => {
+    setCommissionTarget(user);
+    setCommissionForm({ amount: '', description: '', propertyId: '', unitId: '', paymentMethod: 'bank_transfer' });
+    if (commissionProperties.length === 0) {
+      propertiesApi.getAll().then(setCommissionProperties).catch(() => {});
+    }
+    if (commissionUnits.length === 0) {
+      unitsApi.getAll().then(setCommissionUnits).catch(() => {});
+    }
+  };
+
+  const handlePayCommission = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commissionTarget || commissionSaving) return;
+    const amount = parseFloat(commissionForm.amount);
+    if (!amount || amount <= 0) { showToast('Enter a valid amount', 'error'); return; }
+    if (!commissionForm.description.trim()) { showToast('Enter a description', 'error'); return; }
+    setCommissionSaving(true);
+    realtorsApi
+      .payCommission(commissionTarget.id, {
+        amount,
+        description: commissionForm.description.trim(),
+        propertyId: commissionForm.propertyId || undefined,
+        unitId: commissionForm.unitId || undefined,
+        paymentMethod: commissionForm.paymentMethod,
+      })
+      .then(() => {
+        showToast('Commission paid. Confirmation sent to realtor.', 'success');
+        setCommissionTarget(null);
+      })
+      .catch((err) => showToast((err as Error).message || 'Could not record commission', 'error'))
+      .finally(() => setCommissionSaving(false));
   };
 
   const canManageUsers = hasPermission('users_create') || hasPermission('users_edit') || hasPermission('users_delete');
@@ -584,6 +626,9 @@ export function Users() {
                               <span className={`font-medium ${user.isActive ? 'text-ink' : 'text-faint line-through'}`}>
                                 {user.firstName} {user.lastName}
                               </span>
+                              {user.companyName && (
+                                <span className="text-xs text-muted">{user.companyName}</span>
+                              )}
                               {!user.isActive && <Badge variant="secondary">Inactive</Badge>}
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-xs text-muted flex-wrap">
@@ -601,6 +646,11 @@ export function Users() {
                               className="text-xs font-medium text-primary hover:text-primary-hover px-2 py-1 rounded-md hover:bg-primary-soft transition-colors"
                             >
                               Resend invite
+                            </button>
+                          )}
+                          {hasPermission('properties_edit') && user.isActive && (
+                            <button onClick={() => openPayCommission(user)} title="Pay commission" className="p-2 hover:bg-green-50 rounded-lg transition-colors">
+                              <DollarSign className="h-4 w-4 text-muted" />
                             </button>
                           )}
                           {hasPermission('tenants_create') && (
@@ -834,6 +884,16 @@ export function Users() {
               onChange={(e) => setRealtorForm({ ...realtorForm, phone: e.target.value })}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Business name</label>
+            <input
+              type="text"
+              placeholder="Brokerage or company name"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={realtorForm.companyName}
+              onChange={(e) => setRealtorForm({ ...realtorForm, companyName: e.target.value })}
+            />
+          </div>
           {!editingRealtorId && (
             <p className="text-xs text-muted">An invite to set their password will be emailed when you save.</p>
           )}
@@ -843,6 +903,87 @@ export function Users() {
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setAddRealtorOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={realtorSaving}>{realtorSaving ? 'Saving.' : editingRealtorId ? 'Save' : 'Add realtor'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Pay Commission Modal */}
+      <Modal isOpen={!!commissionTarget} onClose={() => setCommissionTarget(null)} title={`Pay commission — ${commissionTarget ? `${commissionTarget.firstName} ${commissionTarget.lastName}` : ''}`}>
+        <form onSubmit={handlePayCommission} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Amount *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                value={commissionForm.amount}
+                onChange={(e) => setCommissionForm({ ...commissionForm, amount: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Description *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Commission for tenant placement, John Smith"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={commissionForm.description}
+              onChange={(e) => setCommissionForm({ ...commissionForm, description: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Property</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={commissionForm.propertyId}
+              onChange={(e) => setCommissionForm({ ...commissionForm, propertyId: e.target.value, unitId: '' })}
+            >
+              <option value="">No specific property</option>
+              {commissionProperties.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          {commissionForm.propertyId && commissionUnits.filter(u => u.propertyId === commissionForm.propertyId).length > 0 && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Unit</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={commissionForm.unitId}
+              onChange={(e) => setCommissionForm({ ...commissionForm, unitId: e.target.value })}
+            >
+              <option value="">No specific unit</option>
+              {commissionUnits.filter(u => u.propertyId === commissionForm.propertyId).map((u) => (
+                <option key={u.id} value={u.id}>{u.unitNumber}</option>
+              ))}
+            </select>
+          </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium mb-1">Payment method</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              value={commissionForm.paymentMethod}
+              onChange={(e) => setCommissionForm({ ...commissionForm, paymentMethod: e.target.value })}
+            >
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="check">Check</option>
+              <option value="money_order">Money order</option>
+              <option value="zelle">Zelle</option>
+              <option value="cash">Cash</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <p className="text-xs text-muted">This records the commission as an expense and emails a payment confirmation to the realtor.</p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={() => setCommissionTarget(null)}>Cancel</Button>
+            <Button type="submit" disabled={commissionSaving}>{commissionSaving ? 'Processing...' : 'Pay commission'}</Button>
           </div>
         </form>
       </Modal>

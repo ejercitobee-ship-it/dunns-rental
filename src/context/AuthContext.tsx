@@ -20,6 +20,7 @@ function mapApiUser(apiUser: ApiUser, rolesList: Role[]): User {
     isActive: apiUser.isActive,
     createdAt: apiUser.createdAt,
     photoUrl: apiUser.photoUrl,
+    companyName: apiUser.companyName,
   };
 }
 

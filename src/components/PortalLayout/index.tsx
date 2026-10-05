@@ -36,6 +36,7 @@ const TENANT_TABS: Tab[] = [
 const REALTOR_TABS: Tab[] = [
   { name: 'Dashboard', path: '/portal', Icon: LayoutDashboard },
   { name: 'Tenants', path: '/portal/tenants', Icon: Users },
+  { name: 'Messages', path: '/portal/messages', Icon: MessageSquare },
   { name: 'Available', path: '/portal/available', Icon: Building2 },
 ];
 
@@ -57,6 +58,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
   const isTenant = user?.roleId === 'tenant';
   const isHandyman = user?.roleId === 'handyman';
+  const isRealtor = user?.roleId === 'realtor';
 
   // Announcements: fetched once for tenants, shown as a slim banner at the top.
   const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([]);
@@ -65,15 +67,12 @@ export function PortalLayout({ children }: PortalLayoutProps) {
     portalApi.announcements().then(setAnnouncements).catch(() => {});
   }, [isTenant]);
 
-  // Unread office replies drive the badge on the Messages tab (tenant thread for
-  // a tenant, vendor thread for a handyman). Refresh on load, on navigation
-  // (opening the thread clears it server-side), on focus, and every 15s.
   const [unread, setUnread] = useState(0);
   useEffect(() => {
-    if (!isTenant && !isHandyman) return;
+    if (!isTenant && !isHandyman && !isRealtor) return;
     let cancelled = false;
     const load = () =>
-      (isHandyman ? portalApi.vendorMessagesUnread() : portalApi.messagesUnread())
+      (isHandyman ? portalApi.vendorMessagesUnread() : isRealtor ? portalApi.realtorMessagesUnread() : portalApi.messagesUnread())
         .then((r) => {
           if (!cancelled) setUnread(r.count);
         })
@@ -89,7 +88,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       window.clearInterval(id);
       window.removeEventListener('focus', load);
     };
-  }, [isTenant, isHandyman, location.pathname]);
+  }, [isTenant, isHandyman, isRealtor, location.pathname]);
 
   const handleSignOut = () => {
     logout();
@@ -112,7 +111,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               <p className="text-sm font-medium text-ink leading-tight">
                 {user?.firstName} {user?.lastName}
               </p>
-              <p className="eyebrow leading-tight">{user?.role.name}</p>
+              <p className="eyebrow leading-tight">{isRealtor && user?.companyName ? user.companyName : user?.role.name}</p>
             </div>
             <Button variant="outline" size="sm" onClick={handleSignOut}>
               Sign out

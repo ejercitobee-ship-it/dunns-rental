@@ -1,5 +1,6 @@
 import type { Env } from './session';
 import { isUnitAvailable } from './units';
+import { nextTenantNumber } from './serializers';
 
 /** Longest allowed value for any tenant contact field. */
 export const MAX_CONTACT_FIELD = 120;
@@ -124,14 +125,15 @@ export async function createTenantForRealtor(
   dates?: LeaseDates
 ): Promise<Record<string, unknown>> {
   const tenantId = crypto.randomUUID();
+  const tenantNumber = await nextTenantNumber(env.DB);
 
   const statements = [
     env.DB.prepare(
-      `INSERT INTO tenants (id, first_name, last_name, email, phone,
+      `INSERT INTO tenants (id, tenant_number, first_name, last_name, email, phone,
          emergency_contact_name, emergency_contact_phone, emergency_contact_relationship)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      tenantId, value.firstName, value.lastName, value.email, value.phone,
+      tenantId, tenantNumber, value.firstName, value.lastName, value.email, value.phone,
       value.emergencyName, value.emergencyPhone, value.emergencyRelationship
     ),
     env.DB.prepare(

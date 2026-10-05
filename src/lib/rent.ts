@@ -31,6 +31,15 @@ const EPSILON = 0.005;
  */
 export const RENT_TRACKING_START = 2026 * 12 + 1; // January 2026
 
+/**
+ * Leases that started before this month are never prorated for their start
+ * month. They were entered before proration was implemented and their
+ * payments assume full-month billing. Prorating them retroactively would
+ * create phantom credits. Leases starting from this month onward get
+ * prorated when the move-in day differs from the rent due day.
+ */
+const PRORATION_CUTOFF = 2026 * 12 + 7; // July 2026
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -277,10 +286,11 @@ export function rentIncomeForMonths(
 }
 
 /**
- * The rent owed for a single month, prorated when the lease starts or ends
- * mid-month. A lease starting on the 15th of a 30-day month owes 16/30 of
- * the monthly rent (the 15th through the 30th). A lease ending on the 10th
- * owes 10/30. A full month returns the unmodified monthly rent.
+ * The rent owed for a single month. When a lease starts ON its rent due day
+ * (e.g. move-in July 30 with rentDueDay 30) the start month is a full month.
+ * When a lease starts mid-cycle (e.g. Sept 14 with rentDueDay 1) the start
+ * month is prorated from the start day. The end month is prorated when the
+ * lease ends mid-month.
  */
 export function proratedDue(lease: Lease, month: number, year: number): number {
   const fullRent = round2(lease.monthlyRent || 0);
@@ -295,7 +305,8 @@ export function proratedDue(lease: Lease, month: number, year: number): number {
     const startYM = yearMonthOf(lease.startDate);
     if (startYM === target) {
       const [, , d] = parseDateParts(lease.startDate);
-      startDay = d;
+      const dueDay = lease.rentDueDay ?? 1;
+      startDay = (d === dueDay || startYM < PRORATION_CUTOFF) ? 1 : d;
     }
   }
 

@@ -3,14 +3,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { MessageSquare, ArrowLeft, ExternalLink, Inbox, PenSquare, Search, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { messagesApi, vendorMessagesApi, tenantsApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread } from '../lib/api';
+import { messagesApi, vendorMessagesApi, realtorMessagesApi, tenantsApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread, type RealtorMessage, type RealtorThread } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { MessageThread as ThreadView, type ChatItem } from '../components/MessageThread';
 import type { Tenant } from '../types';
 
-type Channel = 'tenant' | 'vendor';
-type AnyMessage = Message | VendorMessage;
+type Channel = 'tenant' | 'vendor' | 'realtor';
+type AnyMessage = Message | VendorMessage | RealtorMessage;
 
 /** One inbox row, normalized so the list renders the same for both channels. */
 interface InboxRow {
@@ -19,7 +19,7 @@ interface InboxRow {
   subtitle?: string;
   unread: number;
   lastBody: string | null;
-  lastSender: 'office' | 'tenant' | 'handyman' | null;
+  lastSender: 'office' | 'tenant' | 'handyman' | 'realtor' | null;
 }
 
 export function Messages() {
@@ -28,6 +28,7 @@ export function Messages() {
   const [channel, setChannel] = useState<Channel>('tenant');
   const [tenantThreads, setTenantThreads] = useState<MessageThread[]>([]);
   const [vendorThreads, setVendorThreads] = useState<VendorThread[]>([]);
+  const [realtorThreads, setRealtorThreads] = useState<RealtorThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,13 +56,22 @@ export function Messages() {
         lastBody: t.lastBody,
         lastSender: t.lastSender,
       }))
-    : vendorThreads.map((v) => ({
+    : channel === 'vendor'
+    ? vendorThreads.map((v) => ({
         id: v.handymanId,
         title: v.name,
         subtitle: v.phone || undefined,
         unread: v.unread,
         lastBody: v.lastBody,
         lastSender: v.lastSender,
+      }))
+    : realtorThreads.map((r) => ({
+        id: r.realtorUserId,
+        title: r.name,
+        subtitle: r.companyName || r.phone || undefined,
+        unread: r.unread,
+        lastBody: r.lastBody,
+        lastSender: r.lastSender,
       }));
 
   const openNewMessage = async () => {
@@ -94,9 +104,10 @@ export function Messages() {
     if (threadsPollRef.current) return;
     threadsPollRef.current = true;
     try {
-      const [t, v] = await Promise.all([messagesApi.threads(), vendorMessagesApi.threads()]);
+      const [t, v, r] = await Promise.all([messagesApi.threads(), vendorMessagesApi.threads(), realtorMessagesApi.threads()]);
       setTenantThreads(t.threads);
       setVendorThreads(v.threads);
+      setRealtorThreads(r.threads);
     } catch {
       /* ignore during polling */
     } finally {
@@ -108,7 +119,7 @@ export function Messages() {
     if (openPollRef.current) return;
     openPollRef.current = true;
     try {
-      const res = ch === 'tenant' ? await messagesApi.thread(id) : await vendorMessagesApi.thread(id);
+      const res = ch === 'tenant' ? await messagesApi.thread(id) : ch === 'vendor' ? await vendorMessagesApi.thread(id) : await realtorMessagesApi.thread(id);
       setMessages((prev) => {
         const next = res.messages as AnyMessage[];
         const same = next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id;
@@ -122,8 +133,8 @@ export function Messages() {
   }, []);
 
   useEffect(() => {
-    Promise.all([messagesApi.threads(), vendorMessagesApi.threads()])
-      .then(([t, v]) => { setTenantThreads(t.threads); setVendorThreads(v.threads); })
+    Promise.all([messagesApi.threads(), vendorMessagesApi.threads(), realtorMessagesApi.threads()])
+      .then(([t, v, r]) => { setTenantThreads(t.threads); setVendorThreads(v.threads); setRealtorThreads(r.threads); })
       .catch((err) => setError((err as Error).message || 'Could not load messages.'))
       .finally(() => setLoading(false));
   }, []);
@@ -176,12 +187,18 @@ export function Messages() {
         setOpenPlace(placeLabel(res));
         setMessages(res.messages);
         setTenantThreads((prev) => prev.map((t) => (t.tenantId === id ? { ...t, unread: 0 } : t)));
-      } else {
+      } else if (channel === 'vendor') {
         const res = await vendorMessagesApi.thread(id);
         setOpenName(res.handymanName);
         setOpenPlace('');
         setMessages(res.messages);
         setVendorThreads((prev) => prev.map((v) => (v.handymanId === id ? { ...v, unread: 0 } : v)));
+      } else {
+        const res = await realtorMessagesApi.thread(id);
+        setOpenName(res.realtorName);
+        setOpenPlace('');
+        setMessages(res.messages);
+        setRealtorThreads((prev) => prev.map((r) => (r.realtorUserId === id ? { ...r, unread: 0 } : r)));
       }
     } catch (err) {
       showToast((err as Error).message || 'Could not open that conversation.', 'error');
@@ -198,7 +215,9 @@ export function Messages() {
     try {
       const sent = channel === 'tenant'
         ? await messagesApi.reply(openId, body, file)
-        : await vendorMessagesApi.reply(openId, body, file);
+        : channel === 'vendor'
+        ? await vendorMessagesApi.reply(openId, body, file)
+        : await realtorMessagesApi.reply(openId, body, file);
       setMessages((prev) => [...prev, sent]);
       refreshThreads();
     } catch (err) {
@@ -220,6 +239,7 @@ export function Messages() {
   const TABS: { key: Channel; label: string; count: number }[] = [
     { key: 'tenant', label: 'Tenants', count: tenantThreads.reduce((s, t) => s + t.unread, 0) },
     { key: 'vendor', label: 'Vendors', count: vendorThreads.reduce((s, v) => s + v.unread, 0) },
+    { key: 'realtor', label: 'Realtors', count: realtorThreads.reduce((s, r) => s + r.unread, 0) },
   ];
 
   return (
@@ -317,7 +337,7 @@ export function Messages() {
           <CardContent className="p-0">
             {rows.length === 0 ? (
               <p className="text-sm text-muted p-6 text-center">
-                {channel === 'tenant' ? 'No tenant messages yet.' : 'No active vendors to message.'}
+                {channel === 'tenant' ? 'No tenant messages yet.' : channel === 'vendor' ? 'No active vendors to message.' : 'No realtors to message yet.'}
               </p>
             ) : (
               <div className="divide-y divide-line">

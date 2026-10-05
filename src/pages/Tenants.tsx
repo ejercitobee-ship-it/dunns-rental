@@ -173,6 +173,7 @@ export function Tenants() {
     return list.filter(g =>
       g.occupants.some(t =>
         `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
+        (t.tenantNumber || '').toLowerCase().includes(q) ||
         (t.email || '').toLowerCase().includes(q) ||
         (t.phone || '').toLowerCase().includes(q) ||
         (t.notes || '').toLowerCase().includes(q) ||
@@ -266,7 +267,7 @@ export function Tenants() {
 
     const csvRows: string[][] = [];
     csvRows.push([
-      'Tenant', 'Email', 'Phone', 'Property', 'Unit',
+      'Tenant ID', 'Tenant', 'Email', 'Phone', 'Property', 'Unit',
       'Monthly Rent', 'Lease Start', 'Lease End', 'Status',
       `${curMonth}/${curYear} Owed`, `${curMonth}/${curYear} Paid`,
       `${curMonth}/${curYear} Balance`, `${curMonth}/${curYear} Status`,
@@ -300,6 +301,7 @@ export function Tenants() {
 
       for (const t of occupants) {
         csvRows.push([
+          t.tenantNumber || '',
           `${t.firstName} ${t.lastName}`,
           t.email || '',
           t.phone || '',
@@ -705,6 +707,9 @@ export function Tenants() {
                                       >
                                         {highlightMatch(`${t.firstName} ${t.lastName}`)}
                                       </Link>
+                                      {t.tenantNumber && (
+                                        <span className="text-[11px] text-faint font-medium">{t.tenantNumber}</span>
+                                      )}
                                       {t.verified && (
                                         <Check className="h-3.5 w-3.5 text-positive" aria-label="Verified: has logged in" />
                                       )}{i < occupants.length - 1 ? ',' : ''}

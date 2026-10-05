@@ -432,6 +432,7 @@ export function DepositReturnSection({ tenantId, leaseId, propertyId, unitId, de
               >
                 <option value="">Select method</option>
                 <option value="check">Check</option>
+                <option value="money_order">Money Order</option>
                 <option value="cash">Cash</option>
                 <option value="ach">ACH / Bank Transfer</option>
                 <option value="other">Other</option>

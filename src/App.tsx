@@ -44,6 +44,7 @@ const TenantMessages = lazy(() => import('./pages/portal/TenantMessages').then(m
 const TenantDocuments = lazy(() => import('./pages/portal/TenantDocuments').then(m => ({ default: m.TenantDocuments })));
 const HandymanJobs = lazy(() => import('./pages/portal/HandymanJobs').then(m => ({ default: m.HandymanJobs })));
 const HandymanMessages = lazy(() => import('./pages/portal/HandymanMessages').then(m => ({ default: m.HandymanMessages })));
+const RealtorMessages = lazy(() => import('./pages/portal/RealtorMessages').then(m => ({ default: m.RealtorMessages })));
 const InstallGuide = lazy(() => import('./pages/portal/InstallGuide').then(m => ({ default: m.InstallGuide })));
 const PortalAnnouncements = lazy(() => import('./pages/portal/Announcements').then(m => ({ default: m.Announcements })));
 const RealtorTenants = lazy(() => import('./pages/portal/RealtorTenants').then(m => ({ default: m.RealtorTenants })));
@@ -52,6 +53,7 @@ const RealtorDashboard = lazy(() => import('./pages/portal/RealtorDashboard').th
 const RealtorAvailableUnits = lazy(() => import('./pages/portal/RealtorAvailableUnits').then(m => ({ default: m.RealtorAvailableUnits })));
 const Announcements = lazy(() => import('./pages/Announcements').then(m => ({ default: m.Announcements })));
 const AIAssistant = lazy(() => import('./pages/AIAssistant').then(m => ({ default: m.AIAssistant })));
+const Tasks = lazy(() => import('./pages/Tasks').then(m => ({ default: m.Tasks })));
 
 // Protected Route component
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: string }) {
@@ -114,11 +116,10 @@ function PortalIndex() {
   return <TenantHome />;
 }
 
-// /portal/messages is shared: a handyman sees their vendor thread with the
-// office, a tenant sees their own thread.
+// /portal/messages is shared: each portal role sees their own thread with the office.
 function PortalMessages() {
   const { user } = useAuth();
-  return user?.roleId === 'handyman' ? <HandymanMessages /> : <TenantMessages />;
+  return user?.roleId === 'handyman' ? <HandymanMessages /> : user?.roleId === 'realtor' ? <RealtorMessages /> : <TenantMessages />;
 }
 
 // The site root. A logged-out visitor sees the public homepage; a logged-in
@@ -382,6 +383,12 @@ function AppRoutes() {
       <Route path="/ai-assistant" element={
         <ProtectedRoute requiredPermission="ai_assistant_use">
           <Layout><AIAssistant /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/tasks" element={
+        <ProtectedRoute requiredPermission="tasks_view">
+          <Layout><Tasks /></Layout>
         </ProtectedRoute>
       } />
 

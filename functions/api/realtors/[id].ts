@@ -30,6 +30,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const lastName = str(body.lastName);
     const email = str(body.email);
     const phone = str(body.phone);
+    const companyName = str(body.companyName);
     if (!firstName) return jsonError('A first name is required', 400);
     const name = [firstName, lastName].filter(Boolean).join(' ');
 
@@ -47,11 +48,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         .run();
     }
 
-    await env.DB.prepare('UPDATE user SET name = ?, phone = ?, updated_at = unixepoch() WHERE id = ?')
-      .bind(name, phone || null, id)
+    await env.DB.prepare('UPDATE user SET name = ?, phone = ?, company_name = ?, updated_at = unixepoch() WHERE id = ?')
+      .bind(name, phone || null, companyName || null, id)
       .run();
 
-    return jsonOk({ success: true, data: { id, firstName, lastName, email, phone } });
+    return jsonOk({ success: true, data: { id, firstName, lastName, email, phone, companyName } });
   } catch {
     return serverError();
   }

@@ -145,12 +145,12 @@ export function Dashboard() {
       .filter(e => monthOf(e.date) === currentMonth && yearOf(e.date) === currentYear)
       .reduce((sum, e) => sum + e.amount, 0);
 
-    const currentLeases = leases.filter(l => l.status !== 'ended');
     const elapsedMonths = Array.from({ length: currentMonth }, (_, i) => i + 1);
     let totalOwed = 0;
     for (const month of elapsedMonths) {
-      for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        totalOwed += settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases, paymentAllocations).balance;
+      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+        if (lease.status === 'ended') continue;
+        totalOwed += settleMonthWithCredit(lease, rentPayments, month, currentYear, leases, paymentAllocations).balance;
       }
     }
 
@@ -254,12 +254,11 @@ export function Dashboard() {
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
     const elapsed = Array.from({ length: currentMonth }, (_, i) => i + 1);
-    const currentLeases = leases.filter(l => l.status !== 'ended');
-
     const perLease = new Map<string, { lease: ReturnType<typeof leasesOwingMonth>[number]; months: number; total: number }>();
     for (const month of elapsed) {
-      for (const lease of leasesOwingMonth(currentLeases, month, currentYear)) {
-        const s = settleMonthWithCredit(lease, rentPayments, month, currentYear, currentLeases, paymentAllocations);
+      for (const lease of leasesOwingMonth(leases, month, currentYear)) {
+        if (lease.status === 'ended') continue;
+        const s = settleMonthWithCredit(lease, rentPayments, month, currentYear, leases, paymentAllocations);
         if (s.status === 'paid') continue;
         let e = perLease.get(lease.id);
         if (!e) { e = { lease, months: 0, total: 0 }; perLease.set(lease.id, e); }
@@ -426,10 +425,10 @@ export function Dashboard() {
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
-    const currentLeases = leasesOwingMonth(leases.filter(l => l.status !== 'ended'), currentMonth, currentYear);
+    const currentLeases = leasesOwingMonth(leases, currentMonth, currentYear).filter(l => l.status !== 'ended');
     let paid = 0;
     for (const lease of currentLeases) {
-      if (settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, currentLeases, paymentAllocations).status === 'paid') paid++;
+      if (settleMonthWithCredit(lease, rentPayments, currentMonth, currentYear, leases, paymentAllocations).status === 'paid') paid++;
     }
     return { paid, total: currentLeases.length };
   }, [leases, rentPayments, paymentAllocations]);

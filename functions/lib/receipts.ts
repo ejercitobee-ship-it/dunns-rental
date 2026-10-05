@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { Env } from './session';
-import { getSetting, ensureTenantFolder, uploadToDrive, deleteDriveFile } from './google';
+import { getSetting, ensureTenantFolder, ensurePropertyExpensesFolder, ensureRealtorFolder, uploadToDrive, deleteDriveFile } from './google';
 import { sendEmail } from './email';
 import { sendPushToTenant } from './push';
 
@@ -44,6 +44,7 @@ export interface ReceiptEmailData {
   receiptNumber: string;
   firstName: string;
   tenantName: string;
+  tenantNumber?: string;
   location: string;
   period: string;
   amount: string;
@@ -82,6 +83,7 @@ export function receiptEmailHtml(d: ReceiptEmailData): string {
       <tr><td style="padding:8px 32px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${row('Received from', d.tenantName)}
+          ${d.tenantNumber ? row('Tenant ID', d.tenantNumber) : ''}
           ${row('Property', d.location)}
           ${row('Rent period', d.period)}
           ${row('Payment method', d.method)}
@@ -120,6 +122,7 @@ export function receiptEmailText(d: ReceiptEmailData): string {
     d.confirmationText || `Hi ${d.firstName}, we've received your rent payment${d.period ? ` for ${d.period}` : ''}. Thank you.`,
     '',
     `Received from: ${d.tenantName}`,
+    ...(d.tenantNumber ? [`Tenant ID: ${d.tenantNumber}`] : []),
     `Property: ${d.location}`,
     `Rent period: ${d.period}`,
     `Payment method: ${d.method}`,
@@ -135,6 +138,7 @@ export interface ReceiptData {
   datePaid: string;
   company: { name: string; lines: string[] };
   tenantName: string;
+  tenantNumber?: string;
   location: string;
   period: string;
   amount: string;
@@ -199,6 +203,7 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
     y -= 44;
   };
   field('Received from', data.tenantName);
+  if (data.tenantNumber) field('Tenant ID', data.tenantNumber);
   field('Property', data.location);
   field(data.periodFieldLabel || 'For rent period', data.period);
   field('Payment method', data.method);
@@ -280,6 +285,7 @@ interface PaymentJoin {
 
 interface TenantRow {
   id: string;
+  tenant_number: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -330,7 +336,7 @@ export async function generateMoveInFeeReceipt(env: Env, leaseId: string, upload
   if (!l) return null;
 
   const tenant = await env.DB.prepare(
-    `SELECT t.id, t.first_name, t.last_name, t.email
+    `SELECT t.id, t.tenant_number, t.first_name, t.last_name, t.email
        FROM tenants t JOIN lease_tenants lt ON lt.tenant_id = t.id
       WHERE lt.lease_id = ? ORDER BY t.last_name, t.first_name LIMIT 1`
   ).bind(leaseId).first<TenantRow>();
@@ -364,6 +370,7 @@ export async function generateMoveInFeeReceipt(env: Env, leaseId: string, upload
       ],
     },
     tenantName,
+    tenantNumber: tenant.tenant_number ?? undefined,
     location,
     period: 'One-time move-in fee (non-refundable)',
     amount: money(l.security_deposit || 0),
@@ -403,12 +410,12 @@ export async function generateMoveInFeeReceipt(env: Env, leaseId: string, upload
         html: receiptEmailHtml({
           companyName: company.companyName,
           contact: [company.address, [company.city, company.state, company.zipCode].filter(Boolean).join(', '), [company.phone, company.email].filter(Boolean).join(' · ')].filter(Boolean).join(' · '),
-          receiptNumber: rNumber, firstName: tenant.first_name, tenantName, location,
+          receiptNumber: rNumber, firstName: tenant.first_name, tenantName, tenantNumber: tenant.tenant_number ?? undefined, location,
           period: 'Move-in fee', amount: money(l.security_deposit || 0), method: prettyMethod(l.move_in_fee_method), datePaid,
         }),
         text: receiptEmailText({
           companyName: company.companyName, contact: '', receiptNumber: rNumber, firstName: tenant.first_name,
-          tenantName, location, period: 'Move-in fee', amount: money(l.security_deposit || 0), method: prettyMethod(l.move_in_fee_method), datePaid,
+          tenantName, tenantNumber: tenant.tenant_number ?? undefined, location, period: 'Move-in fee', amount: money(l.security_deposit || 0), method: prettyMethod(l.move_in_fee_method), datePaid,
         }),
       });
     } catch { /* best-effort */ }
@@ -439,12 +446,12 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   // lease's first occupant. No tenant means nowhere to file it — skip.
   let tenant: TenantRow | null = null;
   if (p.paid_by_tenant_id) {
-    tenant = await env.DB.prepare('SELECT id, first_name, last_name, email FROM tenants WHERE id = ?')
+    tenant = await env.DB.prepare('SELECT id, tenant_number, first_name, last_name, email FROM tenants WHERE id = ?')
       .bind(p.paid_by_tenant_id).first<TenantRow>();
   }
   if (!tenant) {
     tenant = await env.DB.prepare(
-      `SELECT t.id, t.first_name, t.last_name, t.email
+      `SELECT t.id, t.tenant_number, t.first_name, t.last_name, t.email
          FROM tenants t JOIN lease_tenants lt ON lt.tenant_id = t.id
         WHERE lt.lease_id = ? ORDER BY t.last_name, t.first_name LIMIT 1`
     ).bind(p.lease_id).first<TenantRow>();
@@ -496,6 +503,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
       ],
     },
     tenantName,
+    tenantNumber: tenant.tenant_number ?? undefined,
     location,
     period,
     amount: money(p.amount),
@@ -548,6 +556,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
         receiptNumber: rNumber,
         firstName: tenant.first_name,
         tenantName,
+        tenantNumber: tenant.tenant_number ?? undefined,
         location,
         period,
         amount: money(p.amount),
@@ -592,6 +601,376 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     }
   } catch {
     // Push is best-effort.
+  }
+
+  return docId;
+}
+
+// ---------------------------------------------------------------------------
+// Vendor payment confirmation
+// ---------------------------------------------------------------------------
+
+interface MaintenancePayJoin {
+  id: string;
+  title: string;
+  cost: number;
+  paid_at: string | null;
+  property_id: string | null;
+  unit_id: string | null;
+  assigned_handyman_id: string | null;
+  vendor: string | null;
+  receipt_document_id: string | null;
+  property_name: string | null;
+  property_address: string | null;
+  property_city: string | null;
+  property_state: string | null;
+  property_zip: string | null;
+  unit_number: string | null;
+}
+
+interface HandymanRow {
+  name: string;
+  email: string | null;
+  company_name: string | null;
+}
+
+function vendorConfirmationEmailHtml(d: {
+  companyName: string;
+  contact: string;
+  refNumber: string;
+  vendorName: string;
+  service: string;
+  property: string;
+  amount: string;
+  datePaid: string;
+}): string {
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:7px 0;color:#75726b;font-size:13px;">${label}</td>` +
+    `<td style="padding:7px 0;text-align:right;font-size:13px;color:#1c1a17;font-weight:500;">${value || '—'}</td></tr>`;
+  return `
+<div style="background:#f4f5f3;padding:24px 12px;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e2e0d8;border-radius:12px;">
+      <tr><td style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+        <div style="font-size:20px;font-weight:bold;color:#24503f;">${d.companyName}</div>
+        ${d.contact ? `<div style="font-size:12px;color:#8a887f;margin-top:6px;">${d.contact}</div>` : ''}
+      </td></tr>
+      <tr><td style="padding:24px 32px 4px;">
+        <div style="font-size:16px;font-weight:bold;color:#1c1a17;">Payment confirmation</div>
+        <div style="font-size:12px;color:#8a887f;margin-top:4px;">Ref. ${d.refNumber}${d.datePaid ? ` &nbsp;&middot;&nbsp; ${d.datePaid}` : ''}</div>
+        <p style="font-size:14px;color:#1c1a17;line-height:1.6;margin:16px 0 4px;">Hi ${d.vendorName},<br><br>This confirms that your payment of ${d.amount} has been processed for the service described below. Thank you for your work.</p>
+      </td></tr>
+      <tr><td style="padding:8px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          ${row('Paid to', d.vendorName)}
+          ${row('Service', d.service)}
+          ${row('Property', d.property)}
+        </table>
+      </td></tr>
+      <tr><td style="padding:16px 32px 4px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f4;border:1px solid #e7e5dd;border-radius:8px;"><tr>
+          <td style="padding:16px 18px;">
+            <div style="font-size:11px;letter-spacing:0.08em;color:#8a887f;font-weight:bold;">AMOUNT PAID</div>
+            <div style="font-size:22px;font-weight:bold;color:#1c1a17;margin-top:2px;">${d.amount}</div>
+          </td>
+          <td style="padding:16px 18px;text-align:right;font-size:16px;font-weight:bold;color:#2b7a59;">PAID</td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:16px 32px 24px;">
+        <p style="font-size:13px;color:#75726b;line-height:1.6;margin:0;">Please retain this confirmation for your records. If you have any questions, feel free to reach out.</p>
+      </td></tr>
+      <tr><td style="padding:14px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+        ${d.companyName}${d.contact ? ` &nbsp;&middot;&nbsp; ${d.contact}` : ''}
+      </td></tr>
+    </table>
+  </td></tr></table>
+</div>`.trim();
+}
+
+function vendorConfirmationEmailText(d: {
+  companyName: string;
+  vendorName: string;
+  service: string;
+  property: string;
+  amount: string;
+  datePaid: string;
+  refNumber: string;
+}): string {
+  return [
+    `${d.companyName} — Payment confirmation`,
+    `Ref. ${d.refNumber}${d.datePaid ? ` · ${d.datePaid}` : ''}`,
+    '',
+    `Hi ${d.vendorName},`,
+    '',
+    `This confirms that your payment of ${d.amount} has been processed for the service described below. Thank you for your work.`,
+    '',
+    `Paid to: ${d.vendorName}`,
+    `Service: ${d.service}`,
+    `Property: ${d.property}`,
+    `Amount paid: ${d.amount} (PAID)`,
+    '',
+    'Please retain this confirmation for your records.',
+  ].join('\n');
+}
+
+/**
+ * Generate a payment confirmation when a vendor/handyman is paid for a
+ * maintenance request: build the PDF, file it in the property's Expenses
+ * folder on Drive, record it as a document, link it on the maintenance
+ * request, and best-effort email the handyman.
+ */
+export async function generateVendorPaymentConfirmation(
+  env: Env,
+  requestId: string,
+  uploadedBy?: string,
+): Promise<string | null> {
+  const r = await env.DB.prepare(
+    `SELECT mr.id, mr.title, mr.cost, mr.paid_at, mr.property_id, mr.unit_id,
+            mr.assigned_handyman_id, mr.vendor, mr.receipt_document_id,
+            pr.name AS property_name, pr.address AS property_address,
+            pr.city AS property_city, pr.state AS property_state, pr.zip_code AS property_zip,
+            u.unit_number AS unit_number
+       FROM maintenance_requests mr
+       LEFT JOIN properties pr ON pr.id = mr.property_id
+       LEFT JOIN units u ON u.id = mr.unit_id
+      WHERE mr.id = ?`
+  ).bind(requestId).first<MaintenancePayJoin>();
+  if (!r || !r.paid_at || !r.cost) return null;
+
+  let handyman: HandymanRow | null = null;
+  if (r.assigned_handyman_id) {
+    handyman = await env.DB.prepare(
+      'SELECT name, email, company_name FROM handymen WHERE id = ?'
+    ).bind(r.assigned_handyman_id).first<HandymanRow>();
+  }
+  const vendorName = handyman?.company_name || handyman?.name || r.vendor || 'Vendor';
+
+  const company = await companySettings(env);
+  const cityStateZip = [
+    [r.property_city, r.property_state].filter(Boolean).join(', '),
+    r.property_zip,
+  ].filter(Boolean).join(' ');
+  const fullAddress = [r.property_address, cityStateZip].filter(Boolean).join(', ');
+  const location = [
+    fullAddress || r.property_name,
+    r.unit_number ? `Unit ${r.unit_number}` : null,
+  ].filter(Boolean).join(' · ') || '—';
+  const datePaid = r.paid_at ? prettyDate(r.paid_at) : '';
+  const refNumber = `VP-${requestId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+
+  const pdfBytes = await buildReceiptPdf({
+    receiptNumber: refNumber,
+    datePaid,
+    title: 'PAYMENT CONFIRMATION',
+    periodFieldLabel: 'Service',
+    company: {
+      name: company.companyName,
+      lines: [
+        company.address,
+        [company.city, company.state, company.zipCode].filter(Boolean).join(', '),
+        [company.phone, company.email].filter(Boolean).join('  ·  '),
+      ],
+    },
+    tenantName: vendorName,
+    location,
+    period: r.title || 'Maintenance service',
+    amount: money(r.cost),
+    method: 'Bank transfer',
+  });
+
+  const year = new Date(r.paid_at).getFullYear();
+  const folderId = r.property_id
+    ? await ensurePropertyExpensesFolder(env, r.property_id, year)
+    : null;
+
+  const fileName = `Payment confirmation - ${vendorName} - ${r.title || requestId.slice(0, 6)}.pdf`;
+  let driveId: string | null = null;
+  if (folderId) {
+    const uploaded = await uploadToDrive(
+      env, folderId, fileName, 'application/pdf',
+      new Blob([pdfBytes], { type: 'application/pdf' }),
+    );
+    driveId = uploaded.id;
+  }
+
+  const docId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, uploaded_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(docId, fileName, driveId, 'application/pdf', pdfBytes.length, r.property_id, uploadedBy ?? null),
+    env.DB.prepare('UPDATE maintenance_requests SET receipt_document_id = ? WHERE id = ?').bind(docId, requestId),
+  ]);
+
+  if (r.receipt_document_id && r.receipt_document_id !== docId) {
+    try {
+      const old = await env.DB.prepare('SELECT drive_file_id FROM documents WHERE id = ?')
+        .bind(r.receipt_document_id).first<{ drive_file_id: string | null }>();
+      if (old?.drive_file_id) await deleteDriveFile(env, old.drive_file_id);
+      await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(r.receipt_document_id).run();
+    } catch { /* best-effort cleanup */ }
+  }
+
+  const vendorEmail = handyman?.email;
+  if (vendorEmail) {
+    try {
+      const contactLine = [
+        company.address,
+        [company.city, company.state, company.zipCode].filter(Boolean).join(', '),
+        [company.phone, company.email].filter(Boolean).join(' · '),
+      ].filter(Boolean).join(' · ');
+      await sendEmail(env, {
+        to: vendorEmail,
+        subject: `Payment confirmation for ${r.title || 'maintenance service'} — ${company.companyName}`,
+        html: vendorConfirmationEmailHtml({
+          companyName: company.companyName,
+          contact: contactLine,
+          refNumber,
+          vendorName,
+          service: r.title || 'Maintenance service',
+          property: location,
+          amount: money(r.cost),
+          datePaid,
+        }),
+        text: vendorConfirmationEmailText({
+          companyName: company.companyName,
+          vendorName,
+          service: r.title || 'Maintenance service',
+          property: location,
+          amount: money(r.cost),
+          datePaid,
+          refNumber,
+        }),
+      });
+    } catch { /* best-effort */ }
+  }
+
+  return docId;
+}
+
+// ---------------------------------------------------------------------------
+// Realtor commission payment confirmation
+// ---------------------------------------------------------------------------
+
+export async function generateRealtorCommissionConfirmation(
+  env: Env,
+  expenseId: string,
+  realtorUserId: string,
+  paymentMethod?: string,
+  uploadedBy?: string,
+): Promise<string | null> {
+  const expense = await env.DB.prepare(
+    `SELECT e.id, e.amount, e.date, e.description, e.vendor, e.property_id, e.receipt_document_id,
+            pr.name AS property_name, pr.address AS property_address,
+            pr.city AS property_city, pr.state AS property_state, pr.zip_code AS property_zip
+       FROM expenses e
+       LEFT JOIN properties pr ON pr.id = e.property_id
+      WHERE e.id = ?`
+  ).bind(expenseId).first<{
+    id: string; amount: number; date: string; description: string; vendor: string | null;
+    property_id: string | null; receipt_document_id: string | null;
+    property_name: string | null; property_address: string | null;
+    property_city: string | null; property_state: string | null; property_zip: string | null;
+  }>();
+  if (!expense) return null;
+
+  const realtor = await env.DB.prepare(
+    'SELECT id, name, email, company_name FROM user WHERE id = ?'
+  ).bind(realtorUserId).first<{ id: string; name: string; email: string | null; company_name: string | null }>();
+  if (!realtor) return null;
+
+  const realtorLabel = realtor.company_name || realtor.name || 'Realtor';
+  const company = await companySettings(env);
+
+  const cityStateZip = [
+    [expense.property_city, expense.property_state].filter(Boolean).join(', '),
+    expense.property_zip,
+  ].filter(Boolean).join(' ');
+  const fullAddress = [expense.property_address, cityStateZip].filter(Boolean).join(', ');
+  const location = fullAddress || expense.property_name || 'N/A';
+  const datePaid = expense.date ? prettyDate(expense.date) : '';
+  const refNumber = `RC-${expenseId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+
+  const pdfBytes = await buildReceiptPdf({
+    receiptNumber: refNumber,
+    datePaid,
+    title: 'COMMISSION PAYMENT CONFIRMATION',
+    periodFieldLabel: 'Commission for',
+    company: {
+      name: company.companyName,
+      lines: [
+        company.address,
+        [company.city, company.state, company.zipCode].filter(Boolean).join(', '),
+        [company.phone, company.email].filter(Boolean).join('  ·  '),
+      ],
+    },
+    tenantName: realtorLabel,
+    location,
+    period: expense.description || 'Realtor commission',
+    amount: money(expense.amount),
+    method: prettyMethod(paymentMethod || 'bank_transfer'),
+  });
+
+  const folderId = await ensureRealtorFolder(env, realtorUserId);
+  const fileName = `Commission confirmation - ${realtorLabel} - ${expense.date || expenseId.slice(0, 6)}.pdf`;
+  let driveId: string | null = null;
+  if (folderId) {
+    const uploaded = await uploadToDrive(
+      env, folderId, fileName, 'application/pdf',
+      new Blob([pdfBytes], { type: 'application/pdf' }),
+    );
+    driveId = uploaded.id;
+  }
+
+  const docId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, uploaded_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(docId, fileName, driveId, 'application/pdf', pdfBytes.length, expense.property_id, uploadedBy ?? null),
+    env.DB.prepare('UPDATE expenses SET receipt_document_id = ? WHERE id = ?').bind(docId, expenseId),
+  ]);
+
+  if (expense.receipt_document_id && expense.receipt_document_id !== docId) {
+    try {
+      const old = await env.DB.prepare('SELECT drive_file_id FROM documents WHERE id = ?')
+        .bind(expense.receipt_document_id).first<{ drive_file_id: string | null }>();
+      if (old?.drive_file_id) await deleteDriveFile(env, old.drive_file_id);
+      await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(expense.receipt_document_id).run();
+    } catch { /* best-effort */ }
+  }
+
+  if (realtor.email) {
+    try {
+      const contactLine = [
+        company.address,
+        [company.city, company.state, company.zipCode].filter(Boolean).join(', '),
+        [company.phone, company.email].filter(Boolean).join(' · '),
+      ].filter(Boolean).join(' · ');
+      await sendEmail(env, {
+        to: realtor.email,
+        subject: `Commission payment confirmation — ${company.companyName}`,
+        html: vendorConfirmationEmailHtml({
+          companyName: company.companyName,
+          contact: contactLine,
+          refNumber,
+          vendorName: realtorLabel,
+          service: expense.description || 'Realtor commission',
+          property: location,
+          amount: money(expense.amount),
+          datePaid,
+        }),
+        text: vendorConfirmationEmailText({
+          companyName: company.companyName,
+          vendorName: realtorLabel,
+          service: expense.description || 'Realtor commission',
+          property: location,
+          amount: money(expense.amount),
+          datePaid,
+          refNumber,
+        }),
+      });
+    } catch { /* best-effort commission email */ }
   }
 
   return docId;

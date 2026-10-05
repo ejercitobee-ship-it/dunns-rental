@@ -20,12 +20,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const { results } = await env.DB.prepare(
-      `SELECT u.id, u.name, u.email
+      `SELECT u.id, u.name, u.email, u.phone, u.company_name
          FROM user u
          JOIN user_roles ur ON ur.user_id = u.id
         WHERE ur.role = 'realtor' AND u.is_active = 1
         ORDER BY u.name`
-    ).all<{ id: string; name: string; email: string }>();
+    ).all<{ id: string; name: string; email: string; phone: string | null; company_name: string | null }>();
 
     return jsonOk({ success: true, data: results || [] });
   } catch {
@@ -51,6 +51,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const lastName = str(body.lastName);
     const email = str(body.email);
     const phone = str(body.phone);
+    const companyName = str(body.companyName);
     if (!firstName) return jsonError('A first name is required', 400);
     if (!email) return jsonError('An email is required to send the invite', 400);
 
@@ -64,8 +65,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
       throw e;
     }
-    if (phone) {
-      await env.DB.prepare('UPDATE user SET phone = ?, updated_at = unixepoch() WHERE id = ?').bind(phone, userId).run();
+    const updates: string[] = [];
+    const binds: unknown[] = [];
+    if (phone) { updates.push('phone = ?'); binds.push(phone); }
+    if (companyName) { updates.push('company_name = ?'); binds.push(companyName); }
+    if (updates.length) {
+      binds.push(userId);
+      await env.DB.prepare(`UPDATE user SET ${updates.join(', ')}, updated_at = unixepoch() WHERE id = ?`).bind(...binds).run();
     }
 
     const res = await sendInviteLink(env, userId, firstName, email, false);

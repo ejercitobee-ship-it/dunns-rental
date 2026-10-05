@@ -4,7 +4,7 @@ export interface Permission {
   id: string;
   name: string;
   description: string;
-  module: 'dashboard' | 'properties' | 'tenants' | 'rents' | 'finances' | 'leases' | 'maintenance' | 'documents' | 'reports' | 'users' | 'settings' | 'announcements' | 'ai_assistant';
+  module: 'dashboard' | 'properties' | 'tenants' | 'rents' | 'finances' | 'leases' | 'maintenance' | 'documents' | 'reports' | 'users' | 'settings' | 'announcements' | 'ai_assistant' | 'tasks';
   /** If true, this permission is only available for granular user grants, not
    * included in the basic role builder. Keeps the role editor clean. */
   advanced?: boolean;
@@ -38,6 +38,7 @@ export interface User {
   /** Merged permissions from the server: role permissions + per-user overrides.
    *  When present, permission checks use this instead of `role.permissions`. */
   effectivePermissions?: string[];
+  companyName?: string;
   tenancyEndDate?: string;
   tenancyEndReason?: string;
 }
@@ -133,6 +134,14 @@ export const SYSTEM_PERMISSIONS: Permission[] = [
 
   // AI Assistant
   { id: 'ai_assistant_use', name: 'Use AI Assistant', description: 'Can use the AI operations assistant to query property data', module: 'ai_assistant' },
+
+  // Tasks
+  { id: 'tasks_view', name: 'View Tasks', description: 'Can view tasks and projects', module: 'tasks' },
+  { id: 'tasks_create', name: 'Create Tasks', description: 'Can create new tasks and projects', module: 'tasks' },
+  { id: 'tasks_edit', name: 'Edit Tasks', description: 'Can edit and update tasks', module: 'tasks' },
+  { id: 'tasks_delete', name: 'Delete Tasks', description: 'Can delete tasks permanently', module: 'tasks', advanced: true },
+  { id: 'tasks_assign', name: 'Assign Tasks', description: 'Can assign and reassign tasks to team members', module: 'tasks' },
+  { id: 'projects_manage', name: 'Manage Projects', description: 'Can create, edit, and manage projects', module: 'tasks' },
 ];
 
 /** Permission module labels for the UI. */
@@ -150,6 +159,7 @@ export const PERMISSION_MODULES: Record<Permission['module'], string> = {
   settings: 'System Settings',
   announcements: 'Announcements',
   ai_assistant: 'AI Assistant',
+  tasks: 'Task Management',
 };
 
 // Default System Roles
@@ -173,6 +183,7 @@ export const DEFAULT_ROLES: Role[] = [
       'rents_view', 'rents_record', 'rents_edit', 'rents_export',
       'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
       'settings_view', 'activity_view',
+      'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_assign', 'projects_manage',
     ],
     isSystem: true,
   },
@@ -188,6 +199,7 @@ export const DEFAULT_ROLES: Role[] = [
       'rents_view', 'rents_record',
       'finances_view', 'finances_expenses', 'finances_income',
       'activity_view',
+      'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_assign',
     ],
     isSystem: true,
   },
@@ -203,6 +215,7 @@ export const DEFAULT_ROLES: Role[] = [
       'rents_view',
       'finances_view',
       'activity_view',
+      'tasks_view',
     ],
     isSystem: true,
   },
@@ -218,6 +231,7 @@ export const DEFAULT_ROLES: Role[] = [
       'rents_view', 'rents_record', 'rents_export',
       'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
       'activity_view',
+      'tasks_view',
     ],
     isSystem: true,
   },

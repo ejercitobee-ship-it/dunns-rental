@@ -24,6 +24,7 @@ interface UserRow {
   created_at: number | null;
   role: string | null;
   image: string | null;
+  company_name: string | null;
   tenancy_end_date?: string | null;
   tenancy_end_reason?: string | null;
 }
@@ -43,6 +44,7 @@ export function serializeUser(r: UserRow) {
     isActive: r.is_active !== 0,
     createdAt: r.created_at ? new Date(r.created_at * 1000).toISOString() : new Date().toISOString(),
     photoUrl: r.image ? `/api/photo/${r.image}` : null,
+    companyName: r.company_name ?? undefined,
     tenancyEndDate: r.tenancy_end_date ?? undefined,
     tenancyEndReason: r.tenancy_end_reason ?? undefined,
   };
@@ -70,7 +72,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     const { results } = await env.DB.prepare(
       `SELECT u.id, u.name, u.email, u.is_active, u.phone, u.department, u.birthdate,
-              u.created_at, u.image, r.role AS role,
+              u.created_at, u.image, u.company_name, r.role AS role,
               latest_lease.end_date AS tenancy_end_date,
               latest_lease.end_reason AS tenancy_end_reason
          FROM user u

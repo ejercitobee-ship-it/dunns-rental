@@ -4,6 +4,18 @@
 
 type Row = Record<string, unknown>;
 
+export async function nextTenantNumber(db: { prepare: (sql: string) => { first: <T>() => Promise<T | null> } }): Promise<string> {
+  const row = await db.prepare(
+    `SELECT tenant_number FROM tenants WHERE tenant_number IS NOT NULL ORDER BY tenant_number DESC LIMIT 1`
+  ).first<{ tenant_number: string }>();
+  let seq = 1;
+  if (row?.tenant_number) {
+    const m = row.tenant_number.match(/(\d+)$/);
+    if (m) seq = parseInt(m[1], 10) + 1;
+  }
+  return `MHD-${String(seq).padStart(4, '0')}`;
+}
+
 export function serializeProperty(r: Row) {
   return {
     id: r.id,
@@ -54,6 +66,7 @@ export function serializeTenant(r: Row) {
     r.emergency_contact_name || r.emergency_contact_phone || r.emergency_contact_relationship;
   return {
     id: r.id,
+    tenantNumber: r.tenant_number ?? undefined,
     firstName: r.first_name,
     lastName: r.last_name,
     email: r.email ?? undefined,
@@ -519,5 +532,98 @@ export function serializeAppliance(r: Row) {
     notes: r.notes ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+export function serializeTask(r: Row) {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description ?? undefined,
+    category: r.category,
+    status: r.status,
+    priority: r.priority,
+    waitingFor: r.waiting_for ?? undefined,
+    assignedTo: r.assigned_to ?? undefined,
+    assignedToName: r.assigned_to_name ?? undefined,
+    createdBy: r.created_by,
+    createdByName: r.created_by_name ?? undefined,
+    dueDate: r.due_date ?? undefined,
+    dueTime: r.due_time ?? undefined,
+    startDate: r.start_date ?? undefined,
+    estimatedMinutes: r.estimated_minutes ?? undefined,
+    actualMinutes: r.actual_minutes ?? undefined,
+    projectId: r.project_id ?? undefined,
+    projectName: r.project_name ?? undefined,
+    propertyId: r.property_id ?? undefined,
+    propertyName: r.property_name ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    unitNumber: r.unit_number ?? undefined,
+    tenantId: r.tenant_id ?? undefined,
+    tenantName: r.tenant_name ?? undefined,
+    vendorId: r.vendor_id ?? undefined,
+    vendorName: r.vendor_name ?? undefined,
+    leaseId: r.lease_id ?? undefined,
+    maintenanceRequestId: r.maintenance_request_id ?? undefined,
+    expenseId: r.expense_id ?? undefined,
+    inspectionId: r.inspection_id ?? undefined,
+    requiresApproval: !!r.requires_approval,
+    approvalStatus: r.approval_status ?? 'not_required',
+    approvedBy: r.approved_by ?? undefined,
+    approvedAt: r.approved_at ?? undefined,
+    isRecurring: !!r.is_recurring,
+    recurrenceRule: r.recurrence_rule ?? undefined,
+    recurrenceEndDate: r.recurrence_end_date ?? undefined,
+    parentTaskId: r.parent_task_id ?? undefined,
+    completedAt: r.completed_at ?? undefined,
+    completedBy: r.completed_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function serializeProject(r: Row) {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? undefined,
+    status: r.status,
+    priority: r.priority,
+    ownerId: r.owner_id ?? undefined,
+    ownerName: r.owner_name ?? undefined,
+    startDate: r.start_date ?? undefined,
+    dueDate: r.due_date ?? undefined,
+    propertyId: r.property_id ?? undefined,
+    propertyName: r.property_name ?? undefined,
+    createdBy: r.created_by,
+    createdByName: r.created_by_name ?? undefined,
+    taskCount: r.task_count ?? 0,
+    completedCount: r.completed_count ?? 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function serializeTaskComment(r: Row) {
+  return {
+    id: r.id,
+    taskId: r.task_id,
+    userId: r.user_id,
+    userName: r.user_name ?? undefined,
+    body: r.body,
+    createdAt: r.created_at,
+  };
+}
+
+export function serializeTaskActivity(r: Row) {
+  return {
+    id: r.id,
+    taskId: r.task_id,
+    action: r.action,
+    fromValue: r.from_value ?? undefined,
+    toValue: r.to_value ?? undefined,
+    userId: r.user_id,
+    userName: r.user_name ?? undefined,
+    createdAt: r.created_at,
   };
 }

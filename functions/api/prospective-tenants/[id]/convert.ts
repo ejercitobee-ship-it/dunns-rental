@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { getProspective } from '../../../lib/prospective';
 import { leaseEndDate } from '../../leases/index';
 import { isUnitAvailable } from '../../../lib/units';
+import { nextTenantNumber } from '../../../lib/serializers';
 
 /**
  * POST /api/prospective-tenants/:id/convert — turn an applicant into an active
@@ -39,12 +40,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const tenantId = crypto.randomUUID();
     const leaseId = crypto.randomUUID();
+    const tenantNumber = await nextTenantNumber(env.DB);
 
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO tenants (id, first_name, last_name, email, phone, notes)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).bind(tenantId, applicant.first_name, applicant.last_name, applicant.email ?? null, applicant.phone ?? null, applicant.notes ?? null),
+        `INSERT INTO tenants (id, tenant_number, first_name, last_name, email, phone, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(tenantId, tenantNumber, applicant.first_name, applicant.last_name, applicant.email ?? null, applicant.phone ?? null, applicant.notes ?? null),
       env.DB.prepare(
         `INSERT INTO leases (id, unit_id, property_id, lease_type, start_date, end_date, monthly_rent,
            security_deposit, move_in_fee_paid, status, needs_review, user_id)

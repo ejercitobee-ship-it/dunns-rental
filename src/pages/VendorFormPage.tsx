@@ -5,6 +5,7 @@ import { vendorFormApi, type VendorFormInfo } from '../lib/api';
 
 const PAYMENT_METHODS = [
   { value: 'check', label: 'Check' },
+  { value: 'money_order', label: 'Money Order' },
   { value: 'zelle', label: 'Zelle' },
   { value: 'venmo', label: 'Venmo' },
   { value: 'cash', label: 'Cash' },

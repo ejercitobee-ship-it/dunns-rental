@@ -5,7 +5,7 @@ import { type Env, type SessionUser } from './session';
 export type ActivityModule =
   | 'properties' | 'tenants' | 'leases' | 'finances'
   | 'maintenance' | 'documents' | 'calendar' | 'users'
-  | 'settings' | 'system';
+  | 'settings' | 'system' | 'tasks';
 
 // ─── Human labels for resources (used by the middleware auto-logger) ────
 const RESOURCE_LABEL: Record<string, string> = {
@@ -30,6 +30,8 @@ const RESOURCE_LABEL: Record<string, string> = {
   'utility-accounts': 'utility account',
   'prospective-tenants': 'prospective tenant',
   messages: 'message',
+  tasks: 'task',
+  projects: 'project',
 };
 
 // Map resource slug to module.
@@ -58,6 +60,8 @@ const RESOURCE_MODULE: Record<string, ActivityModule> = {
   'rent-sheet': 'finances',
   'expense-imports': 'finances',
   'handyman-messages': 'maintenance',
+  tasks: 'tasks',
+  projects: 'tasks',
 };
 
 const VERB: Record<string, string> = {
