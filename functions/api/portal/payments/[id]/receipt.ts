@@ -40,7 +40,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (err instanceof DriveNotConnected) {
       return jsonError('Receipts are temporarily unavailable. Please contact your property manager.', 503);
     }
-    console.error('[portal/receipt]', err instanceof Error ? err.message : err);
+    console.error('[portal/receipt]', err instanceof Error ? err.stack || err.message : err);
     return serverError();
   }
 };

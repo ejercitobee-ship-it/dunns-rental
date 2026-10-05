@@ -23,6 +23,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (err instanceof DriveNotConnected) {
       return jsonError('Google Drive is not connected. Connect it in Settings to create receipts.', 503);
     }
+    console.error('[admin/receipt]', err instanceof Error ? err.stack || err.message : err);
     return serverError();
   }
 };

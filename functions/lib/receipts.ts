@@ -425,6 +425,7 @@ export async function generateMoveInFeeReceipt(env: Env, leaseId: string, upload
 }
 
 export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: string): Promise<string | null> {
+  console.log('[receipt] start', paymentId);
   const p = await env.DB.prepare(
     `SELECT rp.id, rp.amount, rp.month, rp.year, rp.paid_date, rp.received_date,
             rp.payment_method, rp.status, rp.paid_by_tenant_id, rp.lease_id,
@@ -438,7 +439,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
        LEFT JOIN properties pr ON pr.id = l.property_id
       WHERE rp.id = ?`
   ).bind(paymentId).first<PaymentJoin>();
-  if (!p || p.status !== 'paid' || !p.lease_id) return null;
+  if (!p || p.status !== 'paid' || !p.lease_id) { console.log('[receipt] no payment/not paid'); return null; }
 
   const isCredit = p.type === 'credit';
 
@@ -456,9 +457,11 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
         WHERE lt.lease_id = ? ORDER BY t.last_name, t.first_name LIMIT 1`
     ).bind(p.lease_id).first<TenantRow>();
   }
-  if (!tenant) return null;
+  if (!tenant) { console.log('[receipt] no tenant found'); return null; }
+  console.log('[receipt] tenant:', tenant.id);
 
   const company = await companySettings(env);
+  console.log('[receipt] company loaded');
   const tenantName = `${tenant.first_name} ${tenant.last_name}`.trim();
   const period = periodLabel(p.month, p.year);
   // The Property line: the complete street address (falling back to the
@@ -488,6 +491,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
   if (p.notes) noteParts.push(p.notes);
   const receiptNotes = noteParts.length > 0 ? noteParts.join(': ') : undefined;
 
+  console.log('[receipt] building pdf');
   const pdfBytes = await buildReceiptPdf({
     receiptNumber: rNumber,
     datePaid,
@@ -510,16 +514,22 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     method: isCredit ? 'Credit' : prettyMethod(p.payment_method),
     notes: receiptNotes,
   });
+  console.log('[receipt] pdf built, bytes:', pdfBytes.length);
 
   const name = isCredit
     ? `Rent credit - ${period || p.id.slice(0, 6)}.pdf`
     : `Rent receipt - ${period || p.id.slice(0, 6)}.pdf`;
+  console.log('[receipt] ensuring folder');
   const folderId = await ensureTenantFolder(env, tenant.id);
+  console.log('[receipt] folder:', folderId);
+  console.log('[receipt] uploading to drive');
   const { id: driveId } = await uploadToDrive(
     env, folderId, name, 'application/pdf', new Blob([pdfBytes], { type: 'application/pdf' })
   );
+  console.log('[receipt] uploaded, driveId:', driveId);
 
   const docId = crypto.randomUUID();
+  console.log('[receipt] saving to db, docId:', docId);
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO documents (id, name, drive_file_id, content_type, size, property_id, tenant_id, uploaded_by)
@@ -527,6 +537,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     ).bind(docId, name, driveId, 'application/pdf', pdfBytes.length, p.property_id, tenant.id, uploadedBy ?? null),
     env.DB.prepare('UPDATE rent_payments SET receipt_document_id = ? WHERE id = ?').bind(docId, paymentId),
   ]);
+  console.log('[receipt] db saved');
 
   // Regenerating replaces the receipt: remove the old one so duplicates do not
   // pile up in Drive. Best-effort — the new receipt is already the linked one.
@@ -603,6 +614,7 @@ export async function generateReceipt(env: Env, paymentId: string, uploadedBy?: 
     // Push is best-effort.
   }
 
+  console.log('[receipt] done, returning docId:', docId);
   return docId;
 }
 
