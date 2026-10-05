@@ -96,9 +96,13 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     for (const key of KEYS) {
       if (body[key] === undefined) continue;
-      // Store defaults merged with the incoming values so a partial payload
-      // never drops fields.
       const merged = { ...DEFAULTS[key], ...(body[key] as Record<string, unknown>) };
+      for (const [k, v] of Object.entries(merged)) {
+        if (typeof v === 'string') {
+          // eslint-disable-next-line no-control-regex
+          (merged as Record<string, unknown>)[k] = v.replace(/[\u0000-\u001F\u007F-\u009F​-‏ - ﻿]/g, '');
+        }
+      }
       await env.DB.prepare(
         `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
