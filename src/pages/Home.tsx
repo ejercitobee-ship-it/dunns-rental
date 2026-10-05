@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
-import { Mail, ArrowRight } from 'lucide-react';
+import { Mail, Phone, ArrowRight } from 'lucide-react';
 import logo from '../assets/mh-dunn-logo.png';
 import heroPhoto from '../assets/login-family.jpg';
 import dunnFamily from '../assets/dunn-family.jpg';
 
 const EMAIL = 'info@mhdunnproperty.net';
+const PHONE = '(773) 234-6422';
+const PHONE_HREF = 'tel:+17732346422';
 
 export function Home() {
   return (
@@ -98,6 +100,9 @@ export function Home() {
             <p className="text-sm text-white/50">Quality multi family homes for rent</p>
           </div>
           <div className="flex items-center gap-6 text-sm">
+            <a href={PHONE_HREF} className="inline-flex items-center gap-1.5 hover:text-white transition-colors">
+              <Phone className="h-3.5 w-3.5" /> {PHONE}
+            </a>
             <a href={`mailto:${EMAIL}`} className="inline-flex items-center gap-1.5 hover:text-white transition-colors">
               <Mail className="h-3.5 w-3.5" /> {EMAIL}
             </a>
