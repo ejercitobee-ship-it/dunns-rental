@@ -4,7 +4,18 @@
 
 type Row = Record<string, unknown>;
 
-export async function nextTenantNumber(db: { prepare: (sql: string) => { first: <T>() => Promise<T | null> } }): Promise<string> {
+export async function nextTenantNumber(
+  db: { prepare: (sql: string) => { bind: (...args: unknown[]) => { first: <T>() => Promise<T | null> }; first: <T>() => Promise<T | null> } },
+  leaseId?: string,
+): Promise<string> {
+  if (leaseId) {
+    const coTenant = await db.prepare(
+      `SELECT t.tenant_number FROM tenants t
+         JOIN lease_tenants lt ON lt.tenant_id = t.id
+        WHERE lt.lease_id = ? AND t.tenant_number IS NOT NULL LIMIT 1`
+    ).bind(leaseId).first<{ tenant_number: string }>();
+    if (coTenant?.tenant_number) return coTenant.tenant_number;
+  }
   const row = await db.prepare(
     `SELECT tenant_number FROM tenants WHERE tenant_number IS NOT NULL ORDER BY tenant_number DESC LIMIT 1`
   ).first<{ tenant_number: string }>();
@@ -14,6 +25,23 @@ export async function nextTenantNumber(db: { prepare: (sql: string) => { first: 
     if (m) seq = parseInt(m[1], 10) + 1;
   }
   return `MHD-${String(seq).padStart(4, '0')}`;
+}
+
+export async function syncLeaseTenantsNumber(env: { DB: { prepare: (sql: string) => { bind: (...args: unknown[]) => { all: <T>() => Promise<{ results: T[] }>; run: () => Promise<unknown> }; first: <T>() => Promise<T | null> } } }, leaseId: string): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT t.id, t.tenant_number FROM tenants t
+       JOIN lease_tenants lt ON lt.tenant_id = t.id
+      WHERE lt.lease_id = ?`
+  ).bind(leaseId).all<{ id: string; tenant_number: string | null }>();
+  if (results.length < 2) return;
+  const existing = results.find(r => r.tenant_number);
+  if (!existing) return;
+  for (const r of results) {
+    if (r.tenant_number !== existing.tenant_number) {
+      await env.DB.prepare('UPDATE tenants SET tenant_number = ? WHERE id = ?')
+        .bind(existing.tenant_number, r.id).run();
+    }
+  }
 }
 
 export function serializeProperty(r: Row) {

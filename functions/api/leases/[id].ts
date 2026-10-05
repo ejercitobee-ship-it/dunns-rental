@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { withLeaseDetails, findMissingTenantIds, readLeaseStatus, isValidDateString, leaseEndDate } from './index';
+import { syncLeaseTenantsNumber } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { logLeaseChange, notifyLeaseStatusChange } from '../../lib/lease-audit';
 import { logActivityStmt } from '../../lib/activity';
@@ -216,6 +217,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     );
 
     await env.DB.batch(statements);
+    if (tenantIds) await syncLeaseTenantsNumber(env, id);
 
     const statusChanged = current.status !== status;
     const rentChanged = Number(current.monthly_rent) !== Number(body.monthlyRent);

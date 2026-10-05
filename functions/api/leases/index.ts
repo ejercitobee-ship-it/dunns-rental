@@ -1,6 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
-import { serializeLease } from '../../lib/serializers';
+import { serializeLease, syncLeaseTenantsNumber } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { logActivityStmt } from '../../lib/activity';
 
@@ -253,6 +253,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     await env.DB.batch(statements);
+    await syncLeaseTenantsNumber(env, id);
 
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     const [data] = await withLeaseDetails(env, [row as Record<string, unknown>]);
