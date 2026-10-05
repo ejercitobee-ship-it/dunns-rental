@@ -279,6 +279,7 @@ export function Messages() {
                   const q = pickerSearch.toLowerCase();
                   const filtered = allTenants.filter(t =>
                     `${t.firstName} ${t.lastName}`.toLowerCase().includes(q)
+                    || (t.tenantNumber || '').toLowerCase().includes(q)
                     || (t.email || '').toLowerCase().includes(q)
                   );
                   return filtered.length === 0 ? (

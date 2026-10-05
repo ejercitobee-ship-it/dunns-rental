@@ -401,6 +401,7 @@ export function Rents() {
     return leaseMonthRows.filter(row => {
       const matchesOccupant = row.occupants.some(t =>
         `${t.firstName} ${t.lastName}`.toLowerCase().includes(q) ||
+        (t.tenantNumber || '').toLowerCase().includes(q) ||
         (t.email || '').toLowerCase().includes(q) ||
         (t.phone || '').toLowerCase().includes(q) ||
         (t.notes || '').toLowerCase().includes(q) ||

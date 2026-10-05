@@ -248,6 +248,7 @@ export function Maintenance() {
         (m.vendor || '').toLowerCase().includes(q) ||
         (mt && (
           `${mt.firstName} ${mt.lastName}`.toLowerCase().includes(q) ||
+          (mt.tenantNumber || '').toLowerCase().includes(q) ||
           (mt.email || '').toLowerCase().includes(q) ||
           (mt.phone || '').toLowerCase().includes(q) ||
           (mt.notes || '').toLowerCase().includes(q) ||

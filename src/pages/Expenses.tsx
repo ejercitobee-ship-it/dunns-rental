@@ -432,6 +432,7 @@ export function Expenses() {
         property?.name.toLowerCase().includes(sq) ||
         unit?.unitNumber.toLowerCase().includes(sq) ||
         (incomeTenant && (
+          (incomeTenant.tenantNumber || '').toLowerCase().includes(sq) ||
           (incomeTenant.notes || '').toLowerCase().includes(sq) ||
           (incomeTenant.emergencyContact?.name || '').toLowerCase().includes(sq) ||
           (incomeTenant.emergencyContact?.phone || '').toLowerCase().includes(sq) ||
