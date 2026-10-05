@@ -99,8 +99,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       const merged = { ...DEFAULTS[key], ...(body[key] as Record<string, unknown>) };
       for (const [k, v] of Object.entries(merged)) {
         if (typeof v === 'string') {
-          // eslint-disable-next-line no-control-regex
-          (merged as Record<string, unknown>)[k] = v.replace(/[\u0000-\u001F\u007F-\u009F​-‏ - ﻿]/g, '');
+          (merged as Record<string, unknown>)[k] = v.replace(new RegExp('[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202F\uFEFF]', 'g'), '');
         }
       }
       await env.DB.prepare(

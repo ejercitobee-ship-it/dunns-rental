@@ -156,9 +156,11 @@ export interface ReceiptData {
 }
 
 /** Strip characters that WinAnsi (Helvetica) cannot encode. */
+const UNSAFE_RE = new RegExp(
+  '[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202F\uFEFF]', 'g',
+);
 function safeText(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/[\u0000-\u001F\u007F-\u009F​-‏ - ﻿]/g, '');
+  return s.replace(UNSAFE_RE, '');
 }
 
 /**
