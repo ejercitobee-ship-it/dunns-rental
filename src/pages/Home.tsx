@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, ArrowRight } from 'lucide-react';
 import logo from '../assets/mh-dunn-logo.png';
 import heroPhoto from '../assets/login-family.jpg';
-import dunnFamily from '../assets/dunn-family.jpg';
+import dunnFamily from '../assets/dunn-family.webp';
 
 const EMAIL = 'info@mhdunnproperty.net';
 const PHONE = '(773) 234-6422';
@@ -57,35 +57,38 @@ export function Home() {
 
       {/* About */}
       <section className="flex-1 bg-canvas">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24">
           <p className="text-sm font-medium tracking-wide uppercase text-primary">About MH Dunn</p>
           <h2 className="font-display text-3xl font-medium text-ink mt-3">Meet Marlene and Terry</h2>
 
-          <div className="mt-6 text-lg text-muted leading-relaxed [&>p]:mb-4 [&>p:last-child]:mb-0">
-            <figure className="mb-5 sm:float-left sm:mr-7 sm:mb-3 sm:w-[44%] sm:max-w-xs">
+          <div className="mt-8 flex flex-col lg:flex-row gap-10 lg:gap-14">
+            {/* Photo — left column */}
+            <div className="lg:w-[45%] flex-shrink-0">
               <img
                 src={dunnFamily}
                 alt="Marlene and Terry Dunn"
                 className="w-full rounded-2xl border border-line object-cover shadow-[0_2px_16px_rgba(27,26,23,0.08)]"
               />
-              <figcaption className="mt-3 text-center text-sm text-faint">Marlene and Terry Dunn</figcaption>
-            </figure>
-            <p>
-              MH Dunn Property is a family-owned business built by Marlene and Terry Dunn. The name comes from Marlene's first and middle initials, combined with the Dunn family name.
-            </p>
-            <p>
-              For more than 20 years, they've owned and cared for these homes together. They believe that being a landlord is about more than maintaining properties. It's about creating places where people feel comfortable calling home.
-            </p>
-            <p>
-              Before dedicating his time to the business, Terry served with the Chicago Police Department for many years. He brings that same dependable, hands-on approach to every property. When something needs to be fixed or taken care of, he's often the one who shows up.
-            </p>
-            <p>
-              Marlene focuses on building relationships with tenants. She knows the properties, the people who live in them, and believes everyone deserves to be treated with respect and care, not as just another name on a lease.
-            </p>
-            <p>
-              When you rent from MH Dunn Property, you're working directly with the people who own and care for your home.
-            </p>
-            <div className="clear-both" />
+            </div>
+
+            {/* Story — right column */}
+            <div className="text-lg text-muted leading-relaxed [&>p]:mb-4 [&>p:last-child]:mb-0">
+              <p>
+                MH Dunn Property is a family-owned business built by Marlene and Terry Dunn. The name comes from Marlene's first and middle initials, combined with the Dunn family name.
+              </p>
+              <p>
+                For more than 20 years, they've owned and cared for these homes together. They believe that being a landlord is about more than maintaining properties. It's about creating places where people feel comfortable calling home.
+              </p>
+              <p>
+                Before dedicating his time to the business, Terry served with the Chicago Police Department for many years. He brings that same dependable, hands-on approach to every property. When something needs to be fixed or taken care of, he's often the one who shows up.
+              </p>
+              <p>
+                Marlene focuses on building relationships with tenants. She knows the properties, the people who live in them, and believes everyone deserves to be treated with respect and care, not as just another name on a lease.
+              </p>
+              <p>
+                When you rent from MH Dunn Property, you're working directly with the people who own and care for your home.
+              </p>
+            </div>
           </div>
         </div>
       </section>
