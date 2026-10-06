@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, jsonOk, serverError } from '../../lib/session';
 import { sendEmail, passwordResetEmail } from '../../lib/email';
 import { SITE_URL } from '../../lib/site';
+import { throttleLockedUntil, recordLoginFailure } from '../../lib/throttle';
 
 const GENERIC_MESSAGE =
   'If an account exists with this email, you will receive password reset instructions.';
@@ -13,6 +14,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
   try {
+    const ip = request.headers.get('CF-Connecting-IP');
+    const locked = await throttleLockedUntil(env, ip);
+    if (locked) {
+      return jsonOk({ success: true, message: GENERIC_MESSAGE, emailConfigured: !!env.RESEND_API_KEY });
+    }
+
     const body = (await request.json()) as { email?: string };
     const email = body.email?.trim().toLowerCase();
 
@@ -56,6 +63,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     }
 
+    await recordLoginFailure(env, ip);
     return jsonOk({ success: true, message: GENERIC_MESSAGE, emailConfigured });
   } catch {
     return serverError();

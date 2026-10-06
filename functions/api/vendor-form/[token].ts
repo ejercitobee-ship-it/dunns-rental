@@ -48,13 +48,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Fetch properties and units so the vendor can pick/confirm.
-    const { results: props } = await env.DB.prepare(
-      'SELECT id, name, address FROM properties ORDER BY name'
-    ).all();
-    const { results: unitRows } = await env.DB.prepare(
-      'SELECT id, property_id, unit_number FROM units ORDER BY unit_number'
-    ).all();
+    // Only return the property/unit tied to this maintenance request, not the
+    // full inventory. If no property is linked, fall back to an empty list so the
+    // vendor cannot enumerate all properties.
+    const scopedPropertyId = sub.property_id as string | null;
+    const props = scopedPropertyId
+      ? (await env.DB.prepare('SELECT id, name, address FROM properties WHERE id = ?').bind(scopedPropertyId).all()).results || []
+      : [];
+    const unitRows = scopedPropertyId
+      ? (await env.DB.prepare('SELECT id, property_id, unit_number FROM units WHERE property_id = ? ORDER BY unit_number').bind(scopedPropertyId).all()).results || []
+      : [];
 
     return jsonOk({
       success: true,

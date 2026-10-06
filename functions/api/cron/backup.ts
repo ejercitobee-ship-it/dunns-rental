@@ -104,13 +104,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const backup: Record<string, unknown[]> = {};
     let totalRows = 0;
 
+    const SENSITIVE_COLUMNS: Record<string, string[]> = {
+      account: ['password'],
+      session: ['token'],
+      login_throttle: ['ip'],
+    };
+
     for (const table of TABLES) {
       try {
         const result = await env.DB.prepare(`SELECT * FROM ${table}`).all();
-        backup[table] = result.results || [];
+        const rows = result.results || [];
+        const strip = SENSITIVE_COLUMNS[table];
+        if (strip) {
+          backup[table] = rows.map((row: Record<string, unknown>) => {
+            const clean = { ...row };
+            for (const col of strip) delete clean[col];
+            return clean;
+          });
+        } else {
+          backup[table] = rows;
+        }
         totalRows += backup[table].length;
       } catch {
-        // Table may not exist yet (migration not applied). Skip it.
         backup[table] = [];
       }
     }
@@ -136,6 +151,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const { id: driveFileId } = await uploadToDrive(env, backupFolderId, fileName, 'application/json', blob);
 
     const sizeMB = (payload.length / (1024 * 1024)).toFixed(2);
+
+    // Housekeeping: purge expired sessions and stale throttle rows.
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM session WHERE expires_at < ?').bind(Math.floor(Date.now() / 1000) - 86400),
+      env.DB.prepare('DELETE FROM login_throttle WHERE first_fail_at < ?').bind(Math.floor(Date.now() / 1000) - 86400),
+    ]);
 
     return jsonOk({
       success: true,
