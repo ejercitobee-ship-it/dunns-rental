@@ -28,6 +28,7 @@ import {
   Megaphone,
   Bot,
   ListChecks,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -39,6 +40,7 @@ import { ProfileModal } from '../ProfileModal';
 import { BackToTop } from '../BackToTop';
 import { CommandPalette } from '../CommandPalette';
 import { PageTransition } from '../PageTransition';
+import { NotificationBell } from '../NotificationBell';
 
 interface NavItem {
   name: string;
@@ -75,6 +77,35 @@ function saveOpenGroups(state: Record<string, boolean>) {
 
 function loadCollapsed(): boolean {
   try { return localStorage.getItem('sidebar-collapsed') === 'true'; } catch { return false; }
+}
+
+function MobileBell() {
+  const navigate = useNavigate();
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const load = () => {
+      import('../../lib/api').then(({ mgmtNotificationsApi }) =>
+        mgmtNotificationsApi.unreadCount().then(r => setCount(r.count)).catch(() => {})
+      );
+    };
+    load();
+    const id = window.setInterval(() => { if (document.visibilityState === 'visible') load(); }, 30000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <button
+      onClick={() => navigate('/notifications')}
+      className="relative p-2 hover:bg-black/[0.05] rounded-lg transition-colors"
+      aria-label={count > 0 ? `${count} unread notifications` : 'Notifications'}
+    >
+      <Bell className="h-5 w-5 text-muted" />
+      {count > 0 && (
+        <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </button>
+  );
 }
 
 interface LayoutProps {
@@ -443,6 +474,11 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
 
+        {/* Notifications — above user footer */}
+        <div className={cn('flex-shrink-0 border-t border-sidebar-line', showLabels ? 'px-3 pt-2' : 'px-1.5 pt-2')}>
+          <NotificationBell collapsed={!showLabels} />
+        </div>
+
         {/* User footer — flex-shrink-0, always visible */}
         <div className={cn('flex-shrink-0 border-t border-sidebar-line', showLabels ? 'px-3 py-2' : 'px-1.5 py-2')}>
           {showLabels ? (
@@ -506,12 +542,15 @@ export function Layout({ children }: LayoutProps) {
           <Link to="/" className="flex items-center">
             <img src={logo} alt="MH Dunn Property" className="h-10 w-auto" />
           </Link>
-          <button
-            className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5 text-muted" />
-          </button>
+          <div className="flex items-center gap-1">
+            <MobileBell />
+            <button
+              className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5 text-muted" />
+            </button>
+          </div>
         </header>
 
         {/* Page Content */}

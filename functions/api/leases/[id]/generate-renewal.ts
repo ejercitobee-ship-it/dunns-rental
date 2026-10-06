@@ -4,6 +4,7 @@ import { generateAndSaveRenewal, type RenewalTerms } from '../../../lib/lease-pd
 import { DriveNotConnected } from '../../../lib/google';
 import { sendEmail } from '../../../lib/email';
 import { logLeaseChange } from '../../../lib/lease-audit';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -132,6 +133,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       );
     }
 
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'lease',
+          category: 'lease_renewal',
+          title: 'Lease renewal generated',
+          message: `${tenantNames} renewal: $${body.newMonthlyRent}/mo, ${body.newStartDate} to ${body.newEndDate}`,
+          entityType: 'leases',
+          entityId: newLeaseId,
+          route: '/leases',
+        })))
+      ).catch(() => {})
+    );
     return jsonOk({
       success: true,
       data: {

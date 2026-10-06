@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializeMaintenance } from '../../../lib/serializers';
 import { maintenanceExpenseId, logStatusChange } from '../../../lib/maintenance';
 import { generateVendorPaymentConfirmation } from '../../../lib/receipts';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /**
  * POST /api/maintenance/:id/pay — the admin records paying the handyman. Sets
@@ -71,6 +72,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ]);
 
     context.waitUntil(generateVendorPaymentConfirmation(env, id, auth.id).catch(() => {}));
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'maintenance',
+          category: 'maintenance_paid',
+          title: `Maintenance paid: ${req.title}`,
+          message: `$${cost.toFixed(2)} paid to ${vendor || 'vendor'}`,
+          entityType: 'maintenance',
+          entityId: id,
+          route: '/maintenance',
+        })))
+      ).catch(() => {})
+    );
 
     const row = await env.DB.prepare('SELECT * FROM maintenance_requests WHERE id = ?').bind(id).first();
     return jsonOk({ success: true, data: serializeMaintenance(row as Record<string, unknown>) });

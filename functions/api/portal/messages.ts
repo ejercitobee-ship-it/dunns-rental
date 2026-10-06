@@ -3,6 +3,7 @@ import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../lib
 import { tenantIdForUser } from '../../lib/portal';
 import { serializeMessage, notifyOfficeOfMessage, readMessageInput, MAX_ATTACHMENT_BYTES } from '../../lib/messages';
 import { ensureTenantFolder, uploadToDrive, DriveNotConnected } from '../../lib/google';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 const MAX_BODY = 4000;
 
@@ -81,8 +82,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
        VALUES (?, ?, 'tenant', ?, ?, ?, ?, ?, 1, 0)`
     ).bind(id, tenantId, auth.id, body, driveId, file?.name ?? null, file?.type ?? null).run();
 
+    const tenant = await env.DB.prepare('SELECT first_name, last_name FROM tenants WHERE id = ?').bind(tenantId).first<{ first_name: string; last_name: string }>();
+    const tenantName = tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : 'A tenant';
+    const preview = (body || '(sent an attachment)').substring(0, 80);
+
     context.waitUntil(
-      notifyOfficeOfMessage(env, tenantId, body || '(sent an attachment)').catch((e) => console.error('notifyOfficeOfMessage failed', e))
+      Promise.all([
+        notifyOfficeOfMessage(env, tenantId, body || '(sent an attachment)').catch((e) => console.error('notifyOfficeOfMessage failed', e)),
+        getManagementUserIds(env).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'tenant',
+            category: 'tenant_message',
+            title: `New message from ${tenantName}`,
+            message: preview,
+            entityType: 'messages',
+            entityId: id,
+            route: '/messages',
+          })))
+        ).catch(() => {}),
+      ])
     );
 
     const row = await env.DB.prepare(

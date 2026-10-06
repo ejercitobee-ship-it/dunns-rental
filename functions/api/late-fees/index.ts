@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeLateFee } from '../../lib/serializers';
 import { logActivityStmt } from '../../lib/activity';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -102,6 +103,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         newValues: { amount, month, year, leaseId: body.leaseId },
       }),
     ]);
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'payment',
+          category: 'late_fee_assessed',
+          title: `Late fee assessed: $${amount}`,
+          message: `${MONTHS[month - 1]} ${year}`,
+          entityType: 'late_fee',
+          entityId: id,
+          route: '/rent',
+        })))
+      ).catch(() => {})
+    );
 
     const row = await env.DB.prepare('SELECT * FROM late_fees WHERE id = ?').bind(id).first();
     return jsonOk({ success: true, data: serializeLateFee(row as Record<string, unknown>) }, 201);

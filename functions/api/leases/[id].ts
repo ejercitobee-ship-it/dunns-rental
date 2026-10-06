@@ -5,6 +5,7 @@ import { syncLeaseTenantsNumber } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { logLeaseChange, notifyLeaseStatusChange } from '../../lib/lease-audit';
 import { logActivityStmt } from '../../lib/activity';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -262,6 +263,21 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       context.waitUntil(
         notifyLeaseStatusChange(env, id, status, statusChangedOn, (body.endReason as string) || undefined, auth.id)
           .catch(e => console.error('lease notification failed', e))
+      );
+      context.waitUntil(
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'lease',
+            category: 'lease_status_changed',
+            priority: status === 'ended' ? 'important' as const : 'normal' as const,
+            title: `Lease ${status === 'paused' ? 'paused' : status === 'ended' ? 'terminated' : 'resumed'}`,
+            message: status === 'ended' ? ((body.endReason as string) || undefined) : undefined,
+            entityType: 'lease',
+            entityId: id,
+            route: '/leases',
+          })))
+        ).catch(() => {})
       );
     }
 

@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeTask } from '../../lib/serializers';
 import { logActivityStmt } from '../../lib/activity';
+import { createNotification } from '../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -239,6 +240,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       LEFT JOIN handymen h ON h.id = t.vendor_id
       WHERE t.id = ?`
     ).bind(id).first();
+
+    if (body.assignedTo && body.assignedTo !== auth.id) {
+      context.waitUntil(
+        createNotification(env, {
+          userId: body.assignedTo as string,
+          type: 'task',
+          category: 'task_assigned',
+          title: 'Task assigned to you',
+          message: body.title as string,
+          entityType: 'tasks',
+          entityId: id,
+          route: '/tasks',
+        }).catch(() => {})
+      );
+    }
 
     return jsonOk({ success: true, data: serializeTask(row as Record<string, unknown>) }, 201);
   } catch {

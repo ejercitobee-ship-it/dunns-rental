@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { logLeaseChange, notifyLeaseStatusChange } from '../../../lib/lease-audit';
 import { syncRentSheet } from '../../../lib/sheets';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -47,6 +48,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }).catch(() => {})
       );
 
+      context.waitUntil(
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'lease',
+            category: 'lease_renewal_rejected',
+            title: 'Lease renewal rejected',
+            entityType: 'lease',
+            entityId: previousLeaseId,
+            route: '/leases',
+          })))
+        ).catch(() => {})
+      );
+
       return jsonOk({ success: true, status: 'rejected' });
     }
 
@@ -75,6 +90,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     context.waitUntil(
       notifyLeaseStatusChange(env, newLeaseId, 'renewed', now, undefined, auth.id)
         .catch(e => console.error('renewal approval notification failed', e))
+    );
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'lease',
+          category: 'lease_renewal_approved',
+          title: 'Lease renewal approved',
+          message: `New rent: $${Number(newLease.monthly_rent).toFixed(2)}`,
+          entityType: 'lease',
+          entityId: newLeaseId,
+          route: '/leases',
+        })))
+      ).catch(() => {})
     );
 
     syncRentSheet(context);

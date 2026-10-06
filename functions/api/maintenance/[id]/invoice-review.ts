@@ -5,6 +5,7 @@ import { logStatusChange } from '../../../lib/maintenance';
 import { notifyHandyman } from '../../../lib/maintenance-notify';
 import { sendPushToUser } from '../../../lib/push';
 import { SITE_URL } from '../../../lib/site';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /**
  * POST /api/maintenance/:id/invoice-review — admin reviews a submitted invoice.
@@ -130,6 +131,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         );
       }
     }
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'approval',
+          category: action === 'approve' ? 'invoice_approved' : 'invoice_rejected',
+          title: action === 'approve'
+            ? `Invoice approved: ${req.title}`
+            : `Invoice ${action}: ${req.title}`,
+          entityType: 'maintenance',
+          entityId: id,
+          route: '/maintenance',
+        })))
+      ).catch(() => {})
+    );
 
     const row = await env.DB.prepare('SELECT * FROM maintenance_requests WHERE id = ?').bind(id).first();
     return jsonOk({ success: true, data: serializeMaintenance(row as Record<string, unknown>) });

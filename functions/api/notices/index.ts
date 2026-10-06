@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeNotice } from '../../lib/serializers';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 /** List notices, optionally filtered by ?tenantId=, ?leaseId=, ?type=, ?status= */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -87,6 +88,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
        WHERE n.id = ?`
     ).bind(id).first();
     if (!row) return serverError();
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'tenant',
+          category: 'notice_created',
+          title: `Notice created: ${body.title}`,
+          message: `Type: ${body.type}`,
+          entityType: 'notice',
+          entityId: id,
+          route: '/notices',
+        })))
+      ).catch(() => {})
+    );
 
     return jsonOk({
       success: true,

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeInspection, serializeInspectionItem } from '../../lib/serializers';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 /** Get a single inspection with all its items. */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -94,6 +95,22 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       'SELECT * FROM inspection_items WHERE inspection_id = ? ORDER BY room ASC, item ASC'
     ).bind(id).all();
 
+    if (body.status !== undefined) {
+      context.waitUntil(
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'inspection',
+            category: 'inspection_updated',
+            title: `Inspection ${body.status}`,
+            message: `${row.property_name || 'Property'} ${body.type || row.type || ''} inspection`,
+            entityType: 'inspections',
+            entityId: id,
+            route: '/inspections',
+          })))
+        ).catch(() => {})
+      );
+    }
     return jsonOk({
       success: true,
       data: {

@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeInspection } from '../../lib/serializers';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 /** List inspections, optionally filtered by ?unitId=, ?leaseId=, ?tenantId=, ?type= */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -99,6 +100,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).bind(id).first();
     if (!row) return serverError();
 
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'inspection',
+          category: 'inspection_scheduled',
+          title: 'Inspection scheduled',
+          message: `${body.type} inspection on ${body.inspectionDate}`,
+          entityType: 'inspections',
+          entityId: id,
+          route: '/inspections',
+        })))
+      ).catch(() => {})
+    );
     return jsonOk({
       success: true,
       data: {

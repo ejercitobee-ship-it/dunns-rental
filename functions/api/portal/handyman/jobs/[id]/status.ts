@@ -6,6 +6,7 @@ import { logStatusChange } from '../../../../../lib/maintenance';
 import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../../../lib/push';
 import { generateAndSaveWorkReport } from '../../../../../lib/work-report';
+import { getManagementUserIds, notifyMultiple } from '../../../../../lib/notify';
 
 // Which prior statuses each move is allowed from. Start work from an assigned or
 // scheduled job; complete only from in progress. Anything else is a 409.
@@ -58,36 +59,53 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const job = serializeJob(row);
 
     context.waitUntil(
-      (async () => {
-        const tenantId = row.tenant_id as string | null;
-        if (status === 'in_progress') {
-          await notifyTenant(env, row.tenant_email as string | null, 'Your maintenance is under way', [
-            ['Issue', job.title],
-            ['Status', 'The handyman has started the work.'],
-          ]);
-          await sendPushToTenant(env, tenantId, {
-            title: 'Maintenance under way',
-            body: `${job.title}: the handyman has started the work.`,
-            url: '/portal/maintenance',
-          });
-        } else {
-          const hName = await handymanName(env, handyman.id);
-          await notifyTenant(env, row.tenant_email as string | null, 'Your maintenance is complete', [
-            ['Issue', job.title],
-            ['Status', 'The work is finished. Thank you.'],
-          ]);
-          await sendPushToTenant(env, tenantId, {
-            title: 'Maintenance complete',
-            body: `${job.title}: the work is finished.`,
-            url: '/portal/maintenance',
-          });
-          await notifyOffice(env, `Job completed, ready to pay: ${job.title}`, [
-            ['Handyman', hName],
-            ['Location', job.locationLabel || 'Not set'],
-          ]);
-          await generateAndSaveWorkReport(env, row, hName).catch(e => console.error('work report failed', e));
-        }
-      })().catch((e) => console.error('status notify failed', e))
+      Promise.all([
+        (async () => {
+          const tenantId = row.tenant_id as string | null;
+          if (status === 'in_progress') {
+            await notifyTenant(env, row.tenant_email as string | null, 'Your maintenance is under way', [
+              ['Issue', job.title],
+              ['Status', 'The handyman has started the work.'],
+            ]);
+            await sendPushToTenant(env, tenantId, {
+              title: 'Maintenance under way',
+              body: `${job.title}: the handyman has started the work.`,
+              url: '/portal/maintenance',
+            });
+          } else {
+            const hName = await handymanName(env, handyman.id);
+            await notifyTenant(env, row.tenant_email as string | null, 'Your maintenance is complete', [
+              ['Issue', job.title],
+              ['Status', 'The work is finished. Thank you.'],
+            ]);
+            await sendPushToTenant(env, tenantId, {
+              title: 'Maintenance complete',
+              body: `${job.title}: the work is finished.`,
+              url: '/portal/maintenance',
+            });
+            await notifyOffice(env, `Job completed, ready to pay: ${job.title}`, [
+              ['Handyman', hName],
+              ['Location', job.locationLabel || 'Not set'],
+            ]);
+            await generateAndSaveWorkReport(env, row, hName).catch(e => console.error('work report failed', e));
+          }
+        })().catch((e) => console.error('status notify failed', e)),
+        status === 'completed'
+          ? getManagementUserIds(env).then(userIds =>
+              notifyMultiple(env, userIds.map(uid => ({
+                userId: uid,
+                type: 'maintenance',
+                category: 'maintenance_completed',
+                priority: 'important' as const,
+                title: 'Handyman completed a job',
+                message: `${job.title}: ready for review and payment`,
+                entityType: 'maintenance_requests',
+                entityId: jobId,
+                route: '/maintenance',
+              })))
+            ).catch(() => {})
+          : Promise.resolve(),
+      ])
     );
 
     return jsonOk({ success: true, data: job });

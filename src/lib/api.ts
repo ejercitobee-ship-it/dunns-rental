@@ -1754,3 +1754,42 @@ export const projectsApi = {
   delete: (id: string): Promise<void> =>
     apiRequest(`/projects/${id}`, { method: 'DELETE' }),
 };
+
+export interface MgmtNotification {
+  id: string;
+  user_id: string;
+  type: string;
+  category: string;
+  priority: string;
+  title: string;
+  message: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  route: string | null;
+  is_read: number;
+  read_at: number | null;
+  created_at: number;
+}
+
+export const mgmtNotificationsApi = {
+  list: (filter = 'all', page = 1, limit = 20): Promise<{ notifications: MgmtNotification[]; total: number; page: number; limit: number }> =>
+    apiRequest(`/mgmt-notifications?filter=${filter}&page=${page}&limit=${limit}`),
+
+  unreadCount: (): Promise<{ count: number }> =>
+    apiRequest('/mgmt-notifications/unread-count'),
+
+  markRead: (id: string, isRead = true): Promise<void> =>
+    apiRequest(`/mgmt-notifications/${id}/read`, { method: 'PUT', body: JSON.stringify({ is_read: isRead }) }),
+
+  markAllRead: (): Promise<void> =>
+    apiRequest('/mgmt-notifications', { method: 'PUT', body: JSON.stringify({ action: 'mark_all_read' }) }),
+
+  dismiss: (id: string): Promise<void> =>
+    apiRequest(`/mgmt-notifications/${id}`, { method: 'DELETE' }),
+
+  getPreferences: (): Promise<{ preferences: Record<string, boolean>; categories: string[] }> =>
+    apiRequest('/mgmt-notifications/preferences'),
+
+  updatePreferences: (preferences: Record<string, boolean>): Promise<void> =>
+    apiRequest('/mgmt-notifications/preferences', { method: 'PUT', body: JSON.stringify({ preferences }) }),
+};

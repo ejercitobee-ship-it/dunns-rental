@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializeTenant, nextTenantNumber } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { logActivityStmt } from '../../lib/activity';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 interface EmergencyContact {
   name?: string;
@@ -84,6 +85,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         newValues: { firstName: body.firstName, lastName: body.lastName, email: body.email, phone: body.phone },
       }),
     ]);
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'tenant',
+          category: 'tenant_created',
+          title: `New tenant: ${body.firstName} ${body.lastName}`,
+          entityType: 'tenant',
+          entityId: id,
+          route: '/tenants',
+        })))
+      ).catch(() => {})
+    );
 
     const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
     syncRentSheet(context);

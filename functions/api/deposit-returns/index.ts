@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeDepositReturn } from '../../lib/serializers';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 /** List deposit returns, optionally filtered by ?leaseId= or ?status= */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -88,6 +89,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'SELECT dr.*, t.first_name || \' \' || t.last_name AS tenant_name, p.name AS property_name, u.unit_number FROM deposit_returns dr LEFT JOIN tenants t ON dr.tenant_id = t.id LEFT JOIN properties p ON dr.property_id = p.id LEFT JOIN units u ON dr.unit_id = u.id WHERE dr.id = ?'
     ).bind(id).first();
     if (!row) return serverError();
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'payment',
+          category: 'deposit_return_created',
+          priority: 'important' as const,
+          title: 'Deposit return initiated',
+          message: `$${depositAmount.toFixed(2)} deposit return started`,
+          entityType: 'deposit_return',
+          entityId: id,
+          route: '/leases',
+        })))
+      ).catch(() => {})
+    );
 
     return jsonOk({
       success: true,

@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeExpense } from '../../lib/serializers';
 import { logActivityStmt } from '../../lib/activity';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -71,6 +72,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ]);
 
     const row = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+    if (amount >= 500) {
+      context.waitUntil(
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'expense',
+            category: 'expense_created',
+            priority: amount >= 2500 ? 'important' as const : 'normal' as const,
+            title: 'Expense recorded',
+            message: `$${amount} ${body.category}: ${body.description}`,
+            entityType: 'expenses',
+            entityId: id,
+            route: '/finances',
+          })))
+        ).catch(() => {})
+      );
+    }
     return jsonOk({ success: true, data: serializeExpense(row as Record<string, unknown>) }, 201);
   } catch {
     return serverError();

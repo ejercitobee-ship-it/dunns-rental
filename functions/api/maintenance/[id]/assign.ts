@@ -7,6 +7,7 @@ import { availabilityText, notifyTenant } from '../../../lib/maintenance-notify'
 import { sendEmail } from '../../../lib/email';
 import { companySettings } from '../../../lib/receipts';
 import { sendPushToTenant } from '../../../lib/push';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /**
  * POST /api/maintenance/:id/assign — the admin assigns a job to a handyman (or
@@ -64,32 +65,46 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const handymanEmail = handyman.email;
       const hName = handyman.name;
       context.waitUntil(
-        (async () => {
-          if (handymanEmail) {
-            const rows: [string, string][] = [
+        Promise.all([
+          (async () => {
+            if (handymanEmail) {
+              const rows: [string, string][] = [
+                ['Issue', notice.title],
+                ['Category', notice.category || 'General'],
+                ['Location', notice.locationLabel || 'Not set'],
+                ['Availability', availabilityText(notice.availability)],
+              ];
+              await sendEmail(env, {
+                to: handymanEmail,
+                subject: `You have been assigned a job: ${notice.title}`,
+                html: `<div style="font-family:sans-serif"><b>${c.companyName}</b><p>You have been assigned a maintenance job. Open your portal to confirm a time.</p></div>`,
+                text: `${c.companyName}\nYou have been assigned: ${notice.title}\n${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}`,
+              });
+            }
+            await notifyTenant(env, tenantEmail(row), 'Your maintenance request is being handled', [
               ['Issue', notice.title],
-              ['Category', notice.category || 'General'],
-              ['Location', notice.locationLabel || 'Not set'],
-              ['Availability', availabilityText(notice.availability)],
-            ];
-            await sendEmail(env, {
-              to: handymanEmail,
-              subject: `You have been assigned a job: ${notice.title}`,
-              html: `<div style="font-family:sans-serif"><b>${c.companyName}</b><p>You have been assigned a maintenance job. Open your portal to confirm a time.</p></div>`,
-              text: `${c.companyName}\nYou have been assigned: ${notice.title}\n${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}`,
+              ['Handyman', hName],
+              ['Next', 'They will confirm a time from your availability.'],
+            ]);
+            await sendPushToTenant(env, (row.tenant_id as string) || null, {
+              title: 'Your maintenance request is being handled',
+              body: `${notice.title}: ${hName} will confirm a time.`,
+              url: '/portal/maintenance',
             });
-          }
-          await notifyTenant(env, tenantEmail(row), 'Your maintenance request is being handled', [
-            ['Issue', notice.title],
-            ['Handyman', hName],
-            ['Next', 'They will confirm a time from your availability.'],
-          ]);
-          await sendPushToTenant(env, (row.tenant_id as string) || null, {
-            title: 'Your maintenance request is being handled',
-            body: `${notice.title}: ${hName} will confirm a time.`,
-            url: '/portal/maintenance',
-          });
-        })().catch((e) => console.error('assign notify failed', e))
+          })().catch((e) => console.error('assign notify failed', e)),
+          getManagementUserIds(env, auth.id).then(userIds =>
+            notifyMultiple(env, userIds.map(uid => ({
+              userId: uid,
+              type: 'maintenance',
+              category: 'vendor_assigned',
+              title: `Handyman assigned: ${hName}`,
+              message: notice.title,
+              entityType: 'maintenance_requests',
+              entityId: id,
+              route: '/maintenance',
+            })))
+          ).catch(() => {}),
+        ])
       );
     }
 

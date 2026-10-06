@@ -4,6 +4,7 @@ import { getProspective } from '../../../lib/prospective';
 import { leaseEndDate } from '../../leases/index';
 import { isUnitAvailable } from '../../../lib/units';
 import { nextTenantNumber } from '../../../lib/serializers';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /**
  * POST /api/prospective-tenants/:id/convert — turn an applicant into an active
@@ -69,6 +70,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         `UPDATE prospective_tenants SET status = 'converted', converted_tenant_id = ?, updated_at = unixepoch() WHERE id = ?`
       ).bind(tenantId, id),
     ]);
+
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'tenant',
+          category: 'tenant_converted',
+          title: `Applicant converted: ${applicant.first_name} ${applicant.last_name}`,
+          entityType: 'tenant',
+          entityId: tenantId,
+          route: '/tenants',
+        })))
+      ).catch(() => {})
+    );
 
     return jsonOk({ success: true, data: { tenantId } }, 201);
   } catch {

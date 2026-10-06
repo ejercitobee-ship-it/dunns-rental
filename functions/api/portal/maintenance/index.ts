@@ -4,6 +4,7 @@ import { tenantIdForUser } from '../../../lib/portal';
 import { serializeMaintenance } from '../../../lib/serializers';
 import { MAINTENANCE_TRADES } from '../../../lib/maintenance';
 import { notifyNewRequest, type AvailabilityWindow } from '../../../lib/maintenance-notify';
+import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /** The tenant's current lease with its unit and property, for a new request. */
 async function currentPlacement(env: Env, tenantId: string) {
@@ -135,15 +136,30 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const tenantName = tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : undefined;
 
     context.waitUntil(
-      notifyNewRequest(env, {
-        id,
-        title,
-        category,
-        description,
-        tenantName,
-        locationLabel,
-        availability,
-      }).catch((e) => console.error('notifyNewRequest failed', e))
+      Promise.all([
+        notifyNewRequest(env, {
+          id,
+          title,
+          category,
+          description,
+          tenantName,
+          locationLabel,
+          availability,
+        }).catch((e) => console.error('notifyNewRequest failed', e)),
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'maintenance',
+            category: 'maintenance_new',
+            priority: 'normal' as const,
+            title: 'New maintenance request',
+            message: `${tenantName || 'A tenant'} reported: ${title}${locationLabel ? ` at ${locationLabel}` : ''}`,
+            entityType: 'maintenance_requests',
+            entityId: id,
+            route: '/maintenance',
+          })))
+        ).catch(() => {}),
+      ])
     );
 
     const row = await env.DB.prepare('SELECT * FROM maintenance_requests WHERE id = ?').bind(id).first();

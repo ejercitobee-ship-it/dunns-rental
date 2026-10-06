@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializeLease, syncLeaseTenantsNumber } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { logActivityStmt } from '../../lib/activity';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 /**
  * Attach the tenant ids and pause intervals on each lease, in two extra
@@ -258,6 +259,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const row = await env.DB.prepare('SELECT * FROM leases WHERE id = ?').bind(id).first();
     const [data] = await withLeaseDetails(env, [row as Record<string, unknown>]);
     syncRentSheet(context);
+    context.waitUntil(
+      getManagementUserIds(env, auth.id).then(userIds =>
+        notifyMultiple(env, userIds.map(uid => ({
+          userId: uid,
+          type: 'lease',
+          category: 'lease_created',
+          title: 'New lease created',
+          message: `Unit ${(row as Record<string, unknown>).unit_id ?? 'unknown'}, $${body.monthlyRent}/mo`,
+          entityType: 'leases',
+          entityId: id,
+          route: '/leases',
+        })))
+      ).catch(() => {})
+    );
     return jsonOk({ success: true, data }, 201);
   } catch {
     return serverError();

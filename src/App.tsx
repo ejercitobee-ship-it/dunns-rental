@@ -54,6 +54,7 @@ const RealtorAvailableUnits = lazy(() => import('./pages/portal/RealtorAvailable
 const Announcements = lazy(() => import('./pages/Announcements').then(m => ({ default: m.Announcements })));
 const AIAssistant = lazy(() => import('./pages/AIAssistant').then(m => ({ default: m.AIAssistant })));
 const Tasks = lazy(() => import('./pages/Tasks').then(m => ({ default: m.Tasks })));
+const NotificationsPage = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 
 // Protected Route component
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: string }) {
@@ -389,6 +390,12 @@ function AppRoutes() {
       <Route path="/tasks" element={
         <ProtectedRoute requiredPermission="tasks_view">
           <Layout><Tasks /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/notifications" element={
+        <ProtectedRoute requiredPermission="dashboard_view">
+          <Layout><NotificationsPage /></Layout>
         </ProtectedRoute>
       } />
 

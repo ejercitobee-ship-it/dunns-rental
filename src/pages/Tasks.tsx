@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus, Search, ListChecks, Clock, AlertTriangle, CheckCircle2,
-  Calendar, User, Building2, MessageSquare, ChevronRight,
+  Calendar, User, Building2, ChevronRight,
   Filter, FolderKanban, Loader2, X, Send, Pause, Circle,
-  LayoutList, Columns3, GripVertical,
+  LayoutList, Columns3, GripVertical, Pencil,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -68,13 +68,6 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
   low: 'bg-line',
 };
 
-const STATUS_BADGE: Record<TaskStatus, 'secondary' | 'default' | 'warning' | 'success' | 'destructive'> = {
-  todo: 'secondary',
-  in_progress: 'default',
-  waiting: 'warning',
-  completed: 'success',
-  cancelled: 'destructive',
-};
 
 type ViewMode = 'my' | 'all' | 'today' | 'overdue' | 'completed' | 'projects';
 
@@ -253,14 +246,19 @@ export function Tasks() {
 
   const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
     try {
-      await tasksApi.update(task.id, { status: newStatus } as Partial<Task>);
+      const payload: Partial<Task> = { status: newStatus };
+      if (newStatus !== 'waiting') {
+        (payload as Record<string, unknown>).waitingFor = null;
+      }
+      await tasksApi.update(task.id, payload);
       loadTasks();
       loadStats();
       if (detailTask && detailTask.task.id === task.id) {
         openDetail(task.id);
       }
-    } catch {
-      showToast('Failed to update status', 'error');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update status';
+      showToast(msg, 'error');
     }
   };
 
@@ -563,87 +561,118 @@ export function Tasks() {
         isOpen={isCreateOpen}
         onClose={() => { setIsCreateOpen(false); setEditingId(null); }}
         title={editingId ? 'Edit Task' : 'New Task'}
+        size="lg"
       >
-        <div className="space-y-4">
-          <FormField label="Title" required>
-            <input
-              type="text"
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              className="form-input"
-              placeholder="What needs to be done?"
-              autoFocus
-            />
-          </FormField>
-
-          <FormField label="Description">
-            <textarea
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className="form-input min-h-[72px] resize-y"
-              rows={3}
-              placeholder="Add details..."
-            />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Category">
-              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as TaskCategory }))} className="form-input">
-                {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+        <div className="space-y-6">
+          {/* Core info */}
+          <div className="space-y-4">
+            <FormField label="Title" required>
+              <input
+                type="text"
+                value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                className="form-input !py-3 !text-base"
+                placeholder="What needs to be done?"
+                autoFocus
+              />
             </FormField>
-            <FormField label="Priority">
-              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as TaskPriority }))} className="form-input">
-                {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+
+            <FormField label="Description">
+              <textarea
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                className="form-input min-h-[100px] resize-y"
+                rows={4}
+                placeholder="Add context, notes, or instructions..."
+              />
             </FormField>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Status">
-              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as TaskStatus }))} className="form-input">
-                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </FormField>
-            <FormField label="Due Date">
-              <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="form-input" />
-            </FormField>
+          {/* Classification */}
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted/50 mb-3">Classification</p>
+            <div className="grid grid-cols-3 gap-3">
+              <FormField label="Category">
+                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as TaskCategory }))} className="form-input">
+                  {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Status">
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as TaskStatus }))} className="form-input">
+                  {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Priority">
+                <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as TaskPriority }))} className="form-input">
+                  {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </FormField>
+            </div>
           </div>
 
-          {canAssign && (
-            <FormField label="Assign To">
-              <select value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))} className="form-input">
-                <option value="">Unassigned</option>
-                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </FormField>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Property">
-              <select value={form.propertyId} onChange={e => setForm(f => ({ ...f, propertyId: e.target.value, unitId: '' }))} className="form-input">
-                <option value="">None</option>
-                {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </FormField>
-            <FormField label="Unit">
-              <select value={form.unitId} onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))} className="form-input" disabled={!form.propertyId}>
-                <option value="">None</option>
-                {filteredUnits.map(u => <option key={u.id} value={u.id}>{u.unitNumber}</option>)}
-              </select>
-            </FormField>
+          {/* Scheduling */}
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted/50 mb-3">Scheduling</p>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Due Date">
+                <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="form-input" />
+              </FormField>
+              <FormField label="Estimated Time (minutes)">
+                <input
+                  type="number"
+                  value={form.estimatedMinutes}
+                  onChange={e => setForm(f => ({ ...f, estimatedMinutes: e.target.value }))}
+                  className="form-input"
+                  placeholder="Optional"
+                  min={0}
+                />
+              </FormField>
+            </div>
           </div>
 
-          {projects.length > 0 && (
-            <FormField label="Project">
-              <select value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))} className="form-input">
-                <option value="">None</option>
-                {projects.filter(p => p.status !== 'completed' && p.status !== 'cancelled').map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </FormField>
-          )}
+          {/* Assignment */}
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted/50 mb-3">Assignment</p>
+            <div className="grid grid-cols-2 gap-3">
+              {canAssign && (
+                <FormField label="Assign To">
+                  <select value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))} className="form-input">
+                    <option value="">Unassigned</option>
+                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </FormField>
+              )}
+              {projects.length > 0 && (
+                <FormField label="Project">
+                  <select value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))} className="form-input">
+                    <option value="">None</option>
+                    {projects.filter(p => p.status !== 'completed' && p.status !== 'cancelled').map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+            </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted/50 mb-3">Location</p>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Property">
+                <select value={form.propertyId} onChange={e => setForm(f => ({ ...f, propertyId: e.target.value, unitId: '' }))} className="form-input">
+                  <option value="">None</option>
+                  {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Unit">
+                <select value={form.unitId} onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))} className="form-input" disabled={!form.propertyId}>
+                  <option value="">None</option>
+                  {filteredUnits.map(u => <option key={u.id} value={u.id}>{u.unitNumber}</option>)}
+                </select>
+              </FormField>
+            </div>
+          </div>
 
           {form.status === 'waiting' && (
             <FormField label="Waiting For">
@@ -657,18 +686,7 @@ export function Tasks() {
             </FormField>
           )}
 
-          <FormField label="Estimated Time (minutes)">
-            <input
-              type="number"
-              value={form.estimatedMinutes}
-              onChange={e => setForm(f => ({ ...f, estimatedMinutes: e.target.value }))}
-              className="form-input"
-              placeholder="Optional"
-              min={0}
-            />
-          </FormField>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-line">
+          <div className="flex justify-end gap-3 pt-4 border-t border-line">
             <Button variant="outline" onClick={() => { setIsCreateOpen(false); setEditingId(null); }}>
               Cancel
             </Button>
@@ -917,191 +935,264 @@ function TaskDetailDrawer({ detail, loading, onClose, onStatusChange, onEdit, on
   onComment: () => void;
 }) {
   const task = detail?.task;
+  const categoryLabel = CATEGORY_OPTIONS.find(c => c.value === task?.category)?.label;
+
+  const STATUS_PILL: Record<string, string> = {
+    todo: 'bg-slate-100 text-slate-700',
+    in_progress: 'bg-blue-50 text-blue-700',
+    waiting: 'bg-amber-50 text-amber-700',
+    completed: 'bg-emerald-50 text-emerald-700',
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[3px]" />
       <div
-        className="relative w-full max-w-lg bg-surface border-l border-line overflow-y-auto animate-slide-in-right shadow-[-8px_0_24px_rgba(27,26,23,0.08)]"
+        className="relative w-full max-w-3xl bg-surface rounded-2xl shadow-[0_24px_60px_-12px_rgba(27,26,23,0.28)] border border-line overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {loading || !task ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="w-5 h-5 animate-spin text-muted" />
+          <div className="flex items-center justify-center h-48">
+            <Loader2 className="w-6 h-6 animate-spin text-muted" />
           </div>
         ) : (
-          <>
-            {/* Drawer header */}
-            <div className="sticky top-0 bg-surface border-b border-line px-6 py-4 flex items-start justify-between z-10">
-              <div className="flex-1 min-w-0 mr-3">
-                <p className="eyebrow mb-1">
-                  {CATEGORY_OPTIONS.find(c => c.value === task.category)?.label}
-                </p>
-                <h2 className="font-display text-xl font-medium text-ink leading-snug">{task.title}</h2>
-              </div>
-              <button onClick={onClose} className="p-2 rounded-lg hover:bg-hover text-muted transition-colors flex-shrink-0">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-6">
-              {/* Status + priority bar */}
-              <div className="flex items-center gap-3 flex-wrap">
-                {onStatusChange && (
-                  <select
-                    value={task.status}
-                    onChange={e => onStatusChange(task, e.target.value as TaskStatus)}
-                    className="px-3 py-1.5 text-xs border border-line rounded-lg bg-surface text-ink font-medium focus:outline-none focus:ring-1 focus:ring-primary/20"
-                  >
-                    {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                )}
-                <Badge variant={STATUS_BADGE[task.status]}>
-                  {STATUS_OPTIONS.find(s => s.value === task.status)?.label}
-                </Badge>
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[task.priority]}`} />
-                  <span className={`text-xs font-medium capitalize ${PRIORITY_COLOR[task.priority]}`}>
-                    {task.priority} priority
-                  </span>
-                </div>
-              </div>
-
-              {/* Description */}
-              {task.description && (
-                <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">{task.description}</p>
-              )}
-
-              {/* Detail fields */}
-              <div className="rounded-xl border border-line divide-y divide-line overflow-hidden">
-                {task.dueDate && (
-                  <DetailField icon={Calendar} label="Due date" value={safeDateLabel(task.dueDate)} />
-                )}
-                {task.assignedToName && (
-                  <DetailField icon={User} label="Assignee" value={task.assignedToName} />
-                )}
-                {task.propertyName && (
-                  <DetailField icon={Building2} label="Property" value={`${task.propertyName}${task.unitNumber ? ` / ${task.unitNumber}` : ''}`} />
-                )}
-                {task.projectName && (
-                  <DetailField icon={FolderKanban} label="Project" value={task.projectName} />
-                )}
-                {task.tenantName && (
-                  <DetailField icon={User} label="Tenant" value={task.tenantName} />
-                )}
-                {task.vendorName && (
-                  <DetailField icon={User} label="Vendor" value={task.vendorName} />
-                )}
-                {task.waitingFor && (
-                  <DetailField icon={Pause} label="Waiting for" value={task.waitingFor} />
-                )}
-                {task.createdByName && (
-                  <DetailField icon={User} label="Created by" value={task.createdByName} />
-                )}
-                {task.estimatedMinutes && (
-                  <DetailField icon={Clock} label="Estimate" value={`${task.estimatedMinutes} min`} />
-                )}
-              </div>
-
-              {/* Tags */}
-              {detail.tags.length > 0 && (
-                <div>
-                  <p className="eyebrow mb-2">Tags</p>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {detail.tags.map(t => (
-                      <Badge key={t.id} variant="outline">{t.name}</Badge>
-                    ))}
+          <div className="flex flex-col sm:flex-row max-h-[80vh]">
+            {/* Left: main content */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {/* Header */}
+              <div className="px-6 pt-6 pb-4 flex-shrink-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  {categoryLabel && (
+                    <span className="text-[10px] font-bold tracking-widest uppercase text-primary">
+                      {categoryLabel}
+                    </span>
+                  )}
+                  <span className="text-line-strong text-xs">·</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[task.priority]}`} />
+                    <span className={`text-[11px] font-semibold capitalize ${PRIORITY_COLOR[task.priority]}`}>
+                      {task.priority}
+                    </span>
                   </div>
+                  {detail.tags.map(t => (
+                    <span key={t.id} className="text-[10px] font-medium text-muted px-1.5 py-0.5 rounded bg-canvas border border-line">
+                      {t.name}
+                    </span>
+                  ))}
                 </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                {onEdit && (
-                  <Button variant="outline" size="sm" onClick={() => { onEdit(task); onClose(); }}>
-                    Edit Task
-                  </Button>
-                )}
-                {onDelete && (
-                  <Button variant="destructive" size="sm" onClick={() => onDelete(task.id)}>
-                    Delete
-                  </Button>
-                )}
+                <h2 className="font-display text-lg font-semibold text-ink leading-snug">{task.title}</h2>
               </div>
 
-              {/* Comments */}
-              <div>
-                <p className="eyebrow mb-3 flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Comments ({detail.comments.length})
-                </p>
-                {detail.comments.length > 0 && (
-                  <div className="space-y-3 max-h-56 overflow-y-auto mb-3">
-                    {detail.comments.map(c => (
-                      <div key={c.id} className="rounded-xl bg-canvas p-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-primary-soft text-primary text-[10px] font-bold grid place-items-center">
-                              {initials(c.userName || 'U')}
-                            </span>
-                            <span className="text-sm font-medium text-ink">{c.userName || 'Unknown'}</span>
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto border-t border-line">
+                {/* Description */}
+                {task.description && (
+                  <div className="px-6 py-4 border-b border-line">
+                    <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                  </div>
+                )}
+
+                {/* Comments */}
+                <div className="px-6 py-4">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-3">
+                    Comments {detail.comments.length > 0 && `(${detail.comments.length})`}
+                  </p>
+                  {detail.comments.length > 0 ? (
+                    <div className="space-y-4 mb-4">
+                      {detail.comments.map(c => (
+                        <div key={c.id} className="flex gap-2.5">
+                          <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[10px] font-bold grid place-items-center flex-shrink-0">
+                            {initials(c.userName || 'U')}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2 mb-0.5">
+                              <span className="text-xs font-semibold text-ink">{c.userName || 'Unknown'}</span>
+                              <span className="text-[11px] text-faint">{safeTimestamp(c.createdAt)}</span>
+                            </div>
+                            <p className="text-xs text-muted leading-relaxed whitespace-pre-wrap">{c.body}</p>
                           </div>
-                          <span className="text-[11px] text-faint">
-                            {safeTimestamp(c.createdAt)}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-faint">No comments yet.</p>
+                  )}
+                </div>
+
+                {/* Activity */}
+                {detail.activity.length > 0 && (
+                  <div className="px-6 py-4 border-t border-line">
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-3">Activity</p>
+                    <div className="space-y-2.5">
+                      {detail.activity.map(a => (
+                        <div key={a.id} className="flex items-start gap-2 text-xs text-muted">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary/20 mt-1.5 flex-shrink-0" />
+                          <span className="leading-relaxed">
+                            <strong className="text-ink font-medium">{a.userName || 'System'}</strong>{' '}
+                            {formatActivity(a)}
+                            <span className="ml-1.5 text-faint">{safeTimestamp(a.createdAt)}</span>
                           </span>
                         </div>
-                        <p className="text-sm text-muted leading-relaxed ml-8 whitespace-pre-wrap">{c.body}</p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
+              </div>
+
+              {/* Comment input */}
+              <div className="flex-shrink-0 px-6 py-3 border-t border-line">
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={commentText}
                     onChange={e => setCommentText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onComment(); } }}
-                    className="flex-1 px-3 py-2 border border-line rounded-xl text-sm text-ink placeholder:text-faint bg-surface focus:outline-none focus:ring-1 focus:ring-primary/20"
-                    placeholder="Add a comment..."
+                    className="flex-1 px-3 py-2 border border-line rounded-lg text-sm text-ink placeholder:text-faint bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+                    placeholder="Write a comment..."
                   />
-                  <Button size="sm" onClick={onComment} disabled={!commentText.trim()}>
+                  <button
+                    onClick={onComment}
+                    disabled={!commentText.trim()}
+                    className="px-3 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
                     <Send className="w-3.5 h-3.5" />
-                  </Button>
+                  </button>
                 </div>
               </div>
-
-              {/* Activity */}
-              {detail.activity.length > 0 && (
-                <div>
-                  <p className="eyebrow mb-3">Activity</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {detail.activity.map(a => (
-                      <div key={a.id} className="flex items-start gap-2.5 text-xs text-muted">
-                        <span className="w-1.5 h-1.5 rounded-full bg-line-strong mt-1.5 flex-shrink-0" />
-                        <span className="leading-relaxed">
-                          <strong className="text-ink font-medium">{a.userName || 'System'}</strong>{' '}
-                          {formatActivity(a)}
-                          <span className="ml-1.5 text-faint">{safeTimestamp(a.createdAt)}</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          </>
+
+            {/* Right sidebar: metadata */}
+            <div className="w-full sm:w-64 flex-shrink-0 border-t sm:border-t-0 sm:border-l border-line bg-canvas/50 overflow-y-auto">
+              {/* Status */}
+              <div className="px-5 pt-5 pb-4">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-2">Status</p>
+                {onStatusChange ? (
+                  <select
+                    value={task.status}
+                    onChange={e => onStatusChange(task, e.target.value as TaskStatus)}
+                    className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${STATUS_PILL[task.status] || 'bg-canvas text-ink'}`}
+                  >
+                    {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                ) : (
+                  <span className={`inline-flex px-3 py-1.5 text-xs font-bold rounded-lg ${STATUS_PILL[task.status] || 'bg-canvas text-ink'}`}>
+                    {STATUS_OPTIONS.find(s => s.value === task.status)?.label}
+                  </span>
+                )}
+              </div>
+
+              <div className="border-t border-line" />
+
+              {/* Detail fields */}
+              <div className="px-5 py-4 space-y-4">
+                {task.dueDate && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Due date</p>
+                    <div className="flex items-center gap-1.5 text-sm text-ink">
+                      <Calendar className="w-3.5 h-3.5 text-muted/40" />
+                      {safeDateLabel(task.dueDate)}
+                    </div>
+                  </div>
+                )}
+                {task.assignedToName && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Assignee</p>
+                    <div className="flex items-center gap-2 text-sm text-ink">
+                      <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[9px] font-bold grid place-items-center flex-shrink-0">
+                        {initials(task.assignedToName)}
+                      </span>
+                      {task.assignedToName}
+                    </div>
+                  </div>
+                )}
+                {task.propertyName && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Property</p>
+                    <div className="flex items-center gap-1.5 text-sm text-ink">
+                      <Building2 className="w-3.5 h-3.5 text-muted/40" />
+                      {task.propertyName}{task.unitNumber ? ` / ${task.unitNumber}` : ''}
+                    </div>
+                  </div>
+                )}
+                {task.projectName && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Project</p>
+                    <div className="flex items-center gap-1.5 text-sm text-ink">
+                      <FolderKanban className="w-3.5 h-3.5 text-muted/40" />
+                      {task.projectName}
+                    </div>
+                  </div>
+                )}
+                {task.tenantName && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Tenant</p>
+                    <p className="text-sm text-ink">{task.tenantName}</p>
+                  </div>
+                )}
+                {task.vendorName && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Vendor</p>
+                    <p className="text-sm text-ink">{task.vendorName}</p>
+                  </div>
+                )}
+                {task.waitingFor && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Waiting for</p>
+                    <p className="text-sm text-ink">{task.waitingFor}</p>
+                  </div>
+                )}
+                {task.createdByName && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Created by</p>
+                    <p className="text-sm text-ink">{task.createdByName}</p>
+                  </div>
+                )}
+                {task.estimatedMinutes && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted/40 mb-1">Estimate</p>
+                    <div className="flex items-center gap-1.5 text-sm text-ink">
+                      <Clock className="w-3.5 h-3.5 text-muted/40" />
+                      {task.estimatedMinutes} min
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-line" />
+
+              {/* Actions */}
+              <div className="px-5 py-4 space-y-2">
+                {onEdit && (
+                  <button
+                    onClick={() => { onEdit(task); onClose(); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-ink hover:bg-surface border border-line transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-muted" /> Edit Task
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => onDelete(task.id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-danger/60 hover:text-danger hover:bg-danger/5 transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              {/* Close */}
+              <div className="px-5 pb-4">
+                <button
+                  onClick={onClose}
+                  className="w-full px-3 py-2 rounded-lg text-sm text-muted hover:text-ink hover:bg-surface transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function DetailField({ icon: Icon, label, value }: { icon: typeof User; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <Icon className="w-4 h-4 text-faint flex-shrink-0" />
-      <span className="text-xs text-muted w-24 flex-shrink-0">{label}</span>
-      <span className="text-sm text-ink font-medium">{value}</span>
     </div>
   );
 }
@@ -1378,7 +1469,7 @@ function EmptyState({ view }: { view: ViewMode }) {
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-muted mb-1.5">
+      <label className="block text-xs font-semibold text-muted mb-2">
         {label}{required && <span className="text-danger ml-0.5">*</span>}
       </label>
       {children}

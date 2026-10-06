@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeTask, serializeTaskComment, serializeTaskActivity } from '../../../lib/serializers';
 import { logActivityStmt } from '../../../lib/activity';
+import { createNotification } from '../../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -183,6 +184,39 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     ];
 
     await env.DB.batch(stmts);
+
+    const taskTitle = (body.title ?? existing.title) as string;
+    const assignedTo = (body.assignedTo ?? existing.assigned_to) as string | null;
+
+    if (newStatus !== existing.status && newStatus === 'completed' && assignedTo && assignedTo !== auth.id) {
+      context.waitUntil(
+        createNotification(env, {
+          userId: auth.id,
+          type: 'task',
+          category: 'task_completed',
+          title: 'Task completed',
+          message: taskTitle,
+          entityType: 'tasks',
+          entityId: id,
+          route: '/tasks',
+        }).catch(() => {})
+      );
+    }
+
+    if (body.assignedTo && body.assignedTo !== existing.assigned_to && body.assignedTo !== auth.id) {
+      context.waitUntil(
+        createNotification(env, {
+          userId: body.assignedTo as string,
+          type: 'task',
+          category: 'task_assigned',
+          title: 'Task assigned to you',
+          message: taskTitle,
+          entityType: 'tasks',
+          entityId: id,
+          route: '/tasks',
+        }).catch(() => {})
+      );
+    }
 
     // Re-fetch with JOINs
     const row = await env.DB.prepare(

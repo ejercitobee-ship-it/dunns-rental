@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { serializeProject } from '../../lib/serializers';
 import { logActivityStmt } from '../../lib/activity';
+import { notifyMultiple } from '../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -97,6 +98,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       WHERE p.id = ?`
     ).bind(id).first();
 
+    if (body.ownerId && body.ownerId !== auth.id) {
+      context.waitUntil(
+        notifyMultiple(env, [{
+          userId: body.ownerId as string,
+          type: 'project',
+          category: 'project_created',
+          title: 'You own a new project',
+          message: body.name as string,
+          entityType: 'projects',
+          entityId: id,
+          route: '/projects',
+        }]).catch(() => {})
+      );
+    }
     return jsonOk({ success: true, data: serializeProject(row as Record<string, unknown>) }, 201);
   } catch {
     return serverError();

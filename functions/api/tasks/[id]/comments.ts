@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { serializeTaskComment } from '../../../lib/serializers';
+import { createNotification } from '../../../lib/notify';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -10,8 +11,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const taskId = params.id as string;
 
-    // Verify the task exists
-    const task = await env.DB.prepare('SELECT id FROM tasks WHERE id = ?').bind(taskId).first();
+    const task = await env.DB.prepare('SELECT id, title, assigned_to, created_by FROM tasks WHERE id = ?').bind(taskId).first<{ id: string; title: string; assigned_to: string | null; created_by: string }>();
     if (!task) return jsonError('Task not found', 404);
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -43,6 +43,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
        LEFT JOIN user u ON u.id = tc.user_id
        WHERE tc.id = ?`
     ).bind(id).first();
+
+    const notifyIds = new Set<string>();
+    if (task!.assigned_to && task!.assigned_to !== auth.id) notifyIds.add(task!.assigned_to);
+    if (task!.created_by && task!.created_by !== auth.id) notifyIds.add(task!.created_by);
+    for (const uid of notifyIds) {
+      context.waitUntil(
+        createNotification(env, {
+          userId: uid,
+          type: 'task',
+          category: 'task_comment',
+          title: 'New comment on task',
+          message: `${task!.title}: ${truncatedBody}`,
+          entityType: 'tasks',
+          entityId: taskId,
+          route: '/tasks',
+        }).catch(() => {})
+      );
+    }
 
     return jsonOk({ success: true, data: serializeTaskComment(row as Record<string, unknown>) }, 201);
   } catch {

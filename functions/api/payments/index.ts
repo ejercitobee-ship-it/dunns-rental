@@ -4,6 +4,7 @@ import { serializePayment, serializeAllocation } from '../../lib/serializers';
 import { syncRentSheet } from '../../lib/sheets';
 import { generateReceipt } from '../../lib/receipts';
 import { logActivityStmt } from '../../lib/activity';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -184,6 +185,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         context.waitUntil(generateReceipt(env, id, auth.id).catch(() => {}));
       }
     }
+    if (!isBulk && body.status === 'paid') {
+      context.waitUntil(
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'payment',
+            category: 'payment_received',
+            priority: 'informational' as const,
+            title: 'Rent payment recorded',
+            message: `$${amount} for ${body.month}/${body.year}`,
+            entityType: 'rent_payments',
+            entityId: id,
+            route: '/rents',
+          })))
+        ).catch(() => {})
+      );
+    }
+
     const serializedAllocations = (allocRows?.results || []).map(serializeAllocation);
     return jsonOk({ success: true, data: { ...serializePayment(row as Record<string, unknown>), allocations: serializedAllocations } }, 201);
   } catch {

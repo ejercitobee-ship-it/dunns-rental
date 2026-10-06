@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../lib/session';
 import { getStripe } from '../../lib/stripe';
 import { syncRentSheet } from '../../lib/sheets';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -36,6 +37,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       ).bind(new Date().toISOString().slice(0, 10), row.id).run();
 
       try { syncRentSheet({ env, waitUntil: context.waitUntil.bind(context) }); } catch {}
+
+      context.waitUntil(
+        getManagementUserIds(env).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'payment',
+            category: 'payment_autopay',
+            title: 'Autopay rent payment received',
+            entityType: 'rent_payment',
+            entityId: row.id,
+            route: '/rent',
+          })))
+        ).catch(() => {})
+      );
     }
   }
 

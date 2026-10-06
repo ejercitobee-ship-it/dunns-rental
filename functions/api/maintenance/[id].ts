@@ -3,6 +3,7 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializeMaintenance } from '../../lib/serializers';
 import { deleteDriveFile } from '../../lib/google';
 import { maintenanceExpenseId, logStatusChange } from '../../lib/maintenance';
+import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -107,6 +108,25 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     await env.DB.batch(stmts);
+
+    if (newStatus !== prev.status && (newStatus === 'completed' || newStatus === 'paid')) {
+      const priority = newStatus === 'paid' ? 'informational' as const : 'normal' as const;
+      context.waitUntil(
+        getManagementUserIds(env, auth.id).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'maintenance',
+            category: newStatus === 'completed' ? 'maintenance_completed' : 'maintenance_paid',
+            priority,
+            title: newStatus === 'completed' ? 'Maintenance completed' : 'Maintenance paid',
+            message: title,
+            entityType: 'maintenance_requests',
+            entityId: id,
+            route: '/maintenance',
+          })))
+        ).catch(() => {})
+      );
+    }
 
     const row = await env.DB.prepare('SELECT * FROM maintenance_requests WHERE id = ?').bind(id).first();
     if (!row) return jsonError('Request not found', 404);

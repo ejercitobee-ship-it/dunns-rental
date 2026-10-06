@@ -4,6 +4,7 @@ import { handymanForUser } from '../../../../../lib/portal';
 import { loadOwnedJob, serializeJob } from '../../../../../lib/handyman-jobs';
 import { logStatusChange } from '../../../../../lib/maintenance';
 import { notifyOffice } from '../../../../../lib/maintenance-notify';
+import { getManagementUserIds, notifyMultiple } from '../../../../../lib/notify';
 import { uploadToDrive, ensurePropertyExpenseCategory, ensureRootFolder, DriveNotConnected } from '../../../../../lib/google';
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
@@ -139,15 +140,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ];
     await env.DB.batch(stmts);
 
-    // Notify the office.
     const hName = auth.name || 'A handyman';
     context.waitUntil(
-      notifyOffice(env, `Invoice submitted: ${existing.title as string}`, [
-        ['Handyman', hName],
-        ['Invoice #', invoiceNumber],
-        ['Total', `$${totalAmount.toFixed(2)}`],
-        ['Next', 'Review and approve the invoice on the Maintenance page.'],
-      ]).catch(e => console.error('invoice notify office failed', e))
+      Promise.all([
+        notifyOffice(env, `Invoice submitted: ${existing.title as string}`, [
+          ['Handyman', hName],
+          ['Invoice #', invoiceNumber],
+          ['Total', `$${totalAmount.toFixed(2)}`],
+          ['Next', 'Review and approve the invoice on the Maintenance page.'],
+        ]).catch(e => console.error('invoice notify office failed', e)),
+        getManagementUserIds(env).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'approval',
+            category: 'approval_requested',
+            priority: 'important' as const,
+            title: 'Vendor invoice requires approval',
+            message: `${hName} submitted invoice #${invoiceNumber} for $${totalAmount.toFixed(2)}`,
+            entityType: 'maintenance_requests',
+            entityId: jobId,
+            route: '/maintenance',
+          })))
+        ).catch(() => {}),
+      ])
     );
 
     const row = await loadOwnedJob(env, jobId, handyman.id);
