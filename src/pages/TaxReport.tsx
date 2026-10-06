@@ -152,7 +152,7 @@ const TAX_CATEGORIES: Record<string, { label: string; description: string }> = {
 import { mapToTaxCategory, isCapitalExpense } from '../lib/financials';
 
 export function TaxReport() {
-  const { expenses, incomes, properties, units, tenants, rentPayments, leases } = useApp();
+  const { expenses, incomes, properties, units, tenants, rentPayments, leases, paymentAllocations } = useApp();
   const { showToast } = useToast();
   const now = new Date();
   // Main period.
@@ -278,23 +278,31 @@ export function TaxReport() {
     const pIncome = incomes.filter(i => inP(i.date));
     const pPaidRent = rentPayments.filter(p => p.status === 'paid' && p.year === y && months.includes(p.month) && p.type !== 'credit');
 
-    // rentIncomeForMonths is the shared definition of taxable rent income, so
-    // this matches Rent Management's Tax tab for the same months.
-    const rentIncome = rentIncomeForMonths(rentPayments, months, y);
-    const lateFeeIncome = pIncome.filter(i => i.source === 'late_fee').reduce((s, i) => s + i.amount, 0);
+    // rentIncomeForMonths sums ALL paid rent_payments (including late fee
+    // portions). Break out late fees via payment_allocations so each shows
+    // correctly. Payments without allocations are treated as pure rent.
+    const grossRentIncome = rentIncomeForMonths(rentPayments, months, y);
+    const paidPaymentIds = new Set(
+      pPaidRent.map(p => p.id)
+    );
+    const lateFeeFromAllocations = paymentAllocations
+      .filter(a => a.type === 'late_fee' && paidPaymentIds.has(a.paymentId) && a.year === y && months.includes(a.month))
+      .reduce((s, a) => s + a.amount, 0);
+    const rentIncome = grossRentIncome - lateFeeFromAllocations;
+    const lateFeeIncome = lateFeeFromAllocations + pIncome.filter(i => i.source === 'late_fee').reduce((s, i) => s + i.amount, 0);
     const moveInFeeIncome = pIncome.filter(i => i.source === 'move_in_fee').reduce((s, i) => s + i.amount, 0);
     const utilityReimbursement = pIncome.filter(i => i.source === 'utility_reimbursement').reduce((s, i) => s + i.amount, 0);
     const hoaReimbursement = pIncome.filter(i => i.source === 'hoa_reimbursement').reduce((s, i) => s + i.amount, 0);
     const applicationFeeIncome = pIncome.filter(i => i.source === 'application_fee').reduce((s, i) => s + i.amount, 0);
     const petFeeIncome = pIncome.filter(i => i.source === 'pet_fee').reduce((s, i) => s + i.amount, 0);
     const parkingFeeIncome = pIncome.filter(i => i.source === 'parking_fee').reduce((s, i) => s + i.amount, 0);
+    const depositRetainedIncome = pIncome.filter(i => i.source === 'deposit_retained').reduce((s, i) => s + i.amount, 0);
     const otherIncome = pIncome.filter(i => i.source === 'other').reduce((s, i) => s + i.amount, 0);
     // A refundable security deposit you are holding is a liability you owe back,
-    // NOT taxable income. It becomes income only in the year you keep it (record
-    // that as "Other" income). So deposits are tracked separately and excluded
-    // from the taxable total.
+    // NOT taxable income. It becomes income only in the year you keep it (tracked
+    // as deposit_retained). So deposits received are tracked separately.
     const depositsReceived = pIncome.filter(i => i.source === 'deposit').reduce((s, i) => s + i.amount, 0);
-    const totalIncome = rentIncome + lateFeeIncome + moveInFeeIncome + utilityReimbursement + hoaReimbursement + applicationFeeIncome + petFeeIncome + parkingFeeIncome + otherIncome;
+    const totalIncome = rentIncome + lateFeeIncome + moveInFeeIncome + utilityReimbursement + hoaReimbursement + applicationFeeIncome + petFeeIncome + parkingFeeIncome + depositRetainedIncome + otherIncome;
 
     const propertyNameById = new Map(properties.map(p => [p.id, p.name]));
     const expensesByCategory: Record<string, number> = {};
@@ -506,9 +514,9 @@ export function TaxReport() {
     const vacancyLoss = vacancyData.items.filter(item => monthSet.has(item.month)).reduce((s, item) => s + item.loss, 0);
     const grossPotentialRent = rentIncome + vacancyLoss;
 
-    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent, vendors1099, scheduleEPerProperty, scheduleETotals, vacancyLoss, grossPotentialRent };
+    return { totalIncome, rentIncome, lateFeeIncome, moveInFeeIncome, utilityReimbursement, hoaReimbursement, applicationFeeIncome, petFeeIncome, parkingFeeIncome, depositRetainedIncome, otherIncome, depositsReceived, totalDeductibleExpenses, operatingExpenses, capitalExpenses, capitalItems, depreciation, depreciationSchedule, mortgageInterestDeducted, mortgagePrincipalExcluded, mortgageNeedsSplit, netIncome, expensesByCategory, propertyBreakdown, breakdown, pExpenses, pIncome, pPaidRent, vendors1099, scheduleEPerProperty, scheduleETotals, vacancyLoss, grossPotentialRent };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, incomes, properties, units, rentPayments, leases, capitalProjects, capitalThreshold]);
+  }, [expenses, incomes, properties, units, rentPayments, leases, paymentAllocations, capitalProjects, capitalThreshold]);
 
   const main = useMemo(() => periodData(year, monthsFor(scope, quarter, month)), [periodData, year, scope, quarter, month]);
   const comp = useMemo(() => (compare ? periodData(cYear, monthsFor(scope, cQuarter, cMonth)) : null), [compare, periodData, cYear, scope, cQuarter, cMonth]);
@@ -609,7 +617,7 @@ export function TaxReport() {
     const report = {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
-      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, hoaReimbursements: main.hoaReimbursement, applicationFees: main.applicationFeeIncome, petFees: main.petFeeIncome, parkingFees: main.parkingFeeIncome, other: main.otherIncome },
+      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, hoaReimbursements: main.hoaReimbursement, applicationFees: main.applicationFeeIncome, petFees: main.petFeeIncome, parkingFees: main.parkingFeeIncome, depositRetained: main.depositRetainedIncome, other: main.otherIncome },
       securityDepositsReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
@@ -624,7 +632,7 @@ export function TaxReport() {
       netIncome: main.netIncome,
       comparison: comp ? {
         period: compLabel,
-        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, moveInFees: comp.moveInFeeIncome, utilityReimbursements: comp.utilityReimbursement, hoaReimbursements: comp.hoaReimbursement, applicationFees: comp.applicationFeeIncome, petFees: comp.petFeeIncome, parkingFees: comp.parkingFeeIncome, other: comp.otherIncome },
+        income: { total: comp.totalIncome, rent: comp.rentIncome, lateFees: comp.lateFeeIncome, moveInFees: comp.moveInFeeIncome, utilityReimbursements: comp.utilityReimbursement, hoaReimbursements: comp.hoaReimbursement, applicationFees: comp.applicationFeeIncome, petFees: comp.petFeeIncome, parkingFees: comp.parkingFeeIncome, depositRetained: comp.depositRetainedIncome, other: comp.otherIncome },
         deductibleExpenses: comp.expensesByCategory, totalDeductibleExpenses: comp.totalDeductibleExpenses,
         operatingExpenses: comp.operatingExpenses, capitalExpenses: comp.capitalExpenses, netIncome: comp.netIncome,
       } : undefined,
@@ -649,18 +657,34 @@ export function TaxReport() {
     setTimeout(() => window.print(), 100);
   };
 
+  const scheduleETotalsWithMileage = useMemo(() => {
+    if (mileageDeduction === 0) return main.scheduleETotals;
+    return {
+      ...main.scheduleETotals,
+      lines: main.scheduleETotals.lines.map(l => {
+        if (l.line === 6) return { ...l, amount: round2(l.amount + mileageDeduction) };
+        if (l.line === 20) return { ...l, amount: round2(l.amount + mileageDeduction) };
+        if (l.line === 21) return { ...l, amount: round2(l.amount - mileageDeduction) };
+        return l;
+      }),
+    };
+  }, [main.scheduleETotals, mileageDeduction]);
+
   const exportScheduleECSV = () => {
-    // One row per line, columns for each property + totals
     const props = main.scheduleEPerProperty.filter(p => p.lines.some(l => l.amount !== 0));
     const headerCols = ['Line', 'Description', ...props.map(p => csvEscape(p.name)), 'Totals'];
     const header = headerCols.join(',');
-    const rows = main.scheduleETotals.lines.map(tl => {
+    const totals = scheduleETotalsWithMileage;
+    const rows = totals.lines.map(tl => {
       const perProp = props.map(p => {
         const line = p.lines.find(l => l.line === tl.line);
         return (line?.amount ?? 0).toFixed(2);
       });
       return [tl.line, csvEscape(tl.label), ...perProp, tl.amount.toFixed(2)].join(',');
     });
+    if (mileageDeduction > 0) {
+      rows.push(['', csvEscape(`Note: Line 6 totals include ${mileage} miles at $${(mileageRate / 100).toFixed(3)}/mi = $${mileageDeduction.toFixed(2)} standard mileage deduction`), ...props.map(() => ''), ''].join(','));
+    }
     downloadBlob([header, ...rows].join('\n'), `schedule-e-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
   };
 
@@ -700,16 +724,20 @@ export function TaxReport() {
     const zip = new JSZip();
     const label = mainLabel.replace(/\s+/g, '-');
 
-    // 1) Schedule E summary
+    // 1) Schedule E summary (with mileage on Line 6)
     const seProps = main.scheduleEPerProperty.filter(p => p.lines.some(l => l.amount !== 0));
+    const seTotals = scheduleETotalsWithMileage;
     const seHeaderCols = ['Line', 'Description', ...seProps.map(p => p.name), 'Totals'];
-    const seRows = main.scheduleETotals.lines.map(tl => {
+    const seRows = seTotals.lines.map(tl => {
       const perProp = seProps.map(p => {
         const line = p.lines.find(l => l.line === tl.line);
         return (line?.amount ?? 0).toFixed(2);
       });
       return [tl.line, tl.label, ...perProp, tl.amount.toFixed(2)].join(',');
     });
+    if (mileageDeduction > 0) {
+      seRows.push(['', `Note: Line 6 totals include ${mileage} miles at $${(mileageRate / 100).toFixed(3)}/mi = $${mileageDeduction.toFixed(2)} standard mileage deduction`, ...seProps.map(() => ''), ''].join(','));
+    }
     zip.file(`schedule-e-${label}.csv`, [seHeaderCols.join(','), ...seRows].join('\n'));
 
     // 2) Expenses CSV
@@ -758,7 +786,7 @@ export function TaxReport() {
     const report = {
       generatedAt: new Date().toISOString(),
       period: mainLabel,
-      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, hoaReimbursements: main.hoaReimbursement, applicationFees: main.applicationFeeIncome, petFees: main.petFeeIncome, parkingFees: main.parkingFeeIncome, other: main.otherIncome },
+      income: { total: main.totalIncome, rent: main.rentIncome, lateFees: main.lateFeeIncome, moveInFees: main.moveInFeeIncome, utilityReimbursements: main.utilityReimbursement, hoaReimbursements: main.hoaReimbursement, applicationFees: main.applicationFeeIncome, petFees: main.petFeeIncome, parkingFees: main.parkingFeeIncome, depositRetained: main.depositRetainedIncome, other: main.otherIncome },
       securityDepositsReceived: main.depositsReceived,
       deductibleExpenses: main.expensesByCategory,
       totalDeductibleExpenses: main.totalDeductibleExpenses,
@@ -1127,6 +1155,15 @@ export function TaxReport() {
             >
               <span className="font-medium">Parking Fees</span>
               <span className="font-bold tnum">{formatCurrency(main.parkingFeeIncome)}</span>
+            </button>
+            )}
+            {main.depositRetainedIncome > 0 && (
+            <button
+              className="flex justify-between items-center py-2 border-b w-full text-left hover:bg-black/[0.02] rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => openDrillModal('Deposit Retained', { incomes: main.pIncome.filter(i => i.source === 'deposit_retained'), tab: 'income' })}
+            >
+              <span className="font-medium">Deposit Retained</span>
+              <span className="font-bold tnum">{formatCurrency(main.depositRetainedIncome)}</span>
             </button>
             )}
             <button

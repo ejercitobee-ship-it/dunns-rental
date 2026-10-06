@@ -377,6 +377,7 @@ export type IncomeSource =
   | 'rent'
   | 'late_fee'
   | 'deposit'            // security deposit received
+  | 'deposit_retained'   // portion of deposit kept as income (deductions)
   | 'move_in_fee'
   | 'utility_reimbursement'
   | 'hoa_reimbursement'

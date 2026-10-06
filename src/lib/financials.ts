@@ -202,6 +202,7 @@ export const INCOME_SOURCES: Record<IncomeSource, IncomeMeta> = {
   late_fee:               { label: 'Late Fees' },
   move_in_fee:            { label: 'Move-In Fees' },
   deposit:                { label: 'Security Deposits Received' },
+  deposit_retained:       { label: 'Deposit Retained (Taxable)' },
   utility_reimbursement:  { label: 'Utility Reimbursements' },
   hoa_reimbursement:      { label: 'HOA Reimbursements' },
   application_fee:        { label: 'Application Fees' },

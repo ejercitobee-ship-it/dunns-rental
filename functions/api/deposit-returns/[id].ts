@@ -96,6 +96,23 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     binds.push(id);
     await env.DB.prepare(`UPDATE deposit_returns SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
 
+    // When a deposit return is finalized with deductions, record the retained
+    // portion as taxable income (IRS: forfeited deposits = rental income).
+    if (body.status === 'completed' && totalDeductions > 0) {
+      const dr = await env.DB.prepare(
+        'SELECT property_id, unit_id, tenant_id, refund_date, move_out_date FROM deposit_returns WHERE id = ?'
+      ).bind(id).first<Record<string, unknown>>();
+      if (dr) {
+        const incomeDate = (dr.refund_date as string) || (dr.move_out_date as string) || new Date().toISOString().slice(0, 10);
+        const incomeId = `deposit-retained-${id}`;
+        await env.DB.prepare(
+          `INSERT INTO incomes (id, property_id, unit_id, tenant_id, source, amount, date, description, user_id)
+           VALUES (?, ?, ?, ?, 'deposit_retained', ?, ?, 'Security deposit retained', ?)
+           ON CONFLICT(id) DO UPDATE SET amount = excluded.amount, date = excluded.date`
+        ).bind(incomeId, dr.property_id, dr.unit_id, dr.tenant_id, totalDeductions, incomeDate, auth.id).run();
+      }
+    }
+
     // Return updated record
     const row = await env.DB.prepare(
       'SELECT dr.*, t.first_name || \' \' || t.last_name AS tenant_name, p.name AS property_name, u.unit_number FROM deposit_returns dr LEFT JOIN tenants t ON dr.tenant_id = t.id LEFT JOIN properties p ON dr.property_id = p.id LEFT JOIN units u ON dr.unit_id = u.id WHERE dr.id = ?'
