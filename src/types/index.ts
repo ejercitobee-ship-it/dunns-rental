@@ -263,6 +263,8 @@ export type PaymentMethod =
   | 'zelle'
   | 'venmo'
   | 'cash'
+  | 'bank_transfer'
+  | 'card'
   | 'other';
 
 export interface Expense {

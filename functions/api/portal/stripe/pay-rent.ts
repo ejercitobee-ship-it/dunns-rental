@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../lib/session';
 import { tenantIdForUser } from '../../../lib/portal';
 import { getStripe, getOrCreateCustomer } from '../../../lib/stripe';
-import { achFee } from '../../../lib/stripe-fee';
+import { stripeFee } from '../../../lib/stripe-fee';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -17,12 +17,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       month: number;
       year: number;
       leaseId: string;
+      methodType?: 'us_bank_account' | 'card';
     };
 
     if (!body.paymentMethodId) return jsonError('paymentMethodId is required', 400);
     if (!Number.isFinite(body.amount) || body.amount <= 0) return jsonError('amount must be positive', 400);
     if (!body.month || !body.year) return jsonError('month and year are required', 400);
     if (!body.leaseId) return jsonError('leaseId is required', 400);
+
+    const methodType = body.methodType === 'card' ? 'card' : 'us_bank_account';
 
     const tenantId = await tenantIdForUser(env, auth.id);
     if (!tenantId) return jsonError('No tenant record linked', 404);
@@ -48,26 +51,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const customerId = await getOrCreateCustomer(env, auth.id, tenant?.email || auth.email, name);
 
     const stripe = getStripe(env);
-    const fee = achFee(body.amount);
+    const fee = stripeFee(body.amount, methodType);
     const totalAmount = body.amount + fee;
     const amountCents = Math.round(totalAmount * 100);
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const piParams: Parameters<typeof stripe.paymentIntents.create>[0] = {
       amount: amountCents,
       currency: 'usd',
       customer: customerId,
       payment_method: body.paymentMethodId,
-      payment_method_types: ['us_bank_account'],
+      payment_method_types: [methodType],
       confirm: true,
-      mandate_data: {
-        customer_acceptance: {
-          type: 'online',
-          online: {
-            ip_address: request.headers.get('CF-Connecting-IP') || '0.0.0.0',
-            user_agent: request.headers.get('User-Agent') || '',
-          },
-        },
-      },
       metadata: {
         leaseId: body.leaseId,
         tenantId,
@@ -76,8 +70,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         userId: auth.id,
         rentAmount: String(body.amount),
         processingFee: String(fee),
+        methodType,
       },
-    });
+    };
+
+    if (methodType === 'us_bank_account') {
+      piParams.mandate_data = {
+        customer_acceptance: {
+          type: 'online',
+          online: {
+            ip_address: request.headers.get('CF-Connecting-IP') || '0.0.0.0',
+            user_agent: request.headers.get('User-Agent') || '',
+          },
+        },
+      };
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(piParams);
 
     const paymentId = crypto.randomUUID();
     await env.DB.prepare(
@@ -93,7 +102,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'processing',
       body.month,
       body.year,
-      'bank_transfer',
+      methodType === 'card' ? 'card' : 'bank_transfer',
       auth.id,
       new Date().toISOString(),
       'payment',

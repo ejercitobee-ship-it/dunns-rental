@@ -7,10 +7,31 @@ import { getStripeJs } from '../../lib/stripe';
 import { formatCurrency } from '../../lib/utils';
 import { useToast } from '../../context/ToastContext';
 
-/** ACH processing fee: 0.8% capped at $5. Matches functions/lib/stripe-fee.ts. */
 function achFee(amount: number): number {
   return Math.min(Math.round(amount * 0.008 * 100) / 100, 5);
 }
+
+function cardFee(amount: number): number {
+  return Math.round((amount * 0.029 + 0.30) * 100) / 100;
+}
+
+function feeForMethod(amount: number, type: 'us_bank_account' | 'card'): number {
+  return type === 'card' ? cardFee(amount) : achFee(amount);
+}
+
+function feeLabel(type: 'us_bank_account' | 'card'): string {
+  return type === 'card' ? '2.9% + $0.30 card fee' : '0.8% ACH fee (max $5)';
+}
+
+const BRAND_LABELS: Record<string, string> = {
+  visa: 'Visa',
+  mastercard: 'Mastercard',
+  amex: 'Amex',
+  discover: 'Discover',
+  diners: 'Diners',
+  jcb: 'JCB',
+  unionpay: 'UnionPay',
+};
 
 interface PayRentProps {
   leaseId: string;
@@ -28,7 +49,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   const { showToast } = useToast();
   const [methods, setMethods] = useState<StripePaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
-  const [linking, setLinking] = useState(false);
+  const [linking, setLinking] = useState<'bank' | 'card' | null>(null);
   const [paying, setPaying] = useState(false);
   const [payResult, setPayResult] = useState<'processing' | 'failed' | null>(null);
 
@@ -58,12 +79,12 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   useEffect(() => { loadMethods(); loadAutopay(); }, [loadMethods, loadAutopay]);
 
   const handleLinkBank = async () => {
-    setLinking(true);
+    setLinking('bank');
     try {
       const stripe = await getStripeJs();
       if (!stripe) { showToast('Online payments are not available right now.', 'error'); return; }
 
-      const { clientSecret } = await portalApi.stripe.createSetupIntent();
+      const { clientSecret } = await portalApi.stripe.createSetupIntent('us_bank_account');
 
       const { error } = await stripe.collectBankAccountForSetup({
         clientSecret,
@@ -89,7 +110,37 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     } catch (err) {
       showToast((err as Error).message || 'Could not link your bank account.', 'error');
     } finally {
-      setLinking(false);
+      setLinking(null);
+    }
+  };
+
+  const handleAddCard = async () => {
+    setLinking('card');
+    try {
+      const stripe = await getStripeJs();
+      if (!stripe) { showToast('Online payments are not available right now.', 'error'); return; }
+
+      const { clientSecret } = await portalApi.stripe.createSetupIntent('card');
+
+      const { error } = await stripe.confirmCardSetup(clientSecret, {
+        payment_method: {
+          card: (await createCardElement(stripe)),
+          billing_details: { name: tenantName },
+        },
+      });
+
+      if (error) {
+        showToast(error.message || 'Could not add your card.', 'error');
+        return;
+      }
+
+      showToast('Card added successfully.', 'success');
+      await loadMethods();
+    } catch (err) {
+      showToast((err as Error).message || 'Could not add your card.', 'error');
+    } finally {
+      setLinking(null);
+      cleanupCardElement();
     }
   };
 
@@ -102,13 +153,13 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
         setAutopayEnabled(false);
         setAutopayMethodId(null);
       }
-      showToast('Bank account removed.', 'success');
+      showToast('Payment method removed.', 'success');
     } catch (err) {
-      showToast((err as Error).message || 'Could not remove bank account.', 'error');
+      showToast((err as Error).message || 'Could not remove payment method.', 'error');
     }
   };
 
-  const handlePayRent = async (pmId: string) => {
+  const handlePayRent = async (pm: StripePaymentMethod) => {
     const payAmount = status === 'partial' ? balance : amount;
     if (payAmount <= 0) return;
 
@@ -116,22 +167,38 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     setPayResult(null);
     try {
       const result = await portalApi.stripe.payRent({
-        paymentMethodId: pmId,
+        paymentMethodId: pm.id,
         amount: payAmount,
         month,
         year,
         leaseId,
+        methodType: pm.type,
       });
 
-      if (result.status === 'requires_action' || result.status === 'requires_confirmation') {
-        const stripe = await getStripeJs();
-        if (stripe && result.clientSecret) {
-          await stripe.confirmUsBankAccountPayment(result.clientSecret);
+      if (pm.type === 'us_bank_account') {
+        if (result.status === 'requires_action' || result.status === 'requires_confirmation') {
+          const stripe = await getStripeJs();
+          if (stripe && result.clientSecret) {
+            await stripe.confirmUsBankAccountPayment(result.clientSecret);
+          }
         }
+        setPayResult('processing');
+        showToast('Payment submitted. ACH transfers typically take 3 to 5 business days.', 'success');
+      } else {
+        if (result.status === 'requires_action') {
+          const stripe = await getStripeJs();
+          if (stripe && result.clientSecret) {
+            const { error } = await stripe.confirmCardPayment(result.clientSecret);
+            if (error) {
+              setPayResult('failed');
+              showToast(error.message || 'Card payment failed.', 'error');
+              return;
+            }
+          }
+        }
+        setPayResult('processing');
+        showToast('Card payment submitted. It should confirm within a few seconds.', 'success');
       }
-
-      setPayResult('processing');
-      showToast('Payment submitted. ACH transfers typically take 3 to 5 business days.', 'success');
       onPaymentStarted?.();
     } catch (err) {
       setPayResult('failed');
@@ -175,93 +242,64 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
 
   const isPaid = status === 'paid';
   const payAmount = status === 'partial' ? balance : amount;
-  const fee = achFee(payAmount);
-  const totalWithFee = payAmount + fee;
+
+  const bankMethods = methods.filter(m => m.type === 'us_bank_account');
+  const cardMethods = methods.filter(m => m.type === 'card');
 
   return (
     <Card id="pay-rent-online">
       <CardContent className="p-5 space-y-4">
         <p className="eyebrow">Pay rent online</p>
 
+        {/* Card element mount point for adding a card */}
+        <div id="stripe-card-element" className="hidden" />
+
         {methods.length > 0 ? (
           <div className="space-y-3">
-            {methods.map(pm => {
-              const isAutopayMethod = autopayEnabled && autopayMethodId === pm.id;
-              return (
-                <div key={pm.id} className="rounded-xl border border-line bg-canvas p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-10 h-10 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
-                        <Building2 className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink truncate">{pm.bankName}</p>
-                        <p className="text-xs text-muted">····{pm.last4} · {pm.accountType}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {!isPaid && !payResult && (
-                        <Button
-                          size="sm"
-                          disabled={paying}
-                          onClick={() => handlePayRent(pm.id)}
-                        >
-                          {paying ? (
-                            <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Paying...</>
-                          ) : (
-                            <>Pay {formatCurrency(totalWithFee)}</>
-                          )}
-                        </Button>
-                      )}
-                      <button
-                        onClick={() => handleRemoveMethod(pm.id)}
-                        className="text-faint hover:text-danger p-1.5 rounded-lg hover:bg-danger-soft transition"
-                        title="Remove bank account"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+            {/* Bank accounts */}
+            {bankMethods.map(pm => (
+              <PaymentMethodRow
+                key={pm.id}
+                pm={pm}
+                payAmount={payAmount}
+                isPaid={isPaid}
+                payResult={payResult}
+                paying={paying}
+                autopayEnabled={autopayEnabled}
+                autopayMethodId={autopayMethodId}
+                autopayBusy={autopayBusy}
+                onPay={() => handlePayRent(pm)}
+                onRemove={() => handleRemoveMethod(pm.id)}
+                onToggleAutopay={() => handleToggleAutopay(pm.id)}
+              />
+            ))}
 
-                  {/* Fee breakdown */}
-                  {!isPaid && !payResult && (
-                    <div className="text-xs text-muted pl-[52px]">
-                      {formatCurrency(payAmount)} rent + {formatCurrency(fee)} processing fee
-                    </div>
-                  )}
-
-                  {/* Autopay toggle */}
-                  <div className="flex items-center justify-between pl-[52px]">
-                    <div className="flex items-center gap-2">
-                      <RefreshCw className={`h-3.5 w-3.5 ${isAutopayMethod ? 'text-primary' : 'text-faint'}`} />
-                      <span className="text-xs font-medium text-ink">
-                        {isAutopayMethod ? 'Autopay is on' : 'Autopay'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAutopay(pm.id)}
-                      disabled={autopayBusy}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isAutopayMethod ? 'bg-primary' : 'bg-muted/30'} ${autopayBusy ? 'opacity-50' : ''}`}
-                    >
-                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${isAutopayMethod ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-                    </button>
-                  </div>
-                  {isAutopayMethod && (
-                    <p className="text-xs text-muted pl-[52px]">
-                      Rent will be charged automatically on the due date each month. A {formatCurrency(fee)} processing fee applies.
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+            {/* Cards */}
+            {cardMethods.map(pm => (
+              <PaymentMethodRow
+                key={pm.id}
+                pm={pm}
+                payAmount={payAmount}
+                isPaid={isPaid}
+                payResult={payResult}
+                paying={paying}
+                autopayEnabled={autopayEnabled}
+                autopayMethodId={autopayMethodId}
+                autopayBusy={autopayBusy}
+                onPay={() => handlePayRent(pm)}
+                onRemove={() => handleRemoveMethod(pm.id)}
+                onToggleAutopay={() => handleToggleAutopay(pm.id)}
+              />
+            ))}
 
             {payResult === 'processing' && (
               <div className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary-soft p-4">
                 <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-ink">Payment processing</p>
-                  <p className="text-xs text-muted mt-0.5">ACH transfers typically take 3 to 5 business days to settle.</p>
+                  <p className="text-xs text-muted mt-0.5">
+                    Your payment has been submitted and is being processed.
+                  </p>
                 </div>
               </div>
             )}
@@ -282,27 +320,185 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
         ) : (
           <div className="text-center py-3">
             <CreditCard className="h-8 w-8 text-faint mx-auto mb-2" />
-            <p className="text-sm text-muted mb-3">Link your bank account to pay rent online.</p>
-            <Button onClick={handleLinkBank} disabled={linking}>
-              {linking ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Connecting...</>
-              ) : (
-                'Link bank account'
-              )}
-            </Button>
+            <p className="text-sm text-muted mb-3">Add a payment method to pay rent online.</p>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+              <Button onClick={handleLinkBank} disabled={!!linking}>
+                {linking === 'bank' ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Connecting...</>
+                ) : (
+                  <><Building2 className="h-3.5 w-3.5 mr-1" /> Link bank account</>
+                )}
+              </Button>
+              <Button variant="secondary" onClick={handleAddCard} disabled={!!linking}>
+                {linking === 'card' ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Adding...</>
+                ) : (
+                  <><CreditCard className="h-3.5 w-3.5 mr-1" /> Add card</>
+                )}
+              </Button>
+            </div>
           </div>
         )}
 
         {methods.length > 0 && (
-          <button
-            onClick={handleLinkBank}
-            disabled={linking}
-            className="text-sm text-primary hover:underline disabled:opacity-50"
-          >
-            {linking ? 'Connecting...' : '+ Link another bank account'}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleLinkBank}
+              disabled={!!linking}
+              className="text-sm text-primary hover:underline disabled:opacity-50"
+            >
+              {linking === 'bank' ? 'Connecting...' : '+ Link bank account'}
+            </button>
+            <button
+              onClick={handleAddCard}
+              disabled={!!linking}
+              className="text-sm text-primary hover:underline disabled:opacity-50"
+            >
+              {linking === 'card' ? 'Adding...' : '+ Add card'}
+            </button>
+          </div>
         )}
       </CardContent>
     </Card>
   );
+}
+
+function PaymentMethodRow({
+  pm,
+  payAmount,
+  isPaid,
+  payResult,
+  paying,
+  autopayEnabled,
+  autopayMethodId,
+  autopayBusy,
+  onPay,
+  onRemove,
+  onToggleAutopay,
+}: {
+  pm: StripePaymentMethod;
+  payAmount: number;
+  isPaid: boolean;
+  payResult: 'processing' | 'failed' | null;
+  paying: boolean;
+  autopayEnabled: boolean;
+  autopayMethodId: string | null;
+  autopayBusy: boolean;
+  onPay: () => void;
+  onRemove: () => void;
+  onToggleAutopay: () => void;
+}) {
+  const isAutopayMethod = autopayEnabled && autopayMethodId === pm.id;
+  const fee = feeForMethod(payAmount, pm.type);
+  const totalWithFee = payAmount + fee;
+
+  const isCard = pm.type === 'card';
+  const Icon = isCard ? CreditCard : Building2;
+  const label = isCard
+    ? `${BRAND_LABELS[pm.brand || ''] || 'Card'}`
+    : (pm.bankName || 'Bank account');
+  const sublabel = isCard
+    ? `····${pm.last4}${pm.expMonth ? ` · ${String(pm.expMonth).padStart(2, '0')}/${String(pm.expYear).slice(-2)}` : ''}`
+    : `····${pm.last4} · ${pm.accountType || 'checking'}`;
+
+  return (
+    <div className="rounded-xl border border-line bg-canvas p-4 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-10 h-10 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-ink truncate">{label}</p>
+            <p className="text-xs text-muted">{sublabel}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!isPaid && !payResult && (
+            <Button
+              size="sm"
+              disabled={paying}
+              onClick={onPay}
+            >
+              {paying ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Paying...</>
+              ) : (
+                <>Pay {formatCurrency(totalWithFee)}</>
+              )}
+            </Button>
+          )}
+          <button
+            onClick={onRemove}
+            className="text-faint hover:text-danger p-1.5 rounded-lg hover:bg-danger-soft transition"
+            title="Remove payment method"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {!isPaid && !payResult && (
+        <div className="text-xs text-muted pl-[52px]">
+          {formatCurrency(payAmount)} rent + {formatCurrency(fee)} {feeLabel(pm.type)}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pl-[52px]">
+        <div className="flex items-center gap-2">
+          <RefreshCw className={`h-3.5 w-3.5 ${isAutopayMethod ? 'text-primary' : 'text-faint'}`} />
+          <span className="text-xs font-medium text-ink">
+            {isAutopayMethod ? 'Autopay is on' : 'Autopay'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleAutopay}
+          disabled={autopayBusy}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isAutopayMethod ? 'bg-primary' : 'bg-muted/30'} ${autopayBusy ? 'opacity-50' : ''}`}
+        >
+          <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${isAutopayMethod ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+      {isAutopayMethod && (
+        <p className="text-xs text-muted pl-[52px]">
+          Rent will be charged automatically on the due date each month. A {formatCurrency(fee)} {feeLabel(pm.type)} applies.
+        </p>
+      )}
+    </div>
+  );
+}
+
+let _cardElement: any = null;
+
+async function createCardElement(stripe: any): Promise<any> {
+  cleanupCardElement();
+  const elements = stripe.elements();
+  _cardElement = elements.create('card', {
+    style: {
+      base: {
+        fontSize: '16px',
+        color: 'var(--color-ink, #1a1a1a)',
+        '::placeholder': { color: 'var(--color-muted, #999)' },
+      },
+    },
+  });
+  const container = document.getElementById('stripe-card-element');
+  if (container) {
+    container.classList.remove('hidden');
+    container.classList.add('rounded-xl', 'border', 'border-line', 'bg-canvas', 'p-4', 'mb-3');
+    _cardElement.mount(container);
+  }
+  return _cardElement;
+}
+
+function cleanupCardElement() {
+  if (_cardElement) {
+    try { _cardElement.unmount(); } catch {}
+    _cardElement = null;
+  }
+  const container = document.getElementById('stripe-card-element');
+  if (container) {
+    container.classList.add('hidden');
+    container.classList.remove('rounded-xl', 'border', 'border-line', 'bg-canvas', 'p-4', 'mb-3');
+  }
 }

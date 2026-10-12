@@ -13,6 +13,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   if (!tenantId) return jsonError('No tenant record linked', 404);
 
   try {
+    const body = (await request.json().catch(() => ({}))) as { type?: string };
+    const methodType = body.type === 'card' ? 'card' : 'us_bank_account';
+
     const tenant = await env.DB.prepare('SELECT first_name, last_name, email FROM tenants WHERE id = ?')
       .bind(tenantId)
       .first<{ first_name: string; last_name: string; email: string }>();
@@ -22,19 +25,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const customerId = await getOrCreateCustomer(env, auth.id, email, name);
     const stripe = getStripe(env);
 
-    const setupIntent = await stripe.setupIntents.create({
+    const setupParams: Parameters<typeof stripe.setupIntents.create>[0] = {
       customer: customerId,
-      payment_method_types: ['us_bank_account'],
-      payment_method_options: {
+      payment_method_types: [methodType],
+    };
+
+    if (methodType === 'us_bank_account') {
+      setupParams.payment_method_options = {
         us_bank_account: {
           financial_connections: { permissions: ['payment_method'] },
         },
-      },
-    });
+      };
+    }
+
+    const setupIntent = await stripe.setupIntents.create(setupParams);
 
     return jsonOk({
       success: true,
-      data: { clientSecret: setupIntent.client_secret },
+      data: { clientSecret: setupIntent.client_secret, type: methodType },
     });
   } catch (err) {
     console.error('Stripe setup-intent error:', err);

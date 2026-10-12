@@ -1007,9 +1007,13 @@ export function placeLabel(
 
 export interface StripePaymentMethod {
   id: string;
-  bankName: string;
+  type: 'us_bank_account' | 'card';
   last4: string;
-  accountType: string;
+  bankName?: string;
+  accountType?: string;
+  brand?: string;
+  expMonth?: number;
+  expYear?: number;
 }
 
 export interface PortalAnnouncement {
@@ -1157,15 +1161,15 @@ export const portalApi = {
     postMessageForm('/portal/realtor/messages', body, file),
   announcements: (): Promise<PortalAnnouncement[]> => apiRequest('/portal/announcements'),
   stripe: {
-    createSetupIntent: (): Promise<{ clientSecret: string }> =>
-      apiRequest('/portal/stripe/setup-intent', { method: 'POST' }),
+    createSetupIntent: (type?: 'us_bank_account' | 'card'): Promise<{ clientSecret: string; type: string }> =>
+      apiRequest('/portal/stripe/setup-intent', { method: 'POST', body: JSON.stringify({ type: type || 'us_bank_account' }) }),
     paymentMethods: (): Promise<StripePaymentMethod[]> =>
       apiRequest('/portal/stripe/payment-methods'),
     removePaymentMethod: (paymentMethodId: string): Promise<{ success: boolean }> =>
       apiRequest('/portal/stripe/payment-methods', { method: 'DELETE', body: JSON.stringify({ paymentMethodId }) }),
-    payRent: (data: { paymentMethodId: string; amount: number; month: number; year: number; leaseId: string }): Promise<{ paymentIntentId: string; clientSecret: string; status: string; fee: number; totalAmount: number }> =>
+    payRent: (data: { paymentMethodId: string; amount: number; month: number; year: number; leaseId: string; methodType?: 'us_bank_account' | 'card' }): Promise<{ paymentIntentId: string; clientSecret: string; status: string; fee: number; totalAmount: number }> =>
       apiRequest('/portal/stripe/pay-rent', { method: 'POST', body: JSON.stringify(data) }),
-    getAutopay: (): Promise<{ enabled: boolean; paymentMethodId: string | null }> =>
+    getAutopay: (): Promise<{ enabled: boolean; paymentMethodId: string | null; methodType: string }> =>
       apiRequest('/portal/stripe/autopay'),
     setAutopay: (data: { enabled: boolean; paymentMethodId?: string }): Promise<{ success: boolean; enabled: boolean }> =>
       apiRequest('/portal/stripe/autopay', { method: 'POST', body: JSON.stringify(data) }),

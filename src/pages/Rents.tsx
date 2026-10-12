@@ -51,6 +51,8 @@ const paymentMethodConfig: Record<PaymentMethod, { label: string; icon: typeof C
   zelle: { label: 'Zelle', icon: Smartphone },
   venmo: { label: 'Venmo', icon: Wallet },
   cash: { label: 'Cash', icon: Banknote },
+  bank_transfer: { label: 'Bank Transfer', icon: CreditCard },
+  card: { label: 'Card', icon: CreditCard },
   other: { label: 'Other', icon: CreditCard },
 };
 

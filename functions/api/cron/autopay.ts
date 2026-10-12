@@ -5,7 +5,7 @@ import { getStripe } from '../../lib/stripe';
 import { sendPushToUser } from '../../lib/push';
 import { sendEmail } from '../../lib/email';
 import { SITE_URL } from '../../lib/site';
-import { achFee } from '../../lib/stripe-fee';
+import { stripeFee } from '../../lib/stripe-fee';
 
 /**
  * POST /api/cron/autopay — charge rent automatically for tenants who opted in.
@@ -20,6 +20,7 @@ interface AutopayTenant {
   lease_id: string;
   monthly_rent: number;
   autopay_payment_method_id: string;
+  autopay_method_type: string | null;
   stripe_customer_id: string;
   lease_due_day: number | null;
 }
@@ -79,7 +80,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const { results: rows } = await env.DB.prepare(
       `SELECT u.id AS user_id, t.id AS tenant_id, t.first_name, t.email,
               l.id AS lease_id, l.monthly_rent, l.rent_due_day AS lease_due_day,
-              u.autopay_payment_method_id, u.stripe_customer_id
+              u.autopay_payment_method_id, u.autopay_method_type, u.stripe_customer_id
          FROM user u
          JOIN tenants t ON t.user_id = u.id
          JOIN lease_tenants lt ON lt.tenant_id = t.id
@@ -114,26 +115,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         if (existing) continue;
 
         const rentAmount = tenant.monthly_rent;
-        const fee = achFee(rentAmount);
+        const pmType = (tenant.autopay_method_type === 'card' ? 'card' : 'us_bank_account') as 'card' | 'us_bank_account';
+        const fee = stripeFee(rentAmount, pmType);
         const totalAmount = rentAmount + fee;
         const amountCents = Math.round(totalAmount * 100);
 
-        const pi = await stripe.paymentIntents.create({
+        const piParams: Parameters<typeof stripe.paymentIntents.create>[0] = {
           amount: amountCents,
           currency: 'usd',
           customer: tenant.stripe_customer_id,
           payment_method: tenant.autopay_payment_method_id,
-          payment_method_types: ['us_bank_account'],
+          payment_method_types: [pmType],
           confirm: true,
-          mandate_data: {
-            customer_acceptance: {
-              type: 'online',
-              online: {
-                ip_address: '0.0.0.0',
-                user_agent: 'MH Dunn Property Autopay',
-              },
-            },
-          },
           metadata: {
             leaseId: tenant.lease_id,
             tenantId: tenant.tenant_id,
@@ -143,8 +136,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             autopay: 'true',
             rentAmount: String(rentAmount),
             processingFee: String(fee),
+            methodType: pmType,
           },
-        });
+        };
+
+        if (pmType === 'us_bank_account') {
+          piParams.mandate_data = {
+            customer_acceptance: {
+              type: 'online',
+              online: {
+                ip_address: '0.0.0.0',
+                user_agent: 'MH Dunn Property Autopay',
+              },
+            },
+          };
+        }
+
+        const pi = await stripe.paymentIntents.create(piParams);
 
         const paymentId = crypto.randomUUID();
         await env.DB.prepare(
@@ -154,7 +162,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         ).bind(
           paymentId, tenant.lease_id, tenant.tenant_id, rentAmount,
           new Date().toISOString().slice(0, 10), 'processing',
-          month, year, 'bank_transfer', tenant.user_id,
+          month, year, pmType === 'card' ? 'card' : 'bank_transfer', tenant.user_id,
           new Date().toISOString(), 'payment', pi.id,
         ).run();
 

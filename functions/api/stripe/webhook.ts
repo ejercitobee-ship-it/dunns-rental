@@ -3,6 +3,7 @@ import type { Env } from '../../lib/session';
 import { getStripe } from '../../lib/stripe';
 import { syncRentSheet } from '../../lib/sheets';
 import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
+import { generateReceipt } from '../../lib/receipts';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -38,18 +39,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
       try { syncRentSheet({ env, waitUntil: context.waitUntil.bind(context) }); } catch {}
 
+      const isAutopay = pi.metadata?.autopay === 'true';
       context.waitUntil(
         getManagementUserIds(env).then(userIds =>
           notifyMultiple(env, userIds.map(uid => ({
             userId: uid,
             type: 'payment',
             category: 'payment_autopay',
-            title: 'Autopay rent payment received',
+            title: isAutopay ? 'Autopay rent payment received' : 'Online rent payment received',
             entityType: 'rent_payment',
             entityId: row.id,
             route: '/rent',
           })))
         ).catch(() => {})
+      );
+
+      context.waitUntil(
+        generateReceipt(env, row.id, pi.metadata?.userId || 'system').catch((err) => {
+          console.error('Webhook receipt generation failed:', err);
+        })
       );
     }
   }

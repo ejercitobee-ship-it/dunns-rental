@@ -16,19 +16,29 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if (!row?.stripe_customer_id) return jsonOk({ success: true, data: [] });
 
     const stripe = getStripe(env);
-    const methods = await stripe.paymentMethods.list({
-      customer: row.stripe_customer_id,
-      type: 'us_bank_account',
-    });
+    const [bankMethods, cardMethods] = await Promise.all([
+      stripe.paymentMethods.list({ customer: row.stripe_customer_id, type: 'us_bank_account' }),
+      stripe.paymentMethods.list({ customer: row.stripe_customer_id, type: 'card' }),
+    ]);
 
-    const data = methods.data.map(pm => ({
+    const banks = bankMethods.data.map(pm => ({
       id: pm.id,
+      type: 'us_bank_account' as const,
       bankName: pm.us_bank_account?.bank_name ?? 'Bank account',
       last4: pm.us_bank_account?.last4 ?? '****',
       accountType: pm.us_bank_account?.account_type ?? 'checking',
     }));
 
-    return jsonOk({ success: true, data });
+    const cards = cardMethods.data.map(pm => ({
+      id: pm.id,
+      type: 'card' as const,
+      brand: pm.card?.brand ?? 'card',
+      last4: pm.card?.last4 ?? '****',
+      expMonth: pm.card?.exp_month ?? 0,
+      expYear: pm.card?.exp_year ?? 0,
+    }));
+
+    return jsonOk({ success: true, data: [...banks, ...cards] });
   } catch (err) {
     console.error('Stripe payment-methods error:', err);
     return serverError();

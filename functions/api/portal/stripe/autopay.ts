@@ -13,12 +13,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth.role !== 'tenant') return jsonError('Not a tenant account', 403);
 
   const row = await env.DB.prepare(
-    'SELECT autopay_enabled, autopay_payment_method_id FROM user WHERE id = ?'
-  ).bind(auth.id).first<{ autopay_enabled: number; autopay_payment_method_id: string | null }>();
+    'SELECT autopay_enabled, autopay_payment_method_id, autopay_method_type FROM user WHERE id = ?'
+  ).bind(auth.id).first<{ autopay_enabled: number; autopay_payment_method_id: string | null; autopay_method_type: string | null }>();
 
   return jsonOk({
     enabled: row?.autopay_enabled === 1,
     paymentMethodId: row?.autopay_payment_method_id ?? null,
+    methodType: row?.autopay_method_type ?? 'us_bank_account',
   });
 };
 
@@ -48,12 +49,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const pm = await stripe.paymentMethods.retrieve(body.paymentMethodId);
       if (pm.customer !== customerId) return jsonError('Payment method does not belong to you', 403);
 
+      const methodType = pm.type === 'card' ? 'card' : 'us_bank_account';
+
       await env.DB.prepare(
-        'UPDATE user SET autopay_enabled = 1, autopay_payment_method_id = ? WHERE id = ?'
-      ).bind(body.paymentMethodId, auth.id).run();
+        'UPDATE user SET autopay_enabled = 1, autopay_payment_method_id = ?, autopay_method_type = ? WHERE id = ?'
+      ).bind(body.paymentMethodId, methodType, auth.id).run();
     } else {
       await env.DB.prepare(
-        'UPDATE user SET autopay_enabled = 0, autopay_payment_method_id = NULL WHERE id = ?'
+        'UPDATE user SET autopay_enabled = 0, autopay_payment_method_id = NULL, autopay_method_type = NULL WHERE id = ?'
       ).bind(auth.id).run();
     }
 
