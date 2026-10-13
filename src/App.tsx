@@ -56,6 +56,7 @@ const AIAssistant = lazy(() => import('./pages/AIAssistant').then(m => ({ defaul
 const Tasks = lazy(() => import('./pages/Tasks').then(m => ({ default: m.Tasks })));
 const NotificationsPage = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
+const TermsOfService = lazy(() => import('./pages/TermsOfService').then(m => ({ default: m.TermsOfService })));
 
 // Protected Route component
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: string }) {
@@ -201,6 +202,7 @@ function AppRoutes() {
       <Route path="/vendor-form/:token" element={<VendorFormPage />} />
 
       <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
       
       <Route path="/" element={<RootRoute />} />
 

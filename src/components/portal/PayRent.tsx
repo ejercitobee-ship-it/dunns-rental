@@ -326,20 +326,35 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     }
   };
 
+  const [autopayConfirmPmId, setAutopayConfirmPmId] = useState<string | null>(null);
+
   const handleToggleAutopay = async (pmId: string) => {
-    setAutopayBusy(true);
-    try {
-      if (autopayEnabled && autopayMethodId === pmId) {
+    if (autopayEnabled && autopayMethodId === pmId) {
+      setAutopayBusy(true);
+      try {
         await portalApi.stripe.setAutopay({ enabled: false });
         setAutopayEnabled(false);
         setAutopayMethodId(null);
         showToast('Autopay turned off.', 'success');
-      } else {
-        await portalApi.stripe.setAutopay({ enabled: true, paymentMethodId: pmId });
-        setAutopayEnabled(true);
-        setAutopayMethodId(pmId);
-        showToast('Autopay is on. Your rent will be charged automatically on the due date.', 'success');
+      } catch (err) {
+        showToast((err as Error).message || 'Could not update autopay.', 'error');
+      } finally {
+        setAutopayBusy(false);
       }
+    } else {
+      setAutopayConfirmPmId(pmId);
+    }
+  };
+
+  const confirmAutopay = async () => {
+    if (!autopayConfirmPmId) return;
+    setAutopayBusy(true);
+    setAutopayConfirmPmId(null);
+    try {
+      await portalApi.stripe.setAutopay({ enabled: true, paymentMethodId: autopayConfirmPmId });
+      setAutopayEnabled(true);
+      setAutopayMethodId(autopayConfirmPmId);
+      showToast('Autopay is on. Your rent will be charged automatically on the due date.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not update autopay.', 'error');
     } finally {
@@ -365,6 +380,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   const cardMethods = methods.filter(m => m.type === 'card');
 
   return (
+    <>
     <Card id="pay-rent-online">
       <CardContent className="p-5 space-y-4">
         <p className="eyebrow">Pay rent</p>
@@ -526,8 +542,57 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
         {paymentInstructions && (
           <ZelleOption instructions={paymentInstructions} memo={paymentMemo} />
         )}
+
+        <p className="text-xs text-muted leading-relaxed">
+          Online payment is optional. You may also pay by check, money order, or Zelle.
+          Contact the office at{' '}
+          <a href="tel:+17732346422" className="text-primary hover:underline">(773) 234-6422</a>
+          {' '}or{' '}
+          <a href="mailto:info@mhdunnproperty.net" className="text-primary hover:underline">info@mhdunnproperty.net</a>
+          {' '}for details. Processing fees apply only to online payments and are shown before you pay.
+        </p>
       </CardContent>
     </Card>
+
+    {autopayConfirmPmId && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="bg-surface rounded-2xl border border-line shadow-xl max-w-md w-full p-6 space-y-4">
+          <h3 className="text-base font-semibold text-ink">Enable Autopay</h3>
+          <div className="text-sm text-ink leading-relaxed space-y-3">
+            <p>
+              By enabling autopay, you authorize MH Dunn Property to automatically debit your
+              selected payment method on the rent due date each month for the full monthly rent
+              amount plus the applicable processing fee.
+            </p>
+            <p>
+              For bank account (ACH) payments, you authorize recurring electronic debits from your
+              account in accordance with NACHA rules. ACH transfers typically take 3 to 5 business
+              days to settle.
+            </p>
+            <p>
+              You may cancel autopay at any time from this screen, and cancellation will take
+              effect before the next scheduled charge. If you have questions, contact the office at{' '}
+              <a href="mailto:info@mhdunnproperty.net" className="text-primary hover:underline">info@mhdunnproperty.net</a>
+              {' '}or{' '}
+              <a href="tel:+17732346422" className="text-primary hover:underline">(773) 234-6422</a>.
+            </p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button onClick={confirmAutopay} disabled={autopayBusy}>
+              {autopayBusy ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Enabling...</>
+              ) : (
+                'I agree, enable autopay'
+              )}
+            </Button>
+            <Button variant="secondary" onClick={() => setAutopayConfirmPmId(null)} disabled={autopayBusy}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

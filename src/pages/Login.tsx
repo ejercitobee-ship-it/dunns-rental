@@ -277,9 +277,14 @@ export function Login() {
         {/* Footer */}
         <div className="text-center mt-8 space-y-1">
           <p className="text-sm text-faint">© 2026 MH Dunn Property. All rights reserved.</p>
-          <Link to="/privacy" className="text-sm text-primary hover:text-primary-hover font-medium">
-            Data Privacy Policy
-          </Link>
+          <div className="flex justify-center gap-4">
+            <Link to="/privacy" className="text-sm text-primary hover:text-primary-hover font-medium">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" className="text-sm text-primary hover:text-primary-hover font-medium">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
       </div>
