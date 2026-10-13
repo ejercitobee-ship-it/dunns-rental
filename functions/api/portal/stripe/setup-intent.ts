@@ -44,8 +44,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       success: true,
       data: { clientSecret: setupIntent.client_secret, type: methodType },
     });
-  } catch (err) {
-    console.error('Stripe setup-intent error:', err);
-    return serverError();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Stripe setup-intent error:', msg);
+    return jsonError(msg, 500);
   }
 };
