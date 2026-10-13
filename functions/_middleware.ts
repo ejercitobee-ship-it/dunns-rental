@@ -56,7 +56,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (pathname.startsWith('/api/') && response.ok && !isAuthRoute) {
     const sessionToken = parseCookies(request)['session'];
     if (sessionToken) {
-      response.headers.append('Set-Cookie', sessionCookie(sessionToken));
+      response.headers.append('Set-Cookie', sessionCookie(sessionToken, request.url));
       context.waitUntil(
         renewSessionDb(env, sessionToken).catch(() => { /* must never break a request */ })
       );

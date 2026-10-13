@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CreditCard, Building2, Trash2, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { CreditCard, Building2, Trash2, Loader2, CheckCircle, AlertCircle, RefreshCw, DollarSign, Copy } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { portalApi, type StripePaymentMethod } from '../../lib/api';
@@ -43,9 +43,11 @@ interface PayRentProps {
   balance: number;
   tenantName: string;
   onPaymentStarted?: () => void;
+  paymentInstructions?: string;
+  paymentMemo?: string;
 }
 
-export function PayRent({ leaseId, amount, month, year, monthLabel, status, balance, tenantName, onPaymentStarted }: PayRentProps) {
+export function PayRent({ leaseId, amount, month, year, monthLabel, status, balance, tenantName, onPaymentStarted, paymentInstructions, paymentMemo }: PayRentProps) {
   const { showToast } = useToast();
   const [methods, setMethods] = useState<StripePaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,7 +251,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   return (
     <Card id="pay-rent-online">
       <CardContent className="p-5 space-y-4">
-        <p className="eyebrow">Pay rent online</p>
+        <p className="eyebrow">Pay rent</p>
 
         {/* Card element mount point for adding a card */}
         <div id="stripe-card-element" className="hidden" />
@@ -358,6 +360,10 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
             </button>
           </div>
         )}
+
+        {paymentInstructions && (
+          <ZelleOption instructions={paymentInstructions} memo={paymentMemo} />
+        )}
       </CardContent>
     </Card>
   );
@@ -463,6 +469,49 @@ function PaymentMethodRow({
         <p className="text-xs text-muted pl-[52px]">
           Rent will be charged automatically on the due date each month. A {formatCurrency(fee)} {feeLabel(pm.type)} applies.
         </p>
+      )}
+    </div>
+  );
+}
+
+function ZelleOption({ instructions, memo }: { instructions: string; memo?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!memo) return;
+    try {
+      await navigator.clipboard.writeText(memo);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  };
+
+  return (
+    <div className="rounded-xl border border-line bg-canvas p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="w-10 h-10 rounded-lg bg-[#6d1ed4]/10 text-[#6d1ed4] grid place-items-center flex-shrink-0">
+          <DollarSign className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-ink">Zelle</p>
+          <p className="text-xs text-muted">No processing fee</p>
+        </div>
+      </div>
+      <p className="text-sm text-ink pl-[52px]">{instructions}</p>
+      {memo && (
+        <div className="ml-[52px] rounded-lg border border-line bg-surface p-3 space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Put this in the memo</p>
+          <div className="flex items-center gap-2">
+            <code className="text-sm text-ink flex-1 break-words">{memo}</code>
+            <button
+              type="button"
+              onClick={copy}
+              className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0"
+            >
+              <Copy className="h-3 w-3" />
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

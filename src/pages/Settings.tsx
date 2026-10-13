@@ -652,7 +652,7 @@ export function Settings() {
               <textarea
                 rows={2}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Pay your rent by Zelle to 7739917112."
+                placeholder="Pay your rent by Zelle to Marlene Dunn at 7739917112."
                 value={rentSettings.paymentInstructions}
                 onChange={(e) => setRentSettings({ ...rentSettings, paymentInstructions: e.target.value })}
               />

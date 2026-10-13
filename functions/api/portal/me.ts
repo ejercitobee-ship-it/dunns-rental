@@ -4,7 +4,7 @@ import { tenantIdForUser, leasePauses } from '../../lib/portal';
 import { getSetting } from '../../lib/google';
 import { serializePortalTenant, serializePortalLease, serializeUnit, serializeProperty } from '../../lib/serializers';
 
-const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to 7739917112.';
+const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to Marlene Dunn at 7739917112.';
 
 /** The rent settings the portal needs: payment instructions and the past-due
  * threshold. Reads app_settings 'rent' once, falling back to defaults. */

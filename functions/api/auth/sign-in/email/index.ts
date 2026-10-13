@@ -87,7 +87,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const trustedDevice = await checkTrustedDevice(env, user.id, tdToken);
 
     if (trustedDevice) {
-      // Remembered device within its 30-day window: skip the code.
+      // Remembered device: skip the code.
     } else if (user.totp_enabled) {
       const code = (body.code || '').trim();
       if (!code) {
@@ -177,7 +177,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Two cookies may be set (session + remembered device), so build the headers
     // by hand: a plain object cannot carry two Set-Cookie entries.
     const headers = new Headers({ 'Content-Type': 'application/json' });
-    headers.append('Set-Cookie', sessionCookie(sessionToken));
+    headers.append('Set-Cookie', sessionCookie(sessionToken, request.url));
     if (tdCookieToSet) headers.append('Set-Cookie', tdCookieToSet);
 
     return new Response(

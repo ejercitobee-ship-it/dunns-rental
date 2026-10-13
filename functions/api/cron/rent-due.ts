@@ -5,7 +5,7 @@ import { sendPushToUser } from '../../lib/push';
 import { sendEmail, rentReminderEmail } from '../../lib/email';
 import { SITE_URL } from '../../lib/site';
 
-const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to 7739917112.';
+const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to Marlene Dunn at 7739917112.';
 const STATE_KEY = 'rentReminderState';
 
 interface RentSettings {

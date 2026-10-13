@@ -249,7 +249,7 @@ export function TenantHome() {
       ) : (
         <>
           <HomeCard property={property} unit={unit} lease={lease} />
-          {import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY && (
+          {import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ? (
             <PayRent
               leaseId={lease.id}
               amount={thisMonth?.due ?? lease.monthlyRent}
@@ -259,9 +259,12 @@ export function TenantHome() {
               status={thisMonth?.status ?? null}
               balance={thisMonth?.balance ?? 0}
               tenantName={`${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim() || 'Tenant'}
+              paymentInstructions={me.paymentInstructions}
+              paymentMemo={paymentMemo}
             />
+          ) : (
+            <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
           )}
-          <HowToPayCard instructions={me.paymentInstructions} memo={paymentMemo} />
         </>
       )}
 

@@ -9,7 +9,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (token) {
       await env.DB.prepare('DELETE FROM session WHERE token = ?').bind(token).run();
     }
-    return jsonOk({ success: true }, 200, { 'Set-Cookie': clearSessionCookie() });
+    return jsonOk({ success: true }, 200, { 'Set-Cookie': clearSessionCookie(request.url) });
   } catch {
     return serverError();
   }

@@ -29,7 +29,7 @@ const DEFAULTS = {
     rentDueDay: 1,
     // Shown to tenants on their portal under "How to pay". The portal adds each
     // tenant's own memo (street, unit, month, name) beneath this.
-    paymentInstructions: 'Pay your rent by Zelle to 7739917112.',
+    paymentInstructions: 'Pay your rent by Zelle to Marlene Dunn at 7739917112.',
   },
   notifications: {
     emailNotifications: true,

@@ -63,12 +63,14 @@ const SESSION_COOKIE = 'session';
  *  indefinitely and idle users get logged out after 15 minutes. */
 const SESSION_IDLE_TIMEOUT = 15 * 60; // 15 minutes
 
-export function sessionCookie(token: string): string {
-  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_IDLE_TIMEOUT}; Path=/`;
+export function sessionCookie(token: string, requestUrl?: string): string {
+  const secure = requestUrl && new URL(requestUrl).hostname === '127.0.0.1' ? '' : ' Secure;';
+  return `${SESSION_COOKIE}=${token}; HttpOnly;${secure} SameSite=Strict; Max-Age=${SESSION_IDLE_TIMEOUT}; Path=/`;
 }
 
-export function clearSessionCookie(): string {
-  return `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/`;
+export function clearSessionCookie(requestUrl?: string): string {
+  const secure = requestUrl && new URL(requestUrl).hostname === '127.0.0.1' ? '' : ' Secure;';
+  return `${SESSION_COOKIE}=; HttpOnly;${secure} SameSite=Strict; Max-Age=0; Path=/`;
 }
 
 /**
