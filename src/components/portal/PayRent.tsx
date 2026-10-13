@@ -566,6 +566,7 @@ async function createCardElement(stripe: any): Promise<any> {
   cleanupCardElement();
   const elements = stripe.elements();
   _cardElement = elements.create('card', {
+    disableLink: true,
     style: {
       base: {
         fontSize: '16px',
