@@ -129,6 +129,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
       await createCardElement(stripe);
       setCardClientSecret(clientSecret);
       setCardInputReady(true);
+      setLinking(null);
     } catch (err) {
       showToast((err as Error).message || 'Could not add your card.', 'error');
       setLinking(null);
@@ -384,7 +385,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
           </div>
         )}
 
-        {methods.length > 0 && (
+        {methods.length > 0 && !cardInputReady && (
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleLinkBank}
