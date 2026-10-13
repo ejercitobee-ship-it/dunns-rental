@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../lib/session';
+import { type Env, requireUser, jsonOk, jsonError } from '../../../lib/session';
 import { tenantIdForUser } from '../../../lib/portal';
 import { getStripe, getOrCreateCustomer } from '../../../lib/stripe';
 
