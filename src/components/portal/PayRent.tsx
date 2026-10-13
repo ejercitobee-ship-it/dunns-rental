@@ -55,6 +55,9 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   const [paying, setPaying] = useState(false);
   const [payResult, setPayResult] = useState<'processing' | 'failed' | null>(null);
 
+  const [cardInputReady, setCardInputReady] = useState(false);
+  const [cardClientSecret, setCardClientSecret] = useState<string | null>(null);
+
   const [autopayEnabled, setAutopayEnabled] = useState(false);
   const [autopayMethodId, setAutopayMethodId] = useState<string | null>(null);
   const [autopayBusy, setAutopayBusy] = useState(false);
@@ -120,13 +123,29 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     setLinking('card');
     try {
       const stripe = await getStripeJs();
-      if (!stripe) { showToast('Online payments are not available right now.', 'error'); return; }
+      if (!stripe) { showToast('Online payments are not available right now.', 'error'); setLinking(null); return; }
 
       const { clientSecret } = await portalApi.stripe.createSetupIntent('card');
+      await createCardElement(stripe);
+      setCardClientSecret(clientSecret);
+      setCardInputReady(true);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not add your card.', 'error');
+      setLinking(null);
+      cleanupCardElement();
+    }
+  };
 
-      const { error } = await stripe.confirmCardSetup(clientSecret, {
+  const handleConfirmCard = async () => {
+    if (!cardClientSecret || !_cardElement) return;
+    setLinking('card');
+    try {
+      const stripe = await getStripeJs();
+      if (!stripe) return;
+
+      const { error } = await stripe.confirmCardSetup(cardClientSecret, {
         payment_method: {
-          card: (await createCardElement(stripe)),
+          card: _cardElement,
           billing_details: { name: tenantName },
         },
       });
@@ -142,8 +161,17 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
       showToast((err as Error).message || 'Could not add your card.', 'error');
     } finally {
       setLinking(null);
+      setCardInputReady(false);
+      setCardClientSecret(null);
       cleanupCardElement();
     }
+  };
+
+  const handleCancelCard = () => {
+    setLinking(null);
+    setCardInputReady(false);
+    setCardClientSecret(null);
+    cleanupCardElement();
   };
 
   const handleRemoveMethod = async (pmId: string) => {
@@ -255,6 +283,20 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
 
         {/* Card element mount point for adding a card */}
         <div id="stripe-card-element" className="hidden" />
+        {cardInputReady && (
+          <div className="flex gap-2">
+            <Button onClick={handleConfirmCard} disabled={linking === 'card'}>
+              {linking === 'card' ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Saving...</>
+              ) : (
+                'Save card'
+              )}
+            </Button>
+            <Button variant="secondary" onClick={handleCancelCard} disabled={linking === 'card'}>
+              Cancel
+            </Button>
+          </div>
+        )}
 
         {methods.length > 0 ? (
           <div className="space-y-3">
