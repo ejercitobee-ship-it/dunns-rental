@@ -268,12 +268,19 @@ export function Login() {
             Call or text{' '}
             <a href="tel:+17732346422" className="text-primary hover:text-primary-hover font-medium">(773) 234-6422</a>
           </p>
+          <p className="text-sm text-muted mt-1">
+            Email{' '}
+            <a href="mailto:info@mhdunnproperty.net" className="text-primary hover:text-primary-hover font-medium">info@mhdunnproperty.net</a>
+          </p>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-faint mt-8">
-          © 2026 MH Dunn Property. All rights reserved.
-        </p>
+        <div className="text-center mt-8 space-y-1">
+          <p className="text-sm text-faint">© 2026 MH Dunn Property. All rights reserved.</p>
+          <Link to="/privacy" className="text-sm text-primary hover:text-primary-hover font-medium">
+            Data Privacy Policy
+          </Link>
+        </div>
       </div>
       </div>
     </div>

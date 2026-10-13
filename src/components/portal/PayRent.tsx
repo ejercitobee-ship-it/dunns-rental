@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CreditCard, Building2, Trash2, Loader2, CheckCircle, AlertCircle, RefreshCw, DollarSign, Copy } from 'lucide-react';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { CreditCard, Building2, Trash2, Loader2, CheckCircle, AlertCircle, RefreshCw, DollarSign, Copy, Smartphone } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { portalApi, type StripePaymentMethod } from '../../lib/api';
@@ -62,6 +62,10 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   const [autopayMethodId, setAutopayMethodId] = useState<string | null>(null);
   const [autopayBusy, setAutopayBusy] = useState(false);
 
+  const [walletAvailable, setWalletAvailable] = useState<'apple_pay' | 'google_pay' | null>(null);
+  const [walletPaying, setWalletPaying] = useState(false);
+  const walletChecked = useRef(false);
+
   const loadMethods = useCallback(async () => {
     try {
       const data = await portalApi.stripe.paymentMethods();
@@ -82,6 +86,89 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
   }, []);
 
   useEffect(() => { loadMethods(); loadAutopay(); }, [loadMethods, loadAutopay]);
+
+  useEffect(() => {
+    if (walletChecked.current) return;
+    walletChecked.current = true;
+    (async () => {
+      try {
+        const stripe = await getStripeJs();
+        if (!stripe) return;
+        const pr = stripe.paymentRequest({
+          country: 'US',
+          currency: 'usd',
+          total: { label: 'Rent check', amount: 100 },
+          requestPayerName: true,
+        });
+        const result = await pr.canMakePayment();
+        if (result?.applePay) setWalletAvailable('apple_pay');
+        else if (result?.googlePay) setWalletAvailable('google_pay');
+      } catch {}
+    })();
+  }, []);
+
+  const handleWalletPay = async () => {
+    const payAmt = status === 'partial' ? balance : amount;
+    if (payAmt <= 0) return;
+    setWalletPaying(true);
+    setPayResult(null);
+    try {
+      const stripe = await getStripeJs();
+      if (!stripe) { showToast('Online payments are not available right now.', 'error'); return; }
+
+      const fee = cardFee(payAmt);
+      const totalCents = Math.round((payAmt + fee) * 100);
+
+      const pr = stripe.paymentRequest({
+        country: 'US',
+        currency: 'usd',
+        total: { label: `${monthLabel} Rent`, amount: totalCents },
+        requestPayerName: true,
+      });
+
+      const canPay = await pr.canMakePayment();
+      if (!canPay) { showToast('Digital wallet is not available on this device.', 'error'); return; }
+
+      pr.on('paymentmethod', async (ev) => {
+        try {
+          const result = await portalApi.stripe.payRent({
+            paymentMethodId: ev.paymentMethod.id,
+            amount: payAmt,
+            month,
+            year,
+            leaseId,
+            methodType: 'card',
+          });
+
+          if (result.status === 'requires_action' && result.clientSecret) {
+            const { error } = await stripe.confirmCardPayment(result.clientSecret);
+            if (error) {
+              ev.complete('fail');
+              setPayResult('failed');
+              showToast(error.message || 'Payment failed.', 'error');
+              return;
+            }
+          }
+
+          ev.complete('success');
+          setPayResult('processing');
+          showToast('Payment submitted successfully.', 'success');
+          onPaymentStarted?.();
+        } catch (err) {
+          ev.complete('fail');
+          setPayResult('failed');
+          showToast((err as Error).message || 'Payment failed.', 'error');
+        }
+      });
+
+      pr.show();
+    } catch (err) {
+      setPayResult('failed');
+      showToast((err as Error).message || 'Payment failed.', 'error');
+    } finally {
+      setWalletPaying(false);
+    }
+  };
 
   const handleLinkBank = async () => {
     setLinking('bank');
@@ -296,6 +383,38 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
             <Button variant="secondary" onClick={handleCancelCard} disabled={linking === 'card'}>
               Cancel
             </Button>
+          </div>
+        )}
+
+        {walletAvailable && !isPaid && !payResult && (
+          <div className="rounded-xl border border-line bg-canvas p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-10 h-10 rounded-lg bg-ink/5 text-ink grid place-items-center flex-shrink-0">
+                  <Smartphone className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">
+                    {walletAvailable === 'apple_pay' ? 'Apple Pay' : 'Google Pay'}
+                  </p>
+                  <p className="text-xs text-muted">Pay instantly with your digital wallet</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                disabled={walletPaying || paying}
+                onClick={handleWalletPay}
+              >
+                {walletPaying ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Paying...</>
+                ) : (
+                  <>Pay {formatCurrency(payAmount + cardFee(payAmount))}</>
+                )}
+              </Button>
+            </div>
+            <div className="text-xs text-muted pl-[52px]">
+              {formatCurrency(payAmount)} rent + {formatCurrency(cardFee(payAmount))} {feeLabel('card')}
+            </div>
           </div>
         )}
 
