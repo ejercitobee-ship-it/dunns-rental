@@ -45,8 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       data: { clientSecret: setupIntent.client_secret, type: methodType },
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Stripe setup-intent error:', msg);
-    return jsonError(msg, 500);
+    console.error('Stripe setup-intent error:', err instanceof Error ? err.message : err);
+    return jsonError('Could not set up payment method. Please try again.', 500);
   }
 };

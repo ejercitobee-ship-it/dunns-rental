@@ -51,9 +51,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
       const methodType = pm.type === 'card' ? 'card' : 'us_bank_account';
 
+      const ip = request.headers.get('CF-Connecting-IP') || '';
+      const ua = request.headers.get('User-Agent') || '';
       await env.DB.prepare(
-        'UPDATE user SET autopay_enabled = 1, autopay_payment_method_id = ?, autopay_method_type = ? WHERE id = ?'
-      ).bind(body.paymentMethodId, methodType, auth.id).run();
+        'UPDATE user SET autopay_enabled = 1, autopay_payment_method_id = ?, autopay_method_type = ?, autopay_ip = ?, autopay_user_agent = ? WHERE id = ?'
+      ).bind(body.paymentMethodId, methodType, ip, ua, auth.id).run();
     } else {
       await env.DB.prepare(
         'UPDATE user SET autopay_enabled = 0, autopay_payment_method_id = NULL, autopay_method_type = NULL WHERE id = ?'

@@ -2,14 +2,16 @@ import Stripe from 'stripe';
 import type { Env } from './session';
 
 let _stripe: Stripe | null = null;
+let _stripeKey: string | null = null;
 
 export function getStripe(env: Env): Stripe {
   if (!env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY is not configured');
-  if (!_stripe) {
+  if (!_stripe || _stripeKey !== env.STRIPE_SECRET_KEY) {
     _stripe = new Stripe(env.STRIPE_SECRET_KEY, {
       apiVersion: '2026-08-26.dahlia',
       httpClient: Stripe.createFetchHttpClient(),
     });
+    _stripeKey = env.STRIPE_SECRET_KEY;
   }
   return _stripe;
 }

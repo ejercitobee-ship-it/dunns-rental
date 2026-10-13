@@ -537,6 +537,9 @@ async function createCardElement(stripe: any): Promise<any> {
     container.classList.add('rounded-xl', 'border', 'border-line', 'bg-canvas', 'p-4', 'mb-3');
     _cardElement.mount(container);
   }
+  await new Promise<void>((resolve) => {
+    _cardElement.on('ready', () => resolve());
+  });
   return _cardElement;
 }
 

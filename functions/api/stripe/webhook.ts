@@ -24,6 +24,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return new Response('Invalid signature', { status: 400 });
   }
 
+  const already = await env.DB.prepare(
+    'SELECT 1 FROM processed_stripe_events WHERE event_id = ?'
+  ).bind(event.id).first();
+  if (already) return new Response('ok', { status: 200 });
+
   if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object;
     const piId = pi.id;
@@ -64,12 +69,62 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   if (event.type === 'payment_intent.payment_failed') {
     const pi = event.data.object;
-    const piId = pi.id;
-
     await env.DB.prepare(
       "UPDATE rent_payments SET status = 'failed' WHERE stripe_payment_intent_id = ?"
-    ).bind(piId).run();
+    ).bind(pi.id).run();
   }
+
+  if (event.type === 'charge.dispute.created') {
+    const charge = event.data.object;
+    const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+    if (piId) {
+      await env.DB.prepare(
+        "UPDATE rent_payments SET status = 'disputed' WHERE stripe_payment_intent_id = ?"
+      ).bind(piId).run();
+
+      context.waitUntil(
+        getManagementUserIds(env).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'payment',
+            category: 'payment_dispute',
+            title: 'Payment disputed: a tenant filed a chargeback',
+            entityType: 'rent_payment',
+            entityId: piId,
+            route: '/rent',
+          })))
+        ).catch(() => {})
+      );
+    }
+  }
+
+  if (event.type === 'charge.refunded') {
+    const charge = event.data.object;
+    const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+    if (piId) {
+      await env.DB.prepare(
+        "UPDATE rent_payments SET status = 'refunded' WHERE stripe_payment_intent_id = ?"
+      ).bind(piId).run();
+
+      context.waitUntil(
+        getManagementUserIds(env).then(userIds =>
+          notifyMultiple(env, userIds.map(uid => ({
+            userId: uid,
+            type: 'payment',
+            category: 'payment_refund',
+            title: 'A Stripe payment has been refunded',
+            entityType: 'rent_payment',
+            entityId: piId,
+            route: '/rent',
+          })))
+        ).catch(() => {})
+      );
+    }
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO processed_stripe_events (event_id, created_at) VALUES (?, ?)'
+  ).bind(event.id, new Date().toISOString()).run();
 
   return new Response('ok', { status: 200 });
 };

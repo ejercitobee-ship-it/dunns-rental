@@ -21,6 +21,8 @@ interface AutopayTenant {
   monthly_rent: number;
   autopay_payment_method_id: string;
   autopay_method_type: string | null;
+  autopay_ip: string | null;
+  autopay_user_agent: string | null;
   stripe_customer_id: string;
   lease_due_day: number | null;
 }
@@ -80,7 +82,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const { results: rows } = await env.DB.prepare(
       `SELECT u.id AS user_id, t.id AS tenant_id, t.first_name, t.email,
               l.id AS lease_id, l.monthly_rent, l.rent_due_day AS lease_due_day,
-              u.autopay_payment_method_id, u.autopay_method_type, u.stripe_customer_id
+              u.autopay_payment_method_id, u.autopay_method_type,
+              u.autopay_ip, u.autopay_user_agent, u.stripe_customer_id
          FROM user u
          JOIN tenants t ON t.user_id = u.id
          JOIN lease_tenants lt ON lt.tenant_id = t.id
@@ -145,8 +148,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             customer_acceptance: {
               type: 'online',
               online: {
-                ip_address: '0.0.0.0',
-                user_agent: 'MH Dunn Property Autopay',
+                ip_address: tenant.autopay_ip || '0.0.0.0',
+                user_agent: tenant.autopay_user_agent || 'MH Dunn Property Autopay',
               },
             },
           };

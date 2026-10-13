@@ -31,18 +31,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!tenantId) return jsonError('No tenant record linked', 404);
 
     const lease = await env.DB.prepare(
-      `SELECT l.id FROM leases l
+      `SELECT l.id, l.monthly_rent FROM leases l
          JOIN lease_tenants lt ON lt.lease_id = l.id
         WHERE lt.tenant_id = ? AND l.id = ? AND l.status != 'ended'`
-    ).bind(tenantId, body.leaseId).first();
+    ).bind(tenantId, body.leaseId).first<{ id: string; monthly_rent: number }>();
     if (!lease) return jsonError('Lease not found or not active', 404);
 
     const existing = await env.DB.prepare(
       `SELECT id FROM rent_payments
-       WHERE lease_id = ? AND month = ? AND year = ? AND stripe_payment_intent_id IS NOT NULL
-         AND status != 'failed'`
+       WHERE lease_id = ? AND month = ? AND year = ?
+         AND status IN ('paid', 'processing')
+         AND type = 'payment'`
     ).bind(body.leaseId, body.month, body.year).first();
-    if (existing) return jsonError('A Stripe payment for this month is already in progress', 409);
+    if (existing) return jsonError('A payment for this month is already recorded or in progress', 409);
+
+    if (body.amount > lease.monthly_rent) {
+      return jsonError('Amount exceeds rent owed', 400);
+    }
 
     const tenant = await env.DB.prepare('SELECT email, first_name, last_name FROM tenants WHERE id = ?')
       .bind(tenantId)
@@ -51,6 +56,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const customerId = await getOrCreateCustomer(env, auth.id, tenant?.email || auth.email, name);
 
     const stripe = getStripe(env);
+
+    const pm = await stripe.paymentMethods.retrieve(body.paymentMethodId);
+    if (pm.customer !== customerId) return jsonError('Not your payment method', 403);
+
     const fee = stripeFee(body.amount, methodType);
     const totalAmount = body.amount + fee;
     const amountCents = Math.round(totalAmount * 100);
