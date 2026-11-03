@@ -548,7 +548,7 @@ export function Reports() {
           {incomeData.vacancyLoss > 0 && (
             <Card>
               <div className="p-5">
-                <span className="eyebrow mb-3 block">Rental Income Pipeline</span>
+                <h3 className="section-heading mb-3">Rental Income Pipeline</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end text-center">
                   <div>
                     <p className="text-xs text-muted mb-1">Gross Potential Rent</p>
@@ -652,7 +652,7 @@ export function Reports() {
             <div className="grid gap-0 grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-line -mx-6 -mb-6">
               {/* By category */}
               <div className="p-5">
-                <h3 className="eyebrow mb-4">By Category</h3>
+                <h3 className="section-heading mb-4">By Category</h3>
                 <div className="space-y-2">
                   {expenseData.byCategory.map((cat, idx) => (
                     <button
@@ -672,7 +672,7 @@ export function Reports() {
 
               {/* By vendor */}
               <div className="p-5">
-                <h3 className="eyebrow mb-4">By Vendor</h3>
+                <h3 className="section-heading mb-4">By Vendor</h3>
                 <div className="space-y-2 max-h-80 overflow-y-auto">
                   {Object.entries(expenseData.byVendor)
                     .sort(([, a], [, b]) => b - a)
