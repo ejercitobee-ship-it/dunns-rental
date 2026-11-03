@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, User, Mail, Phone, ShieldAlert, FileText, Upload, MapPin, Pencil, X, Check, Users, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Avatar } from '../../components/ui/Avatar';
 import { EmailInput } from '../../components/ui/EmailInput';
 import { portalApi, type AppDocument, type PortalPerson, type HouseholdMember, type HouseholdInput } from '../../lib/api';
@@ -13,6 +14,7 @@ export function RealtorTenantDetail() {
   const { id } = useParams<{ id: string }>();
   const { showToast } = useToast();
   const [tenant, setTenant] = useState<PortalPerson | null>(null);
+  const [removeMemberId, setRemoveMemberId] = useState<string | null>(null);
   const [docs, setDocs] = useState<AppDocument[]>([]);
   const [household, setHousehold] = useState<HouseholdMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,7 +180,6 @@ export function RealtorTenantDetail() {
   };
 
   const removeMember = async (memberId: string) => {
-    if (!confirm('Remove this household member?')) return;
     try {
       await portalApi.realtorHousehold.remove(memberId);
       setHousehold(prev => prev.filter(m => m.id !== memberId));
@@ -448,7 +449,7 @@ export function RealtorTenantDetail() {
                     <button
                       type="button"
                       className="p-1.5 rounded-md text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                      onClick={() => removeMember(m.id)}
+                      onClick={() => setRemoveMemberId(m.id)}
                       title="Remove"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -500,6 +501,15 @@ export function RealtorTenantDetail() {
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog
+        isOpen={!!removeMemberId}
+        onClose={() => setRemoveMemberId(null)}
+        onConfirm={() => { if (removeMemberId) removeMember(removeMemberId); setRemoveMemberId(null); }}
+        title="Remove Household Member"
+        message="Remove this household member? This cannot be undone."
+        confirmText="Remove"
+        variant="danger"
+      />
     </div>
   );
 }

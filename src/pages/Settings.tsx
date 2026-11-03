@@ -28,6 +28,7 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { settingsApi, googleApi, rentSheetApi, adminApi, authApi } from '../lib/api';
@@ -45,6 +46,7 @@ export function Settings() {
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'migrateDocs' | 'deleteRole'; roleId?: string } | null>(null);
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
   const [isDriveWorking, setIsDriveWorking] = useState(false);
   const [rentSheetUrl, setRentSheetUrl] = useState<string | null>(null);
@@ -197,7 +199,6 @@ export function Settings() {
 
   const [isMigratingDocs, setIsMigratingDocs] = useState(false);
   const handleMigrateDocFolders = async () => {
-    if (!confirm('Reorganize existing documents into Property/Unit → Tenant folders? This is safe to run once.')) return;
     setIsMigratingDocs(true);
     try {
       const { moved, foldersNested } = await adminApi.migrateDocFolders();
@@ -275,13 +276,11 @@ export function Settings() {
   };
 
   const handleDeleteRole = async (roleId: string) => {
-    if (confirm('Are you sure you want to delete this role?')) {
-      try {
-        await deleteRole(roleId);
-        showToast('Role deleted!', 'success');
-      } catch (err) {
-        showToast((err as Error).message || 'Failed to delete role', 'error');
-      }
+    try {
+      await deleteRole(roleId);
+      showToast('Role deleted!', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to delete role', 'error');
     }
   };
 
@@ -506,7 +505,7 @@ export function Settings() {
                       <p className="text-sm text-muted">Reorganize existing documents into Property/Unit → Tenant folders. Safe to run once.</p>
                     </div>
                   </div>
-                  <Button variant="outline" onClick={handleMigrateDocFolders} disabled={isMigratingDocs} className="flex-shrink-0">
+                  <Button variant="outline" onClick={() => setConfirmAction({ type: 'migrateDocs' })} disabled={isMigratingDocs} className="flex-shrink-0">
                     {isMigratingDocs ? 'Organizing…' : 'Organize now'}
                   </Button>
                 </div>
@@ -818,7 +817,7 @@ export function Settings() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteRole(role.id);
+                              setConfirmAction({ type: 'deleteRole', roleId: role.id });
                             }}
                           >
                             <Trash2 className="h-4 w-4 text-danger" />
@@ -976,6 +975,23 @@ export function Settings() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (!confirmAction) return;
+          if (confirmAction.type === 'migrateDocs') handleMigrateDocFolders();
+          else if (confirmAction.type === 'deleteRole' && confirmAction.roleId) handleDeleteRole(confirmAction.roleId);
+          setConfirmAction(null);
+        }}
+        title={confirmAction?.type === 'migrateDocs' ? 'Reorganize Documents' : 'Delete Role'}
+        message={confirmAction?.type === 'migrateDocs'
+          ? 'Reorganize existing documents into Property/Unit folders by tenant? This is safe to run once.'
+          : 'Delete this role permanently? Users assigned to it will lose those permissions.'}
+        confirmText={confirmAction?.type === 'migrateDocs' ? 'Reorganize' : 'Delete'}
+        variant={confirmAction?.type === 'migrateDocs' ? 'warning' : 'danger'}
+      />
     </div>
   );
 }

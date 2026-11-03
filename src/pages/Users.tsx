@@ -31,6 +31,7 @@ export function Users() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [tempPasswordInfo, setTempPasswordInfo] = useState<{ name: string; password: string } | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [addTenantTarget, setAddTenantTarget] = useState<User | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<User | null>(null);
 
@@ -282,7 +283,6 @@ export function Users() {
 
   const handleResetPassword = async (user: User) => {
     const name = `${user.firstName} ${user.lastName}`;
-    if (!confirm(`Generate a new temporary password for ${name}?\n\nTheir current password stops working immediately and they will be signed out.`)) return;
     try {
       const res = await adminApi.resetUserPassword(user.id);
       setTempPasswordInfo({ name, password: res.tempPassword });
@@ -508,7 +508,7 @@ export function Users() {
                                 tab has no reset here; staff and realtors keep it. */}
                             {tab !== 'tenant' && (
                               <button
-                                onClick={() => handleResetPassword(user)}
+                                onClick={() => setResetPasswordUser(user)}
                                 title="Reset password"
                                 className="p-2 hover:bg-primary-soft rounded-lg transition-colors"
                               >
@@ -630,7 +630,7 @@ export function Users() {
                               <button onClick={() => openEditRealtor(user)} title="Edit" className="p-2 hover:bg-black/[0.05] rounded-lg transition-colors">
                                 <Edit2 className="h-4 w-4 text-muted" />
                               </button>
-                              <button onClick={() => handleResetPassword(user)} title="Reset password (temporary)" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
+                              <button onClick={() => setResetPasswordUser(user)} title="Reset password (temporary)" className="p-2 hover:bg-primary-soft rounded-lg transition-colors">
                                 <KeyRound className="h-4 w-4 text-muted" />
                               </button>
                               <button
@@ -768,6 +768,16 @@ export function Users() {
         }
         confirmText="Delete"
         variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={!!resetPasswordUser}
+        onClose={() => setResetPasswordUser(null)}
+        onConfirm={() => { if (resetPasswordUser) handleResetPassword(resetPasswordUser); setResetPasswordUser(null); }}
+        title="Reset Password"
+        message={`Generate a new temporary password for ${resetPasswordUser?.firstName} ${resetPasswordUser?.lastName}? Their current password stops working immediately and they will be signed out.`}
+        confirmText="Reset Password"
+        variant="warning"
       />
 
       {/* Add / Edit Realtor Modal */}

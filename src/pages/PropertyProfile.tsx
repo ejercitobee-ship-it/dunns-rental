@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { StatCard } from '../components/ui/StatCard';
 import { formatCurrency, formatDate } from '../lib/utils';
@@ -1246,12 +1248,12 @@ function AppliancesTab({
             ))}
           </select>
         </div>
-        <button
+        <Button
           onClick={() => { setEditing(null); setModalOpen(true); }}
-          className="btn btn-primary flex items-center gap-1.5 text-sm"
+          className="flex items-center gap-1.5 text-sm"
         >
           <Plus className="h-4 w-4" /> Add Appliance
-        </button>
+        </Button>
       </div>
 
       {/* Appliance cards */}
@@ -1369,24 +1371,15 @@ function AppliancesTab({
         />
       )}
 
-      {/* Delete confirmation */}
-      {deleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px]">
-          <Card className="w-full max-w-sm mx-4">
-            <CardContent className="p-6 space-y-4">
-              <h3 className="font-semibold text-ink">Remove Appliance</h3>
-              <p className="text-sm text-muted">
-                Remove the {APPLIANCE_TYPE_LABELS[deleting.type as ApplianceType] || deleting.type}
-                {deleting.brand ? ` (${deleting.brand})` : ''}? This cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setDeleting(null)} className="btn btn-secondary text-sm">Cancel</button>
-                <button onClick={handleDelete} className="btn btn-danger text-sm">Remove</button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={handleDelete}
+        title="Remove Appliance"
+        message={deleting ? `Remove the ${APPLIANCE_TYPE_LABELS[deleting.type as ApplianceType] || deleting.type}${deleting.brand ? ` (${deleting.brand})` : ''}? This cannot be undone.` : ''}
+        confirmText="Remove"
+        variant="danger"
+      />
     </div>
   );
 }
@@ -1475,10 +1468,10 @@ function ApplianceModal({
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={onClose} className="btn btn-secondary text-sm" disabled={saving}>Cancel</button>
-            <button onClick={() => onSave(form)} className="btn btn-primary text-sm" disabled={saving}>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button onClick={() => onSave(form)} disabled={saving}>
               {saving ? 'Saving...' : isEditing ? 'Update' : 'Add'}
-            </button>
+            </Button>
           </div>
         </CardContent>
       </Card>

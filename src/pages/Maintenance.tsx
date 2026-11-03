@@ -6,6 +6,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { EmailInput } from '../components/ui/EmailInput';
@@ -81,6 +82,7 @@ export function Maintenance() {
   const [vendorLinkResult, setVendorLinkResult] = useState<{ url: string; emailed: boolean } | null>(null);
   const [vendorLinkSending, setVendorLinkSending] = useState(false);
   const [vendorLinkCopied, setVendorLinkCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'request' | 'vendor'; id: string } | null>(null);
 
   // Vendor submissions state.
   const [vendorSubmissions, setVendorSubmissions] = useState<VendorSubmission[]>([]);
@@ -374,7 +376,6 @@ export function Maintenance() {
   };
 
   const handleDeleteVendorSub = async (id: string) => {
-    if (!confirm('Delete this vendor submission? If an expense was created from it, that will also be removed.')) return;
     setVendorSubBusy(id);
     try {
       await vendorSubmissionsApi.remove(id);
@@ -424,7 +425,6 @@ export function Maintenance() {
   };
 
   const handleDelete = async (m: MaintenanceRequest) => {
-    if (!confirm('Delete this maintenance request?')) return;
     try {
       await deleteMaintenance(m.id);
       showToast('Request deleted', 'success');
@@ -666,7 +666,7 @@ export function Maintenance() {
                         )}
                         {canDeleteMaintenance && (
                           <button
-                            onClick={() => handleDelete(m)}
+                            onClick={() => setConfirmDelete({ type: 'request', id: m.id })}
                             className="p-1.5 text-faint hover:text-danger hover:bg-danger-soft rounded-md transition-colors"
                             title="Delete"
                           >
@@ -1246,7 +1246,7 @@ export function Maintenance() {
                                   </Button>
                                 )}
                                 <button
-                                  onClick={() => handleDeleteVendorSub(sub.id)}
+                                  onClick={() => setConfirmDelete({ type: 'vendor', id: sub.id })}
                                   disabled={vendorSubBusy === sub.id}
                                   className="text-faint hover:text-danger transition-colors p-1 rounded hover:bg-danger-soft disabled:opacity-50"
                                   title="Delete"
@@ -1447,6 +1447,23 @@ export function Maintenance() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (!confirmDelete) return;
+          if (confirmDelete.type === 'vendor') handleDeleteVendorSub(confirmDelete.id);
+          else handleDelete({ id: confirmDelete.id } as MaintenanceRequest);
+          setConfirmDelete(null);
+        }}
+        title={confirmDelete?.type === 'vendor' ? 'Delete Vendor Submission' : 'Delete Maintenance Request'}
+        message={confirmDelete?.type === 'vendor'
+          ? 'Delete this vendor submission? If an expense was created from it, that will also be removed.'
+          : 'Delete this maintenance request? This cannot be undone.'}
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

@@ -442,7 +442,6 @@ export function TenantDetail() {
   const handlePauseResume = async () => {
     if (!lease) return;
     const resuming = lease.status === 'paused';
-    if (!confirm(resuming ? 'Resume rent for this tenancy?' : 'Pause rent for this tenancy? You can resume it later.')) return;
     try {
       await updateLease({ ...lease, status: resuming ? 'active' : 'paused', statusChangedOn: todayLocalDate() });
       showToast(resuming ? 'Rent resumed.' : 'Rent paused.', 'success');
@@ -453,6 +452,7 @@ export function TenantDetail() {
 
   // Terminate the tenancy: records the move-out date and the reason, ends the
   // lease (so it stops billing from the following month), and frees the unit.
+  const [pauseResumeOpen, setPauseResumeOpen] = useState(false);
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [termForm, setTermForm] = useState({ date: todayLocalDate(), reason: '' });
@@ -1382,7 +1382,7 @@ export function TenantDetail() {
             </Button>
           )}
           {canManagePortal && lease && lease.status !== 'ended' && (
-            <Button variant="outline" onClick={handlePauseResume} className="flex-1 sm:flex-none">
+            <Button variant="outline" onClick={() => setPauseResumeOpen(true)} className="flex-1 sm:flex-none">
               {lease.status === 'paused' ? (
                 <><Play className="h-4 w-4 mr-2" /> Resume rent</>
               ) : (
@@ -1948,6 +1948,16 @@ export function TenantDetail() {
         message={`Remove this ${formatCurrency(Math.abs(deletingCredit?.amount ?? 0))} credit entry? This cannot be undone.`}
         confirmText={deleteCreditBusy ? 'Deleting...' : 'Delete'}
         variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={pauseResumeOpen}
+        onClose={() => setPauseResumeOpen(false)}
+        onConfirm={() => { handlePauseResume(); setPauseResumeOpen(false); }}
+        title={lease?.status === 'paused' ? 'Resume Rent' : 'Pause Rent'}
+        message={lease?.status === 'paused' ? 'Resume rent collection for this tenancy?' : 'Pause rent for this tenancy? You can resume it later.'}
+        confirmText={lease?.status === 'paused' ? 'Resume' : 'Pause'}
+        variant="warning"
       />
 
       {/* Documents */}

@@ -4,6 +4,7 @@ import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
+import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { handymenApi, type HandymanInput } from '../lib/api';
@@ -30,6 +31,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<HandymanInput>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ handyman: Handyman; action: 'deactivate' | 'delete' } | null>(null);
 
   const load = () => {
     handymenApi
@@ -108,25 +110,35 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
   };
 
   const handleDeactivate = (h: Handyman) => {
-    if (h.isActive && !confirm(`Deactivate ${h.name}? They stop receiving new jobs but their record stays.`)) return;
+    if (h.isActive) { setConfirmAction({ handyman: h, action: 'deactivate' }); return; }
     handymenApi
       .update(h.id, { name: h.name, companyName: h.companyName, phone: h.phone, email: h.email, trades: h.trades, isActive: !h.isActive })
       .then(() => {
-        showToast(h.isActive ? 'Contractor deactivated' : 'Contractor reactivated', 'success');
+        showToast('Contractor reactivated', 'success');
         load();
       })
       .catch((err) => showToast((err as Error).message || 'Could not update', 'error'));
   };
 
   const handleDelete = (h: Handyman) => {
-    if (!confirm(`Permanently remove ${h.name}? This deletes their record and login. Past jobs stay but will no longer show this contractor. This cannot be undone.`)) return;
-    handymenApi
-      .remove(h.id)
-      .then(() => {
-        showToast('Contractor removed', 'success');
-        load();
-      })
-      .catch((err) => showToast((err as Error).message || 'Could not remove', 'error'));
+    setConfirmAction({ handyman: h, action: 'delete' });
+  };
+
+  const executeConfirmAction = () => {
+    if (!confirmAction) return;
+    const { handyman: h, action } = confirmAction;
+    setConfirmAction(null);
+    if (action === 'deactivate') {
+      handymenApi
+        .update(h.id, { name: h.name, companyName: h.companyName, phone: h.phone, email: h.email, trades: h.trades, isActive: false })
+        .then(() => { showToast('Contractor deactivated', 'success'); load(); })
+        .catch((err) => showToast((err as Error).message || 'Could not update', 'error'));
+    } else {
+      handymenApi
+        .remove(h.id)
+        .then(() => { showToast('Contractor removed', 'success'); load(); })
+        .catch((err) => showToast((err as Error).message || 'Could not remove', 'error'));
+    }
   };
 
   return (
@@ -297,6 +309,18 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={executeConfirmAction}
+        title={confirmAction?.action === 'delete' ? 'Remove Contractor' : 'Deactivate Contractor'}
+        message={confirmAction?.action === 'delete'
+          ? `Permanently remove ${confirmAction?.handyman.name}? This deletes their record and login. Past jobs stay but will no longer show this contractor. This cannot be undone.`
+          : `Deactivate ${confirmAction?.handyman.name}? They stop receiving new jobs but their record stays.`}
+        confirmText={confirmAction?.action === 'delete' ? 'Remove' : 'Deactivate'}
+        variant="danger"
+      />
     </Card>
   );
 }

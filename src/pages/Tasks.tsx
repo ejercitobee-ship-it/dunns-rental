@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -129,6 +130,7 @@ export function Tasks() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
 
   // Project form
   const [projectForm, setProjectForm] = useState({
@@ -264,7 +266,6 @@ export function Tasks() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this task permanently?')) return;
     try {
       await tasksApi.delete(id);
       showToast('Task deleted', 'success');
@@ -549,7 +550,7 @@ export function Tasks() {
           onClose={() => { setDetailTask(null); setCommentText(''); }}
           onStatusChange={canEdit ? handleStatusChange : undefined}
           onEdit={canEdit ? openEdit : undefined}
-          onDelete={canDelete ? handleDelete : undefined}
+          onDelete={canDelete ? (id: string) => setDeleteTaskId(id) : undefined}
           commentText={commentText}
           setCommentText={setCommentText}
           onComment={handleComment}
@@ -739,6 +740,16 @@ export function Tasks() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTaskId}
+        onClose={() => setDeleteTaskId(null)}
+        onConfirm={() => { if (deleteTaskId) handleDelete(deleteTaskId); setDeleteTaskId(null); }}
+        title="Delete Task"
+        message="Delete this task permanently? This cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
