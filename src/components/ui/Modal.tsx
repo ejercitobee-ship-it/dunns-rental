@@ -63,7 +63,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
       )}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-line">
-          <h2 className="font-display text-lg sm:text-xl font-medium text-ink">{title}</h2>
+          <h2 className="font-display text-lg sm:text-xl font-semibold text-ink">{title}</h2>
           <button
             onClick={onClose}
             className="p-2 -mr-2 hover:bg-black/[0.05] rounded-lg transition-colors group"

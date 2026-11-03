@@ -487,15 +487,15 @@ export function Dashboard() {
       {/* ================================================================
           ZONE 2: TRENDS
           ================================================================ */}
-      <h2 className="eyebrow mt-2">Trends</h2>
+      <h2 className="section-heading mt-2">Trends</h2>
       <div className="grid gap-4 md:grid-cols-[5fr_3fr]">
         {/* Income vs Expenses bar chart */}
-        <Card className="cursor-pointer hover:border-line-strong hover:shadow-sm transition-all" onClick={() => navigate('/finances')}>
+        <Card className="group cursor-pointer hover:border-line-strong hover:shadow-[0_4px_16px_rgba(27,26,23,0.08)] transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><BarChart3 /></span>
+            <CardTitle className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[16px] [&_svg]:w-[16px]"><BarChart3 /></span>
               Income vs expenses
-              <ArrowRight className="h-4 w-4 text-faint ml-auto" />
+              <ArrowRight className="h-4 w-4 text-faint ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -521,11 +521,11 @@ export function Dashboard() {
         </Card>
 
         {/* Expenses by Category */}
-        <Card className="cursor-pointer hover:border-line-strong hover:shadow-sm transition-all" onClick={() => navigate('/finances')}>
+        <Card className="group cursor-pointer hover:border-line-strong hover:shadow-[0_4px_16px_rgba(27,26,23,0.08)] transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><PieChartIcon /></span>
+              <CardTitle className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[16px] [&_svg]:w-[16px]"><PieChartIcon /></span>
                 By category
               </CardTitle>
               <div
@@ -597,8 +597,8 @@ export function Dashboard() {
       {upcomingActivities.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><CalendarDays /></span>
+            <CardTitle className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[16px] [&_svg]:w-[16px]"><CalendarDays /></span>
               Upcoming ({upcomingActivities.length})
               <button
                 type="button"
@@ -654,7 +654,7 @@ export function Dashboard() {
       {/* ================================================================
           ZONE 3: NEEDS ATTENTION (bottom)
           ================================================================ */}
-      <h2 className="eyebrow mt-2">Needs attention</h2>
+      <h2 className="section-heading mt-2">Needs attention</h2>
       <Card>
         {/* Tab bar */}
         <div className="flex border-b border-line bg-canvas/50 rounded-t-xl overflow-x-auto">

@@ -10,8 +10,8 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'default', ...props }, ref) => {
     const variants = {
-      default: 'bg-primary text-white hover:bg-primary-hover shadow-sm',
-      destructive: 'bg-danger text-white hover:bg-[#8c2b21] shadow-sm',
+      default: 'bg-primary text-white hover:bg-primary-hover shadow-[0_1px_2px_rgba(27,26,23,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
+      destructive: 'bg-danger text-white hover:bg-[#8c2b21] shadow-[0_1px_2px_rgba(27,26,23,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
       outline: 'border border-line-strong bg-surface text-ink hover:bg-canvas hover:border-faint',
       secondary: 'bg-primary-soft text-primary hover:bg-[#e0e9e2]',
       ghost: 'text-muted hover:bg-black/[0.05] hover:text-ink',
