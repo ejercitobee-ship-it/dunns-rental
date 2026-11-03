@@ -26,6 +26,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local secrets for `wrangler pages dev`. Never commit.
+# Local secrets. Never commit.
+.env
 .dev.vars
 .gstack/
+.impeccable/
+.superpowers/

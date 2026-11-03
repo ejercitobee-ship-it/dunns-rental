@@ -2,9 +2,13 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download, User, MapPin, Calendar, ChevronRight, Image, Send, Copy, Check } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
+import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
+import { EmailInput } from '../components/ui/EmailInput';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -125,6 +129,19 @@ export function Maintenance() {
     }
   };
 
+  const releaseJob = async (m: MaintenanceRequest) => {
+    setBusyId(m.id);
+    try {
+      const updated = await maintenanceApi.release(m.id);
+      dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      showToast('Released to handymen', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not release', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const openPay = (m: MaintenanceRequest) => {
     setPayTarget(m);
     setPayCost(m.cost ? String(m.cost) : '');
@@ -225,7 +242,7 @@ export function Maintenance() {
     // "Invoices to review" counts jobs awaiting the handyman's invoice AND invoices already submitted for admin review.
     const invoicesActionNeeded = maintenance.filter(m => m.status === 'approved_for_invoicing' || m.status === 'invoice_submitted').length;
     // "In progress" counts all active work statuses before the invoice phase.
-    const activeStatuses = new Set<string>(['submitted', 'assigned', 'scheduled', 'in_progress', 'completed']);
+    const activeStatuses = new Set<string>(['submitted', 'available', 'assigned', 'scheduled', 'in_progress', 'completed']);
     const inProgress = maintenance.filter(m => activeStatuses.has(m.status) && !m.needsApproval).length;
     const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'invoice_approved' && m.status !== 'cancelled').length;
     const spend = maintenance.filter(m => m.status === 'paid' || m.status === 'invoice_approved').reduce((s, m) => s + (m.cost || 0), 0);
@@ -434,31 +451,23 @@ export function Maintenance() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Operations</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Maintenance</h1>
-        </div>
-        {canEditMaintenance && (
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Request
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Operations"
+        title="Maintenance"
+        actions={
+          canEditMaintenance ? (
+            <Button onClick={openNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Request
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {statCards.map(s => (
-          <Card key={s.label}>
-            <div className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="eyebrow">{s.label}</span>
-                <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
-              </div>
-              <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{s.value}</div>
-            </div>
-          </Card>
+          <StatCard key={s.label} title={s.label} value={s.value} icon={s.icon} />
         ))}
       </div>
 
@@ -469,13 +478,13 @@ export function Maintenance() {
           <input
             type="text"
             placeholder="Search by title, property, or vendor..."
-            className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
         <select
-          className="px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+          className="px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as FilterStatus)}
         >
@@ -483,6 +492,7 @@ export function Maintenance() {
           <option value="pending_approval">Pending approval</option>
           <option value="needs_invoice_review">Invoices to review</option>
           <option value="submitted">Submitted</option>
+          <option value="available">Available</option>
           <option value="assigned">Assigned</option>
           <option value="scheduled">Scheduled</option>
           <option value="in_progress">In progress</option>
@@ -501,15 +511,15 @@ export function Maintenance() {
           <div className="overflow-x-auto sm:overflow-visible">
             <table className="w-full min-w-[820px] sm:min-w-0">
               <thead>
-                <tr className="border-b border-line bg-canvas">
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Request</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Priority</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Handyman</th>
-                  <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Cost</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Reported</th>
-                  <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Actions</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Request</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Priority</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Handyman</th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Cost</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Reported</th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -576,7 +586,7 @@ export function Maintenance() {
                               assignHandyman(m, e.target.value);
                             }
                           }}
-                          className="text-sm px-2 py-1 border border-line rounded-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 max-w-[150px]"
+                          className="text-sm px-2 py-1 border border-line rounded-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 max-w-[150px]"
                         >
                           <option value="">Unassigned</option>
                           {eligibleHandymen(handymen, m.category).map((h) => (
@@ -598,6 +608,16 @@ export function Maintenance() {
                     </td>
                     <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
+                        {/* Release to handymen: for submitted jobs not yet assigned */}
+                        {canEditMaintenance && m.status === 'submitted' && !m.assignedHandymanId && (
+                          <button
+                            onClick={() => releaseJob(m)}
+                            disabled={busyId === m.id}
+                            className="text-xs font-semibold text-white bg-primary hover:bg-primary-hover px-2.5 py-1 rounded-md transition-colors disabled:opacity-50"
+                          >
+                            Release
+                          </button>
+                        )}
                         {/* Approve: for needsApproval OR completed jobs with a handyman */}
                         {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && (
                           <button
@@ -678,18 +698,15 @@ export function Maintenance() {
             Record what you paid {payTarget?.assignedHandymanId ? handymanName(payTarget.assignedHandymanId) : payTarget?.vendor || 'the vendor'} for <span className="font-medium text-ink">{payTarget?.title}</span>. This
             marks the job paid and counts it as an expense in Finances. It does not touch the tenant's rent.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Amount paid</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={payCost}
-              onChange={(e) => setPayCost(e.target.value)}
-              placeholder="0.00"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+          <TextInput
+            label="Amount paid"
+            type="number"
+            min="0"
+            step="0.01"
+            value={payCost}
+            onChange={(e) => setPayCost(e.target.value)}
+            placeholder="0.00"
+          />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setPayTarget(null)}>Cancel</Button>
             <Button onClick={confirmPay} disabled={busyId === payTarget?.id}>Mark paid</Button>
@@ -717,18 +734,15 @@ export function Maintenance() {
           {approveTarget?.reportedCost != null && (
             <p className="text-xs text-muted">Handyman proposed {formatCurrency(approveTarget.reportedCost)}. Adjust below if needed.</p>
           )}
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Approved cost</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={approveCost}
-              onChange={(e) => setApproveCost(e.target.value)}
-              placeholder="0.00"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+          <TextInput
+            label="Approved cost"
+            type="number"
+            min="0"
+            step="0.01"
+            value={approveCost}
+            onChange={(e) => setApproveCost(e.target.value)}
+            placeholder="0.00"
+          />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setApproveTarget(null)}>Cancel</Button>
             <Button onClick={confirmApprove} disabled={busyId === approveTarget?.id}>Approve</Button>
@@ -845,18 +859,14 @@ export function Maintenance() {
             </div>
 
             {invoiceAction !== 'approve' && (
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">
-                  Reason {invoiceAction === 'revision' ? 'for revision' : 'for rejection'} *
-                </label>
-                <textarea
-                  rows={2}
-                  value={invoiceReason}
-                  onChange={(e) => setInvoiceReason(e.target.value)}
-                  placeholder={invoiceAction === 'revision' ? 'What needs to be changed?' : 'Why is this invoice being rejected?'}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
-              </div>
+              <TextareaInput
+                label={`Reason ${invoiceAction === 'revision' ? 'for revision' : 'for rejection'}`}
+                required
+                rows={2}
+                value={invoiceReason}
+                onChange={(e) => setInvoiceReason(e.target.value)}
+                placeholder={invoiceAction === 'revision' ? 'What needs to be changed?' : 'Why is this invoice being rejected?'}
+              />
             )}
 
             <div className="flex justify-end gap-2 pt-1">
@@ -881,133 +891,104 @@ export function Maintenance() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Title *</label>
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={e => setForm({ ...form, title: e.target.value })}
-              placeholder="e.g. Leaking kitchen faucet"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+          <TextInput
+            label="Title"
+            required
+            value={form.title}
+            onChange={e => setForm({ ...form, title: e.target.value })}
+            placeholder="e.g. Leaking kitchen faucet"
+          />
+
+          <TextareaInput
+            label="Description"
+            rows={2}
+            value={form.description}
+            onChange={e => setForm({ ...form, description: e.target.value })}
+            placeholder="What needs fixing?"
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <SelectInput
+              label="Property"
+              value={form.propertyId}
+              onChange={e => setForm({ ...form, propertyId: e.target.value, unitId: '' })}
+            >
+              <option value="">Select property</option>
+              {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </SelectInput>
+            <SelectInput
+              label="Unit"
+              value={form.unitId}
+              onChange={e => setForm({ ...form, unitId: e.target.value })}
+            >
+              <option value="">Select unit</option>
+              {availableUnits.map(u => <option key={u.id} value={u.id}>{u.unitNumber}</option>)}
+            </SelectInput>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <SelectInput
+              label="Category"
+              value={form.category}
+              onChange={e => setForm({ ...form, category: e.target.value })}
+              className="capitalize"
+            >
+              {CATEGORIES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
+            </SelectInput>
+            <SelectInput
+              label="Priority"
+              value={form.priority}
+              onChange={e => setForm({ ...form, priority: e.target.value as MaintenancePriority })}
+              className="capitalize"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </SelectInput>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <SelectInput
+              label="Status"
+              value={form.status}
+              onChange={e => setForm({ ...form, status: e.target.value as MaintenanceStatus })}
+            >
+              <option value="submitted">Submitted</option>
+              <option value="available">Available</option>
+              <option value="assigned">Assigned</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="approved_for_invoicing">Awaiting Invoice</option>
+              <option value="invoice_submitted">Invoice Submitted</option>
+              <option value="invoice_approved">Invoice Approved</option>
+              <option value="paid">Paid</option>
+              <option value="cancelled">Cancelled</option>
+            </SelectInput>
+            <TextInput
+              label="Cost"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.cost}
+              onChange={e => setForm({ ...form, cost: Number(e.target.value) })}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Description</label>
-            <textarea
-              rows={2}
-              value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
-              placeholder="What needs fixing?"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+          <div className="grid grid-cols-2 gap-4">
+            <TextInput
+              label="Vendor"
+              value={form.vendor}
+              onChange={e => setForm({ ...form, vendor: e.target.value })}
+              placeholder="Who's handling it?"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Property</label>
-              <select
-                value={form.propertyId}
-                onChange={e => setForm({ ...form, propertyId: e.target.value, unitId: '' })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                <option value="">Select property</option>
-                {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Unit</label>
-              <select
-                value={form.unitId}
-                onChange={e => setForm({ ...form, unitId: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                <option value="">Select unit</option>
-                {availableUnits.map(u => <option key={u.id} value={u.id}>{u.unitNumber}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Category</label>
-              <select
-                value={form.category}
-                onChange={e => setForm({ ...form, category: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface capitalize focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                {CATEGORIES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Priority</label>
-              <select
-                value={form.priority}
-                onChange={e => setForm({ ...form, priority: e.target.value as MaintenancePriority })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface capitalize focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Status</label>
-              <select
-                value={form.status}
-                onChange={e => setForm({ ...form, status: e.target.value as MaintenanceStatus })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                <option value="submitted">Submitted</option>
-                <option value="assigned">Assigned</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="approved_for_invoicing">Awaiting Invoice</option>
-                <option value="invoice_submitted">Invoice Submitted</option>
-                <option value="invoice_approved">Invoice Approved</option>
-                <option value="paid">Paid</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Cost</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.cost}
-                onChange={e => setForm({ ...form, cost: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Vendor</label>
-              <input
-                type="text"
-                value={form.vendor}
-                onChange={e => setForm({ ...form, vendor: e.target.value })}
-                placeholder="Who's handling it?"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Reported Date</label>
-              <input
-                type="date"
-                value={form.reportedDate}
-                onChange={e => setForm({ ...form, reportedDate: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
+            <TextInput
+              label="Reported Date"
+              type="date"
+              value={form.reportedDate}
+              onChange={e => setForm({ ...form, reportedDate: e.target.value })}
+            />
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -1282,7 +1263,7 @@ export function Maintenance() {
                                   placeholder="Reason for revision (optional)"
                                   value={vendorSubRejectReason}
                                   onChange={e => setVendorSubRejectReason(e.target.value)}
-                                  className="flex-1 text-xs border border-line rounded px-2 py-1.5 bg-surface focus:outline-none focus:ring-1 focus:ring-primary/25"
+                                  className="flex-1 text-xs border border-line rounded px-2 py-1.5 bg-surface focus:outline-none focus:ring-1 focus:ring-primary/10"
                                 />
                                 <Button size="sm" variant="destructive" onClick={() => handleVendorSubAction(sub.id, 'reject', vendorSubRejectReason)} disabled={vendorSubBusy === sub.id}>
                                   Send
@@ -1387,46 +1368,38 @@ export function Maintenance() {
 
             {/* Pick from registered handymen or enter manually */}
             {handymen.filter(h => h.isActive).length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">Select a registered vendor</label>
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const h = handymen.find(hm => hm.id === e.target.value);
-                    if (h) {
-                      setVendorLinkName(h.name);
-                      setVendorLinkEmail(h.email || '');
-                    }
-                  }}
-                  className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/25"
-                >
-                  <option value="">Choose from roster, or enter manually below</option>
-                  {handymen.filter(h => h.isActive).map(h => (
-                    <option key={h.id} value={h.id}>
-                      {h.name}{h.companyName ? ` (${h.companyName})` : ''}{h.email ? `, ${h.email}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectInput
+                label="Select a registered vendor"
+                value=""
+                onChange={(e) => {
+                  const h = handymen.find(hm => hm.id === e.target.value);
+                  if (h) {
+                    setVendorLinkName(h.name);
+                    setVendorLinkEmail(h.email || '');
+                  }
+                }}
+              >
+                <option value="">Choose from roster, or enter manually below</option>
+                {handymen.filter(h => h.isActive).map(h => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}{h.companyName ? ` (${h.companyName})` : ''}{h.email ? `, ${h.email}` : ''}
+                  </option>
+                ))}
+              </SelectInput>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Vendor Name</label>
-              <input
-                type="text"
-                value={vendorLinkName}
-                onChange={(e) => setVendorLinkName(e.target.value)}
-                className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/25"
-                placeholder="e.g. John Smith"
-              />
-            </div>
+            <TextInput
+              label="Vendor Name"
+              value={vendorLinkName}
+              onChange={(e) => setVendorLinkName(e.target.value)}
+              placeholder="e.g. John Smith"
+            />
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Vendor Email</label>
-              <input
-                type="email"
+              <EmailInput
                 value={vendorLinkEmail}
                 onChange={(e) => setVendorLinkEmail(e.target.value)}
-                className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-canvas focus:outline-none focus:ring-2 focus:ring-primary/10"
                 placeholder="vendor@example.com (optional)"
               />
               <p className="text-xs text-muted mt-1">Leave blank to generate a link you can share manually.</p>

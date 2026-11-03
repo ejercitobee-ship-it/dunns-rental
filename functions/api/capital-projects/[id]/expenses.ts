@@ -26,7 +26,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const stmts = ids.map(eid =>
       env.DB.prepare(
-        'UPDATE expenses SET capital_project_id = ?, updated_at = unixepoch() WHERE id = ?'
+        "UPDATE expenses SET capital_project_id = ?, expense_type = 'capital', updated_at = unixepoch() WHERE id = ?"
       ).bind(projectId, eid)
     );
     await env.DB.batch(stmts);

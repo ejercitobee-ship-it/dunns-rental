@@ -6,9 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { authApi } from '../lib/api';
 import { resizeImage } from '../lib/image';
-
-const inputClass =
-  'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25';
+import { formatPhone } from '../lib/utils';
+import { TextInput } from './ui/FormField';
 
 /** The signed-in team member's own profile: photo, name, phone. Email and role
  * are shown but not editable (email is the login, role is set by an admin).
@@ -103,20 +102,14 @@ export function ProfileModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">First name</label>
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Last name</label>
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
-          </div>
+          <TextInput label="First name" name="profileFirstName" required
+            value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <TextInput label="Last name" name="profileLastName"
+            value={lastName} onChange={(e) => setLastName(e.target.value)} />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
-        </div>
+        <TextInput label="Phone" name="profilePhone" type="tel"
+          value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
 
         <div className="text-sm text-muted space-y-1 pt-1">
           <p>Email: <span className="text-ink">{user?.email}</span></p>

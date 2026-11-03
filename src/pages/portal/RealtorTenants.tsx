@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { useToast } from '../../context/ToastContext';
 import { portalApi, type RealtorTenantSummary, type AvailableUnit } from '../../lib/api';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatPhone, isValidEmail } from '../../lib/utils';
 
 // This app has had a React #310 white screen from a hook called after an
 // early return, so every hook below runs unconditionally before the
@@ -33,6 +33,7 @@ export function RealtorTenants() {
   const [units, setUnits] = useState<AvailableUnit[]>([]);
   // Set when the office needs to link an existing record (email already used).
   const [emailFlag, setEmailFlag] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
 
   const selectedUnit = units.find((u) => u.id === form.unitId);
   const rentFloor = selectedUnit?.monthlyRent ?? 0;
@@ -46,7 +47,7 @@ export function RealtorTenants() {
   // Name, email, phone, a unit, a valid rent, and a start date are required; the
   // emergency contact is optional.
   const allFieldsFilled =
-    !!form.firstName.trim() && !!form.lastName.trim() && !!form.email.trim() && !!form.phone.trim() &&
+    !!form.firstName.trim() && !!form.lastName.trim() && !!form.email.trim() && isValidEmail(form.email) && !!form.phone.trim() &&
     !!form.unitId && rentValid && datesValid;
 
   // When the realtor picks a start date, default the expiration to one year
@@ -181,18 +182,24 @@ export function RealtorTenants() {
                 value={form.lastName}
                 onChange={(e) => setForm({ ...form, lastName: e.target.value })}
               />
-              <input
-                className={`rounded-lg border px-3 py-2 text-sm ${emailFlag ? 'border-danger' : 'border-line'}`}
-                placeholder="Email *"
-                type="email"
-                value={form.email}
-                onChange={(e) => { setForm({ ...form, email: e.target.value }); setEmailFlag(false); }}
-              />
+              <div className="w-full">
+                <input
+                  className={`rounded-lg border px-3 py-2 text-sm w-full ${emailFlag || (emailTouched && form.email.trim() && !isValidEmail(form.email)) ? 'border-danger ring-danger/30' : 'border-line'}`}
+                  placeholder="Email *"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => { setForm({ ...form, email: e.target.value }); setEmailFlag(false); }}
+                  onBlur={() => setEmailTouched(true)}
+                />
+                {emailTouched && form.email.trim() && !isValidEmail(form.email) && (
+                  <p className="text-xs text-danger mt-1">Please enter a valid email address</p>
+                )}
+              </div>
               <input
                 className="rounded-lg border border-line px-3 py-2 text-sm"
                 placeholder="Phone *"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                value={formatPhone(form.phone)}
+                onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
               />
             </div>
 

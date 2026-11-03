@@ -36,7 +36,7 @@ describe('rentReminderEmail', () => {
     const mail = rentReminderEmail({
       monthLabel: 'July 2026',
       portalUrl: 'https://mhdunnproperty.net/portal/payments',
-      paymentInstructions: 'Pay by Zelle to 7739917112.',
+      paymentInstructions: 'Pay rent via Zelle to 773-991-7112, payable to Marlene Dunn.',
       name: 'Pat',
     });
     expect(mail.subject).toBe('Your rent for July 2026 is due');

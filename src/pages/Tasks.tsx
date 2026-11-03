@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useApp } from '../context/AppContext';
@@ -359,27 +360,26 @@ export function Tasks() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Operations</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Tasks</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {canManageProjects && (
-            <Button variant="outline" onClick={() => setIsProjectModalOpen(true)}>
-              <FolderKanban className="w-4 h-4 mr-1.5" />
-              New Project
-            </Button>
-          )}
-          {canCreate && (
-            <Button onClick={() => { setEditingId(null); setForm(emptyForm); setIsCreateOpen(true); }}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              New Task
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Operations"
+        title="Tasks"
+        actions={
+          <div className="flex items-center gap-2">
+            {canManageProjects && (
+              <Button variant="outline" onClick={() => setIsProjectModalOpen(true)}>
+                <FolderKanban className="w-4 h-4 mr-1.5" />
+                New Project
+              </Button>
+            )}
+            {canCreate && (
+              <Button onClick={() => { setEditingId(null); setForm(emptyForm); setIsCreateOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1.5" />
+                New Task
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {/* Stat Cards (Dashboard-style) */}
       {stats && (
@@ -427,7 +427,7 @@ export function Tasks() {
               placeholder="Search tasks..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-line bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary-line transition-colors"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border border-line bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
             />
           </div>
 
@@ -756,7 +756,7 @@ function TaskStatCard({ title, value, icon, iconBg = 'bg-primary-soft text-prima
     <Card
       className={`cursor-pointer transition-all ${
         active
-          ? 'border-primary ring-1 ring-primary/20 shadow-[0_2px_12px_rgba(36,80,63,0.12)]'
+          ? 'border-primary ring-1 ring-primary/10 shadow-[0_2px_12px_rgba(36,80,63,0.12)]'
           : 'hover:border-line-strong hover:shadow-[0_2px_12px_rgba(27,26,23,0.07)]'
       }`}
       onClick={onClick}
@@ -799,7 +799,7 @@ function FilterSelect({ label, value, onChange, options }: {
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="px-2.5 py-1.5 text-xs border border-line rounded-lg bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-primary/20"
+        className="px-2.5 py-1.5 text-xs border border-line rounded-lg bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-primary/10"
       >
         <option value="">All</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -946,7 +946,7 @@ function TaskDetailDrawer({ detail, loading, onClose, onStatusChange, onEdit, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[3px]" />
+      <div className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" />
       <div
         className="relative w-full max-w-3xl bg-surface rounded-2xl shadow-[0_24px_60px_-12px_rgba(27,26,23,0.28)] border border-line overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -1070,7 +1070,7 @@ function TaskDetailDrawer({ detail, loading, onClose, onStatusChange, onEdit, on
                   <select
                     value={task.status}
                     onChange={e => onStatusChange(task, e.target.value as TaskStatus)}
-                    className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${STATUS_PILL[task.status] || 'bg-canvas text-ink'}`}
+                    className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all ${STATUS_PILL[task.status] || 'bg-canvas text-ink'}`}
                   >
                     {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>

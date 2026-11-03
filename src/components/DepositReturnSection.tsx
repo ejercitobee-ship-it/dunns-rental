@@ -10,6 +10,7 @@ import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { formatCurrency, formatDate, todayLocalDate } from '../lib/utils';
 import { depositReturnsApi } from '../lib/api';
+import { TextInput, SelectInput, TextareaInput } from './ui/FormField';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type { DepositReturn, DeductionCategory, DepositReturnStatus } from '../types';
@@ -328,38 +329,15 @@ export function DepositReturnSection({ tenantId, leaseId, propertyId, unitId, de
       {/* Create modal */}
       <Modal isOpen={isCreateOpen} onClose={() => !saving && setIsCreateOpen(false)} title="Start Deposit Return" size="md">
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Move Out Date</label>
-            <input
-              type="date"
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-              value={moveOutDate}
-              onChange={e => setMoveOutDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Deposit Amount</label>
-            <input
-              type="number"
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-              value={deposit}
-              onChange={e => setDeposit(Number(e.target.value))}
-              min={0}
-              step={0.01}
-            />
-            <p className="text-xs text-muted mt-1">
-              Illinois requires return within 30 days. The deadline will be calculated automatically.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Notes (optional)</label>
-            <textarea
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink min-h-[60px]"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Move out condition, forwarding address, etc."
-            />
-          </div>
+          <TextInput label="Move Out Date" name="createMoveOutDate" type="date"
+            value={moveOutDate} onChange={e => setMoveOutDate(e.target.value)} />
+          <TextInput label="Deposit Amount" name="createDeposit" type="number"
+            value={String(deposit)} onChange={e => setDeposit(Number(e.target.value))}
+            min={0} step={0.01}
+            hint="Illinois requires return within 30 days. The deadline will be calculated automatically." />
+          <TextareaInput label="Notes (optional)" name="createNotes"
+            value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Move out condition, forwarding address, etc." />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleCreate} disabled={saving || !moveOutDate}>
@@ -373,71 +351,37 @@ export function DepositReturnSection({ tenantId, leaseId, propertyId, unitId, de
       <Modal isOpen={!!editingReturn} onClose={() => !saving && setEditingReturn(null)} title="Deposit Return Details" size="lg">
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Status</label>
-              <select
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={status}
-                onChange={e => setStatus(e.target.value as DepositReturnStatus)}
-              >
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="completed">Completed</option>
-                <option value="forfeited">Forfeited</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Move Out Date</label>
-              <input
-                type="date"
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={moveOutDate}
-                onChange={e => setMoveOutDate(e.target.value)}
-              />
-            </div>
+            <SelectInput label="Status" name="editStatus"
+              value={status} onChange={e => setStatus(e.target.value as DepositReturnStatus)}>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="completed">Completed</option>
+              <option value="forfeited">Forfeited</option>
+            </SelectInput>
+            <TextInput label="Move Out Date" name="editMoveOutDate" type="date"
+              value={moveOutDate} onChange={e => setMoveOutDate(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Deposit Amount</label>
-              <input
-                type="number"
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={deposit}
-                onChange={e => setDeposit(Number(e.target.value))}
-                min={0}
-                step={0.01}
-              />
-            </div>
+            <TextInput label="Deposit Amount" name="editDeposit" type="number"
+              value={String(deposit)} onChange={e => setDeposit(Number(e.target.value))}
+              min={0} step={0.01} />
             {(status === 'completed' || refundDate) && (
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">Refund Date</label>
-                <input
-                  type="date"
-                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                  value={refundDate}
-                  onChange={e => setRefundDate(e.target.value)}
-                />
-              </div>
+              <TextInput label="Refund Date" name="editRefundDate" type="date"
+                value={refundDate} onChange={e => setRefundDate(e.target.value)} />
             )}
           </div>
 
           {(status === 'completed' || refundMethod) && (
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Refund Method</label>
-              <select
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={refundMethod}
-                onChange={e => setRefundMethod(e.target.value)}
-              >
-                <option value="">Select method</option>
-                <option value="check">Check</option>
-                <option value="money_order">Money Order</option>
-                <option value="cash">Cash</option>
-                <option value="ach">ACH / Bank Transfer</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+            <SelectInput label="Refund Method" name="editRefundMethod"
+              value={refundMethod} onChange={e => setRefundMethod(e.target.value)}>
+              <option value="">Select method</option>
+              <option value="check">Check</option>
+              <option value="money_order">Money Order</option>
+              <option value="cash">Cash</option>
+              <option value="ach">ACH / Bank Transfer</option>
+              <option value="other">Other</option>
+            </SelectInput>
           )}
 
           {/* Deductions */}
@@ -508,15 +452,9 @@ export function DepositReturnSection({ tenantId, leaseId, propertyId, unitId, de
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
-            <textarea
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink min-h-[60px]"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Move out condition, forwarding address, etc."
-            />
-          </div>
+          <TextareaInput label="Notes" name="editNotes"
+            value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Move out condition, forwarding address, etc." />
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setEditingReturn(null)} disabled={saving}>Cancel</Button>

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
@@ -34,6 +35,8 @@ import { SYSTEM_PERMISSIONS } from '../types/auth';
 import { DocumentTemplatesSection } from '../components/DocumentTemplatesSection';
 import type { Role } from '../types/auth';
 import { QRCodeSVG } from 'qrcode.react';
+import { formatPhone } from '../lib/utils';
+import { EmailInput } from '../components/ui/EmailInput';
 
 export function Settings() {
   const { showToast } = useToast();
@@ -341,10 +344,7 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="eyebrow">Administration</p>
-        <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Settings</h1>
-      </div>
+      <PageHeader eyebrow="Administration" title="Settings" />
 
       <div className="rounded-xl border border-line bg-surface p-1 inline-flex overflow-x-auto">
         {tabs.map((tab) => (
@@ -441,14 +441,13 @@ export function Settings() {
                 <input
                   type="tel"
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={companySettings.phone}
-                  onChange={(e) => setCompanySettings({...companySettings, phone: e.target.value})}
+                  value={formatPhone(companySettings.phone)}
+                  onChange={(e) => setCompanySettings({...companySettings, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Email</label>
-                <input
-                  type="email"
+                <EmailInput
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   value={companySettings.email}
                   onChange={(e) => setCompanySettings({...companySettings, email: e.target.value})}
@@ -652,7 +651,7 @@ export function Settings() {
               <textarea
                 rows={2}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Pay your rent by Zelle to Marlene Dunn at 7739917112."
+                placeholder="Pay rent via Zelle to 773-991-7112, payable to Marlene Dunn."
                 value={rentSettings.paymentInstructions}
                 onChange={(e) => setRentSettings({ ...rentSettings, paymentInstructions: e.target.value })}
               />
@@ -694,7 +693,7 @@ export function Settings() {
                     type="number"
                     min={0}
                     step="100"
-                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                     value={financeSettings.capitalThreshold}
                     onChange={(e) => setFinanceSettings({ ...financeSettings, capitalThreshold: parseInt(e.target.value) || 0 })}
                   />
@@ -743,7 +742,7 @@ export function Settings() {
                       checked={notificationSettings[item.key as keyof typeof notificationSettings]}
                       onChange={(e) => setNotificationSettings({...notificationSettings, [item.key]: e.target.checked})}
                     />
-                    <div className="w-11 h-6 bg-[#dcd9d1] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line-strong after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    <div className="w-11 h-6 bg-[#dcd9d1] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line-strong after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
               ))}

@@ -82,7 +82,7 @@ export function Register() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-transparent"
                   placeholder="John Doe"
                   required
                 />
@@ -97,7 +97,7 @@ export function Register() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-transparent"
                   placeholder="Enter your email"
                   required
                 />
@@ -112,7 +112,7 @@ export function Register() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
+                  className="w-full pl-10 pr-12 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-transparent"
                   placeholder="Min 8 characters"
                   required
                   minLength={8}
@@ -139,7 +139,7 @@ export function Register() {
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-transparent"
                   placeholder="Confirm your password"
                   required
                 />

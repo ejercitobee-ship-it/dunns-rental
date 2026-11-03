@@ -35,10 +35,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const id = crypto.randomUUID();
+    const capitalProjectId = body.capitalProjectId ?? null;
+    const expenseType = capitalProjectId ? 'capital' : (body.expenseType ?? null);
+    const recoveryYears = body.recoveryYears != null ? Number(body.recoveryYears) : null;
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, recurring_frequency, interest_amount, tier, payment_account, expense_type, classification_status, capital_project_id, user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO expenses (id, property_id, unit_id, category, amount, date, description, vendor, is_recurring, recurring_frequency, interest_amount, tier, payment_account, expense_type, classification_status, capital_project_id, recovery_years, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -54,9 +57,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           body.interestAmount ?? null,
           body.tier ?? null,
           body.paymentAccount ?? null,
-          body.expenseType ?? null,
+          expenseType,
           body.classificationStatus ?? 'confirmed',
-          body.capitalProjectId ?? null,
+          capitalProjectId,
+          recoveryYears,
           auth.id
         ),
       logActivityStmt(env.DB, auth, {

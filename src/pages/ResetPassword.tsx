@@ -102,7 +102,7 @@ export function ResetPassword() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-12 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                      className="w-full pl-10 pr-12 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40"
                       placeholder="At least 8 characters"
                       required
                     />
@@ -124,7 +124,7 @@ export function ResetPassword() {
                       type={showPassword ? 'text' : 'password'}
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                      className="w-full pl-10 pr-4 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40"
                       placeholder="Type it again"
                       required
                     />

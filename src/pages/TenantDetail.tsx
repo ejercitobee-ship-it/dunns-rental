@@ -12,7 +12,8 @@ import { Badge } from '../components/ui/Badge';
 import { Avatar } from '../components/ui/Avatar';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { formatCurrency, formatDate, formatMonthYear, todayLocalDate } from '../lib/utils';
+import { EmailInput } from '../components/ui/EmailInput';
+import { formatCurrency, formatDate, formatMonthYear, todayLocalDate, formatPhone } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -28,6 +29,8 @@ import { ActivityTimeline } from '../components/ActivityTimeline';
 import { DepositReturnSection } from '../components/DepositReturnSection';
 import { InspectionSection } from '../components/InspectionSection';
 import { NoticeSection } from '../components/NoticeSection';
+import { SendPaymentLinkModal } from '../components/SendPaymentLinkModal';
+import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
   active: 'success',
@@ -817,6 +820,7 @@ export function TenantDetail() {
 
   // ── Transfer tenant to a different unit ──────────────────────────────
   const [transferOpen, setTransferOpen] = useState(false);
+  const [paymentLinkOpen, setPaymentLinkOpen] = useState(false);
   const [transferUnitId, setTransferUnitId] = useState('');
   const [transferring, setTransferring] = useState(false);
 
@@ -1419,7 +1423,7 @@ export function TenantDetail() {
               </div>
               <div className="flex items-center gap-2 text-muted">
                 <Phone className="h-3.5 w-3.5 text-faint" />
-                <span>{tenant.phone || '—'}</span>
+                <span>{tenant.phone ? formatPhone(tenant.phone) : '—'}</span>
               </div>
             </div>
 
@@ -1437,7 +1441,7 @@ export function TenantDetail() {
               {tenant.emergencyContact ? (
                 <div className="text-sm space-y-1">
                   <p className="text-ink font-medium">{tenant.emergencyContact.name}</p>
-                  <p className="text-muted">{tenant.emergencyContact.phone}</p>
+                  <p className="text-muted">{tenant.emergencyContact.phone ? formatPhone(tenant.emergencyContact.phone) : ''}</p>
                   <p className="text-muted capitalize">{tenant.emergencyContact.relationship}</p>
                 </div>
               ) : (
@@ -1669,7 +1673,7 @@ export function TenantDetail() {
                     <div>
                       <p className="text-ink font-medium text-sm">{m.name}</p>
                       <p className="text-muted text-xs">
-                        {[m.relationship, m.phone].filter(Boolean).join(' · ') || 'No details on file'}
+                        {[m.relationship, m.phone ? formatPhone(m.phone) : null].filter(Boolean).join(' · ') || 'No details on file'}
                       </p>
                     </div>
                     {canManagePortal && (
@@ -1709,8 +1713,8 @@ export function TenantDetail() {
                     <input
                       className="rounded-lg border border-line px-3 py-2 text-sm"
                       placeholder="Phone"
-                      value={householdForm.phone}
-                      onChange={(e) => setHouseholdForm({ ...householdForm, phone: e.target.value })}
+                      value={formatPhone(householdForm.phone)}
+                      onChange={(e) => setHouseholdForm({ ...householdForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                     />
                   </div>
                   <div className="flex gap-2">
@@ -1855,23 +1859,16 @@ export function TenantDetail() {
                 step="0.01"
                 value={creditForm.amount}
                 onChange={(e) => setCreditForm(f => ({ ...f, amount: e.target.value }))}
-                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 placeholder="0.00"
               />
             </div>
             <p className="text-xs text-muted">This adds to the tenant's credit balance. It can be applied when recording rent.</p>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-ink">Notes</label>
-            <textarea
-              rows={2}
-              value={creditForm.notes}
-              onChange={(e) => setCreditForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="What is this credit for? (e.g. tenant paid $150 for plumbing repair)"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
-            />
-          </div>
+          <TextareaInput label="Notes" name="addCreditNotes" rows={2}
+            value={creditForm.notes} onChange={(e) => setCreditForm(f => ({ ...f, notes: e.target.value }))}
+            placeholder="What is this credit for? (e.g. tenant paid $150 for plumbing repair)" className="resize-none" />
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setShowAddCredit(false)} disabled={creditBusy}>
@@ -1921,22 +1918,15 @@ export function TenantDetail() {
                 step="0.01"
                 value={editCreditForm.amount}
                 onChange={(e) => setEditCreditForm(f => ({ ...f, amount: e.target.value }))}
-                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 placeholder="0.00"
               />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-ink">Notes</label>
-            <textarea
-              rows={2}
-              value={editCreditForm.notes}
-              onChange={(e) => setEditCreditForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Optional notes"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
-            />
-          </div>
+          <TextareaInput label="Notes" name="editCreditNotes" rows={2}
+            value={editCreditForm.notes} onChange={(e) => setEditCreditForm(f => ({ ...f, notes: e.target.value }))}
+            placeholder="Optional notes" className="resize-none" />
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setEditingCredit(null)} disabled={editCreditBusy}>
@@ -2118,7 +2108,7 @@ export function TenantDetail() {
               {availableRealtors.length > 0 && (
                 <div className="flex items-center gap-2">
                   <select
-                    className="flex-1 px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    className="flex-1 px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
                     value={selectedRealtorId}
                     onChange={(e) => setSelectedRealtorId(e.target.value)}
                   >
@@ -2196,25 +2186,36 @@ export function TenantDetail() {
             <h3 className="font-semibold text-ink flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-faint" /> Payment History
             </h3>
-            {(payments.length > 0 || moveInFeeRows.length > 0) && (
-              <button
-                type="button"
-                onClick={downloadLedger}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-hover"
-              >
-                <Download className="h-3.5 w-3.5" /> Download CSV
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {hasPermission('rents_manage') && lease && tenant?.email && (
+                <button
+                  type="button"
+                  onClick={() => setPaymentLinkOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-hover"
+                >
+                  <Send className="h-3.5 w-3.5" /> Send Payment Link
+                </button>
+              )}
+              {(payments.length > 0 || moveInFeeRows.length > 0) && (
+                <button
+                  type="button"
+                  onClick={downloadLedger}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-hover"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download CSV
+                </button>
+              )}
+            </div>
           </div>
           <div className="overflow-x-auto mt-3">
             <table className="w-full min-w-[600px]">
               <thead>
-                <tr className="border-b border-line bg-canvas">
-                  <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Month</th>
-                  <th className="text-right py-3 px-5 font-semibold text-ink text-sm">Amount</th>
-                  <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Method</th>
-                  <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Date</th>
-                  <th className="text-left py-3 px-5 font-semibold text-ink text-sm">Receipt</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Month</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Method</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -2313,13 +2314,13 @@ export function TenantDetail() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[500px]">
                   <thead>
-                    <tr className="border-b border-line bg-canvas">
-                      <th className="text-left py-2.5 px-4 font-semibold text-ink text-sm">Renewal Period</th>
-                      <th className="text-right py-2.5 px-4 font-semibold text-ink text-sm">Previous Rent</th>
-                      <th className="text-right py-2.5 px-4 font-semibold text-ink text-sm">New Rent</th>
-                      <th className="text-right py-2.5 px-4 font-semibold text-ink text-sm">Change</th>
-                      <th className="text-left py-2.5 px-4 font-semibold text-ink text-sm">Generated</th>
-                      <th className="text-left py-2.5 px-4 font-semibold text-ink text-sm">Status</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Renewal Period</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Previous Rent</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">New Rent</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Change</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Generated</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2525,31 +2526,18 @@ export function TenantDetail() {
           <p className="text-sm text-muted">
             Recording {formatCurrency(lease?.securityDeposit || 0)} for this tenancy. This creates an income entry, generates a receipt, and logs the payment.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Date Paid *</label>
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              value={moveInFeeForm.paidDate}
-              onChange={(e) => setMoveInFeeForm({ ...moveInFeeForm, paidDate: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Payment Method</label>
-            <select
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
-              value={moveInFeeForm.method}
-              onChange={(e) => setMoveInFeeForm({ ...moveInFeeForm, method: e.target.value })}
-            >
-              <option value="">Select method</option>
-              <option value="check">Check</option>
-              <option value="money_order">Money Order</option>
-              <option value="zelle">Zelle</option>
-              <option value="venmo">Venmo</option>
-              <option value="cash">Cash</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+          <TextInput label="Date Paid" name="moveInFeePaidDate" type="date" required
+            value={moveInFeeForm.paidDate} onChange={(e) => setMoveInFeeForm({ ...moveInFeeForm, paidDate: e.target.value })} />
+          <SelectInput label="Payment Method" name="moveInFeeMethod"
+            value={moveInFeeForm.method} onChange={(e) => setMoveInFeeForm({ ...moveInFeeForm, method: e.target.value })}>
+            <option value="">Select method</option>
+            <option value="check">Check</option>
+            <option value="money_order">Money Order</option>
+            <option value="zelle">Zelle</option>
+            <option value="venmo">Venmo</option>
+            <option value="cash">Cash</option>
+            <option value="other">Other</option>
+          </SelectInput>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setMoveInFeeModalOpen(false)} disabled={recordingMoveInFee}>
               Cancel
@@ -2575,48 +2563,28 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={editMoveInFeeForm.amount}
                 onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, amount: e.target.value })}
                 placeholder="0.00"
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Date Paid</label>
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              value={editMoveInFeeForm.paidDate}
-              onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, paidDate: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Payment Method</label>
-            <select
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
-              value={editMoveInFeeForm.method}
-              onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, method: e.target.value })}
-            >
-              <option value="">Select method</option>
-              <option value="check">Check</option>
-              <option value="money_order">Money Order</option>
-              <option value="zelle">Zelle</option>
-              <option value="venmo">Venmo</option>
-              <option value="cash">Cash</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Reason for Edit</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
-              value={editMoveInFeeForm.reason}
-              onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, reason: e.target.value })}
-              placeholder="e.g. Correcting payment date"
-            />
-          </div>
+          <TextInput label="Date Paid" name="editMoveInFeePaidDate" type="date"
+            value={editMoveInFeeForm.paidDate} onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, paidDate: e.target.value })} />
+          <SelectInput label="Payment Method" name="editMoveInFeeMethod"
+            value={editMoveInFeeForm.method} onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, method: e.target.value })}>
+            <option value="">Select method</option>
+            <option value="check">Check</option>
+            <option value="money_order">Money Order</option>
+            <option value="zelle">Zelle</option>
+            <option value="venmo">Venmo</option>
+            <option value="cash">Cash</option>
+            <option value="other">Other</option>
+          </SelectInput>
+          <TextInput label="Reason for Edit" name="editMoveInFeeReason"
+            value={editMoveInFeeForm.reason} onChange={(e) => setEditMoveInFeeForm({ ...editMoveInFeeForm, reason: e.target.value })}
+            placeholder="e.g. Correcting payment date" />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setEditMoveInFeeOpen(false)} disabled={savingMoveInFee}>
               Cancel
@@ -2639,7 +2607,7 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={tenancyForm.monthlyRent}
                 onChange={(e) => setTenancyForm({ ...tenancyForm, monthlyRent: e.target.value })}
                 placeholder="0.00"
@@ -2667,25 +2635,11 @@ export function TenantDetail() {
             </div>
           </div>
           <div className={`grid gap-4 ${tenancyForm.leaseType === 'month_to_month' ? '' : 'grid-cols-2'}`}>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Start Date</label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={tenancyForm.startDate}
-                onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
-              />
-            </div>
+            <TextInput label="Start Date" name="tenancyStartDate" type="date"
+              value={tenancyForm.startDate} onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })} />
             {tenancyForm.leaseType === 'fixed' && (
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  value={tenancyForm.endDate}
-                  onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
-                />
-              </div>
+              <TextInput label="End Date" name="tenancyEndDate" type="date"
+                value={tenancyForm.endDate} onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })} />
             )}
           </div>
           <div>
@@ -2696,7 +2650,7 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={tenancyForm.moveInFee}
                 onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFee: e.target.value })}
                 placeholder="0.00"
@@ -2717,7 +2671,7 @@ export function TenantDetail() {
                   <label className="block text-xs font-medium text-muted mb-1">Date Paid *</label>
                   <input
                     type="date"
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={tenancyForm.moveInFeePaidDate}
                     onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaidDate: e.target.value })}
                   />
@@ -2725,7 +2679,7 @@ export function TenantDetail() {
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1">Method</label>
                   <select
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={tenancyForm.moveInFeeMethod}
                     onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeeMethod: e.target.value })}
                   >
@@ -2749,7 +2703,7 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={tenancyForm.depositAmount}
                 onChange={(e) => setTenancyForm({ ...tenancyForm, depositAmount: e.target.value })}
                 placeholder="0.00"
@@ -2770,7 +2724,7 @@ export function TenantDetail() {
                   <label className="block text-xs font-medium text-muted mb-1">Date Collected</label>
                   <input
                     type="date"
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={tenancyForm.depositPaidDate}
                     onChange={(e) => setTenancyForm({ ...tenancyForm, depositPaidDate: e.target.value })}
                   />
@@ -2778,7 +2732,7 @@ export function TenantDetail() {
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1">Method</label>
                   <select
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={tenancyForm.depositMethod}
                     onChange={(e) => setTenancyForm({ ...tenancyForm, depositMethod: e.target.value })}
                   >
@@ -2794,19 +2748,10 @@ export function TenantDetail() {
               </div>
             )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Rent Due Day</label>
-            <input
-              type="number"
-              min={1}
-              max={31}
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              value={tenancyForm.rentDueDay}
-              onChange={(e) => setTenancyForm({ ...tenancyForm, rentDueDay: e.target.value })}
-              placeholder="Global default"
-            />
-            <p className="text-xs text-muted mt-1">Leave blank to use the global setting.</p>
-          </div>
+          <TextInput label="Rent Due Day" name="tenancyRentDueDay" type="number"
+            min={1} max={31} value={tenancyForm.rentDueDay}
+            onChange={(e) => setTenancyForm({ ...tenancyForm, rentDueDay: e.target.value })}
+            placeholder="Global default" hint="Leave blank to use the global setting." />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setTenancyOpen(false)} disabled={savingTenancy}>
               Cancel
@@ -2891,36 +2836,33 @@ export function TenantDetail() {
           {hmMode === 'new' ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">First Name *</label>
-                  <input type="text" className="input" value={hmForm.firstName} onChange={e => setHmForm({ ...hmForm, firstName: e.target.value })} placeholder="First name" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Last Name *</label>
-                  <input type="text" className="input" value={hmForm.lastName} onChange={e => setHmForm({ ...hmForm, lastName: e.target.value })} placeholder="Last name" />
-                </div>
+                <TextInput label="First Name" name="hmFirstName" required
+                  value={hmForm.firstName} onChange={e => setHmForm({ ...hmForm, firstName: e.target.value })} placeholder="First name" />
+                <TextInput label="Last Name" name="hmLastName" required
+                  value={hmForm.lastName} onChange={e => setHmForm({ ...hmForm, lastName: e.target.value })} placeholder="Last name" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-ink mb-1">Email</label>
-                <input type="email" className="input" value={hmForm.email} onChange={e => setHmForm({ ...hmForm, email: e.target.value })} placeholder="Email address" />
+                <EmailInput className="input" value={hmForm.email} onChange={e => setHmForm({ ...hmForm, email: e.target.value })} placeholder="Email address" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Phone</label>
-                <input type="tel" className="input" value={hmForm.phone} onChange={e => setHmForm({ ...hmForm, phone: e.target.value })} placeholder="Phone number" />
-              </div>
+              <TextInput label="Phone" name="hmPhone" type="tel"
+                value={formatPhone(hmForm.phone)} onChange={e => setHmForm({ ...hmForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} placeholder="Phone number" />
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">Select a tenant</label>
               {hmCandidates.length > 0 ? (
-                <select className="input" value={hmExistingId} onChange={e => setHmExistingId(e.target.value)}>
+                <SelectInput label="Select a tenant" name="hmExistingTenant"
+                  value={hmExistingId} onChange={e => setHmExistingId(e.target.value)}>
                   <option value="">Choose...</option>
                   {hmCandidates.map(t => (
                     <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
                   ))}
-                </select>
+                </SelectInput>
               ) : (
-                <p className="text-sm text-faint">All tenants are already on this lease.</p>
+                <>
+                  <label className="block text-sm font-medium text-ink mb-1">Select a tenant</label>
+                  <p className="text-sm text-faint">All tenants are already on this lease.</p>
+                </>
               )}
             </div>
           )}
@@ -2954,7 +2896,7 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={approveForm.monthlyRent}
                 onChange={(e) => setApproveForm({ ...approveForm, monthlyRent: e.target.value })}
                 placeholder="0.00"
@@ -2981,25 +2923,11 @@ export function TenantDetail() {
             </div>
           </div>
           <div className={`grid gap-4 ${approveForm.leaseType === 'month_to_month' ? '' : 'grid-cols-2'}`}>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Start Date *</label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={approveForm.startDate}
-                onChange={(e) => setApproveForm({ ...approveForm, startDate: e.target.value })}
-              />
-            </div>
+            <TextInput label="Start Date" name="approveStartDate" type="date" required
+              value={approveForm.startDate} onChange={(e) => setApproveForm({ ...approveForm, startDate: e.target.value })} />
             {approveForm.leaseType === 'fixed' && (
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  value={approveForm.endDate}
-                  onChange={(e) => setApproveForm({ ...approveForm, endDate: e.target.value })}
-                />
-              </div>
+              <TextInput label="End Date" name="approveEndDate" type="date"
+                value={approveForm.endDate} onChange={(e) => setApproveForm({ ...approveForm, endDate: e.target.value })} />
             )}
           </div>
           <div>
@@ -3010,7 +2938,7 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={approveForm.moveInFee}
                 onChange={(e) => setApproveForm({ ...approveForm, moveInFee: e.target.value })}
                 placeholder="0.00"
@@ -3031,7 +2959,7 @@ export function TenantDetail() {
                   <label className="block text-xs font-medium text-muted mb-1">Date Paid *</label>
                   <input
                     type="date"
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={approveForm.moveInFeePaidDate}
                     onChange={(e) => setApproveForm({ ...approveForm, moveInFeePaidDate: e.target.value })}
                   />
@@ -3039,7 +2967,7 @@ export function TenantDetail() {
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1">Method</label>
                   <select
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={approveForm.moveInFeeMethod}
                     onChange={(e) => setApproveForm({ ...approveForm, moveInFeeMethod: e.target.value })}
                   >
@@ -3066,7 +2994,7 @@ export function TenantDetail() {
                 type="number"
                 min={0}
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={approveForm.depositAmount}
                 onChange={(e) => setApproveForm({ ...approveForm, depositAmount: e.target.value })}
                 placeholder="0.00"
@@ -3087,7 +3015,7 @@ export function TenantDetail() {
                   <label className="block text-xs font-medium text-muted mb-1">Date Collected</label>
                   <input
                     type="date"
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={approveForm.depositPaidDate}
                     onChange={(e) => setApproveForm({ ...approveForm, depositPaidDate: e.target.value })}
                   />
@@ -3095,7 +3023,7 @@ export function TenantDetail() {
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1">Method</label>
                   <select
-                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                    className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                     value={approveForm.depositMethod}
                     onChange={(e) => setApproveForm({ ...approveForm, depositMethod: e.target.value })}
                   >
@@ -3126,62 +3054,29 @@ export function TenantDetail() {
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Tenant" size="lg">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">First Name *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={form.firstName}
-                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Last Name *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={form.lastName}
-                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-              />
-            </div>
+            <TextInput label="First Name" name="editFirstName" required
+              value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+            <TextInput label="Last Name" name="editLastName" required
+              value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
-              <input
-                type="email"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+              <EmailInput
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
-              <input
-                type="tel"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              />
-            </div>
+            <TextInput label="Phone" name="editPhone" type="tel"
+              value={formatPhone(form.phone)} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
-            <textarea
-              rows={3}
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Private notes, for example who pays the rent, their phone number, or any payment arrangement."
-            />
-            <p className="text-xs text-muted mt-1">
-              Private to the office, never shown to the tenant. Searchable from the Tenants page.
-            </p>
-          </div>
+          <TextareaInput label="Notes" name="editNotes" rows={3}
+            value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Private notes, for example who pays the rent, their phone number, or any payment arrangement."
+            hint="Private to the office, never shown to the tenant. Searchable from the Tenants page." />
 
           <hr className="border-line" />
 
@@ -3189,58 +3084,25 @@ export function TenantDetail() {
             <MapPin className="h-4 w-4 text-faint" /> Mailing Address
           </h3>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Street Address</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              placeholder="123 Main St"
-              value={form.addressLine1}
-              onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
-            />
-          </div>
+          <TextInput label="Street Address" name="editStreet"
+            placeholder="123 Main St" value={form.addressLine1}
+            onChange={(e) => setForm({ ...form, addressLine1: e.target.value })} />
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Apt / Suite / Unit</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              value={form.addressLine2}
-              onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
-            />
-          </div>
+          <TextInput label="Apt / Suite / Unit" name="editApt"
+            value={form.addressLine2} onChange={(e) => setForm({ ...form, addressLine2: e.target.value })} />
 
           <div className="grid grid-cols-6 gap-4">
             <div className="col-span-3">
-              <label className="block text-sm font-medium text-ink mb-1.5">City</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
+              <TextInput label="City" name="editCity"
+                value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             </div>
             <div className="col-span-1">
-              <label className="block text-sm font-medium text-ink mb-1.5">State</label>
-              <input
-                type="text"
-                maxLength={2}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                placeholder="IL"
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
-              />
+              <TextInput label="State" name="editState" maxLength={2} placeholder="IL"
+                value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })} />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-ink mb-1.5">ZIP</label>
-              <input
-                type="text"
-                maxLength={10}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                placeholder="60630"
-                value={form.zip}
-                onChange={(e) => setForm({ ...form, zip: e.target.value })}
-              />
+              <TextInput label="ZIP" name="editZip" maxLength={10} placeholder="60630"
+                value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} />
             </div>
           </div>
 
@@ -3250,36 +3112,16 @@ export function TenantDetail() {
             <ShieldAlert className="h-4 w-4 text-faint" /> Emergency Contact
           </h3>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Name</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              value={form.emergencyName}
-              onChange={(e) => setForm({ ...form, emergencyName: e.target.value })}
-            />
-          </div>
+          <TextInput label="Name" name="emergencyName"
+            value={form.emergencyName} onChange={(e) => setForm({ ...form, emergencyName: e.target.value })} />
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
-              <input
-                type="tel"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={form.emergencyPhone}
-                onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Relationship</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                placeholder="e.g. Parent, Sibling"
-                value={form.emergencyRelationship}
-                onChange={(e) => setForm({ ...form, emergencyRelationship: e.target.value })}
-              />
-            </div>
+            <TextInput label="Phone" name="emergencyPhone" type="tel"
+              value={formatPhone(form.emergencyPhone)}
+              onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+            <TextInput label="Relationship" name="emergencyRelationship"
+              placeholder="e.g. Parent, Sibling" value={form.emergencyRelationship}
+              onChange={(e) => setForm({ ...form, emergencyRelationship: e.target.value })} />
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -3322,25 +3164,11 @@ export function TenantDetail() {
           <p className="text-sm text-muted">
             This ends the tenancy and frees up the unit. Rent stops from the month after the move-out date. The lease and payment history are kept.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Move-out date *</label>
-            <input
-              type="date"
-              value={termForm.date}
-              onChange={(e) => setTermForm({ ...termForm, date: e.target.value })}
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Reason for leaving</label>
-            <textarea
-              rows={3}
-              value={termForm.reason}
-              onChange={(e) => setTermForm({ ...termForm, reason: e.target.value })}
-              placeholder="e.g. Lease ended, moving out of state, non-renewal, eviction."
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+          <TextInput label="Move-out date" name="termDate" type="date" required
+            value={termForm.date} onChange={(e) => setTermForm({ ...termForm, date: e.target.value })} />
+          <TextareaInput label="Reason for leaving" name="termReason" rows={3}
+            value={termForm.reason} onChange={(e) => setTermForm({ ...termForm, reason: e.target.value })}
+            placeholder="e.g. Lease ended, moving out of state, non-renewal, eviction." />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setTerminateOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleTerminate} disabled={terminating}>
@@ -3376,72 +3204,32 @@ export function TenantDetail() {
           <div className="space-y-4">
             <h4 className="text-xs font-semibold text-muted uppercase tracking-wide">Renewal Terms</h4>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">New Start Date</label>
-                <input type="date"
-                  value={renewalForm.newStartDate}
-                  onChange={e => setRenewalForm({ ...renewalForm, newStartDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">New End Date</label>
-                <input type="date"
-                  value={renewalForm.newEndDate}
-                  onChange={e => setRenewalForm({ ...renewalForm, newEndDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
-              </div>
+              <TextInput label="New Start Date" name="renewalStartDate" type="date"
+                value={renewalForm.newStartDate} onChange={e => setRenewalForm({ ...renewalForm, newStartDate: e.target.value })} />
+              <TextInput label="New End Date" name="renewalEndDate" type="date"
+                value={renewalForm.newEndDate} onChange={e => setRenewalForm({ ...renewalForm, newEndDate: e.target.value })} />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1">New Monthly Rent</label>
-                <input type="number" min="0" step="0.01"
-                  value={renewalForm.newMonthlyRent}
-                  onChange={e => setRenewalForm({ ...renewalForm, newMonthlyRent: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
+                <TextInput label="New Monthly Rent" name="renewalMonthlyRent" type="number" min={0} step="0.01"
+                  value={renewalForm.newMonthlyRent} onChange={e => setRenewalForm({ ...renewalForm, newMonthlyRent: e.target.value })} />
                 {lease && Number(renewalForm.newMonthlyRent) !== lease.monthlyRent && Number(renewalForm.newMonthlyRent) > 0 && (
                   <p className="text-xs text-muted mt-1">
                     {Number(renewalForm.newMonthlyRent) > lease.monthlyRent ? 'Increase' : 'Decrease'}: {formatCurrency(Math.abs(Number(renewalForm.newMonthlyRent) - lease.monthlyRent))} ({((Math.abs(Number(renewalForm.newMonthlyRent) - lease.monthlyRent) / lease.monthlyRent) * 100).toFixed(1)}%)
                   </p>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Rent Due Day</label>
-                <input type="number" min="1" max="31"
-                  value={renewalForm.rentDueDay}
-                  onChange={e => setRenewalForm({ ...renewalForm, rentDueDay: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Late Fee</label>
-                <input type="number" min="0" step="0.01"
-                  value={renewalForm.lateFeeAmount}
-                  onChange={e => setRenewalForm({ ...renewalForm, lateFeeAmount: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
-              </div>
+              <TextInput label="Rent Due Day" name="renewalRentDueDay" type="number" min={1} max={31}
+                value={renewalForm.rentDueDay} onChange={e => setRenewalForm({ ...renewalForm, rentDueDay: e.target.value })} />
+              <TextInput label="Late Fee" name="renewalLateFee" type="number" min={0} step="0.01"
+                value={renewalForm.lateFeeAmount} onChange={e => setRenewalForm({ ...renewalForm, lateFeeAmount: e.target.value })} />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Utilities (if changing)</label>
-              <textarea rows={2}
-                value={renewalForm.utilities}
-                onChange={e => setRenewalForm({ ...renewalForm, utilities: e.target.value })}
-                placeholder="Tenant is responsible for all utilities."
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Special Renewal Terms or Notes (optional)</label>
-              <textarea rows={3}
-                value={renewalForm.additionalTerms}
-                onChange={e => setRenewalForm({ ...renewalForm, additionalTerms: e.target.value })}
-                placeholder="Any additional renewal clauses, updated pet policies, parking agreements..."
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
+            <TextareaInput label="Utilities (if changing)" name="renewalUtilities" rows={2}
+              value={renewalForm.utilities} onChange={e => setRenewalForm({ ...renewalForm, utilities: e.target.value })}
+              placeholder="Tenant is responsible for all utilities." />
+            <TextareaInput label="Special Renewal Terms or Notes (optional)" name="renewalTerms" rows={3}
+              value={renewalForm.additionalTerms} onChange={e => setRenewalForm({ ...renewalForm, additionalTerms: e.target.value })}
+              placeholder="Any additional renewal clauses, updated pet policies, parking agreements..." />
           </div>
 
           <label className="flex items-center gap-2 text-sm">
@@ -3459,6 +3247,18 @@ export function TenantDetail() {
           </div>
         </div>
       </Modal>
+
+      {lease && tenant?.email && (
+        <SendPaymentLinkModal
+          isOpen={paymentLinkOpen}
+          onClose={() => setPaymentLinkOpen(false)}
+          tenantName={`${tenant.firstName} ${tenant.lastName}`}
+          tenantEmail={tenant.email}
+          tenantId={tenant.id}
+          leaseId={lease.id}
+          owedMonths={owed.months}
+        />
+      )}
     </div>
   );
 }
@@ -3568,7 +3368,7 @@ function AgentNotesCard({ tenantId }: { tenantId: string }) {
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
                 placeholder="Add a note about this tenant..."
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 resize-none"
               />
               <div className="flex justify-end">
                 <Button size="sm" onClick={handleAdd} disabled={!draft.trim() || saving}>
@@ -3592,7 +3392,7 @@ function AgentNotesCard({ tenantId }: { tenantId: string }) {
                           rows={3}
                           value={editBody}
                           onChange={e => setEditBody(e.target.value)}
-                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 resize-none"
                         />
                         <div className="flex gap-2 justify-end">
                           <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setEditBody(''); }}>Cancel</Button>
@@ -3812,28 +3612,12 @@ function EmailCard({ tenantId, tenantEmail, tenantName, canSend }: { tenantId: s
             Sends an email to <span className="font-medium text-ink">{tenantName || 'this tenant'}</span>
             {tenantEmail && <> at <span className="font-medium text-ink">{tenantEmail}</span></>}. A copy is saved here. Their reply goes to your normal inbox.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Subject</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              maxLength={200}
-              placeholder="e.g. About your lease renewal"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Message</label>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={8}
-              maxLength={8000}
-              placeholder="Write your message..."
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
-            />
-          </div>
+          <TextInput label="Subject" name="emailSubject"
+            value={subject} onChange={(e) => setSubject(e.target.value)}
+            maxLength={200} placeholder="e.g. About your lease renewal" />
+          <TextareaInput label="Message" name="emailBody" rows={8}
+            value={body} onChange={(e) => setBody(e.target.value)}
+            maxLength={8000} placeholder="Write your message..." className="resize-none" />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={send} disabled={sending || !subject.trim() || !body.trim()}>

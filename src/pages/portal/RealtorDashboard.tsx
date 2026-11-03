@@ -6,6 +6,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { portalApi, photoApi, type RealtorMe } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
 import { useToast } from '../../context/ToastContext';
+import { formatPhone } from '../../lib/utils';
 
 export function RealtorDashboard() {
   const [data, setData] = useState<RealtorMe | null>(null);
@@ -127,7 +128,7 @@ export function RealtorDashboard() {
             <p className="text-ink font-medium">{profile.name || 'Realtor'}</p>
             {profile.companyName && <p className="text-muted text-sm">{profile.companyName}</p>}
             <p className="text-muted text-sm">{profile.email}</p>
-            {profile.phone && <p className="text-muted text-sm">{profile.phone}</p>}
+            {profile.phone && <p className="text-muted text-sm">{formatPhone(profile.phone)}</p>}
           </div>
           <p className="text-xs text-muted">To update these details, please contact the office.</p>
         </CardContent>

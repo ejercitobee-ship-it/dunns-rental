@@ -8,8 +8,9 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { templateApi, type DocumentTemplate } from '../lib/api';
+import { TextInput, SelectInput } from './ui/FormField';
 
-const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25';
+const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10';
 
 const CATEGORIES = [
   { value: 'lease', label: 'Lease Agreement' },
@@ -220,20 +221,16 @@ export function DocumentTemplatesSection() {
             <label className="block text-sm font-medium text-ink mb-1.5">File *</label>
             <input ref={fileRef} type="file" className={inputClass} onChange={handleFileChange} accept=".pdf,.doc,.docx,.txt,.rtf" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Template name *</label>
-            <input className={inputClass} value={uploadForm.name} onChange={e => setUploadForm({ ...uploadForm, name: e.target.value })} placeholder="e.g. Residential Lease Agreement" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Category</label>
-            <select className={inputClass} value={uploadForm.category} onChange={e => setUploadForm({ ...uploadForm, category: e.target.value })}>
-              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Description (optional)</label>
-            <input className={inputClass} value={uploadForm.description} onChange={e => setUploadForm({ ...uploadForm, description: e.target.value })} placeholder="Short note about this template" />
-          </div>
+          <TextInput label="Template name" name="uploadTemplateName" required
+            value={uploadForm.name} onChange={e => setUploadForm({ ...uploadForm, name: e.target.value })}
+            placeholder="e.g. Residential Lease Agreement" />
+          <SelectInput label="Category" name="uploadCategory"
+            value={uploadForm.category} onChange={e => setUploadForm({ ...uploadForm, category: e.target.value })}>
+            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </SelectInput>
+          <TextInput label="Description (optional)" name="uploadDescription"
+            value={uploadForm.description} onChange={e => setUploadForm({ ...uploadForm, description: e.target.value })}
+            placeholder="Short note about this template" />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
             <Button onClick={handleUpload} disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</Button>
@@ -244,20 +241,14 @@ export function DocumentTemplatesSection() {
       {/* Edit modal */}
       <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Template" size="md">
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Template name *</label>
-            <input className={inputClass} value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Category</label>
-            <select className={inputClass} value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}>
-              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Description (optional)</label>
-            <input className={inputClass} value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
-          </div>
+          <TextInput label="Template name" name="editTemplateName" required
+            value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+          <SelectInput label="Category" name="editCategory"
+            value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}>
+            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </SelectInput>
+          <TextInput label="Description (optional)" name="editDescription"
+            value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
             <Button onClick={handleEdit} disabled={editBusy}>{editBusy ? 'Saving...' : 'Save'}</Button>

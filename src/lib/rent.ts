@@ -507,10 +507,14 @@ export function monthsBehind(
   const currentTarget = currentYear * 12 + currentMonth;
   const from = Math.max(yearMonthOf(lease.startDate), currentTarget - 60);
 
+  const dueDay = lease.rentDueDay ?? 1;
+  const todayDay = new Date().getDate();
+
   let months = 0;
   let balance = 0;
-  for (const { settlement } of settleWithCarryForward(lease, payments, from, currentTarget, leaseSet, allocations)) {
+  for (const { ym, settlement } of settleWithCarryForward(lease, payments, from, currentTarget, leaseSet, allocations)) {
     if (settlement.balance > EPSILON) {
+      if (ym === currentTarget && todayDay <= dueDay) continue;
       months += 1;
       balance = round2(balance + settlement.balance);
     }

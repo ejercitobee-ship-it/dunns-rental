@@ -3,6 +3,7 @@ import type { MaintenanceStatus } from '../types';
 /** Human labels for the job lifecycle, shared by the admin page and portals. */
 export const STATUS_LABEL: Record<MaintenanceStatus, string> = {
   submitted: 'Submitted',
+  available: 'Available',
   assigned: 'Assigned',
   scheduled: 'Scheduled',
   in_progress: 'In progress',
@@ -18,6 +19,7 @@ type BadgeVariant = 'warning' | 'default' | 'success' | 'secondary' | 'destructi
 
 export const STATUS_BADGE: Record<MaintenanceStatus, BadgeVariant> = {
   submitted: 'warning',
+  available: 'default',
   assigned: 'default',
   scheduled: 'default',
   in_progress: 'default',

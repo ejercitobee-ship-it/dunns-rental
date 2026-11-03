@@ -19,6 +19,7 @@ import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useApp } from '../context/AppContext';
@@ -340,11 +341,7 @@ export function Announcements() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <p className="eyebrow">Communication</p>
-        <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Announcements</h1>
-      </div>
+      <PageHeader eyebrow="Communication" title="Announcements" />
 
       {/* Compose card */}
       <Card ref={formRef}>

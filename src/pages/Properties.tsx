@@ -6,11 +6,14 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { StatCard } from '../components/ui/StatCard';
+import { PageHeader } from '../components/ui/PageHeader';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type { Property, Unit, UnitStatus, LeaseStatus, UtilityAccount, UtilityType } from '../types';
+import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 
 const UTILITY_META: Record<UtilityType, { label: string; icon: typeof Droplet }> = {
   water: { label: 'Water', icon: Droplet },
@@ -431,63 +434,57 @@ export function Properties() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Portfolio</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Properties</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-48 sm:w-56 pl-10 pr-4 py-2 border border-line rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 bg-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Properties"
+        actions={
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="w-48 sm:w-56 pl-10 pr-4 py-2 border border-line rounded-lg bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            {canCreateProperty && (
+              <Button onClick={() => setIsAddPropertyOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Property
+              </Button>
+            )}
           </div>
-          {canCreateProperty && (
-            <Button onClick={() => setIsAddPropertyOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Property
-            </Button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       {/* Portfolio Summary */}
-      <div className="grid gap-4 sm:gap-5 grid-cols-2 lg:grid-cols-4">
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.04] rounded-bl-[40px]" />
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Properties</span>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum mt-2">{properties.length}</p>
-          <div className="mt-3 w-8 h-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><Building2 className="h-4 w-4" /></div>
-        </div>
-
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.04] rounded-bl-[40px]" />
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Total Units</span>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum mt-2">{totalUnits}</p>
-          <div className="mt-3 w-8 h-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><DoorOpen className="h-4 w-4" /></div>
-        </div>
-
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-positive/[0.06] rounded-bl-[40px]" />
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Occupancy</span>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-positive tnum mt-2">{occupancyPct}%</p>
-          <p className="text-xs text-muted mt-1">{occupiedUnits} of {totalUnits} occupied</p>
-          <div className="mt-2 w-8 h-8 rounded-xl bg-positive/10 text-positive grid place-items-center"><Home className="h-4 w-4" /></div>
-        </div>
-
-        <div className="bg-surface rounded-2xl border border-line p-5 sm:p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.04] rounded-bl-[40px]" />
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Monthly Revenue</span>
-          <p className="text-3xl sm:text-4xl font-display font-semibold text-ink tnum mt-2">{formatCurrency(totalMonthlyRent)}</p>
-          <p className="text-xs text-muted mt-1">Potential rent</p>
-          <div className="mt-2 w-8 h-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><DollarSign className="h-4 w-4" /></div>
-        </div>
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Properties"
+          value={properties.length}
+          icon={<Building2 />}
+        />
+        <StatCard
+          title="Total Units"
+          value={totalUnits}
+          icon={<DoorOpen />}
+        />
+        <StatCard
+          title="Occupancy"
+          value={`${occupancyPct}%`}
+          subtitle={`${occupiedUnits} of ${totalUnits} occupied`}
+          icon={<Home />}
+          iconBg="bg-positive/10 text-positive"
+          valueColor="text-positive"
+        />
+        <StatCard
+          title="Monthly Revenue"
+          value={formatCurrency(totalMonthlyRent)}
+          subtitle="Potential rent"
+          icon={<DollarSign />}
+        />
       </div>
 
       {/* Properties */}
@@ -702,7 +699,7 @@ export function Properties() {
                             <select
                               value={isManualHold ? unit.status : 'none'}
                               onChange={(e) => handleSetUnitStatus(unit, e.target.value as UnitStatus | 'none')}
-                              className="w-full py-1.5 px-2 text-xs rounded-lg bg-canvas border border-line text-ink transition-colors cursor-pointer hover:bg-black/[0.03] focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              className="w-full py-1.5 px-2 text-xs rounded-lg bg-canvas border border-line text-ink transition-colors cursor-pointer hover:bg-black/[0.03] focus:outline-none focus:ring-1 focus:ring-primary/10"
                             >
                               <option value="none">No hold (auto from lease)</option>
                               {MANUAL_UNIT_STATUSES.map(s => (
@@ -797,55 +794,34 @@ export function Properties() {
       {/* Add Property Modal */}
       <Modal isOpen={isAddPropertyOpen} onClose={() => setIsAddPropertyOpen(false)} title="Add New Property">
         <form onSubmit={handleAddProperty} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Property Name *</label>
-            <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={propertyForm.name} onChange={(e) => setPropertyForm({...propertyForm, name: e.target.value})} placeholder="e.g., Sunset Apartments" />
-          </div>
-          
+          <TextInput label="Property Name" name="addPropName" required placeholder="e.g., Sunset Apartments"
+            value={propertyForm.name} onChange={(e) => setPropertyForm({...propertyForm, name: e.target.value})} />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Address *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.address} onChange={(e) => setPropertyForm({...propertyForm, address: e.target.value})} placeholder="Street address" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">City *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.city} onChange={(e) => setPropertyForm({...propertyForm, city: e.target.value})} placeholder="City" />
-            </div>
+            <TextInput label="Address" name="addPropAddress" required placeholder="Street address"
+              value={propertyForm.address} onChange={(e) => setPropertyForm({...propertyForm, address: e.target.value})} />
+            <TextInput label="City" name="addPropCity" required placeholder="City"
+              value={propertyForm.city} onChange={(e) => setPropertyForm({...propertyForm, city: e.target.value})} />
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">State *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.state} onChange={(e) => setPropertyForm({...propertyForm, state: e.target.value})} placeholder="CA" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">ZIP Code *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.zipCode} onChange={(e) => setPropertyForm({...propertyForm, zipCode: e.target.value})} placeholder="90001" />
-            </div>
+            <TextInput label="State" name="addPropState" required placeholder="CA"
+              value={propertyForm.state} onChange={(e) => setPropertyForm({...propertyForm, state: e.target.value})} />
+            <TextInput label="ZIP Code" name="addPropZip" required placeholder="90001"
+              value={propertyForm.zipCode} onChange={(e) => setPropertyForm({...propertyForm, zipCode: e.target.value})} />
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Property Type *</label>
-            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={propertyForm.type} onChange={(e) => setPropertyForm({...propertyForm, type: e.target.value as Property['type']})}>
-              <option value="apartment">Apartment</option>
-              <option value="house">House</option>
-              <option value="condo">Condo</option>
-              <option value="townhouse">Townhouse</option>
-              <option value="multi-family">Multi-Family</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <textarea className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30" rows={3}
-              value={propertyForm.description} onChange={(e) => setPropertyForm({...propertyForm, description: e.target.value})} placeholder="Brief description..." />
-          </div>
+
+          <SelectInput label="Property Type" name="addPropType" required
+            value={propertyForm.type} onChange={(e) => setPropertyForm({...propertyForm, type: e.target.value as Property['type']})}>
+            <option value="apartment">Apartment</option>
+            <option value="house">House</option>
+            <option value="condo">Condo</option>
+            <option value="townhouse">Townhouse</option>
+            <option value="multi-family">Multi-Family</option>
+          </SelectInput>
+
+          <TextareaInput label="Description" name="addPropDesc" rows={3} placeholder="Brief description..."
+            value={propertyForm.description} onChange={(e) => setPropertyForm({...propertyForm, description: e.target.value})} />
 
           <div className="pt-2 border-t border-line space-y-4">
             <div>
@@ -857,21 +833,18 @@ export function Properties() {
                 <label className="block text-sm font-medium mb-1">Purchase price</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
                     value={propertyForm.purchasePrice} onChange={(e) => setPropertyForm({...propertyForm, purchasePrice: e.target.value})} placeholder="0.00" />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Purchase date</label>
-                <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                  value={propertyForm.purchaseDate} onChange={(e) => setPropertyForm({...propertyForm, purchaseDate: e.target.value})} />
-              </div>
+              <TextInput label="Purchase date" name="addPropPurchaseDate" type="date"
+                value={propertyForm.purchaseDate} onChange={(e) => setPropertyForm({...propertyForm, purchaseDate: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Land value (not depreciable)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
                   value={propertyForm.landValue} onChange={(e) => setPropertyForm({...propertyForm, landValue: e.target.value})} placeholder="Leave blank to estimate 20% of price" />
               </div>
               <p className="text-xs text-muted mt-1">Land does not depreciate. Enter its assessed value from your county tax bill so only the building is depreciated. Blank assumes 20% of the price.</p>
@@ -888,56 +861,34 @@ export function Properties() {
       {/* Edit Property Modal */}
       <Modal isOpen={isEditPropertyOpen} onClose={() => setIsEditPropertyOpen(false)} title="Edit Property">
         <form onSubmit={handleUpdateProperty} className="space-y-4">
-          {/* Same form fields as Add Property */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Property Name *</label>
-            <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={propertyForm.name} onChange={(e) => setPropertyForm({...propertyForm, name: e.target.value})} />
-          </div>
-          
+          <TextInput label="Property Name" name="editPropName" required
+            value={propertyForm.name} onChange={(e) => setPropertyForm({...propertyForm, name: e.target.value})} />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Address *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.address} onChange={(e) => setPropertyForm({...propertyForm, address: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">City *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.city} onChange={(e) => setPropertyForm({...propertyForm, city: e.target.value})} />
-            </div>
+            <TextInput label="Address" name="editPropAddress" required
+              value={propertyForm.address} onChange={(e) => setPropertyForm({...propertyForm, address: e.target.value})} />
+            <TextInput label="City" name="editPropCity" required
+              value={propertyForm.city} onChange={(e) => setPropertyForm({...propertyForm, city: e.target.value})} />
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">State *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.state} onChange={(e) => setPropertyForm({...propertyForm, state: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">ZIP Code *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={propertyForm.zipCode} onChange={(e) => setPropertyForm({...propertyForm, zipCode: e.target.value})} />
-            </div>
+            <TextInput label="State" name="editPropState" required
+              value={propertyForm.state} onChange={(e) => setPropertyForm({...propertyForm, state: e.target.value})} />
+            <TextInput label="ZIP Code" name="editPropZip" required
+              value={propertyForm.zipCode} onChange={(e) => setPropertyForm({...propertyForm, zipCode: e.target.value})} />
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Property Type *</label>
-            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={propertyForm.type} onChange={(e) => setPropertyForm({...propertyForm, type: e.target.value as Property['type']})}>
-              <option value="apartment">Apartment</option>
-              <option value="house">House</option>
-              <option value="condo">Condo</option>
-              <option value="townhouse">Townhouse</option>
-              <option value="multi-family">Multi-Family</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <textarea className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30" rows={3}
-              value={propertyForm.description} onChange={(e) => setPropertyForm({...propertyForm, description: e.target.value})} />
-          </div>
+
+          <SelectInput label="Property Type" name="editPropType" required
+            value={propertyForm.type} onChange={(e) => setPropertyForm({...propertyForm, type: e.target.value as Property['type']})}>
+            <option value="apartment">Apartment</option>
+            <option value="house">House</option>
+            <option value="condo">Condo</option>
+            <option value="townhouse">Townhouse</option>
+            <option value="multi-family">Multi-Family</option>
+          </SelectInput>
+
+          <TextareaInput label="Description" name="editPropDesc" rows={3}
+            value={propertyForm.description} onChange={(e) => setPropertyForm({...propertyForm, description: e.target.value})} />
 
           <div className="pt-2 border-t border-line space-y-4">
             <div>
@@ -949,21 +900,18 @@ export function Properties() {
                 <label className="block text-sm font-medium mb-1">Purchase price</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
                     value={propertyForm.purchasePrice} onChange={(e) => setPropertyForm({...propertyForm, purchasePrice: e.target.value})} placeholder="0.00" />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Purchase date</label>
-                <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                  value={propertyForm.purchaseDate} onChange={(e) => setPropertyForm({...propertyForm, purchaseDate: e.target.value})} />
-              </div>
+              <TextInput label="Purchase date" name="editPropPurchaseDate" type="date"
+                value={propertyForm.purchaseDate} onChange={(e) => setPropertyForm({...propertyForm, purchaseDate: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Land value (not depreciable)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
                   value={propertyForm.landValue} onChange={(e) => setPropertyForm({...propertyForm, landValue: e.target.value})} placeholder="Leave blank to estimate 20% of price" />
               </div>
               <p className="text-xs text-muted mt-1">Land does not depreciate. Enter its assessed value from your county tax bill so only the building is depreciated. Blank assumes 20% of the price.</p>
@@ -980,43 +928,25 @@ export function Properties() {
       {/* Add Unit Modal */}
       <Modal isOpen={isAddUnitOpen} onClose={() => setIsAddUnitOpen(false)} title={propertyForUnit ? `Add Unit to ${propertyForUnit.name}` : 'Add Unit'}>
         <form onSubmit={handleAddUnit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Unit Number *</label>
-            <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={unitForm.unitNumber} onChange={(e) => setUnitForm({...unitForm, unitNumber: e.target.value})} placeholder="e.g., 101, A, 2B" />
-          </div>
-          
+          <TextInput label="Unit Number" name="addUnitNumber" required placeholder="e.g., 101, A, 2B"
+            value={unitForm.unitNumber} onChange={(e) => setUnitForm({...unitForm, unitNumber: e.target.value})} />
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Bedrooms *</label>
-              <input type="number" required min={0} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.bedrooms} onChange={(e) => setUnitForm({...unitForm, bedrooms: parseInt(e.target.value)})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Bathrooms *</label>
-              <input type="number" required min={0} step={0.5} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.bathrooms} onChange={(e) => setUnitForm({...unitForm, bathrooms: parseFloat(e.target.value)})} />
-            </div>
+            <TextInput label="Bedrooms" name="addUnitBed" type="number" required min={0}
+              value={unitForm.bedrooms} onChange={(e) => setUnitForm({...unitForm, bedrooms: parseInt(e.target.value)})} />
+            <TextInput label="Bathrooms" name="addUnitBath" type="number" required min={0} step={0.5}
+              value={unitForm.bathrooms} onChange={(e) => setUnitForm({...unitForm, bathrooms: parseFloat(e.target.value)})} />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Square Feet *</label>
-              <input type="number" required min={0} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.squareFeet} onChange={(e) => setUnitForm({...unitForm, squareFeet: parseInt(e.target.value)})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Monthly Rent *</label>
-              <input type="number" required min={0} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.monthlyRent} onChange={(e) => setUnitForm({...unitForm, monthlyRent: parseInt(e.target.value)})} />
-            </div>
+            <TextInput label="Square Feet" name="addUnitSqft" type="number" required min={0}
+              value={unitForm.squareFeet} onChange={(e) => setUnitForm({...unitForm, squareFeet: parseInt(e.target.value)})} />
+            <TextInput label="Monthly Rent" name="addUnitRent" type="number" required min={0}
+              value={unitForm.monthlyRent} onChange={(e) => setUnitForm({...unitForm, monthlyRent: parseInt(e.target.value)})} />
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <textarea className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30" rows={2}
-              value={unitForm.description} onChange={(e) => setUnitForm({...unitForm, description: e.target.value})} placeholder="Unit description..." />
-          </div>
+
+          <TextareaInput label="Description" name="addUnitDesc" rows={2} placeholder="Unit description..."
+            value={unitForm.description} onChange={(e) => setUnitForm({...unitForm, description: e.target.value})} />
           
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddUnitOpen(false)}>Cancel</Button>
@@ -1028,67 +958,45 @@ export function Properties() {
       {/* Edit Unit Modal */}
       <Modal isOpen={isEditUnitOpen} onClose={() => setIsEditUnitOpen(false)} title="Edit Unit">
         <form onSubmit={handleUpdateUnit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Unit Number *</label>
-            <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={unitForm.unitNumber} onChange={(e) => setUnitForm({...unitForm, unitNumber: e.target.value})} />
-          </div>
-          
+          <TextInput label="Unit Number" name="editUnitNumber" required
+            value={unitForm.unitNumber} onChange={(e) => setUnitForm({...unitForm, unitNumber: e.target.value})} />
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Bedrooms *</label>
-              <input type="number" required min={0} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.bedrooms} onChange={(e) => setUnitForm({...unitForm, bedrooms: parseInt(e.target.value)})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Bathrooms *</label>
-              <input type="number" required min={0} step={0.5} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.bathrooms} onChange={(e) => setUnitForm({...unitForm, bathrooms: parseFloat(e.target.value)})} />
-            </div>
+            <TextInput label="Bedrooms" name="editUnitBed" type="number" required min={0}
+              value={unitForm.bedrooms} onChange={(e) => setUnitForm({...unitForm, bedrooms: parseInt(e.target.value)})} />
+            <TextInput label="Bathrooms" name="editUnitBath" type="number" required min={0} step={0.5}
+              value={unitForm.bathrooms} onChange={(e) => setUnitForm({...unitForm, bathrooms: parseFloat(e.target.value)})} />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Square Feet *</label>
-              <input type="number" required min={0} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.squareFeet} onChange={(e) => setUnitForm({...unitForm, squareFeet: parseInt(e.target.value)})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Monthly Rent *</label>
-              <input type="number" required min={0} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={unitForm.monthlyRent} onChange={(e) => setUnitForm({...unitForm, monthlyRent: parseInt(e.target.value)})} />
-            </div>
+            <TextInput label="Square Feet" name="editUnitSqft" type="number" required min={0}
+              value={unitForm.squareFeet} onChange={(e) => setUnitForm({...unitForm, squareFeet: parseInt(e.target.value)})} />
+            <TextInput label="Monthly Rent" name="editUnitRent" type="number" required min={0}
+              value={unitForm.monthlyRent} onChange={(e) => setUnitForm({...unitForm, monthlyRent: parseInt(e.target.value)})} />
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Unit Hold Status</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={
-                unitForm.status === 'maintenance' || unitForm.status === 'renovation'
-                  || unitForm.status === 'owner_hold' || unitForm.status === 'unrentable'
-                  ? unitForm.status
-                  : 'none'
-              }
-              onChange={(e) => {
-                const v = e.target.value;
-                setUnitForm({
-                  ...unitForm,
-                  status: v === 'none'
-                    ? (selectedUnit && getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant')
-                    : v as UnitStatus,
-                });
-              }}
-            >
-              <option value="none">None (auto from lease)</option>
-              {MANUAL_UNIT_STATUSES.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-            <p className="text-xs text-muted mt-1">
-              Occupied and vacant are set automatically from the unit's current tenancy. Hold statuses override that.
-            </p>
-          </div>
+
+          <SelectInput label="Unit Hold Status" name="editUnitHoldStatus"
+            hint="Occupied and vacant are set automatically from the unit's current tenancy. Hold statuses override that."
+            value={
+              unitForm.status === 'maintenance' || unitForm.status === 'renovation'
+                || unitForm.status === 'owner_hold' || unitForm.status === 'unrentable'
+                ? unitForm.status
+                : 'none'
+            }
+            onChange={(e) => {
+              const v = e.target.value;
+              setUnitForm({
+                ...unitForm,
+                status: v === 'none'
+                  ? (selectedUnit && getUnitLease(selectedUnit.id) ? 'occupied' : 'vacant')
+                  : v as UnitStatus,
+              });
+            }}>
+            <option value="none">None (auto from lease)</option>
+            {MANUAL_UNIT_STATUSES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </SelectInput>
 
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setIsEditUnitOpen(false)}>Cancel</Button>
@@ -1131,48 +1039,30 @@ export function Properties() {
       >
         <form onSubmit={handleSaveUtility} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Type *</label>
-              <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={utilityForm.type} onChange={(e) => setUtilityForm({ ...utilityForm, type: e.target.value as UtilityType })}>
-                <option value="electric">Electric</option>
-                <option value="water">Water</option>
-                <option value="gas">Gas</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Serves unit (optional)</label>
-              <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={utilityForm.unitId} onChange={(e) => setUtilityForm({ ...utilityForm, unitId: e.target.value })}>
-                <option value="">Whole property</option>
-                {utilityProperty && getPropertyUnits(utilityProperty.id).map(u => (
-                  <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
-                ))}
-              </select>
-            </div>
+            <SelectInput label="Type" name="utilityType" required
+              value={utilityForm.type} onChange={(e) => setUtilityForm({ ...utilityForm, type: e.target.value as UtilityType })}>
+              <option value="electric">Electric</option>
+              <option value="water">Water</option>
+              <option value="gas">Gas</option>
+            </SelectInput>
+            <SelectInput label="Serves unit (optional)" name="utilityUnit"
+              value={utilityForm.unitId} onChange={(e) => setUtilityForm({ ...utilityForm, unitId: e.target.value })}>
+              <option value="">Whole property</option>
+              {utilityProperty && getPropertyUnits(utilityProperty.id).map(u => (
+                <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
+              ))}
+            </SelectInput>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Provider</label>
-              <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={utilityForm.provider} onChange={(e) => setUtilityForm({ ...utilityForm, provider: e.target.value })} placeholder="e.g., ComEd, Nicor Gas" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Account number</label>
-              <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={utilityForm.accountNumber} onChange={(e) => setUtilityForm({ ...utilityForm, accountNumber: e.target.value })} placeholder="Account #" />
-            </div>
+            <TextInput label="Provider" name="utilityProvider" placeholder="e.g., ComEd, Nicor Gas"
+              value={utilityForm.provider} onChange={(e) => setUtilityForm({ ...utilityForm, provider: e.target.value })} />
+            <TextInput label="Account number" name="utilityAccount" placeholder="Account #"
+              value={utilityForm.accountNumber} onChange={(e) => setUtilityForm({ ...utilityForm, accountNumber: e.target.value })} />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Pay-online URL (optional)</label>
-            <input type="url" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={utilityForm.loginUrl} onChange={(e) => setUtilityForm({ ...utilityForm, loginUrl: e.target.value })} placeholder="https://" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Notes (optional)</label>
-            <textarea rows={2} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={utilityForm.notes} onChange={(e) => setUtilityForm({ ...utilityForm, notes: e.target.value })} placeholder="Meter number, autopay, etc." />
-          </div>
+          <TextInput label="Pay-online URL (optional)" name="utilityUrl" type="url" placeholder="https://"
+            value={utilityForm.loginUrl} onChange={(e) => setUtilityForm({ ...utilityForm, loginUrl: e.target.value })} />
+          <TextareaInput label="Notes (optional)" name="utilityNotes" rows={2} placeholder="Meter number, autopay, etc."
+            value={utilityForm.notes} onChange={(e) => setUtilityForm({ ...utilityForm, notes: e.target.value })} />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setUtilityModalOpen(false)}>Cancel</Button>
             <Button type="submit" className="flex-1">{editingUtility ? 'Save Changes' : 'Add Utility'}</Button>

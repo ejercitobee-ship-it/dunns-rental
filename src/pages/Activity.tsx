@@ -8,6 +8,7 @@ import {
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { activityApi, type ActivityEntry, type ActivityFilter } from '../lib/api';
@@ -208,24 +209,24 @@ export function Activity() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Activity Log</h1>
-          {total > 0 && <p className="text-sm text-muted mt-1">{total.toLocaleString()} entries total</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="h-4 w-4 mr-1.5" />
-            Filters
-            {hasActiveFilters && <span className="ml-1 w-2 h-2 rounded-full bg-primary" />}
-          </Button>
-          <Button variant="secondary" onClick={exportCsv} disabled={entries.length === 0}>
-            <Download className="h-4 w-4 mr-1.5" />
-            Export CSV
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Administration"
+        title="Activity Log"
+        description={total > 0 ? `${total.toLocaleString()} entries total` : undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
+              <Filter className="h-4 w-4 mr-1.5" />
+              Filters
+              {hasActiveFilters && <span className="ml-1 w-2 h-2 rounded-full bg-primary" />}
+            </Button>
+            <Button variant="secondary" onClick={exportCsv} disabled={entries.length === 0}>
+              <Download className="h-4 w-4 mr-1.5" />
+              Export CSV
+            </Button>
+          </div>
+        }
+      />
 
       {/* Search */}
       <div className="relative">
@@ -233,7 +234,7 @@ export function Activity() {
         <input
           type="text"
           placeholder="Search by person, action, description, or record..."
-          className="w-full pl-10 pr-4 py-2 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 bg-surface"
+          className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') setSearchTerm(search.trim()); }}

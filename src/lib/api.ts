@@ -490,6 +490,8 @@ export const paymentsApi = {
     apiRequest(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/payments/${id}`, { method: 'DELETE' }),
+  sendPaymentLink: (data: { tenantId: string; leaseId: string; amount: number; month: number; year: number; note?: string; email?: string }): Promise<{ sent: boolean; url: string; email: string; amount: number; fee: number; total: number }> =>
+    apiRequest('/admin/send-payment-link', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Allocations API
@@ -662,6 +664,28 @@ export const noticesApi = {
     apiRequest(`/notices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/notices/${id}`, { method: 'DELETE' }),
+  createBulk: (data: {
+    notices: Array<{
+      propertyId?: string;
+      unitId?: string;
+      leaseId?: string;
+      tenantId?: string;
+      tenantEmail?: string;
+      type: string;
+      title: string;
+      body: string;
+      noticeDate: string;
+      deliveryMethod?: string;
+      status?: string;
+      monthsBehind?: number;
+      totalOwed?: string;
+      tenantName?: string;
+      propertyAddress?: string;
+      unitNumber?: string;
+    }>;
+    sendEmail?: boolean;
+  }): Promise<{ created: number; emailed: boolean }> =>
+    apiRequest('/notices/bulk', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Documents API (files stored in R2)
@@ -797,6 +821,7 @@ export interface PortalLease {
   pauses: { pausedAt: string; resumedAt?: string }[];
   renewalStatus?: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
   renewedFromLeaseId?: string;
+  rentDueDay?: number;
 }
 
 export interface PortalMeResponse {
@@ -1070,6 +1095,21 @@ export const portalApi = {
     unitId?: string; monthlyRent?: number; startDate?: string; endDate?: string;
   }): Promise<PortalPerson> =>
     apiRequest('/portal/realtor/tenants', { method: 'POST', body: JSON.stringify(data) }),
+  updateRealtorTenant: (id: string, data: {
+    firstName: string; lastName: string; email: string; phone: string;
+    emergencyName?: string; emergencyPhone?: string; emergencyRelationship?: string;
+  }): Promise<PortalPerson> =>
+    apiRequest(`/portal/realtor/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  realtorHousehold: {
+    list: (tenantId: string): Promise<HouseholdMember[]> =>
+      apiRequest(`/portal/realtor/household?tenantId=${encodeURIComponent(tenantId)}`),
+    add: (tenantId: string, data: HouseholdInput): Promise<HouseholdMember> =>
+      apiRequest('/portal/realtor/household', { method: 'POST', body: JSON.stringify({ tenantId, ...data }) }),
+    update: (id: string, data: HouseholdInput): Promise<HouseholdMember> =>
+      apiRequest(`/portal/realtor/household/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id: string): Promise<{ success: boolean }> =>
+      apiRequest(`/portal/realtor/household/${id}`, { method: 'DELETE' }),
+  },
   // Vacant units the realtor may market, asking rent included on purpose.
   availableUnits: (): Promise<AvailableUnit[]> => apiRequest('/portal/realtor/available-units'),
   // A tenant's own maintenance requests, with the assigned handyman's name and
@@ -1102,7 +1142,10 @@ export const portalApi = {
   handymanPlaces: (): Promise<{ properties: { id: string; name: string; address: string }[]; units: { id: string; propertyId: string; unitNumber: string }[] }> =>
     apiRequest('/portal/handyman/places'),
   // A handyman logs work they did; created as completed + pending admin approval.
-  reportWork: (data: { propertyId: string; unitId?: string; title: string; description?: string; category: string; cost: number; date: string }): Promise<PortalMaintenanceRequest> =>
+  reportWork: (data: {
+    items: Array<{ propertyId: string; unitId?: string; title: string; cost: number }>;
+    description?: string; category: string; date: string;
+  }): Promise<PortalMaintenanceRequest | PortalMaintenanceRequest[]> =>
     apiRequest('/portal/handyman/report', { method: 'POST', body: JSON.stringify(data) }),
   // Handyman uploads an invoice for a job approved for invoicing. Multipart form.
   submitInvoice: async (jobId: string, data: {
@@ -1221,6 +1264,9 @@ export const maintenanceApi = {
     apiRequest(`/maintenance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiRequest(`/maintenance/${id}`, { method: 'DELETE' }),
+  // Release a submitted job so any trade-matched handyman can see and claim it.
+  release: (id: string): Promise<MaintenanceRequest> =>
+    apiRequest(`/maintenance/${id}/release`, { method: 'POST' }),
   // Assign (or clear, with handymanId null) a handyman. Notifies them + tenant.
   assign: (id: string, handymanId: string | null): Promise<MaintenanceRequest> =>
     apiRequest(`/maintenance/${id}/assign`, { method: 'POST', body: JSON.stringify({ handymanId }) }),

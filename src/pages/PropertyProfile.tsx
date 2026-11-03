@@ -9,6 +9,7 @@ import {
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
+import { StatCard } from '../components/ui/StatCard';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { expenseCategoryLabel, expenseCategoryIcon } from '../lib/financials';
 import { STATUS_LABEL, STATUS_BADGE } from '../lib/maintenance';
@@ -349,14 +350,14 @@ export function PropertyProfile() {
       )}
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Units" value={String(units.length)} icon={Building} />
-        <StatCard label="Occupied" value={`${occupiedUnits}/${units.length}`} icon={Home} />
-        <StatCard label="Monthly Rent" value={formatCurrency(totalMonthlyRent)} icon={DollarSign} />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard title="Units" value={units.length} icon={<Building />} />
+        <StatCard title="Occupied" value={`${occupiedUnits}/${units.length}`} icon={<Home />} />
+        <StatCard title="Monthly Rent" value={formatCurrency(totalMonthlyRent)} icon={<DollarSign />} />
         <StatCard
-          label="Occupancy"
+          title="Occupancy"
           value={units.length > 0 ? `${Math.round((occupiedUnits / units.length) * 100)}%` : 'N/A'}
-          icon={Users}
+          icon={<Users />}
         />
       </div>
 
@@ -585,11 +586,11 @@ export function PropertyProfile() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-line">
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Year</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Income</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Expenses</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Net</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Year</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Income</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Expenses</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Net</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -674,12 +675,12 @@ export function PropertyProfile() {
                 <div className="overflow-x-auto mt-2">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-line">
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
-                        {units.length > 1 && <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>}
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+                      <tr className="border-b border-line bg-canvas/60">
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
+                        {units.length > 1 && <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>}
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Description</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Vendor</th>
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -747,12 +748,12 @@ export function PropertyProfile() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-line">
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Month</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Method</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Paid Date</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Month</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Method</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Paid Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -786,13 +787,13 @@ export function PropertyProfile() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-line">
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Category</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Description</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Vendor</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Amount</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Category</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Description</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Vendor</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -882,12 +883,12 @@ export function PropertyProfile() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-line">
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Tenant</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Lease Period</th>
-                        <th className="text-right py-2 px-3 font-semibold text-ink">Rent</th>
-                        <th className="text-left py-2 px-3 font-semibold text-ink">Reason</th>
+                      <tr className="border-b border-line bg-canvas/60">
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Tenant</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Lease Period</th>
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Rent</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Reason</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -966,14 +967,14 @@ export function PropertyProfile() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-line">
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Title</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Unit</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Requested By</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Assigned To</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Status</th>
-                      <th className="text-right py-2 px-3 font-semibold text-ink">Cost</th>
-                      <th className="text-left py-2 px-3 font-semibold text-ink">Date</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Title</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Requested By</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Assigned To</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Cost</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1086,22 +1087,6 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-muted">{label}</dt>
       <dd className="text-ink text-right">{value}</dd>
     </div>
-  );
-}
-
-function StatCard({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Building }) {
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-primary-soft">
-          <Icon className="h-4 w-4 text-primary" />
-        </div>
-        <div>
-          <p className="eyebrow">{label}</p>
-          <p className="text-lg font-bold font-display tnum">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -1386,7 +1371,7 @@ function AppliancesTab({
 
       {/* Delete confirmation */}
       {deleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px]">
           <Card className="w-full max-w-sm mx-4">
             <CardContent className="p-6 space-y-4">
               <h3 className="font-semibold text-ink">Remove Appliance</h3>
@@ -1427,7 +1412,7 @@ function ApplianceModal({
     setForm(f => ({ ...f, [key]: val }));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px]">
       <Card className="w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center justify-between">

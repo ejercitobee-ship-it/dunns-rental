@@ -299,6 +299,9 @@ export interface Expense {
   /** Review status: 'confirmed' = user made a deliberate choice,
    *  'needs_review' = flagged for admin review (e.g. ambiguous import). */
   classificationStatus?: 'confirmed' | 'needs_review';
+  /** Per-expense IRS recovery period override for depreciation (e.g. 5, 7, 15, 27.5, 39).
+   *  When set, overrides the category-based default in the Tax Report. */
+  recoveryYears?: number;
 }
 
 export type TaxDeductibleCategory =
@@ -406,6 +409,7 @@ export interface Income {
 // (cancelled at any point). scheduled_for is set when a handyman confirms a time.
 export type MaintenanceStatus =
   | 'submitted'
+  | 'available'
   | 'assigned'
   | 'scheduled'
   | 'in_progress'
@@ -948,7 +952,7 @@ export interface InspectionItem {
 // ---------------------------------------------------------------------------
 // Notices / letters
 // ---------------------------------------------------------------------------
-export type NoticeType = 'late_rent' | 'violation' | 'non_renewal' | 'rent_increase' | 'custom';
+export type NoticeType = 'late_rent' | 'pre_5_day' | 'violation' | 'non_renewal' | 'rent_increase' | 'custom';
 export type NoticeStatus = 'draft' | 'sent' | 'acknowledged';
 export type DeliveryMethod = 'hand_delivered' | 'posted' | 'email' | 'certified_mail';
 

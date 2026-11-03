@@ -12,9 +12,11 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { prospectiveApi, documentsApi, templateApi, type ProspectiveTenant, type ProspectiveStatus, type DocumentTemplate } from '../lib/api';
 import type { AppDocument } from '../lib/api';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, formatPhone } from '../lib/utils';
+import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
+import { EmailInput } from '../components/ui/EmailInput';
 
-const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25';
+const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10';
 const STAGE_STATUSES: ProspectiveStatus[] = ['applied', 'docs_sent', 'signed', 'rejected'];
 
 export function ProspectiveTenantDetail() {
@@ -344,7 +346,7 @@ export function ProspectiveTenantDetail() {
             <h3 className="font-semibold text-ink flex items-center gap-2"><User className="h-4 w-4 text-faint" /> Contact</h3>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-muted"><Mail className="h-3.5 w-3.5 text-faint" /><span className="truncate">{applicant.email || '—'}</span></div>
-              <div className="flex items-center gap-2 text-muted"><Phone className="h-3.5 w-3.5 text-faint" /><span>{applicant.phone || '—'}</span></div>
+              <div className="flex items-center gap-2 text-muted"><Phone className="h-3.5 w-3.5 text-faint" /><span>{applicant.phone ? formatPhone(applicant.phone) : '—'}</span></div>
             </div>
             {applicant.notes && (
               <div className="pt-2 border-t border-line"><p className="eyebrow mb-1">Notes</p><p className="text-sm text-muted whitespace-pre-wrap">{applicant.notes}</p></div>
@@ -484,27 +486,19 @@ export function ProspectiveTenantDetail() {
       <Modal isOpen={editOpen} onClose={() => setEditOpen(false)} title="Edit applicant" size="md">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">First name *</label>
-              <input className={inputClass} value={edit.firstName} onChange={e => setEdit({ ...edit, firstName: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Last name *</label>
-              <input className={inputClass} value={edit.lastName} onChange={e => setEdit({ ...edit, lastName: e.target.value })} />
-            </div>
+            <TextInput label="First name" name="editProspFirstName" required
+              value={edit.firstName} onChange={e => setEdit({ ...edit, firstName: e.target.value })} />
+            <TextInput label="Last name" name="editProspLastName" required
+              value={edit.lastName} onChange={e => setEdit({ ...edit, lastName: e.target.value })} />
           </div>
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
-            <input type="email" className={inputClass} value={edit.email} onChange={e => setEdit({ ...edit, email: e.target.value })} placeholder="name@example.com" />
+            <EmailInput className={inputClass} value={edit.email} onChange={e => setEdit({ ...edit, email: e.target.value })} placeholder="name@example.com" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
-            <input type="tel" className={inputClass} value={edit.phone} onChange={e => setEdit({ ...edit, phone: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
-            <textarea rows={3} className={inputClass} value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} />
-          </div>
+          <TextInput label="Phone" name="editProspPhone" type="tel"
+            value={formatPhone(edit.phone)} onChange={e => setEdit({ ...edit, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+          <TextareaInput label="Notes" name="editProspNotes" rows={3}
+            value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={handleEdit} disabled={editBusy}>{editBusy ? 'Saving...' : 'Save changes'}</Button>
@@ -517,8 +511,8 @@ export function ProspectiveTenantDetail() {
         <div className="space-y-4">
           <p className="text-sm text-muted">This creates an active tenant and their lease. Set where they are moving in and the terms.</p>
           <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Unit *</label>
-            <select className={inputClass} value={conv.unitId} onChange={e => handleUnit(e.target.value)}>
+            <SelectInput label="Unit" name="convUnit" required
+              value={conv.unitId} onChange={e => handleUnit(e.target.value)}>
               <option value="">Select a unit</option>
               {availableUnits.map(({ unit, property, leavingDate }) => (
                 <option key={unit.id} value={unit.id}>
@@ -526,7 +520,7 @@ export function ProspectiveTenantDetail() {
                   {leavingDate ? ` (available ${leavingDate})` : ''}
                 </option>
               ))}
-            </select>
+            </SelectInput>
             {availableUnits.length === 0 && <p className="text-xs text-muted mt-1">No vacant units available.</p>}
             {conv.unitId && availableUnits.find(a => a.unit.id === conv.unitId)?.leavingDate && (
               <p className="text-xs text-amber-600 mt-1">
@@ -536,22 +530,14 @@ export function ProspectiveTenantDetail() {
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Monthly rent *</label>
-              <input type="number" min={0} step="0.01" className={inputClass} value={conv.monthlyRent} onChange={e => setConv({ ...conv, monthlyRent: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Move-in fee</label>
-              <input type="number" min={0} step="0.01" className={inputClass} value={conv.moveInFee} onChange={e => setConv({ ...conv, moveInFee: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Lease start</label>
-              <input type="date" className={inputClass} value={conv.startDate} onChange={e => setConv({ ...conv, startDate: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Lease expires</label>
-              <input type="date" min={conv.startDate || undefined} className={inputClass} value={conv.endDate} onChange={e => setConv({ ...conv, endDate: e.target.value })} />
-            </div>
+            <TextInput label="Monthly rent" name="convMonthlyRent" type="number" required
+              min={0} step="0.01" value={conv.monthlyRent} onChange={e => setConv({ ...conv, monthlyRent: e.target.value })} />
+            <TextInput label="Move-in fee" name="convMoveInFee" type="number"
+              min={0} step="0.01" value={conv.moveInFee} onChange={e => setConv({ ...conv, moveInFee: e.target.value })} />
+            <TextInput label="Lease start" name="convStartDate" type="date"
+              value={conv.startDate} onChange={e => setConv({ ...conv, startDate: e.target.value })} />
+            <TextInput label="Lease expires" name="convEndDate" type="date"
+              min={conv.startDate || undefined} value={conv.endDate} onChange={e => setConv({ ...conv, endDate: e.target.value })} />
           </div>
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" checked={conv.moveInFeePaid} onChange={e => setConv({ ...conv, moveInFeePaid: e.target.checked })} className="w-4 h-4 accent-[#24503f]" />

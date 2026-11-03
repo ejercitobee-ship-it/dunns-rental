@@ -9,6 +9,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
+import { StatCard, ContextCard } from '../components/ui/StatCard';
+import { PageHeader } from '../components/ui/PageHeader';
+import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID, INCOME_COLOR, EXPENSE_COLOR } from '../components/ui/chartConstants';
 import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
@@ -35,68 +38,6 @@ const COLORS = [
   '#5b6abf', '#c2553a', '#3a8a6e', '#8b6f47', '#6b4c8a',
   '#2e8b8b', '#b5651d', '#5f7a3a', '#9b3a5f', '#4a7a9b',
 ];
-const INCOME_COLOR = '#2c7a58';
-const EXPENSE_COLOR = '#b98a5e';
-
-// ---------------------------------------------------------------------------
-// Stat Card
-// ---------------------------------------------------------------------------
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ReactNode;
-  iconBg?: string;
-  valueColor?: string;
-  onClick?: () => void;
-}
-
-function StatCard({ title, value, subtitle, icon, iconBg = 'bg-primary-soft text-primary', valueColor = 'text-ink', onClick }: StatCardProps) {
-  return (
-    <Card
-      className="cursor-pointer hover:border-line-strong hover:shadow-[0_2px_12px_rgba(27,26,23,0.07)] transition-all"
-      onClick={onClick}
-    >
-      <div className="p-5">
-        <div className="flex items-center justify-between mb-1">
-          <span className="eyebrow">{title}</span>
-          <span className={`w-[34px] h-[34px] rounded-[10px] grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${iconBg}`}>{icon}</span>
-        </div>
-        <div className="mt-3 flex items-end gap-2">
-          <span className={`font-display text-[24px] leading-none font-medium ${valueColor} tnum`}>{value}</span>
-        </div>
-        {subtitle && <p className="mt-1.5 text-[12px] text-muted">{subtitle}</p>}
-      </div>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Context card (compact row under stat cards)
-// ---------------------------------------------------------------------------
-interface ContextCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  onClick?: () => void;
-}
-
-function ContextCard({ icon, label, value, onClick }: ContextCardProps) {
-  return (
-    <Card
-      className="cursor-pointer hover:border-line-strong transition-all"
-      onClick={onClick}
-    >
-      <div className="p-3 flex items-center gap-2.5">
-        <span className="w-[34px] h-[34px] rounded-[10px] bg-canvas text-muted grid place-items-center flex-shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>
-        <div className="min-w-0">
-          <p className="eyebrow !text-[10px]">{label}</p>
-          <p className="text-[17px] font-medium text-ink mt-0.5">{value}</p>
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Attention tab types
@@ -445,17 +386,16 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Portfolio overview</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-2 text-[13px] text-muted">
-          <span className="w-1.5 h-1.5 bg-positive rounded-full" />
-          {formatDate(new Date().toISOString())}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Portfolio overview"
+        title="Dashboard"
+        actions={
+          <div className="flex items-center gap-2 text-[13px] text-muted">
+            <span className="w-1.5 h-1.5 bg-positive rounded-full" />
+            {formatDate(new Date().toISOString())}
+          </div>
+        }
+      />
 
       {/* ================================================================
           ZONE 1: THIS MONTH SNAPSHOT
@@ -550,7 +490,7 @@ export function Dashboard() {
       <h2 className="eyebrow mt-2">Trends</h2>
       <div className="grid gap-4 md:grid-cols-[5fr_3fr]">
         {/* Income vs Expenses bar chart */}
-        <Card className="cursor-pointer hover:border-line-strong transition-all" onClick={() => navigate('/finances')}>
+        <Card className="cursor-pointer hover:border-line-strong hover:shadow-sm transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-7 h-7 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[15px] [&_svg]:w-[15px]"><BarChart3 /></span>
@@ -565,23 +505,23 @@ export function Dashboard() {
             </div>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e4dd" vertical={false} />
-                <XAxis dataKey="name" stroke="#a6a29a" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} stroke="#a6a29a" fontSize={11} tickLine={false} axisLine={false} />
+                <CartesianGrid {...CHART_GRID} />
+                <XAxis dataKey="name" {...CHART_AXIS} />
+                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} {...CHART_AXIS} />
                 <Tooltip
                   formatter={(value) => formatCurrency(Number(value))}
                   cursor={{ fill: 'rgba(27,26,23,0.04)' }}
-                  contentStyle={{ borderRadius: '10px', border: '1px solid #e7e4dd', boxShadow: '0 8px 30px -8px rgba(27,26,23,0.18)' }}
+                  contentStyle={CHART_TOOLTIP}
                 />
-                <Bar dataKey="income" fill={INCOME_COLOR} radius={[3, 3, 0, 0]} maxBarSize={20} />
-                <Bar dataKey="expenses" fill={EXPENSE_COLOR} radius={[3, 3, 0, 0]} maxBarSize={20} />
+                <Bar dataKey="income" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="expenses" fill={EXPENSE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         {/* Expenses by Category */}
-        <Card className="cursor-pointer hover:border-line-strong transition-all" onClick={() => navigate('/finances')}>
+        <Card className="cursor-pointer hover:border-line-strong hover:shadow-sm transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -623,7 +563,7 @@ export function Dashboard() {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto">
@@ -729,8 +669,8 @@ export function Dashboard() {
               key={tab.key}
               type="button"
               onClick={() => setAttentionTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-semibold transition-colors relative whitespace-nowrap ${
-                attentionTab === tab.key ? 'text-ink' : 'text-faint hover:text-muted'
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3.5 px-3 text-xs font-semibold transition-colors relative whitespace-nowrap ${
+                attentionTab === tab.key ? 'text-ink' : 'text-faint hover:text-muted hover:bg-black/[0.02]'
               }`}
             >
               {tab.icon}
@@ -745,7 +685,7 @@ export function Dashboard() {
                       : 'bg-canvas text-muted'
               }`}>{tab.count}</span>
               {attentionTab === tab.key && (
-                <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-t" />
+                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-t" />
               )}
             </button>
           ))}
@@ -956,24 +896,37 @@ export function Dashboard() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      <div>
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="mt-2 h-4 w-72" />
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="mt-2.5 h-8 w-48" />
+        </div>
+        <Skeleton className="h-4 w-24 mt-3" />
       </div>
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
       </div>
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
       </div>
-      <div className="grid gap-6 md:grid-cols-[5fr_3fr]">
+      <Skeleton className="h-3 w-16" />
+      <div className="grid gap-4 md:grid-cols-[5fr_3fr]">
         <div className="rounded-xl border border-line bg-surface p-6">
-          <Skeleton className="h-5 w-32 mb-4" />
-          <Skeleton className="h-[200px] w-full rounded-lg" />
+          <div className="flex items-center gap-2 mb-4">
+            <Skeleton className="h-7 w-7 rounded-lg" />
+            <Skeleton className="h-5 w-36" />
+          </div>
+          <Skeleton className="h-[260px] w-full rounded-lg" />
         </div>
         <div className="rounded-xl border border-line bg-surface p-6">
-          <Skeleton className="h-5 w-32 mb-4" />
-          <Skeleton className="h-[200px] w-full rounded-lg" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-7 w-7 rounded-lg" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+            <Skeleton className="h-7 w-28 rounded-lg" />
+          </div>
+          <Skeleton className="h-[180px] w-full rounded-full mx-auto max-w-[180px]" />
         </div>
       </div>
     </div>

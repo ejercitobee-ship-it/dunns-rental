@@ -11,8 +11,8 @@ import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /**
  * POST /api/maintenance/:id/assign — the admin assigns a job to a handyman (or
- * clears the assignment with handymanId: null). Assigning moves a submitted job
- * to assigned, emails the handyman the job, and tells the tenant who is coming.
+ * clears the assignment with handymanId: null). Assigning moves a submitted or
+ * available job to assigned, emails the handyman, and tells the tenant who is coming.
  */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -38,12 +38,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       if (!handyman.is_active) return jsonError('That handyman is inactive', 400);
     }
 
-    // Clearing the assignment sends the job back to the open pool; assigning a
-    // submitted job advances it to assigned. A job already in progress keeps its
-    // status so a reassignment does not rewind real work.
+    // Clearing the assignment sends the job back to submitted (office review);
+    // assigning a submitted or available job advances it to assigned. A job
+    // already in progress keeps its status so a reassignment does not rewind work.
     let newStatus = existing.status;
     if (!handymanId) newStatus = 'submitted';
-    else if (existing.status === 'submitted') newStatus = 'assigned';
+    else if (existing.status === 'submitted' || existing.status === 'available') newStatus = 'assigned';
 
     const stmts = [
       env.DB.prepare(

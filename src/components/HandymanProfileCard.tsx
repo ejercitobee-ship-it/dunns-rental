@@ -6,10 +6,9 @@ import { portalApi, photoApi } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { useToast } from '../context/ToastContext';
 import { tradeLabel } from '../lib/maintenance';
+import { formatPhone } from '../lib/utils';
 import type { Handyman } from '../types';
-
-const inputClass =
-  'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25';
+import { TextInput } from './ui/FormField';
 
 type FormState = { name: string; phone: string; address: string; city: string; state: string; zipCode: string };
 
@@ -163,32 +162,21 @@ export function HandymanProfileCard() {
 
         {editing ? (
           <form onSubmit={save} className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Phone</label>
-              <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Address</label>
-              <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street address" className={inputClass} />
-            </div>
+            <TextInput label="Name" name="handymanName" required
+              value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <TextInput label="Phone" name="handymanPhone" type="tel"
+              value={formatPhone(form.phone)} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+            <TextInput label="Address" name="handymanAddress"
+              value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="Street address" />
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">City</label>
-                <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputClass} />
-              </div>
+              <TextInput label="City" name="handymanCity"
+                value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">State</label>
-                  <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">ZIP</label>
-                  <input value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} className={inputClass} />
-                </div>
+                <TextInput label="State" name="handymanState"
+                  value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+                <TextInput label="ZIP" name="handymanZip"
+                  value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
@@ -200,7 +188,7 @@ export function HandymanProfileCard() {
           <div className="space-y-1 text-sm">
             <p className="text-ink font-medium">{me.name}</p>
             {me.email && <p className="text-muted">{me.email}</p>}
-            {me.phone && <p className="text-muted">{me.phone}</p>}
+            {me.phone && <p className="text-muted">{formatPhone(me.phone)}</p>}
             {addressLine ? (
               <p className="text-muted">{addressLine}</p>
             ) : (

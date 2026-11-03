@@ -8,6 +8,7 @@ import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { TextInput, SelectInput, TextareaInput } from './ui/FormField';
 import { formatDate, todayLocalDate } from '../lib/utils';
 import { inspectionsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -405,37 +406,17 @@ export function InspectionSection({ tenantId, leaseId, propertyId, unitId }: Pro
       >
         <div className="space-y-5">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Type</label>
-              <select
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formType}
-                onChange={e => setFormType(e.target.value as InspectionType)}
-              >
-                <option value="move_in">Move In</option>
-                <option value="move_out">Move Out</option>
-                <option value="periodic">Periodic</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Date</label>
-              <input
-                type="date"
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formDate}
-                onChange={e => setFormDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Inspector</label>
-              <input
-                type="text"
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formInspector}
-                onChange={e => setFormInspector(e.target.value)}
-                placeholder="Name"
-              />
-            </div>
+            <SelectInput label="Type" name="inspectionType"
+              value={formType} onChange={e => setFormType(e.target.value as InspectionType)}>
+              <option value="move_in">Move In</option>
+              <option value="move_out">Move Out</option>
+              <option value="periodic">Periodic</option>
+            </SelectInput>
+            <TextInput label="Date" name="inspectionDate" type="date"
+              value={formDate} onChange={e => setFormDate(e.target.value)} />
+            <TextInput label="Inspector" name="inspectionInspector"
+              value={formInspector} onChange={e => setFormInspector(e.target.value)}
+              placeholder="Name" />
           </div>
 
           {/* Status toggle */}
@@ -522,15 +503,9 @@ export function InspectionSection({ tenantId, leaseId, propertyId, unitId }: Pro
             })}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">General Notes</label>
-            <textarea
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink min-h-[60px]"
-              value={formNotes}
-              onChange={e => setFormNotes(e.target.value)}
-              placeholder="Overall condition, special notes, etc."
-            />
-          </div>
+          <TextareaInput label="General Notes" name="inspectionNotes"
+            value={formNotes} onChange={e => setFormNotes(e.target.value)}
+            placeholder="Overall condition, special notes, etc." />
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={saving}>Cancel</Button>

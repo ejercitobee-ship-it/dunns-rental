@@ -1,14 +1,42 @@
 /**
  * AI Assistant tool definitions and executors.
  *
- * Each tool is a function Claude can call to query the D1 database.
+ * Each tool is a function the AI model can call to query the D1 database.
  * The tool definitions follow the Anthropic tool-use schema and the
- * executors return structured JSON that Claude reasons over.
+ * executors return structured JSON that the model reasons over.
+ *
+ * IMPORTANT: rent math must match src/lib/rent.ts (the single source of
+ * truth). Key rules replicated here:
+ *  - RENT_TRACKING_START: January 2026 (nothing owed before that)
+ *  - payment_allocations: when allocations exist for a payment, use them;
+ *    legacy payments with no allocations fall back to their own month/year
+ *  - credits (type='credit') settle rent but are not income
+ *  - leases with needs_review=1 or pending/rejected/draft/cancelled
+ *    renewal_status owe nothing
+ *  - ended leases still owed rent for the months their dates covered
+ *  - paused months (from lease_pauses) are not billed
  */
 import type { D1Database } from '@cloudflare/workers-types';
 
+const RENT_TRACKING_START_YEAR = 2026;
+const RENT_TRACKING_START_MONTH = 1;
+const RENT_TRACKING_START = RENT_TRACKING_START_YEAR * 12 + RENT_TRACKING_START_MONTH;
+
+function ymOrdinal(year: number, month: number): number {
+  return year * 12 + month;
+}
+
+function ymFromDate(dateStr: string): number {
+  const [y, m] = dateStr.split('-').map(Number);
+  return y * 12 + m;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 // ---------------------------------------------------------------------------
-// Tool definitions (sent to the Claude API)
+// Tool definitions (sent to the model)
 // ---------------------------------------------------------------------------
 
 export interface ToolDefinition {
@@ -36,7 +64,7 @@ export const AI_TOOLS: ToolDefinition[] = [
   {
     name: 'getTenantProfile',
     description:
-      'Get a complete profile for a specific tenant including their lease, payment history, and maintenance requests. Use the tenant ID from searchTenants.',
+      'Get a complete profile for a specific tenant including their lease, payment history, payment allocations, and maintenance requests. Use the tenant ID from searchTenants.',
     input_schema: {
       type: 'object',
       properties: {
@@ -81,7 +109,7 @@ export const AI_TOOLS: ToolDefinition[] = [
   {
     name: 'getRentStatus',
     description:
-      'Get rent collection status for a given month. Shows who has paid, who owes, and totals. Defaults to the current month if no month/year is specified.',
+      'Get rent collection status for a given month. Shows who has paid, who owes, and totals. Includes ended leases that covered the queried month. Uses payment allocations for accuracy. Defaults to the current month if no month/year is specified.',
     input_schema: {
       type: 'object',
       properties: {
@@ -133,7 +161,7 @@ export const AI_TOOLS: ToolDefinition[] = [
       properties: {
         status: {
           type: 'string',
-          enum: ['open', 'in_progress', 'resolved', 'cancelled', 'all'],
+          enum: ['open', 'in_progress', 'completed', 'resolved', 'cancelled', 'all'],
           description: 'Filter by status. Defaults to "open".',
         },
         propertyId: {
@@ -172,6 +200,21 @@ export const AI_TOOLS: ToolDefinition[] = [
       required: [],
     },
   },
+  {
+    name: 'getLeaseDetails',
+    description:
+      'Get detailed information about a specific lease including pause intervals, renewal info, and rent payment allocations. Use when you need precise lease or payment allocation data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        leaseId: {
+          type: 'string',
+          description: 'The lease UUID.',
+        },
+      },
+      required: ['leaseId'],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -203,6 +246,8 @@ export async function executeTool(
         return await getMaintenanceRequests(db, input);
       case 'getRecentActivity':
         return await getRecentActivity(db, input);
+      case 'getLeaseDetails':
+        return await getLeaseDetails(db, input);
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     }
@@ -210,6 +255,72 @@ export async function executeTool(
     console.error(`AI tool ${toolName} failed:`, err);
     return JSON.stringify({ error: `Tool execution failed: ${(err as Error).message}` });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+interface LeaseRow {
+  lease_id: string;
+  monthly_rent: number;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  needs_review: number;
+  renewal_status: string | null;
+  renewed_from_lease_id: string | null;
+  property_name: string | null;
+  unit_number: string | null;
+  tenant_names: string | null;
+}
+
+interface PauseRow {
+  lease_id: string;
+  paused_at: string;
+  resumed_at: string | null;
+}
+
+function monthIsPaused(pause: PauseRow, target: number): boolean {
+  const pausedMonth = ymFromDate(pause.paused_at);
+  if (target <= pausedMonth) return false;
+  if (!pause.resumed_at) return true;
+  return target < ymFromDate(pause.resumed_at);
+}
+
+function leaseOwesMonth(
+  lease: LeaseRow,
+  pauses: PauseRow[],
+  month: number,
+  year: number
+): boolean {
+  const target = ymOrdinal(year, month);
+  if (target < RENT_TRACKING_START) return false;
+  if (lease.needs_review) return false;
+  const rs = lease.renewal_status;
+  if (rs === 'pending' || rs === 'rejected' || rs === 'draft' || rs === 'cancelled') return false;
+  if (lease.start_date && target < ymFromDate(lease.start_date)) return false;
+  if (lease.end_date && target > ymFromDate(lease.end_date)) return false;
+  if (lease.status === 'ended' && !lease.end_date) return false;
+  if (lease.status === 'paused' && pauses.length === 0) return false;
+  if (pauses.some(p => monthIsPaused(p, target))) return false;
+  return true;
+}
+
+/**
+ * Compute the paid amount for a lease+month using allocations when available,
+ * falling back to raw payments. Mirrors allocatedRentForMonth in rent.ts.
+ */
+function computePaidForMonth(
+  leaseId: string,
+  allocByLease: Map<string, { amount: number }[]>,
+  legacyByLease: Map<string, { amount: number }[]>
+): number {
+  const fromAlloc = (allocByLease.get(leaseId) || [])
+    .reduce((s, a) => s + a.amount, 0);
+  const fromLegacy = (legacyByLease.get(leaseId) || [])
+    .reduce((s, p) => s + p.amount, 0);
+  return round2(fromAlloc + fromLegacy);
 }
 
 // ---------------------------------------------------------------------------
@@ -254,28 +365,32 @@ async function searchTenants(db: D1Database, input: ToolInput): Promise<string> 
 async function getTenantProfile(db: D1Database, input: ToolInput): Promise<string> {
   const tenantId = String(input.tenantId);
 
-  // Basic info
   const tenant = await db.prepare(
     'SELECT id, first_name, last_name, email, phone, notes, emergency_contact_name, emergency_contact_phone, created_at FROM tenants WHERE id = ?'
   ).bind(tenantId).first();
   if (!tenant) return JSON.stringify({ error: 'Tenant not found.' });
 
-  // Active lease
-  const lease = await db.prepare(
-    `SELECT l.id, l.start_date, l.end_date, l.monthly_rent, l.security_deposit, l.status,
+  // All leases (active, paused, AND ended) for historical context
+  const { results: leaseRows } = await db.prepare(
+    `SELECT l.id, l.start_date, l.end_date, l.monthly_rent, l.security_deposit,
+            l.status, l.lease_type, l.renewal_status, l.needs_review,
             p.id AS property_id, p.name AS property_name, p.address AS property_address,
             u.unit_number
        FROM leases l
        JOIN lease_tenants lt ON lt.lease_id = l.id
        LEFT JOIN properties p ON p.id = l.property_id
        LEFT JOIN units u ON u.id = l.unit_id
-      WHERE lt.tenant_id = ? AND l.status IN ('active', 'paused')
-      LIMIT 1`
-  ).bind(tenantId).first();
+      WHERE lt.tenant_id = ?
+      ORDER BY CASE l.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
+               l.start_date DESC`
+  ).bind(tenantId).all();
 
-  // Recent payments (last 12)
+  const activeLease = (leaseRows || []).find(l => l.status === 'active' || l.status === 'paused') || null;
+
+  // Recent payments (last 12) with type
   const { results: payments } = await db.prepare(
-    `SELECT rp.amount, rp.due_date, rp.paid_date, rp.status, rp.payment_method, rp.month, rp.year
+    `SELECT rp.id, rp.amount, rp.due_date, rp.paid_date, rp.status, rp.payment_method,
+            rp.month, rp.year, rp.type
        FROM rent_payments rp
        JOIN leases l ON l.id = rp.lease_id
        JOIN lease_tenants lt ON lt.lease_id = l.id
@@ -283,6 +398,55 @@ async function getTenantProfile(db: D1Database, input: ToolInput): Promise<strin
       ORDER BY rp.year DESC, rp.month DESC, rp.due_date DESC
       LIMIT 12`
   ).bind(tenantId).all();
+
+  // Payment allocations for those payments
+  const paymentIds = (payments || []).map(p => p.id as string);
+  let allocations: Record<string, unknown>[] = [];
+  if (paymentIds.length > 0) {
+    const placeholders = paymentIds.map(() => '?').join(',');
+    const { results: allocRows } = await db.prepare(
+      `SELECT payment_id, lease_id, month, year, amount, type
+         FROM payment_allocations
+        WHERE payment_id IN (${placeholders})`
+    ).bind(...paymentIds).all();
+    allocations = allocRows || [];
+  }
+
+  // Compute current balance for the active lease
+  let currentBalance: { month: number; year: number; due: number; paid: number; owed: number } | null = null;
+  if (activeLease && !activeLease.needs_review) {
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    const rent = (activeLease.monthly_rent as number) || 0;
+
+    // Get paid amount for current month using allocations
+    const allocRow = await db.prepare(
+      `SELECT COALESCE(SUM(pa.amount), 0) AS total
+         FROM payment_allocations pa
+         JOIN rent_payments rp ON rp.id = pa.payment_id
+        WHERE pa.lease_id = ? AND pa.month = ? AND pa.year = ?
+          AND pa.type = 'rent' AND rp.status = 'paid'`
+    ).bind(activeLease.id, curMonth, curYear).first<{ total: number }>();
+
+    const legacyRow = await db.prepare(
+      `SELECT COALESCE(SUM(rp.amount), 0) AS total
+         FROM rent_payments rp
+        WHERE rp.lease_id = ? AND rp.month = ? AND rp.year = ?
+          AND rp.status = 'paid'
+          AND (rp.type IS NULL OR rp.type != 'credit')
+          AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = rp.id)`
+    ).bind(activeLease.id, curMonth, curYear).first<{ total: number }>();
+
+    const paid = round2((allocRow?.total || 0) + (legacyRow?.total || 0));
+    currentBalance = {
+      month: curMonth,
+      year: curYear,
+      due: rent,
+      paid,
+      owed: round2(Math.max(0, rent - paid)),
+    };
+  }
 
   // Recent maintenance
   const { results: maintenance } = await db.prepare(
@@ -305,20 +469,35 @@ async function getTenantProfile(db: D1Database, input: ToolInput): Promise<strin
         : null,
       memberSince: tenant.created_at,
     },
-    lease: lease
+    lease: activeLease
       ? {
-          id: lease.id,
-          property: lease.property_name,
-          propertyAddress: lease.property_address,
-          unit: lease.unit_number,
-          monthlyRent: lease.monthly_rent,
-          securityDeposit: lease.security_deposit,
-          startDate: lease.start_date,
-          endDate: lease.end_date,
-          status: lease.status,
+          id: activeLease.id,
+          property: activeLease.property_name,
+          propertyAddress: activeLease.property_address,
+          unit: activeLease.unit_number,
+          monthlyRent: activeLease.monthly_rent,
+          securityDeposit: activeLease.security_deposit,
+          startDate: activeLease.start_date,
+          endDate: activeLease.end_date,
+          status: activeLease.status,
+          leaseType: activeLease.lease_type || 'fixed',
+          renewalStatus: activeLease.renewal_status,
         }
       : null,
+    previousLeases: (leaseRows || [])
+      .filter(l => l.status === 'ended')
+      .slice(0, 3)
+      .map(l => ({
+        id: l.id,
+        property: l.property_name,
+        unit: l.unit_number,
+        monthlyRent: l.monthly_rent,
+        startDate: l.start_date,
+        endDate: l.end_date,
+      })),
+    currentBalance,
     recentPayments: (payments || []).map(p => ({
+      id: p.id,
       amount: p.amount,
       dueDate: p.due_date,
       paidDate: p.paid_date,
@@ -326,7 +505,18 @@ async function getTenantProfile(db: D1Database, input: ToolInput): Promise<strin
       method: p.payment_method,
       month: p.month,
       year: p.year,
+      type: p.type || 'rent',
     })),
+    paymentAllocations: allocations.length > 0
+      ? allocations.map(a => ({
+          paymentId: a.payment_id,
+          leaseId: a.lease_id,
+          month: a.month,
+          year: a.year,
+          amount: a.amount,
+          type: a.type,
+        }))
+      : undefined,
     maintenanceRequests: (maintenance || []).map(m => ({
       id: m.id,
       title: m.title,
@@ -363,7 +553,6 @@ async function searchProperties(db: D1Database, input: ToolInput): Promise<strin
 async function getPropertySummary(db: D1Database, input: ToolInput): Promise<string> {
   const propertyId = String(input.propertyId);
 
-  // Property info
   const prop = await db.prepare(
     'SELECT id, name, address, city, state, zip_code, type, purchase_date, purchase_price FROM properties WHERE id = ?'
   ).bind(propertyId).first();
@@ -386,29 +575,48 @@ async function getPropertySummary(db: D1Database, input: ToolInput): Promise<str
   const totalUnits = (units || []).length;
   const occupied = (units || []).filter(u => u.lease_status === 'active' || u.lease_status === 'paused').length;
 
+  // Expected rent = sum of active lease monthly_rent (not payment records)
+  const expectedRow = await db.prepare(
+    `SELECT COALESCE(SUM(l.monthly_rent), 0) AS total
+       FROM leases l
+      WHERE l.property_id = ? AND l.status IN ('active', 'paused')
+        AND l.needs_review = 0
+        AND (l.renewal_status IS NULL OR l.renewal_status = 'approved')`
+  ).bind(propertyId).first<{ total: number }>();
+  const rentExpected = expectedRow?.total || 0;
+
+  // This month's rent collection (allocation-aware)
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const collectRow = await db.prepare(
+    `SELECT COALESCE(SUM(pa.amount), 0) AS alloc_total
+       FROM payment_allocations pa
+       JOIN rent_payments rp ON rp.id = pa.payment_id
+       JOIN leases l ON l.id = pa.lease_id
+      WHERE l.property_id = ? AND pa.month = ? AND pa.year = ?
+        AND pa.type = 'rent' AND rp.status = 'paid'`
+  ).bind(propertyId, month, year).first<{ alloc_total: number }>();
+
+  const legacyCollectRow = await db.prepare(
+    `SELECT COALESCE(SUM(rp.amount), 0) AS legacy_total
+       FROM rent_payments rp
+       JOIN leases l ON l.id = rp.lease_id
+      WHERE l.property_id = ? AND rp.month = ? AND rp.year = ?
+        AND rp.status = 'paid'
+        AND (rp.type IS NULL OR rp.type != 'credit')
+        AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = rp.id)`
+  ).bind(propertyId, month, year).first<{ legacy_total: number }>();
+
+  const rentCollected = round2((collectRow?.alloc_total || 0) + (legacyCollectRow?.legacy_total || 0));
+
   // Recent expenses (last 10)
   const { results: expenses } = await db.prepare(
     `SELECT category, amount, date, description, vendor
        FROM expenses WHERE property_id = ?
       ORDER BY date DESC LIMIT 10`
   ).bind(propertyId).all();
-
-  // This month's rent collection
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const { results: rentPayments } = await db.prepare(
-    `SELECT rp.status, rp.amount
-       FROM rent_payments rp
-       JOIN leases l ON l.id = rp.lease_id
-      WHERE l.property_id = ? AND rp.month = ? AND rp.year = ?`
-  ).bind(propertyId, month, year).all();
-
-  const rentCollected = (rentPayments || [])
-    .filter(r => r.status === 'paid')
-    .reduce((sum, r) => sum + (r.amount as number), 0);
-  const rentExpected = (rentPayments || [])
-    .reduce((sum, r) => sum + (r.amount as number), 0);
 
   return JSON.stringify({
     property: {
@@ -456,18 +664,28 @@ async function getRentStatus(db: D1Database, input: ToolInput): Promise<string> 
   const now = new Date();
   const month = typeof input.month === 'number' ? input.month : now.getMonth() + 1;
   const year = typeof input.year === 'number' ? input.year : now.getFullYear();
+  const target = ymOrdinal(year, month);
 
-  // Build a date string for the target month to check lease validity.
+  if (target < RENT_TRACKING_START) {
+    return JSON.stringify({
+      period: { month, year },
+      note: 'Rent tracking started in January 2026. No data is available before that.',
+      summary: { totalLeases: 0, paid: 0, partial: 0, unpaid: 0, totalExpected: 0, totalCollected: 0, totalOwed: 0 },
+      tenants: [],
+    });
+  }
+
   const monthPadded = String(month).padStart(2, '0');
   const monthStart = `${year}-${monthPadded}-01`;
 
-  // Step 1: find all active leases that should owe rent for this month.
+  // Step 1: find ALL leases whose date range covers this month (including ended)
   const propFilter = input.propertyId ? 'AND l.property_id = ?' : '';
   const leaseBinds: unknown[] = [monthStart, monthStart];
   if (input.propertyId) leaseBinds.push(String(input.propertyId));
 
-  const { results: leases } = await db.prepare(
+  const { results: rawLeases } = await db.prepare(
     `SELECT l.id AS lease_id, l.monthly_rent, l.start_date, l.end_date,
+            l.status, l.needs_review, l.renewal_status, l.renewed_from_lease_id,
             p.name AS property_name, u.unit_number,
             GROUP_CONCAT(t.first_name || ' ' || t.last_name, ', ') AS tenant_names
        FROM leases l
@@ -475,36 +693,108 @@ async function getRentStatus(db: D1Database, input: ToolInput): Promise<string> 
        LEFT JOIN properties p ON p.id = l.property_id
        LEFT JOIN lease_tenants lt ON lt.lease_id = l.id
        LEFT JOIN tenants t ON t.id = lt.tenant_id
-      WHERE l.status IN ('active', 'paused')
-        AND l.start_date <= ?
+      WHERE l.start_date <= ?
         AND (l.end_date IS NULL OR l.end_date >= ?)
-        AND l.needs_review = 0
         ${propFilter}
       GROUP BY l.id
       ORDER BY p.name, u.unit_number`
   ).bind(...leaseBinds).all();
 
-  // Step 2: get all payments for this month.
+  const leases = (rawLeases || []) as unknown as LeaseRow[];
+
+  // Step 2: get pause intervals for all candidate leases
+  const leaseIds = leases.map(l => l.lease_id);
+  let pausesByLease = new Map<string, PauseRow[]>();
+  if (leaseIds.length > 0) {
+    const ph = leaseIds.map(() => '?').join(',');
+    const { results: pauseRows } = await db.prepare(
+      `SELECT lease_id, paused_at, resumed_at FROM lease_pauses WHERE lease_id IN (${ph})`
+    ).bind(...leaseIds).all();
+    for (const p of (pauseRows || []) as unknown as PauseRow[]) {
+      if (!pausesByLease.has(p.lease_id)) pausesByLease.set(p.lease_id, []);
+      pausesByLease.get(p.lease_id)!.push(p);
+    }
+  }
+
+  // Step 3: filter to leases that actually OWE rent this month
+  let owingLeases = leases.filter(l =>
+    leaseOwesMonth(l, pausesByLease.get(l.lease_id) || [], month, year)
+  );
+
+  // Renewal overlap de-duplication: when old + renewal both cover the month,
+  // keep only the old lease (same logic as rent.ts leasesOwingMonth)
+  if (owingLeases.length > 1) {
+    owingLeases = owingLeases.filter(renewal => {
+      if (!renewal.renewed_from_lease_id) return true;
+      return !owingLeases.some(old => old.lease_id === renewal.renewed_from_lease_id);
+    });
+  }
+
+  // Step 4: get payment allocations for this month
+  const allocBinds: unknown[] = [month, year];
+  if (input.propertyId) allocBinds.push(String(input.propertyId));
+
+  const { results: allocRows } = await db.prepare(
+    `SELECT pa.lease_id, SUM(pa.amount) AS total
+       FROM payment_allocations pa
+       JOIN rent_payments rp ON rp.id = pa.payment_id
+       ${input.propertyId ? 'JOIN leases l ON l.id = pa.lease_id' : ''}
+      WHERE pa.month = ? AND pa.year = ? AND pa.type = 'rent' AND rp.status = 'paid'
+        ${input.propertyId ? 'AND l.property_id = ?' : ''}
+      GROUP BY pa.lease_id`
+  ).bind(...allocBinds).all();
+
+  const allocByLease = new Map<string, { amount: number }[]>();
+  for (const r of (allocRows || [])) {
+    allocByLease.set(r.lease_id as string, [{ amount: (r.total as number) || 0 }]);
+  }
+
+  // Step 5: get legacy payments (those with no allocations) for this month
+  const legBinds: unknown[] = [month, year];
+  if (input.propertyId) legBinds.push(String(input.propertyId));
+
+  const { results: legacyRows } = await db.prepare(
+    `SELECT rp.lease_id, SUM(rp.amount) AS total
+       FROM rent_payments rp
+       ${input.propertyId ? 'JOIN leases l ON l.id = rp.lease_id' : ''}
+      WHERE rp.month = ? AND rp.year = ? AND rp.status = 'paid'
+        AND (rp.type IS NULL OR rp.type != 'credit')
+        AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = rp.id)
+        ${input.propertyId ? 'AND l.property_id = ?' : ''}
+      GROUP BY rp.lease_id`
+  ).bind(...legBinds).all();
+
+  const legacyByLease = new Map<string, { amount: number }[]>();
+  for (const r of (legacyRows || [])) {
+    legacyByLease.set(r.lease_id as string, [{ amount: (r.total as number) || 0 }]);
+  }
+
+  // Step 6: also get the most recent paid payment info per lease for display
   const payBinds: unknown[] = [month, year];
   if (input.propertyId) payBinds.push(String(input.propertyId));
 
-  const { results: payments } = await db.prepare(
-    `SELECT rp.lease_id, rp.amount, rp.status, rp.paid_date, rp.payment_method, rp.type
+  const { results: payInfoRows } = await db.prepare(
+    `SELECT rp.lease_id, rp.paid_date, rp.payment_method
        FROM rent_payments rp
-       JOIN leases l ON l.id = rp.lease_id
-      WHERE rp.month = ? AND rp.year = ?
+       ${input.propertyId ? 'JOIN leases l ON l.id = rp.lease_id' : ''}
+      WHERE rp.month = ? AND rp.year = ? AND rp.status = 'paid'
+        AND (rp.type IS NULL OR rp.type != 'credit')
         ${input.propertyId ? 'AND l.property_id = ?' : ''}
-      ORDER BY rp.lease_id`
+      ORDER BY rp.paid_date DESC`
   ).bind(...payBinds).all();
 
-  // Step 3: match payments to leases.
-  const paymentsByLease = new Map<string, typeof payments>();
-  for (const p of (payments || [])) {
-    const lid = p.lease_id as string;
-    if (!paymentsByLease.has(lid)) paymentsByLease.set(lid, []);
-    paymentsByLease.get(lid)!.push(p);
+  const payInfoByLease = new Map<string, { paid_date: string; payment_method: string }>();
+  for (const r of (payInfoRows || [])) {
+    const lid = r.lease_id as string;
+    if (!payInfoByLease.has(lid)) {
+      payInfoByLease.set(lid, {
+        paid_date: r.paid_date as string,
+        payment_method: r.payment_method as string,
+      });
+    }
   }
 
+  // Step 7: build the result rows
   interface LeaseRentRow {
     tenantNames: string;
     property: string | null;
@@ -515,6 +805,7 @@ async function getRentStatus(db: D1Database, input: ToolInput): Promise<string> 
     status: 'paid' | 'partial' | 'unpaid';
     paidDate: string | null;
     method: string | null;
+    leaseStatus: string;
   }
 
   const rows: LeaseRentRow[] = [];
@@ -524,19 +815,15 @@ async function getRentStatus(db: D1Database, input: ToolInput): Promise<string> 
   let partialCount = 0;
   let unpaidCount = 0;
 
-  for (const lease of (leases || [])) {
-    const rent = (lease.monthly_rent as number) || 0;
+  for (const lease of owingLeases) {
+    const rent = lease.monthly_rent || 0;
     totalExpected += rent;
 
-    const lPayments = paymentsByLease.get(lease.lease_id as string) || [];
-    const cashPayments = lPayments.filter(p => (p.type as string) !== 'credit');
-    const paid = cashPayments
-      .filter(p => p.status === 'paid')
-      .reduce((s, p) => s + ((p.amount as number) || 0), 0);
+    const paid = computePaidForMonth(lease.lease_id, allocByLease, legacyByLease);
     totalCollected += paid;
 
     let status: 'paid' | 'partial' | 'unpaid';
-    if (paid >= rent) {
+    if (paid >= rent - 0.005) {
       status = 'paid';
       paidCount++;
     } else if (paid > 0) {
@@ -547,34 +834,34 @@ async function getRentStatus(db: D1Database, input: ToolInput): Promise<string> 
       unpaidCount++;
     }
 
-    const lastPaid = cashPayments.find(p => p.status === 'paid');
+    const info = payInfoByLease.get(lease.lease_id);
     rows.push({
-      tenantNames: (lease.tenant_names as string) || 'Unknown',
-      property: (lease.property_name as string) || null,
-      unit: (lease.unit_number as string) || null,
+      tenantNames: lease.tenant_names || 'Unknown',
+      property: lease.property_name || null,
+      unit: lease.unit_number || null,
       monthlyRent: rent,
       amountPaid: paid,
-      amountOwed: Math.max(0, rent - paid),
+      amountOwed: round2(Math.max(0, rent - paid)),
       status,
-      paidDate: (lastPaid?.paid_date as string) || null,
-      method: (lastPaid?.payment_method as string) || null,
+      paidDate: info?.paid_date || null,
+      method: info?.payment_method || null,
+      leaseStatus: lease.status,
     });
   }
 
-  // Sort: unpaid first, then partial, then paid.
   const statusOrder = { unpaid: 0, partial: 1, paid: 2 };
   rows.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
   return JSON.stringify({
     period: { month, year },
     summary: {
-      totalLeases: (leases || []).length,
+      totalLeases: owingLeases.length,
       paid: paidCount,
       partial: partialCount,
       unpaid: unpaidCount,
-      totalExpected,
-      totalCollected,
-      totalOwed: totalExpected - totalCollected,
+      totalExpected: round2(totalExpected),
+      totalCollected: round2(totalCollected),
+      totalOwed: round2(Math.max(0, totalExpected - totalCollected)),
       collectionRate: totalExpected > 0 ? `${Math.round((totalCollected / totalExpected) * 100)}%` : 'N/A',
     },
     tenants: rows,
@@ -601,7 +888,7 @@ async function getFinancialSummary(db: D1Database, input: ToolInput): Promise<st
 
   const totalExpenses = (expenseRows || []).reduce((s, r) => s + (r.total as number), 0);
 
-  // Rent collected (paid payments in the date range)
+  // Rent collected: exclude credits (they settle rent but are not income)
   const rentClause = propertyId ? 'AND l.property_id = ?' : '';
   const rentBinds: unknown[] = [startDate, endDate];
   if (propertyId) rentBinds.push(propertyId);
@@ -610,7 +897,9 @@ async function getFinancialSummary(db: D1Database, input: ToolInput): Promise<st
     `SELECT SUM(rp.amount) AS total, COUNT(*) AS count
        FROM rent_payments rp
        JOIN leases l ON l.id = rp.lease_id
-      WHERE rp.status = 'paid' AND rp.paid_date >= ? AND rp.paid_date <= ? ${rentClause}`
+      WHERE rp.status = 'paid' AND rp.paid_date >= ? AND rp.paid_date <= ?
+        AND (rp.type IS NULL OR rp.type != 'credit')
+        ${rentClause}`
   ).bind(...rentBinds).first();
 
   const totalRentCollected = (rentRow?.total as number) || 0;
@@ -633,20 +922,20 @@ async function getFinancialSummary(db: D1Database, input: ToolInput): Promise<st
   return JSON.stringify({
     period: { startDate, endDate },
     income: {
-      rentCollected: totalRentCollected,
+      rentCollected: round2(totalRentCollected),
       rentPaymentCount,
-      otherIncome,
-      totalIncome,
+      otherIncome: round2(otherIncome),
+      totalIncome: round2(totalIncome),
     },
     expenses: {
-      totalExpenses,
+      totalExpenses: round2(totalExpenses),
       byCategory: (expenseRows || []).map(r => ({
         category: r.category,
         total: r.total,
         count: r.count,
       })),
     },
-    netIncome: totalIncome - totalExpenses,
+    netIncome: round2(totalIncome - totalExpenses),
   });
 }
 
@@ -737,5 +1026,104 @@ async function getRecentActivity(db: D1Database, input: ToolInput): Promise<stri
       targetName: r.target_name,
       createdAt: r.created_at,
     })),
+  });
+}
+
+async function getLeaseDetails(db: D1Database, input: ToolInput): Promise<string> {
+  const leaseId = String(input.leaseId);
+
+  const lease = await db.prepare(
+    `SELECT l.id, l.start_date, l.end_date, l.monthly_rent, l.security_deposit,
+            l.status, l.lease_type, l.renewal_status, l.renewed_from_lease_id,
+            l.needs_review, l.rent_due_day,
+            p.name AS property_name, p.address AS property_address,
+            u.unit_number
+       FROM leases l
+       LEFT JOIN properties p ON p.id = l.property_id
+       LEFT JOIN units u ON u.id = l.unit_id
+      WHERE l.id = ?`
+  ).bind(leaseId).first();
+  if (!lease) return JSON.stringify({ error: 'Lease not found.' });
+
+  // Tenants on this lease
+  const { results: tenantRows } = await db.prepare(
+    `SELECT t.id, t.first_name, t.last_name
+       FROM tenants t
+       JOIN lease_tenants lt ON lt.tenant_id = t.id
+      WHERE lt.lease_id = ?`
+  ).bind(leaseId).all();
+
+  // Pause intervals
+  const { results: pauses } = await db.prepare(
+    `SELECT paused_at, resumed_at FROM lease_pauses WHERE lease_id = ? ORDER BY paused_at`
+  ).bind(leaseId).all();
+
+  // Recent payments
+  const { results: payments } = await db.prepare(
+    `SELECT rp.id, rp.amount, rp.month, rp.year, rp.status, rp.paid_date,
+            rp.payment_method, rp.type
+       FROM rent_payments rp
+      WHERE rp.lease_id = ?
+      ORDER BY rp.year DESC, rp.month DESC
+      LIMIT 12`
+  ).bind(leaseId).all();
+
+  // Allocations for those payments
+  const paymentIds = (payments || []).map(p => p.id as string);
+  let allocations: Record<string, unknown>[] = [];
+  if (paymentIds.length > 0) {
+    const ph = paymentIds.map(() => '?').join(',');
+    const { results: allocRows } = await db.prepare(
+      `SELECT payment_id, month, year, amount, type
+         FROM payment_allocations
+        WHERE payment_id IN (${ph})`
+    ).bind(...paymentIds).all();
+    allocations = allocRows || [];
+  }
+
+  return JSON.stringify({
+    lease: {
+      id: lease.id,
+      property: lease.property_name,
+      propertyAddress: lease.property_address,
+      unit: lease.unit_number,
+      monthlyRent: lease.monthly_rent,
+      securityDeposit: lease.security_deposit,
+      startDate: lease.start_date,
+      endDate: lease.end_date,
+      status: lease.status,
+      leaseType: lease.lease_type || 'fixed',
+      renewalStatus: lease.renewal_status,
+      renewedFromLeaseId: lease.renewed_from_lease_id,
+      needsReview: lease.needs_review,
+      rentDueDay: lease.rent_due_day,
+    },
+    tenants: (tenantRows || []).map(t => ({
+      id: t.id,
+      name: `${t.first_name} ${t.last_name}`,
+    })),
+    pauseIntervals: (pauses || []).map(p => ({
+      pausedAt: p.paused_at,
+      resumedAt: p.resumed_at,
+    })),
+    recentPayments: (payments || []).map(p => ({
+      id: p.id,
+      amount: p.amount,
+      month: p.month,
+      year: p.year,
+      status: p.status,
+      paidDate: p.paid_date,
+      method: p.payment_method,
+      type: p.type || 'rent',
+    })),
+    paymentAllocations: allocations.length > 0
+      ? allocations.map(a => ({
+          paymentId: a.payment_id,
+          month: a.month,
+          year: a.year,
+          amount: a.amount,
+          type: a.type,
+        }))
+      : undefined,
   });
 }

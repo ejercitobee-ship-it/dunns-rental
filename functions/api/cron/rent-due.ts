@@ -5,7 +5,7 @@ import { sendPushToUser } from '../../lib/push';
 import { sendEmail, rentReminderEmail } from '../../lib/email';
 import { SITE_URL } from '../../lib/site';
 
-const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay your rent by Zelle to Marlene Dunn at 7739917112.';
+const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay rent via Zelle to 773-991-7112, payable to Marlene Dunn.';
 const STATE_KEY = 'rentReminderState';
 
 interface RentSettings {
@@ -37,7 +37,7 @@ async function rentSettings(env: Env): Promise<RentSettings> {
 /** Today's calendar date in the property's timezone (America/Chicago). The
  * worker fires this at 13:00 UTC, when Chicago is already on the same day, so
  * the day-of-month check lands on the intended date regardless of DST. */
-function chicagoToday(): { day: number; monthKey: string; monthLabel: string } {
+function chicagoToday(): { day: number; monthNum: number; yearNum: number; monthKey: string; monthLabel: string } {
   const now = new Date();
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
@@ -54,7 +54,7 @@ function chicagoToday(): { day: number; monthKey: string; monthLabel: string } {
     month: 'long',
     year: 'numeric',
   }).format(now);
-  return { day, monthKey: `${year}-${month}`, monthLabel };
+  return { day, monthNum: Number(month), yearNum: Number(year), monthKey: `${year}-${month}`, monthLabel };
 }
 
 interface RecipientRow {
@@ -95,18 +95,27 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const dryRun = url.searchParams.get('dryRun') === '1';
 
     const { rentDueDay: globalDueDay, paymentInstructions } = await rentSettings(env);
-    const { day, monthKey, monthLabel } = chicagoToday();
+    const { day, monthNum, yearNum, monthKey, monthLabel } = chicagoToday();
 
-    // Every distinct tenant on an active lease, with the lease's per-lease due
-    // day (NULL = use the global setting).
+    // Every distinct tenant on an active lease whose rent for this month is not
+    // already paid. The NOT EXISTS subquery checks whether a paid rent_payment
+    // already exists for this lease/month/year, so tenants who have paid are
+    // not reminded.
     const { results: allRows } = await env.DB.prepare(
       `SELECT DISTINCT t.id AS tenant_id, t.user_id, t.first_name, t.email,
               l.rent_due_day AS lease_due_day
          FROM leases l
          JOIN lease_tenants lt ON lt.lease_id = l.id
          JOIN tenants t ON t.id = lt.tenant_id
-        WHERE l.status = 'active'`
-    ).all<RecipientRow>();
+        WHERE l.status = 'active'
+          AND NOT EXISTS (
+            SELECT 1 FROM rent_payments rp
+             WHERE rp.lease_id = l.id
+               AND rp.month = ?1
+               AND rp.year = ?2
+               AND rp.status = 'paid'
+          )`
+    ).bind(monthNum, yearNum).all<RecipientRow>();
 
     const recipients = (allRows || []).filter(r => {
       const effectiveDay = r.lease_due_day ?? globalDueDay;

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID, INCOME_COLOR, EXPENSE_COLOR } from '../components/ui/chartConstants';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, yearOf, monthOf, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
@@ -56,7 +58,7 @@ const VENDOR_1099_THRESHOLD = 600;
 
 // IRS standard mileage rate (cents per mile) by year. Check irs.gov each
 // December for the next year's rate and add it here.
-const IRS_MILEAGE_RATES: Record<number, number> = { 2024: 67, 2025: 70 };
+const IRS_MILEAGE_RATES: Record<number, number> = { 2024: 67, 2025: 70, 2026: 72.5 };
 const irsMileageRateCents = (yr: number): number =>
   IRS_MILEAGE_RATES[yr] ?? IRS_MILEAGE_RATES[Math.max(...Object.keys(IRS_MILEAGE_RATES).map(Number).filter(y => y <= yr))] ?? 70;
 
@@ -64,6 +66,10 @@ const irsMileageRateCents = (yr: number): number =>
 // rental income on their federal return. Illinois does NOT allow this deduction
 // (IL starts from federal AGI, which is before QBI).
 const QBI_DEDUCTION_RATE = 0.20;
+// QBI phase-out thresholds (2026, per Rev. Proc. 2025-32). Above these amounts
+// the deduction may be limited based on W-2 wages and property basis.
+const QBI_THRESHOLD_SINGLE = 201750;
+const QBI_THRESHOLD_MFJ = 403500;
 
 // Net Investment Income Tax: an additional 3.8% surtax on rental income for
 // high earners (AGI > $200K single / $250K MFJ).
@@ -90,10 +96,12 @@ interface CapitalItem {
   propertyName?: string;
   capitalProjectId?: string;
   capitalProjectName?: string;
+  recoveryYears?: number;
 }
 
 /** IRS recovery period (useful life) for capital asset depreciation. */
-function recoveryPeriod(category: string): string {
+function recoveryPeriod(category: string, override?: number): string {
+  if (override) return `${override} yr`;
   switch (category) {
     case 'appliance_replacement': return '5 yr';
     case 'capital_improvements':
@@ -359,6 +367,7 @@ export function TaxReport() {
             propertyName: e.propertyId ? propertyNameById.get(e.propertyId) : undefined,
             capitalProjectId: e.capitalProjectId,
             capitalProjectName: proj?.name,
+            recoveryYears: e.recoveryYears,
           });
         } else {
           expensesByCategory[taxCat] = (expensesByCategory[taxCat] || 0) + deductible;
@@ -827,47 +836,44 @@ export function TaxReport() {
     downloadBlob([header, ...rentRows, ...otherRows].join('\n'), `income-${mainLabel.replace(/\s+/g, '-')}.csv`, 'text/csv');
   };
 
-  const selectCls = 'px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/25';
+  const selectCls = 'px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/10';
   const YEARS = Array.from({ length: 12 }, (_, i) => now.getFullYear() + 1 - i);
   const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   return (
     <div className="space-y-6">
-      {/* ── Page header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Tax preparation</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Tax Report</h1>
-          <p className="text-sm text-muted mt-1.5">
-            Tax summary and deductible expenses for {mainLabel}{comp ? ` vs ${compLabel}` : ''}.
-          </p>
-        </div>
-        <div className="relative flex-shrink-0">
-          <Button variant="outline" onClick={() => setExportOpen(!exportOpen)}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-            <ChevronDown className="h-3.5 w-3.5 ml-1" />
-          </Button>
-          {exportOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
-              <div className="absolute right-0 mt-1 z-50 w-56 rounded-lg border border-line bg-surface shadow-lg py-1 text-sm">
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas font-medium text-primary" onClick={exportTaxPacketZIP}>
-                  📦 Tax Packet (ZIP)
-                </button>
-                <div className="border-t border-line my-1" />
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportPrintPdf}>Print / Save as PDF</button>
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleECSV}>Schedule E (CSV)</button>
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleEPerPropertyZIP}>Schedule E Per Property (ZIP)</button>
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportExpensesCSV}>Expenses (CSV)</button>
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportIncomeCSV}>Income (CSV)</button>
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={export1099CSV}>1099 Vendor (CSV)</button>
-                <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportJSON}>Full Report (JSON)</button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Tax preparation"
+        title="Tax Report"
+        description={`Tax summary and deductible expenses for ${mainLabel}${comp ? ` vs ${compLabel}` : ''}.`}
+        actions={
+          <div className="relative flex-shrink-0">
+            <Button variant="outline" onClick={() => setExportOpen(!exportOpen)}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+              <ChevronDown className="h-3.5 w-3.5 ml-1" />
+            </Button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 mt-1 z-50 w-56 rounded-lg border border-line bg-surface shadow-lg py-1 text-sm">
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas font-medium text-primary" onClick={exportTaxPacketZIP}>
+                    Tax Packet (ZIP)
+                  </button>
+                  <div className="border-t border-line my-1" />
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportPrintPdf}>Print / Save as PDF</button>
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleECSV}>Schedule E (CSV)</button>
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportScheduleEPerPropertyZIP}>Schedule E Per Property (ZIP)</button>
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportExpensesCSV}>Expenses (CSV)</button>
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportIncomeCSV}>Income (CSV)</button>
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={export1099CSV}>1099 Vendor (CSV)</button>
+                  <button className="w-full text-left px-4 py-2 hover:bg-canvas" onClick={exportJSON}>Full Report (JSON)</button>
+                </div>
+              </>
+            )}
+          </div>
+        }
+      />
 
       {/* Period + comparison controls */}
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl border border-line bg-surface p-4">
@@ -946,11 +952,11 @@ export function TaxReport() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-3 px-4 font-medium text-muted text-xs uppercase tracking-wider">Metric</th>
-                    <th className="text-right py-2.5 px-4 font-medium">{mainLabel}</th>
-                    <th className="text-right py-2.5 px-4 font-medium">{compLabel}</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Change</th>
+                  <tr className="border-b border-line bg-canvas/60">
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Metric</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">{mainLabel}</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">{compLabel}</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Change</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1015,12 +1021,12 @@ export function TaxReport() {
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={main.breakdown}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Bar dataKey="income" fill="#2c7a58" name="Income" />
-                <Bar dataKey="expenses" fill="#b98a5e" name="Expenses" />
+                <CartesianGrid {...CHART_GRID} />
+                <XAxis dataKey="name" {...CHART_AXIS} />
+                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} {...CHART_AXIS} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
+                <Bar dataKey="income" fill={INCOME_COLOR} name="Income" />
+                <Bar dataKey="expenses" fill={EXPENSE_COLOR} name="Expenses" />
                 <Bar dataKey="netIncome" fill="#24503f" name="Net Income" />
               </BarChart>
             </ResponsiveContainer>
@@ -1052,7 +1058,7 @@ export function TaxReport() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
@@ -1224,11 +1230,11 @@ export function TaxReport() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b bg-canvas">
-                  <th className="text-left py-3 px-4 font-medium">Category</th>
-                  <th className="text-left py-3 px-4 font-medium">Description</th>
-                  <th className="text-right py-3 px-4 font-medium">Amount</th>
-                  <th className="text-right py-3 px-4 font-medium">% of Total</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Category</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Description</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">% of Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -1243,7 +1249,7 @@ export function TaxReport() {
                       : [];
                     return [
                       <tr key={key} className="border-b last:border-0 hover:bg-canvas cursor-pointer" onClick={() => setDrilldown(open ? null : key)}>
-                        <td className="py-3 px-4 font-medium flex items-center gap-1.5">
+                        <td className="py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
                           {key !== 'depreciation' ? (
                             open ? <ChevronDown className="h-3.5 w-3.5 text-muted" /> : <ChevronRight className="h-3.5 w-3.5 text-muted" />
                           ) : <span className="w-3.5" />}
@@ -1385,13 +1391,13 @@ export function TaxReport() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-line bg-canvas">
-                            <th className="text-left py-2.5 px-4 font-medium">Date</th>
-                            <th className="text-left py-2.5 px-4 font-medium">Category</th>
-                            <th className="text-left py-2.5 px-4 font-medium">Item</th>
-                            <th className="text-left py-2.5 px-4 font-medium">Property</th>
-                            <th className="text-center py-2.5 px-4 font-medium">Recovery</th>
-                            <th className="text-right py-2.5 px-4 font-medium">Amount</th>
+                          <tr className="border-b border-line bg-canvas/60">
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Category</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Item</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
+                            <th className="text-center py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Recovery</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1402,7 +1408,7 @@ export function TaxReport() {
                               <td className="py-2.5 px-4 text-muted">{item.description || '—'}</td>
                               <td className="py-2.5 px-4 text-muted">{item.propertyName || '—'}</td>
                               <td className="py-2.5 px-4 text-center" title={recoveryHint(item.category)}>
-                                <Badge variant="secondary" className="text-xs">{recoveryPeriod(item.category)}</Badge>
+                                <Badge variant="secondary" className="text-xs">{recoveryPeriod(item.category, item.recoveryYears)}</Badge>
                               </td>
                               <td className="py-2.5 px-4 text-right font-semibold tnum">{formatCurrency(item.amount)}</td>
                             </tr>
@@ -1449,21 +1455,21 @@ export function TaxReport() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-2.5 px-4 font-medium">Asset</th>
-                    <th className="text-left py-2.5 px-4 font-medium">Recovery</th>
-                    <th className="text-left py-2.5 px-4 font-medium">Placed in service</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Cost basis</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Land</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Depreciable</th>
-                    <th className="text-right py-2.5 px-4 font-medium">This year</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Accumulated</th>
+                  <tr className="border-b border-line bg-canvas/60">
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Asset</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Recovery</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Placed in service</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Cost basis</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Land</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Depreciable</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">This year</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Accumulated</th>
                   </tr>
                 </thead>
                 <tbody>
                   {main.depreciationSchedule.map(d => (
                     <tr key={d.name} className="border-b border-line last:border-0">
-                      <td className="py-2.5 px-4 font-medium text-ink">
+                      <td className="py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider text-ink">
                         {d.name}
                         {d.isProject && <Badge variant="outline" className="ml-2 text-[10px]">Project</Badge>}
                       </td>
@@ -1561,11 +1567,11 @@ export function TaxReport() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b bg-canvas">
-                  <th className="text-left py-3 px-4 font-medium">Property</th>
-                  <th className="text-right py-3 px-4 font-medium">Income</th>
-                  <th className="text-right py-3 px-4 font-medium">Expenses</th>
-                  <th className="text-right py-3 px-4 font-medium">Net Income</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Income</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Expenses</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Net Income</th>
                 </tr>
               </thead>
               <tbody>
@@ -1577,7 +1583,7 @@ export function TaxReport() {
                     : [];
                   return [
                     <tr key={p.name} className="border-b last:border-0 hover:bg-canvas cursor-pointer" onClick={() => setDrilldownProp(open ? null : p.name)}>
-                      <td className="py-3 px-4 font-medium flex items-center gap-1.5">
+                      <td className="py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
                         {open ? <ChevronDown className="h-3.5 w-3.5 text-muted" /> : <ChevronRight className="h-3.5 w-3.5 text-muted" />}
                         {p.name}
                       </td>
@@ -1681,11 +1687,11 @@ export function TaxReport() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: Math.max(600, 200 + main.scheduleEPerProperty.length * 120) }}>
               <thead>
-                <tr className="border-b border-line bg-canvas">
-                  <th className="text-left py-2.5 px-3 font-medium w-10">Line</th>
-                  <th className="text-left py-2.5 px-3 font-medium">Description</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider w-10">Line</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Description</th>
                   {main.scheduleEPerProperty.map(p => (
-                    <th key={p.name} className="text-right py-2.5 px-3 font-medium whitespace-nowrap">{p.name}</th>
+                    <th key={p.name} className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{p.name}</th>
                   ))}
                   <th className="text-right py-2.5 px-3 font-bold">Totals</th>
                 </tr>
@@ -1745,7 +1751,7 @@ export function TaxReport() {
                 type="number" min={0} max={50} step={0.5}
                 value={fedRate}
                 onChange={(e) => setFedRate(Math.max(0, Math.min(50, Number(e.target.value))))}
-                className="w-28 px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-28 px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
             </div>
             <div>
@@ -1754,7 +1760,7 @@ export function TaxReport() {
                 type="number" min={0} max={20} step={0.1}
                 value={stateRate}
                 onChange={(e) => setStateRate(Math.max(0, Math.min(20, Number(e.target.value))))}
-                className="w-28 px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-28 px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
             </div>
           </div>
@@ -1864,12 +1870,26 @@ export function TaxReport() {
               <span className="font-medium">Section 199A (QBI) eligibility:</span>{' '}
               <span className="text-muted">
                 Most rental landlords qualify for the 20% QBI deduction on their federal return.
-                Exceptions include very high earners ($197,300+ single / $394,600+ MFJ for 2025) whose
-                deduction may be limited. The deduction does NOT apply to Illinois state tax because
+                The deduction may be limited for high earners ({formatCurrency(QBI_THRESHOLD_SINGLE)}+ single
+                / {formatCurrency(QBI_THRESHOLD_MFJ)}+ MFJ for 2026, per Rev. Proc. 2025-32).
+                The deduction does NOT apply to Illinois state tax because
                 IL starts from federal AGI, which is calculated before QBI.
               </span>
             </p>
           </div>
+
+          {adjustedNet > 0 && adjustedNet > QBI_THRESHOLD_SINGLE * 0.75 && (
+            <div className="flex items-start gap-2 rounded-lg bg-warning-soft text-warning p-3 mt-3 text-sm">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>
+                <span className="font-medium">QBI deduction may be limited.</span>{' '}
+                Your rental income alone is {formatCurrency(adjustedNet)}, which approaches the
+                QBI phase-out threshold ({formatCurrency(QBI_THRESHOLD_SINGLE)} single / {formatCurrency(QBI_THRESHOLD_MFJ)} MFJ).
+                If your total taxable income from all sources exceeds these thresholds, the 20% deduction shown
+                above may be reduced or eliminated. Consult your tax preparer for the exact amount.
+              </span>
+            </div>
+          )}
 
           <p className="text-xs text-muted mt-3">
             Rental income is generally passive and not subject to self-employment tax.
@@ -1907,16 +1927,16 @@ export function TaxReport() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-line bg-canvas">
-                    <th className="text-left py-2.5 px-4 font-medium">Vendor</th>
-                    <th className="text-right py-2.5 px-4 font-medium">Total Paid</th>
-                    <th className="text-center py-2.5 px-4 font-medium">1099 Required?</th>
+                  <tr className="border-b border-line bg-canvas/60">
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Vendor</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Total Paid</th>
+                    <th className="text-center py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">1099 Required?</th>
                   </tr>
                 </thead>
                 <tbody>
                   {main.vendors1099.map(v => (
                     <tr key={v.name} className="border-b border-line last:border-0">
-                      <td className="py-2.5 px-4 font-medium text-ink">{v.name}</td>
+                      <td className="py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider text-ink">{v.name}</td>
                       <td className="py-2.5 px-4 text-right tnum font-semibold">{formatCurrency(v.total)}</td>
                       <td className="py-2.5 px-4 text-center">
                         {v.total >= VENDOR_1099_THRESHOLD ? (
@@ -1960,7 +1980,7 @@ export function TaxReport() {
                 value={mileage || ''}
                 placeholder="Enter miles"
                 onChange={(e) => saveMileage(Number(e.target.value) || 0)}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
             </div>
             <div className="rounded-xl border border-line p-4">
@@ -2062,31 +2082,31 @@ export function TaxReport() {
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={multiYearData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <CartesianGrid {...CHART_GRID} />
+              <XAxis dataKey="year" {...CHART_AXIS} />
+              <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} {...CHART_AXIS} />
+              <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
               <Legend />
-              <Line type="monotone" dataKey="income" stroke="#2c7a58" strokeWidth={2} name="Income" dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="expenses" stroke="#b98a5e" strokeWidth={2} name="Expenses" dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="income" stroke={INCOME_COLOR} strokeWidth={2} name="Income" dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="expenses" stroke={EXPENSE_COLOR} strokeWidth={2} name="Expenses" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="netIncome" stroke="#24503f" strokeWidth={3} name="Net Income" dot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
           <div className="overflow-x-auto mt-4">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line bg-canvas">
-                  <th className="text-left py-2.5 px-4 font-medium">Year</th>
-                  <th className="text-right py-2.5 px-4 font-medium">Income</th>
-                  <th className="text-right py-2.5 px-4 font-medium">Expenses</th>
-                  <th className="text-right py-2.5 px-4 font-medium">Net Income</th>
-                  <th className="text-right py-2.5 px-4 font-medium">Margin</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Year</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Income</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Expenses</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Net Income</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Margin</th>
                 </tr>
               </thead>
               <tbody>
                 {multiYearData.map(d => (
                   <tr key={d.year} className={cn('border-b border-line last:border-0', d.year === String(year) && 'bg-primary-soft/20 font-medium')}>
-                    <td className="py-2.5 px-4 font-medium">{d.year}</td>
+                    <td className="py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">{d.year}</td>
                     <td className="py-2.5 px-4 text-right tnum text-positive">{formatCurrency(d.income)}</td>
                     <td className="py-2.5 px-4 text-right tnum text-danger">{formatCurrency(d.expenses)}</td>
                     <td className={cn('py-2.5 px-4 text-right tnum font-semibold', d.netIncome >= 0 ? 'text-positive' : 'text-danger')}>

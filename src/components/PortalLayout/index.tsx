@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, CreditCard, Wrench, MessageSquare, FileText, LayoutDashboard, Users, Building2, Smartphone, ChevronRight, Megaphone } from 'lucide-react';
 import logo from '../../assets/mh-dunn-logo.png';
-import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useAutoEnablePush } from '../../lib/useAutoPush';
 import { portalApi, type PortalAnnouncement } from '../../lib/api';
@@ -100,42 +99,42 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <header className={cn('bg-surface/80 backdrop-blur-md sticky top-0 z-30 sticky-header', scrolled && 'scrolled')}>
+      <header className={cn('bg-[#24503f] sticky top-0 z-30 sticky-header', scrolled && 'shadow-[0_2px_12px_rgba(20,45,34,0.3)]')}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <Link to="/portal" className="flex items-center">
-            <img src={logo} alt="MH Dunn Property" className="h-9 w-auto" />
+            <img src={logo} alt="MH Dunn Property" className="h-9 w-auto brightness-0 invert" />
           </Link>
 
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-ink leading-tight">
+              <p className="text-sm font-medium text-white leading-tight">
                 {user?.firstName} {user?.lastName}
               </p>
-              <p className="eyebrow leading-tight">{isRealtor && user?.companyName ? user.companyName : user?.role.name}</p>
+              <p className="text-[10px] uppercase tracking-[0.15em] font-semibold text-[#c9a96e] leading-tight">{isRealtor && user?.companyName ? user.companyName : user?.role.name}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
+            <button onClick={handleSignOut} className="text-sm font-medium text-white/70 hover:text-white border border-white/20 rounded-lg px-3 py-1.5 transition-colors hover:border-white/40">
               Sign out
-            </Button>
+            </button>
           </div>
         </div>
       </header>
 
       {/* Announcement banner: visible on every portal page for tenants. */}
       {isTenant && announcements.length > 0 && (
-        <div className="bg-primary/[0.06] border-b border-primary/15">
+        <div className="bg-[#1c4032] border-b border-white/10">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <Link
               to="/portal/announcements"
               className="flex items-center gap-3 py-3 group"
             >
-              <Megaphone className="h-4 w-4 text-primary flex-shrink-0" />
-              <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
+              <Megaphone className="h-4 w-4 text-[#c9a96e] flex-shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-medium text-white truncate">
                 {announcements[0].title}
                 {announcements.length > 1 && (
-                  <span className="text-muted font-normal"> +{announcements.length - 1} more</span>
+                  <span className="text-white/50 font-normal"> +{announcements.length - 1} more</span>
                 )}
               </span>
-              <ChevronRight className="h-4 w-4 text-primary flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              <ChevronRight className="h-4 w-4 text-[#c9a96e] flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>
         </div>
@@ -148,7 +147,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
       {/* Native app: fixed bottom tab bar for every portal role. */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-md border-t border-line"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#24503f] border-t border-white/10"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="max-w-md mx-auto flex items-stretch justify-around px-1">
@@ -162,13 +161,13 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                   className={cn(
                     'relative flex flex-col items-center gap-1 py-2.5 px-2 flex-1',
                     'transition-[transform,color] duration-200 ease-out active:scale-90 active:duration-75',
-                    isActive ? 'text-primary' : 'text-faint hover:text-muted'
+                    isActive ? 'text-[#c9a96e]' : 'text-white/50 hover:text-white/70'
                   )}
                 >
                   <span className="relative">
                     <Icon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.2 : 1.8} />
                     {tab.path === '/portal/messages' && unread > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-surface">
+                      <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-[#24503f]">
                         {unread}
                       </span>
                     )}

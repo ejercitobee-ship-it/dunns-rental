@@ -7,10 +7,10 @@ import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notif
 import { sendPushToTenant } from '../../../../../lib/push';
 
 /**
- * POST /api/portal/handyman/jobs/:id/claim — the handyman takes an open job.
- * Only an unassigned, submitted request their trade matches can be claimed, in
- * one guarded UPDATE so two handymen cannot both win the same job. The tenant
- * and office are emailed best-effort.
+ * POST /api/portal/handyman/jobs/:id/claim — the handyman takes an available job.
+ * Only an unassigned, office-released (available) request their trade matches
+ * can be claimed, in one guarded UPDATE so two handymen cannot both win the
+ * same job. The tenant and office are emailed best-effort.
  */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
@@ -33,18 +33,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('This job is not in your trades', 403);
     }
 
-    // Guarded so the claim only lands while the job is still open and unclaimed.
+    // Guarded so the claim only lands while the job is available and unclaimed.
     const res = await env.DB.prepare(
       `UPDATE maintenance_requests
           SET assigned_handyman_id = ?, status = 'assigned', updated_at = unixepoch()
-        WHERE id = ? AND assigned_handyman_id IS NULL AND status = 'submitted'`
+        WHERE id = ? AND assigned_handyman_id IS NULL AND status = 'available'`
     )
       .bind(handyman.id, jobId)
       .run();
     if (!res.meta.changes) return jsonError('This job was already taken', 409);
 
     // Log after the guarded update so only successful claims are recorded.
-    await logStatusChange(env.DB, jobId, 'submitted', 'assigned', auth.id, auth.name, 'Claimed job').run();
+    await logStatusChange(env.DB, jobId, 'available', 'assigned', auth.id, auth.name, 'Claimed job').run();
 
     const row = await loadOwnedJob(env, jobId, handyman.id);
     if (!row) return serverError();

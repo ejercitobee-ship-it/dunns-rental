@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { vendorFormApi, type VendorFormInfo } from '../lib/api';
+import { EmailInput } from '../components/ui/EmailInput';
 
 const PAYMENT_METHODS = [
   { value: 'check', label: 'Check' },
@@ -171,8 +172,7 @@ export function VendorFormPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-[#1b1a17] mb-1.5">Email</label>
-            <input
-              type="email"
+            <EmailInput
               value={form.vendorEmail}
               onChange={e => setForm(f => ({ ...f, vendorEmail: e.target.value }))}
               className="w-full border border-[#e7e4dd] rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#24503f]/25"

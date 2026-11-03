@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -490,16 +491,16 @@ export function CapitalProjects() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="eyebrow">Finances</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Capital Projects</h1>
-        </div>
-        <Button variant="default" onClick={() => { resetForm(); setShowCreate(true); }}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          New Project
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Finances"
+        title="Capital Projects"
+        actions={
+          <Button variant="default" onClick={() => { resetForm(); setShowCreate(true); }}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Project
+          </Button>
+        }
+      />
 
       {projects.length === 0 && !loading && (
         <Card>

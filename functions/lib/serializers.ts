@@ -221,6 +221,7 @@ export function serializePortalLease(r: Row) {
     // Renewal fields needed by leasesOwingMonth for overlap de-duplication.
     renewalStatus: full.renewalStatus,
     renewedFromLeaseId: full.renewedFromLeaseId,
+    rentDueDay: full.rentDueDay,
   };
 }
 
@@ -301,6 +302,7 @@ export function serializeExpense(r: Row) {
     paymentAccount: r.payment_account ?? undefined,
     expenseType: r.expense_type ?? undefined,
     classificationStatus: r.classification_status ?? undefined,
+    recoveryYears: r.recovery_years != null ? Number(r.recovery_years) : undefined,
   };
 }
 

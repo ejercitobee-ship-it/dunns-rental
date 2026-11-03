@@ -7,8 +7,10 @@ import { Badge } from './ui/Badge';
 import { useToast } from '../context/ToastContext';
 import { prospectiveApi, type ProspectiveTenant } from '../lib/api';
 import { PROSPECTIVE_STATUS } from '../lib/prospectiveStatus';
+import { formatPhone } from '../lib/utils';
+import { EmailInput } from './ui/EmailInput';
 
-const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25';
+const inputClass = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10';
 
 export function ProspectiveTenantsPanel({ canCreate }: { canCreate: boolean }) {
   const { showToast } = useToast();
@@ -63,8 +65,8 @@ export function ProspectiveTenantsPanel({ canCreate }: { canCreate: boolean }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <input className={inputClass} placeholder="First name *" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} />
               <input className={inputClass} placeholder="Last name *" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} />
-              <input className={inputClass} placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              <input className={inputClass} placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <EmailInput className={inputClass} placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              <input className={inputClass} placeholder="Phone" value={formatPhone(form.phone)} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
             </div>
             <textarea className={inputClass} rows={2} placeholder="Notes (optional)" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
             <div className="flex justify-end gap-2">
@@ -101,7 +103,7 @@ export function ProspectiveTenantsPanel({ canCreate }: { canCreate: boolean }) {
                         <Badge variant={s.variant}>{s.label}</Badge>
                       </div>
                       <p className="text-xs text-muted truncate mt-0.5">
-                        {[p.email, p.phone].filter(Boolean).join(' · ') || 'No contact details'}
+                        {[p.email, p.phone ? formatPhone(p.phone) : null].filter(Boolean).join(' · ') || 'No contact details'}
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-faint flex-shrink-0" />

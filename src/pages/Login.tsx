@@ -166,7 +166,7 @@ export function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                  className="w-full pl-10 pr-4 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40"
                   placeholder="Enter your email"
                   required
                 />
@@ -181,7 +181,7 @@ export function Login() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                  className="w-full pl-10 pr-12 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40"
                   placeholder="Enter your password"
                   required
                 />
@@ -210,7 +210,7 @@ export function Login() {
                   autoFocus
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="w-full px-4 py-3 border border-line rounded-lg bg-surface tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                  className="w-full px-4 py-3 border border-line rounded-lg bg-surface tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40"
                   placeholder="123456"
                 />
                 {twoFactorMethod === 'email' ? (
@@ -233,7 +233,7 @@ export function Login() {
             {!twoFactorMode && (
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded border-line-strong text-primary focus:ring-primary/30 accent-[#24503f]" />
+                  <input type="checkbox" className="w-4 h-4 rounded border-line-strong text-primary focus:ring-primary/10 accent-[#24503f]" />
                   <span className="text-sm text-muted">Remember me</span>
                 </label>
                 <Link to="/forgot-password" className="text-sm text-primary hover:text-primary-hover font-medium">

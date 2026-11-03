@@ -3,9 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { MessageSquare, ArrowLeft, ExternalLink, Inbox, PenSquare, Search, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { messagesApi, vendorMessagesApi, realtorMessagesApi, tenantsApi, placeLabel, type Message, type MessageThread, type VendorMessage, type VendorThread, type RealtorMessage, type RealtorThread } from '../lib/api';
 import { useToast } from '../context/ToastContext';
-import { cn } from '../lib/utils';
+import { cn, formatPhone } from '../lib/utils';
 import { MessageThread as ThreadView, type ChatItem } from '../components/MessageThread';
 import type { Tenant } from '../types';
 
@@ -60,7 +61,7 @@ export function Messages() {
     ? vendorThreads.map((v) => ({
         id: v.handymanId,
         title: v.name,
-        subtitle: v.phone || undefined,
+        subtitle: v.phone ? formatPhone(v.phone) : undefined,
         unread: v.unread,
         lastBody: v.lastBody,
         lastSender: v.lastSender,
@@ -68,7 +69,7 @@ export function Messages() {
     : realtorThreads.map((r) => ({
         id: r.realtorUserId,
         title: r.name,
-        subtitle: r.companyName || r.phone || undefined,
+        subtitle: r.companyName || (r.phone ? formatPhone(r.phone) : undefined),
         unread: r.unread,
         lastBody: r.lastBody,
         lastSender: r.lastSender,
@@ -244,16 +245,15 @@ export function Messages() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="eyebrow">Inbox</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Messages</h1>
-        </div>
-        <div className="relative" ref={pickerRef}>
-          <Button variant="outline" onClick={openNewMessage}>
-            <PenSquare className="h-4 w-4 mr-2" />
-            New Message
-          </Button>
+      <PageHeader
+        eyebrow="Inbox"
+        title="Messages"
+        actions={
+          <div className="relative" ref={pickerRef}>
+            <Button variant="outline" onClick={openNewMessage}>
+              <PenSquare className="h-4 w-4 mr-2" />
+              New Message
+            </Button>
           {showPicker && (
             <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-line rounded-xl shadow-lg z-50 overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 border-b border-line">
@@ -306,8 +306,9 @@ export function Messages() {
               </div>
             </div>
           )}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Channel tabs */}
       <div className="rounded-xl border border-line bg-surface p-1 inline-flex -mt-2">

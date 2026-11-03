@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Plus, Search, Mail, Phone, Edit2, Trash2, UserCheck, UserX, KeyRound, UserPlus, Users as UsersIcon, Shield, ShieldCheck, DollarSign } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
 import { Avatar } from '../components/ui/Avatar';
 import { Modal } from '../components/ui/Modal';
@@ -13,6 +15,9 @@ import type { Property, Unit } from '../types';
 import type { User } from '../types/auth';
 import { userCategory, type UserCategory } from '../lib/userCategory';
 import { HandymenManager } from '../components/HandymenManager';
+import { EmailInput } from '../components/ui/EmailInput';
+import { TextInput, SelectInput } from '../components/ui/FormField';
+import { formatPhone } from '../lib/utils';
 import { UserPermissions } from '../components/UserPermissions';
 
 export function Users() {
@@ -343,63 +348,25 @@ export function Users() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Users</h1>
-        </div>
-        {tab === 'internal' && canManageUsers && (
-          <Button onClick={() => { resetForm(); setIsAddUserOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Member
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Administration"
+        title="Users"
+        actions={
+          tab === 'internal' && canManageUsers ? (
+            <Button onClick={() => { resetForm(); setIsAddUserOpen(true); }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Member
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Members</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UsersIcon /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{users.length}</div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Active</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><UserCheck /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-positive tnum">{users.filter(u => u.isActive).length}</div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Roles</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Shield /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{roles.length}</div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Admins</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><KeyRound /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-primary tnum">
-              {users.filter(u => u.roleId === 'super_admin' || u.roleId === 'admin').length}
-            </div>
-          </div>
-        </Card>
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Total Members" value={users.length} icon={<UsersIcon />} />
+        <StatCard title="Active" value={users.filter(u => u.isActive).length} icon={<UserCheck />} valueColor="text-positive" />
+        <StatCard title="Roles" value={roles.length} icon={<Shield />} />
+        <StatCard title="Admins" value={users.filter(u => u.roleId === 'super_admin' || u.roleId === 'admin').length} icon={<KeyRound />} valueColor="text-primary" />
       </div>
 
       {/* Search */}
@@ -408,7 +375,7 @@ export function Users() {
         <input
           type="text"
           placeholder="Search team members..."
-          className="w-full pl-10 pr-4 py-2 border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -442,15 +409,15 @@ export function Users() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-canvas">
-                  <th className="text-left py-3 px-4 font-semibold text-ink">Member</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink">Contact</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink">Role</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink">Department</th>
-                  <th className="text-center py-3 px-4 font-semibold text-ink">Status</th>
-                  <th className="text-right py-3 px-4 font-semibold text-ink">Actions</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Member</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Contact</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Department</th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -481,7 +448,7 @@ export function Users() {
                         {user.phone && (
                           <div className="flex items-center gap-2 text-sm">
                             <Phone className="h-3 w-3 text-faint" />
-                            <span className="text-muted">{user.phone}</span>
+                            <span className="text-muted">{formatPhone(user.phone)}</span>
                           </div>
                         )}
                       </div>
@@ -633,7 +600,7 @@ export function Users() {
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-xs text-muted flex-wrap">
                               {user.phone && (
-                                <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{user.phone}</span>
+                                <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{formatPhone(user.phone)}</span>
                               )}
                               <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{user.email}</span>
                             </div>
@@ -697,53 +664,34 @@ export function Users() {
       <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add Team Member">
         <form onSubmit={handleAddUser} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">First Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={userForm.firstName} onChange={(e) => setUserForm({...userForm, firstName: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Last Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={userForm.lastName} onChange={(e) => setUserForm({...userForm, lastName: e.target.value})} />
-            </div>
+            <TextInput label="First Name" name="addFirstName" required
+              value={userForm.firstName} onChange={(e) => setUserForm({...userForm, firstName: e.target.value})} />
+            <TextInput label="Last Name" name="addLastName" required
+              value={userForm.lastName} onChange={(e) => setUserForm({...userForm, lastName: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Email *</label>
-            <input type="email" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+            <EmailInput required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
               value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Phone</label>
-            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.phone} onChange={(e) => setUserForm({...userForm, phone: e.target.value})} />
-          </div>
+          <TextInput label="Phone" name="addPhone" type="tel"
+            value={formatPhone(userForm.phone)} onChange={(e) => setUserForm({...userForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} />
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Role *</label>
-            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
-              {assignableRoles.map(role => (
-                <option key={role.id} value={role.id}>{role.name}</option>
-              ))}
-            </select>
-          </div>
+          <SelectInput label="Role" name="addRole" required
+            value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
+            {assignableRoles.map(role => (
+              <option key={role.id} value={role.id}>{role.name}</option>
+            ))}
+          </SelectInput>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Department</label>
-            <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})}
-              placeholder="e.g., Property Management" />
-          </div>
+          <TextInput label="Department" name="addDepartment" placeholder="e.g., Property Management"
+            value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})} />
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Birthdate</label>
-            <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.birthdate} onChange={(e) => setUserForm({...userForm, birthdate: e.target.value})} />
-            <p className="text-xs text-muted mt-1">Shows on the team calendar automatically.</p>
-          </div>
+          <TextInput label="Birthdate" name="addBirthdate" type="date"
+            hint="Shows on the team calendar automatically."
+            value={userForm.birthdate} onChange={(e) => setUserForm({...userForm, birthdate: e.target.value})} />
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="isActive" className="w-4 h-4 rounded border-line-strong"
@@ -766,51 +714,33 @@ export function Users() {
       <Modal isOpen={isEditUserOpen} onClose={() => setIsEditUserOpen(false)} title="Edit Team Member">
         <form onSubmit={handleUpdateUser} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">First Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={userForm.firstName} onChange={(e) => setUserForm({...userForm, firstName: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Last Name *</label>
-              <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={userForm.lastName} onChange={(e) => setUserForm({...userForm, lastName: e.target.value})} />
-            </div>
+            <TextInput label="First Name" name="editFirstName" required
+              value={userForm.firstName} onChange={(e) => setUserForm({...userForm, firstName: e.target.value})} />
+            <TextInput label="Last Name" name="editLastName" required
+              value={userForm.lastName} onChange={(e) => setUserForm({...userForm, lastName: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Email *</label>
-            <input type="email" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+            <EmailInput required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
               value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Phone</label>
-            <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.phone} onChange={(e) => setUserForm({...userForm, phone: e.target.value})} />
-          </div>
+          <TextInput label="Phone" name="editPhone" type="tel"
+            value={formatPhone(userForm.phone)} onChange={(e) => setUserForm({...userForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} />
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Role *</label>
-            <select required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
-              {assignableRoles.map(role => (
-                <option key={role.id} value={role.id}>{role.name}</option>
-              ))}
-            </select>
-          </div>
+          <SelectInput label="Role" name="editRole" required
+            value={userForm.roleId} onChange={(e) => setUserForm({...userForm, roleId: e.target.value})}>
+            {assignableRoles.map(role => (
+              <option key={role.id} value={role.id}>{role.name}</option>
+            ))}
+          </SelectInput>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Department</label>
-            <input type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})} />
-          </div>
+          <TextInput label="Department" name="editDepartment"
+            value={userForm.department} onChange={(e) => setUserForm({...userForm, department: e.target.value})} />
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Birthdate</label>
-            <input type="date" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={userForm.birthdate} onChange={(e) => setUserForm({...userForm, birthdate: e.target.value})} />
-          </div>
+          <TextInput label="Birthdate" name="editBirthdate" type="date"
+            value={userForm.birthdate} onChange={(e) => setUserForm({...userForm, birthdate: e.target.value})} />
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="editIsActive" className="w-4 h-4 rounded border-line-strong"
@@ -844,56 +774,29 @@ export function Users() {
       <Modal isOpen={isAddRealtorOpen} onClose={() => setAddRealtorOpen(false)} title={editingRealtorId ? 'Edit realtor' : 'Add realtor'}>
         <form onSubmit={handleSaveRealtor} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">First name *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={realtorForm.firstName}
-                onChange={(e) => setRealtorForm({ ...realtorForm, firstName: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Last name</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                value={realtorForm.lastName}
-                onChange={(e) => setRealtorForm({ ...realtorForm, lastName: e.target.value })}
-              />
-            </div>
+            <TextInput label="First name" name="realtorFirstName" required
+              value={realtorForm.firstName}
+              onChange={(e) => setRealtorForm({ ...realtorForm, firstName: e.target.value })} />
+            <TextInput label="Last name" name="realtorLastName"
+              value={realtorForm.lastName}
+              onChange={(e) => setRealtorForm({ ...realtorForm, lastName: e.target.value })} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Email *</label>
-            <input
-              type="email"
+            <EmailInput
               required
               placeholder="For their portal login and invite"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
               value={realtorForm.email}
               onChange={(e) => setRealtorForm({ ...realtorForm, email: e.target.value })}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Phone</label>
-            <input
-              type="tel"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={realtorForm.phone}
-              onChange={(e) => setRealtorForm({ ...realtorForm, phone: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Business name</label>
-            <input
-              type="text"
-              placeholder="Brokerage or company name"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={realtorForm.companyName}
-              onChange={(e) => setRealtorForm({ ...realtorForm, companyName: e.target.value })}
-            />
-          </div>
+          <TextInput label="Phone" name="realtorPhone" type="tel"
+            value={formatPhone(realtorForm.phone)}
+            onChange={(e) => setRealtorForm({ ...realtorForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+          <TextInput label="Business name" name="realtorCompany" placeholder="Brokerage or company name"
+            value={realtorForm.companyName}
+            onChange={(e) => setRealtorForm({ ...realtorForm, companyName: e.target.value })} />
           {!editingRealtorId && (
             <p className="text-xs text-muted">An invite to set their password will be emailed when you save.</p>
           )}
@@ -920,66 +823,46 @@ export function Users() {
                 min="0.01"
                 required
                 placeholder="0.00"
-                className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
                 value={commissionForm.amount}
                 onChange={(e) => setCommissionForm({ ...commissionForm, amount: e.target.value })}
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Description *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Commission for tenant placement, John Smith"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={commissionForm.description}
-              onChange={(e) => setCommissionForm({ ...commissionForm, description: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Property</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={commissionForm.propertyId}
-              onChange={(e) => setCommissionForm({ ...commissionForm, propertyId: e.target.value, unitId: '' })}
-            >
-              <option value="">No specific property</option>
-              {commissionProperties.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+          <TextInput label="Description" name="commissionDesc" required
+            placeholder="e.g. Commission for tenant placement, John Smith"
+            value={commissionForm.description}
+            onChange={(e) => setCommissionForm({ ...commissionForm, description: e.target.value })} />
+          <SelectInput label="Property" name="commissionProperty"
+            value={commissionForm.propertyId}
+            onChange={(e) => setCommissionForm({ ...commissionForm, propertyId: e.target.value, unitId: '' })}>
+            <option value="">No specific property</option>
+            {commissionProperties.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </SelectInput>
           {commissionForm.propertyId && commissionUnits.filter(u => u.propertyId === commissionForm.propertyId).length > 0 && (
           <div>
-            <label className="block text-sm font-medium mb-1">Unit</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+            <SelectInput label="Unit" name="commissionUnit"
               value={commissionForm.unitId}
-              onChange={(e) => setCommissionForm({ ...commissionForm, unitId: e.target.value })}
-            >
+              onChange={(e) => setCommissionForm({ ...commissionForm, unitId: e.target.value })}>
               <option value="">No specific unit</option>
               {commissionUnits.filter(u => u.propertyId === commissionForm.propertyId).map((u) => (
                 <option key={u.id} value={u.id}>{u.unitNumber}</option>
               ))}
-            </select>
+            </SelectInput>
           </div>
           )}
-          <div>
-            <label className="block text-sm font-medium mb-1">Payment method</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-              value={commissionForm.paymentMethod}
-              onChange={(e) => setCommissionForm({ ...commissionForm, paymentMethod: e.target.value })}
-            >
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="check">Check</option>
-              <option value="money_order">Money order</option>
-              <option value="zelle">Zelle</option>
-              <option value="cash">Cash</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+          <SelectInput label="Payment method" name="commissionPayMethod"
+            value={commissionForm.paymentMethod}
+            onChange={(e) => setCommissionForm({ ...commissionForm, paymentMethod: e.target.value })}>
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="check">Check</option>
+            <option value="money_order">Money order</option>
+            <option value="zelle">Zelle</option>
+            <option value="cash">Cash</option>
+            <option value="other">Other</option>
+          </SelectInput>
           <p className="text-xs text-muted">This records the commission as an expense and emails a payment confirmation to the realtor.</p>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setCommissionTarget(null)}>Cancel</Button>
@@ -1011,43 +894,31 @@ export function Users() {
             unlinkedTenants.length === 0 ? (
               <p className="text-sm text-muted">Every tenant already has a realtor. Create a new one instead.</p>
             ) : (
-              <div>
-                <label className="block text-sm font-medium mb-1">Tenant with no realtor yet</label>
-                <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                  value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)}>
-                  <option value="">Choose a tenant</option>
-                  {unlinkedTenants.map(t => (
-                    <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
-                  ))}
-                </select>
-              </div>
+              <SelectInput label="Tenant with no realtor yet" name="linkTenant"
+                value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)}>
+                <option value="">Choose a tenant</option>
+                {unlinkedTenants.map(t => (
+                  <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
+                ))}
+              </SelectInput>
             )
           ) : (
             <>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">First Name *</label>
-                  <input type="text" required={addTenantMode === 'create'} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                    value={tenantForm.firstName} onChange={(e) => setTenantForm({...tenantForm, firstName: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Last Name *</label>
-                  <input type="text" required={addTenantMode === 'create'} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                    value={tenantForm.lastName} onChange={(e) => setTenantForm({...tenantForm, lastName: e.target.value})} />
-                </div>
+                <TextInput label="First Name" name="tenantFirstName" required={addTenantMode === 'create'}
+                  value={tenantForm.firstName} onChange={(e) => setTenantForm({...tenantForm, firstName: e.target.value})} />
+                <TextInput label="Last Name" name="tenantLastName" required={addTenantMode === 'create'}
+                  value={tenantForm.lastName} onChange={(e) => setTenantForm({...tenantForm, lastName: e.target.value})} />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Email</label>
-                <input type="email" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
+                <EmailInput className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
                   value={tenantForm.email} onChange={(e) => setTenantForm({...tenantForm, email: e.target.value})} />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
-                <input type="tel" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/30"
-                  value={tenantForm.phone} onChange={(e) => setTenantForm({...tenantForm, phone: e.target.value})} />
-              </div>
+              <TextInput label="Phone" name="tenantPhone" type="tel"
+                value={formatPhone(tenantForm.phone)} onChange={(e) => setTenantForm({...tenantForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} />
             </>
           )}
 

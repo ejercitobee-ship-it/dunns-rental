@@ -6,7 +6,7 @@ import { serializeJob, JOB_COLUMNS, JOB_JOINS, type JobRow } from '../../../lib/
 
 /**
  * GET /api/portal/handyman/jobs — the handyman's world in one call:
- *   available: unassigned, submitted requests matching their trades
+ *   available: unassigned, office-released requests matching their trades
  *   mine:      requests assigned to them that are not cancelled
  * Both are scoped server-side; nothing here trusts a client id.
  */
@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const availableRows = await env.DB.prepare(
       `SELECT ${JOB_COLUMNS} ${JOB_JOINS}
-        WHERE m.assigned_handyman_id IS NULL AND m.status = 'submitted'
+        WHERE m.assigned_handyman_id IS NULL AND m.status = 'available'
         ORDER BY m.created_at DESC`
     ).all<JobRow>();
 

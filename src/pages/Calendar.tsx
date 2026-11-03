@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { calendarApi } from '../lib/api';
@@ -890,30 +892,29 @@ export function Calendar() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Schedule</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Calendar</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="rounded-xl border border-line bg-surface p-1 inline-flex text-xs">
-            {([['today', 'Today', Sun], ['week', 'Week', List], ['calendar', 'Month', Grid3X3], ['agenda', 'Agenda', CalendarIcon]] as const).map(([key, label, Icon]) => (
-              <button
-                key={key}
-                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all font-medium ${view === key ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'}`}
-                onClick={() => setView(key as typeof view)}
-              ><Icon className="h-3.5 w-3.5" /> {label}</button>
-            ))}
+      <PageHeader
+        eyebrow="Schedule"
+        title="Calendar"
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="rounded-xl border border-line bg-surface p-1 inline-flex text-xs">
+              {([['today', 'Today', Sun], ['week', 'Week', List], ['calendar', 'Month', Grid3X3], ['agenda', 'Agenda', CalendarIcon]] as const).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all font-medium ${view === key ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-ink'}`}
+                  onClick={() => setView(key as typeof view)}
+                ><Icon className="h-3.5 w-3.5" /> {label}</button>
+              ))}
+            </div>
+            <button
+              onClick={() => openNew()}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> New
+            </button>
           </div>
-          <button
-            onClick={() => openNew()}
-            className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" /> New
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Search + Filters */}
       <div className="flex flex-wrap gap-3 items-start">
@@ -923,7 +924,7 @@ export function Calendar() {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search events..."
-            className="w-full pl-9 pr-3 py-1.5 text-sm border border-line rounded-lg bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+            className="w-full pl-9 pr-3 py-1.5 text-sm border border-line rounded-lg bg-surface text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
           />
           {searchQuery && (
             <button
@@ -1299,98 +1300,79 @@ export function Calendar() {
               </button>
             </div>
             <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Title *</label>
-                <input
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  placeholder="Event title"
+              <TextInput
+                label="Title"
+                required
+                value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="Event title"
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <TextInput
+                  label="Start Date"
+                  required
+                  type="date"
+                  value={form.eventDate}
+                  onChange={e => setForm(f => ({ ...f, eventDate: e.target.value }))}
+                />
+                <TextInput
+                  label="End Date"
+                  type="date"
+                  value={form.endDate}
+                  onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                  min={form.eventDate || undefined}
+                  hint={!form.endDate ? 'Leave blank for a single day.' : undefined}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Start Date *</label>
-                  <input
-                    type="date"
-                    value={form.eventDate}
-                    onChange={e => setForm(f => ({ ...f, eventDate: e.target.value }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={form.endDate}
-                    onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
-                    min={form.eventDate || undefined}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  />
-                  {!form.endDate && <p className="text-xs text-muted mt-1">Leave blank for a single day.</p>}
-                </div>
+                <TextInput
+                  label="Start Time"
+                  type="time"
+                  value={form.eventTime}
+                  onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
+                />
+                <TextInput
+                  label="End Time"
+                  type="time"
+                  value={form.endTime}
+                  onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
+                  min={!form.endDate && form.eventTime ? form.eventTime : undefined}
+                  hint={!form.eventTime ? 'Set start time first.' : undefined}
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    value={form.eventTime}
-                    onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">End Time</label>
-                  <input
-                    type="time"
-                    value={form.endTime}
-                    onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
-                    min={!form.endDate && form.eventTime ? form.eventTime : undefined}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  />
-                  {!form.eventTime && <p className="text-xs text-muted mt-1">Set start time first.</p>}
-                </div>
-              </div>
+              <SelectInput
+                label="Category"
+                required
+                value={form.category}
+                onChange={e => {
+                  const cat = e.target.value as CalendarCategory;
+                  setForm(f => ({
+                    ...f,
+                    category: cat,
+                    visibility: cat === 'personal' && !editingEvent ? 'personal' : f.visibility,
+                  }));
+                }}
+              >
+                {CATEGORY_GROUPS.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.items.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+                  </optgroup>
+                ))}
+              </SelectInput>
 
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Category *</label>
-                <select
-                  value={form.category}
-                  onChange={e => {
-                    const cat = e.target.value as CalendarCategory;
-                    setForm(f => ({
-                      ...f,
-                      category: cat,
-                      // Auto-default personal category to personal visibility
-                      visibility: cat === 'personal' && !editingEvent ? 'personal' : f.visibility,
-                    }));
-                  }}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                >
-                  {CATEGORY_GROUPS.map(g => (
-                    <optgroup key={g.label} label={g.label}>
-                      {g.items.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Priority</label>
-                <select
-                  value={form.priority}
-                  onChange={e => setForm(f => ({ ...f, priority: e.target.value as CalendarPriority }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
+              <SelectInput
+                label="Priority"
+                value={form.priority}
+                onChange={e => setForm(f => ({ ...f, priority: e.target.value as CalendarPriority }))}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </SelectInput>
 
               {/* Visibility */}
               <div>
@@ -1469,17 +1451,14 @@ export function Calendar() {
               </div>
 
               {propertyUnits.length > 0 && form.propertyIds.size === 1 && (
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1">Unit</label>
-                  <select
-                    value={form.unitId}
-                    onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))}
-                    className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  >
-                    <option value="">All units</option>
-                    {propertyUnits.map(u => <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>)}
-                  </select>
-                </div>
+                <SelectInput
+                  label="Unit"
+                  value={form.unitId}
+                  onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))}
+                >
+                  <option value="">All units</option>
+                  {propertyUnits.map(u => <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>)}
+                </SelectInput>
               )}
 
               <div>
@@ -1496,7 +1475,7 @@ export function Calendar() {
                   <select
                     value={form.recurrenceRule}
                     onChange={e => setForm(f => ({ ...f, recurrenceRule: e.target.value as RecurrenceRule }))}
-                    className="mt-2 w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    className="mt-2 w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/10"
                   >
                     <option value="">Select frequency</option>
                     <option value="daily">Daily</option>
@@ -1516,7 +1495,7 @@ export function Calendar() {
                 <select
                   value={form.reminderHours}
                   onChange={e => setForm(f => ({ ...f, reminderHours: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/10"
                 >
                   <option value="">No reminder</option>
                   <option value="24">24 hours before</option>
@@ -1526,27 +1505,21 @@ export function Calendar() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  rows={2}
-                  placeholder="Optional details"
-                />
-              </div>
+              <TextareaInput
+                label="Description"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                rows={2}
+                placeholder="Optional details"
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  rows={2}
-                  placeholder="Internal notes"
-                />
-              </div>
+              <TextareaInput
+                label="Notes"
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                rows={2}
+                placeholder="Internal notes"
+              />
             </div>
             <div className="flex items-center justify-between p-5 border-t border-line shrink-0">
               <div className="flex items-center gap-3">

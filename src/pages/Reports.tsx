@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID, INCOME_COLOR, EXPENSE_COLOR } from '../components/ui/chartConstants';
 import { Badge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, getMonthName, cn } from '../lib/utils';
 import { useApp } from '../context/AppContext';
@@ -55,7 +57,7 @@ function useReportFilters() {
            propertyFilter, setPropertyFilter, range, availableYears };
 }
 
-const selectCls = 'px-3 py-2 border border-line rounded-lg text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/25';
+const selectCls = 'px-3 py-2 border border-line rounded-lg text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/10';
 
 interface FilterBarProps {
   f: ReturnType<typeof useReportFilters>;
@@ -399,14 +401,11 @@ export function Reports() {
 
   return (
     <div className="space-y-6">
-      {/* ── Page header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Portfolio analytics</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Financial Reports</h1>
-          <p className="text-sm text-muted mt-1.5">Comprehensive financial analysis across all properties.</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Portfolio analytics"
+        title="Financial Reports"
+        description="Comprehensive financial analysis across all properties."
+      />
 
       {/* ── Tab bar ─────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-line bg-surface p-1 flex gap-1 overflow-x-auto">
@@ -471,12 +470,12 @@ export function Reports() {
             <div className="overflow-x-auto -mx-6 -mb-6">
               <table className="w-full min-w-[720px]">
                 <thead>
-                  <tr className="border-y border-line bg-canvas">
-                    <th className="text-left py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Property & Unit</th>
-                    <th className="text-left py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Occupants</th>
-                    <th className="text-right py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Monthly Rent</th>
-                    <th className="text-left py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Lease Ends</th>
-                    <th className="text-center py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Status</th>
+                  <tr className="border-b border-line bg-canvas/60">
+                    <th className="text-left py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Property & Unit</th>
+                    <th className="text-left py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Occupants</th>
+                    <th className="text-right py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Monthly Rent</th>
+                    <th className="text-left py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Lease Ends</th>
+                    <th className="text-center py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -511,11 +510,11 @@ export function Reports() {
               <div className="overflow-x-auto -mx-6 -mb-6">
                 <table className="w-full min-w-[640px]">
                   <thead>
-                    <tr className="border-y border-line bg-canvas">
-                      <th className="text-left py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Property & Unit</th>
-                      <th className="text-left py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Occupants</th>
-                      <th className="text-right py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Balance</th>
-                      <th className="text-center py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Status</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Property & Unit</th>
+                      <th className="text-left py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Occupants</th>
+                      <th className="text-right py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Balance</th>
+                      <th className="text-center py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -697,10 +696,10 @@ export function Reports() {
             <div className="overflow-x-auto -mx-6 -mb-6">
               <table className="w-full">
                 <thead>
-                  <tr className="border-y border-line bg-canvas">
-                    <th className="text-left py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Property</th>
-                    <th className="text-right py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">Amount</th>
-                    <th className="text-right py-3 px-5 font-medium text-muted text-xs uppercase tracking-wider">% of Total</th>
+                  <tr className="border-b border-line bg-canvas/60">
+                    <th className="text-left py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
+                    <th className="text-right py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                    <th className="text-right py-3 px-5 text-xs font-semibold text-muted uppercase tracking-wider">% of Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -735,12 +734,12 @@ export function Reports() {
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={expenseData.monthly}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Bar dataKey="income" fill="#2c7a58" name="Income" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expenses" fill="#b98a5e" name="Expenses" radius={[4, 4, 0, 0]} />
+                  <CartesianGrid {...CHART_GRID} />
+                  <XAxis dataKey="label" {...CHART_AXIS} />
+                  <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} {...CHART_AXIS} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
+                  <Bar dataKey="income" fill={INCOME_COLOR} name="Income" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expenses" fill={EXPENSE_COLOR} name="Expenses" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -795,9 +794,9 @@ export function Reports() {
             <div className="overflow-x-auto -mx-6 -mb-6">
               <table className="w-full min-w-[900px]">
                 <thead>
-                  <tr className="border-y border-line bg-canvas">
+                  <tr className="border-b border-line bg-canvas/60">
                     {['Property', 'Gross Rent', 'Other', 'Total Income', 'Expenses', 'HOA', 'Taxes', 'Insurance', 'NOI', 'Net Profit'].map(h => (
-                      <th key={h} className={cn('py-3 px-4 font-medium text-muted text-xs uppercase tracking-wider', h === 'Property' ? 'text-left' : 'text-right')}>{h}</th>
+                      <th key={h} className={cn('py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider', h === 'Property' ? 'text-left' : 'text-right')}>{h}</th>
                     ))}
                   </tr>
                 </thead>

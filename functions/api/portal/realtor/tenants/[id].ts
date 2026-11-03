@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../../lib/session';
 import { realtorTenantIds, serverToday } from '../../../../lib/portal';
 import { serializePortalTenant } from '../../../../lib/serializers';
+import { validateTenantContact } from '../../../../lib/realtorTenants';
 
 /**
  * GET /api/portal/realtor/tenants/:id
@@ -53,6 +54,42 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         : 'approved';
 
     return jsonOk({ success: true, data: { ...serializePortalTenant(row as Record<string, unknown>), unit, approval } });
+  } catch {
+    return serverError();
+  }
+};
+
+/**
+ * PUT /api/portal/realtor/tenants/:id
+ *
+ * Update the tenant's contact info. Same window check as GET: a realtor can
+ * only edit tenants they are linked to and whose window is still open.
+ */
+export const onRequestPut: PagesFunction<Env> = async (context) => {
+  const { env, request, params } = context;
+  const auth = await requireUser(env, request);
+  if (auth instanceof Response) return auth;
+  if (auth.role !== 'realtor') return jsonError('Not a realtor account', 403);
+
+  try {
+    const id = params.id as string;
+    const ids = await realtorTenantIds(env, auth.id, serverToday());
+    if (!ids.includes(id)) return jsonError('Tenant not found', 404);
+
+    const body = (await request.json()) as Record<string, unknown>;
+    const valid = validateTenantContact(body);
+    if (!valid.ok) return jsonError(valid.error, 400);
+
+    const { firstName, lastName, email, phone, emergencyName, emergencyPhone, emergencyRelationship } = valid.value;
+    await env.DB.prepare(
+      `UPDATE tenants SET first_name = ?, last_name = ?, email = ?, phone = ?,
+         emergency_contact_name = ?, emergency_contact_phone = ?, emergency_contact_relationship = ?,
+         updated_at = unixepoch()
+       WHERE id = ?`
+    ).bind(firstName, lastName, email, phone, emergencyName, emergencyPhone, emergencyRelationship, id).run();
+
+    const row = await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first();
+    return jsonOk({ success: true, data: serializePortalTenant(row as Record<string, unknown>) });
   } catch {
     return serverError();
   }

@@ -7,6 +7,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { StatCard } from '../components/ui/StatCard';
+import { PageHeader } from '../components/ui/PageHeader';
+import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID, INCOME_COLOR, EXPENSE_COLOR } from '../components/ui/chartConstants';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate, formatMonthYear, yearOf, monthOf, todayLocalDate } from '../lib/utils';
@@ -84,6 +87,7 @@ export function Expenses() {
   const [capitalProjects, setCapitalProjects] = useState<{ id: string; name: string; propertyId: string }[]>([]);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [recoveryYears, setRecoveryYears] = useState<string>('');
   // Recurring expense tracking (controlled so we can auto-set for utilities).
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState<'monthly' | 'quarterly' | 'yearly' | ''>('');
@@ -162,6 +166,7 @@ export function Expenses() {
     setCapitalProjectId('');
     setShowNewProject(false);
     setNewProjectName('');
+    setRecoveryYears('');
     setIsRecurring(false);
     setRecurringFrequency('');
     setIsModalOpen(true);
@@ -183,6 +188,7 @@ export function Expenses() {
     setCapitalProjectId(expense.capitalProjectId || '');
     setShowNewProject(false);
     setNewProjectName('');
+    setRecoveryYears(expense.recoveryYears != null ? String(expense.recoveryYears) : '');
     setIsRecurring(expense.isRecurring || false);
     setRecurringFrequency(expense.recurringFrequency || '');
     setIsModalOpen(true);
@@ -512,6 +518,7 @@ export function Expenses() {
             expenseType,
             classificationStatus: 'confirmed' as const,
             capitalProjectId: expenseType === 'capital' ? resolvedProjectId : undefined,
+            recoveryYears: expenseType === 'capital' && recoveryYears ? Number(recoveryYears) : undefined,
             interestAmount: interestAmount != null
               ? Math.round((interestAmount / targetPropertyIds.length) * 100) / 100
               : undefined,
@@ -559,70 +566,54 @@ export function Expenses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Money in, money out</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Finances</h1>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" className="w-full sm:w-auto">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          {(view === 'expenses' ? canAddExpense : canAddIncome) && (
-            <Button onClick={openExpenseModal} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4 mr-2" />
-              Add {view === 'expenses' ? 'Expense' : 'Income'}
+      <PageHeader
+        eyebrow="Money in, money out"
+        title="Finances"
+        actions={
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Download className="h-4 w-4 mr-2" />
+              Export
             </Button>
-          )}
-        </div>
-      </div>
+            {(view === 'expenses' ? canAddExpense : canAddIncome) && (
+              <Button onClick={openExpenseModal} className="w-full sm:w-auto">
+                <Plus className="h-4 w-4 mr-2" />
+                Add {view === 'expenses' ? 'Expense' : 'Income'}
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {/* Stats Cards */}
-      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Income</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingUp /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-positive tnum">{formatCurrency(stats.totalIncome)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">All time</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Total Expenses</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><TrendingDown /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-danger tnum">{formatCurrency(stats.totalExpenses)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">All time</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">Net Income</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><DollarSign /></span>
-            </div>
-            <div className={`mt-3 font-display text-[27px] leading-none font-semibold tnum ${stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}`}>{formatCurrency(stats.netIncome)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Overall profit/loss</p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow">This Month</span>
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Calendar /></span>
-            </div>
-            <div className="mt-3 font-display text-[27px] leading-none font-semibold text-ink tnum">{formatCurrency(stats.monthlyExpenses)}</div>
-            <p className="mt-1.5 text-[13px] text-muted">Expenses</p>
-          </div>
-        </Card>
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Income"
+          value={formatCurrency(stats.totalIncome)}
+          subtitle="All time"
+          icon={<TrendingUp />}
+          valueColor="text-positive"
+        />
+        <StatCard
+          title="Total Expenses"
+          value={formatCurrency(stats.totalExpenses)}
+          subtitle="All time"
+          icon={<TrendingDown />}
+          valueColor="text-danger"
+        />
+        <StatCard
+          title="Net Income"
+          value={formatCurrency(stats.netIncome)}
+          subtitle="Overall profit/loss"
+          icon={<DollarSign />}
+          valueColor={stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}
+        />
+        <StatCard
+          title="This Month"
+          value={formatCurrency(stats.monthlyExpenses)}
+          subtitle="Expenses"
+          icon={<Calendar />}
+        />
       </div>
 
       {/* Charts */}
@@ -634,12 +625,12 @@ export function Expenses() {
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Bar dataKey="income" fill="#2c7a58" name="Income" />
-                <Bar dataKey="expenses" fill="#b98a5e" name="Expenses" />
+                <CartesianGrid {...CHART_GRID} />
+                <XAxis dataKey="name" {...CHART_AXIS} />
+                <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} {...CHART_AXIS} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
+                <Bar dataKey="income" fill={INCOME_COLOR} name="Income" />
+                <Bar dataKey="expenses" fill={EXPENSE_COLOR} name="Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -670,7 +661,7 @@ export function Expenses() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
@@ -801,17 +792,17 @@ export function Expenses() {
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <table className={`w-full sm:min-w-0 ${view === 'income' ? 'min-w-[900px]' : 'min-w-[780px]'}`}>
               <thead>
-                <tr className="border-b bg-canvas">
-                  <th className="text-left py-3 px-4 font-medium">Date</th>
-                  <th className="text-left py-3 px-4 font-medium">Property & Unit</th>
-                  {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Category</th>}
-                  {view === 'income' && <th className="text-left py-3 px-4 font-medium">Source</th>}
-                  {view === 'income' && <th className="text-left py-3 px-4 font-medium">Tenant</th>}
-                  <th className="text-left py-3 px-4 font-medium">Description</th>
-                  {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Vendor</th>}
-                  {view === 'expenses' && <th className="text-left py-3 px-4 font-medium">Acct</th>}
-                  <th className="text-right py-3 px-4 font-medium">Amount</th>
-                  {(canDelete || canAddExpense) && <th className="text-right py-3 px-4 font-medium">Actions</th>}
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Property & Unit</th>
+                  {view === 'expenses' && <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Category</th>}
+                  {view === 'income' && <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Source</th>}
+                  {view === 'income' && <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Tenant</th>}
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Description</th>
+                  {view === 'expenses' && <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Vendor</th>}
+                  {view === 'expenses' && <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Acct</th>}
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                  {(canDelete || canAddExpense) && <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1255,7 +1246,7 @@ export function Expenses() {
                         <select
                           value={capitalProjectId}
                           onChange={(e) => setCapitalProjectId(e.target.value)}
-                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
                         >
                           <option value="">Select a project...</option>
                           {capitalProjects
@@ -1280,7 +1271,7 @@ export function Expenses() {
                           value={newProjectName}
                           onChange={(e) => setNewProjectName(e.target.value)}
                           placeholder="e.g., Kitchen Renovation"
-                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
                         />
                         <button
                           type="button"
@@ -1291,6 +1282,21 @@ export function Expenses() {
                         </button>
                       </>
                     )}
+                    <div className="pt-2">
+                      <label className="text-xs text-muted">Recovery Period (for depreciation)</label>
+                      <select
+                        value={recoveryYears}
+                        onChange={(e) => setRecoveryYears(e.target.value)}
+                        className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
+                      >
+                        <option value="">Auto (based on category)</option>
+                        <option value="5">5 years (appliances, carpets)</option>
+                        <option value="7">7 years (office furniture, equipment)</option>
+                        <option value="15">15 years (land improvements, landscaping)</option>
+                        <option value="27.5">27.5 years (residential building)</option>
+                        <option value="39">39 years (commercial building)</option>
+                      </select>
+                    </div>
                   </div>
                 )}
               </div>

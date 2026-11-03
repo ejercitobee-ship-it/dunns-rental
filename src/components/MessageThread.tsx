@@ -162,7 +162,7 @@ export function MessageThread({
             rows={2}
             maxLength={4000}
             placeholder={placeholder}
-            className="flex-1 resize-y rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex-1 resize-y rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/10"
             style={{ minHeight: '2.75rem', maxHeight: '40vh' }}
           />
           <Button type="submit" disabled={sending || (!draft.trim() && !file)}>

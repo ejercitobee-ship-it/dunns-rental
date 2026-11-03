@@ -50,6 +50,64 @@ export async function sendEmail(
 }
 
 /**
+ * Pre 5 Day courtesy warning email sent to tenants who are 2+ months behind on
+ * rent. Warns that a formal 5 Day Notice to Pay or Quit (735 ILCS 5/9-209)
+ * will follow if the balance is not resolved.
+ */
+export function pre5DayNoticeEmail(opts: {
+  tenantName: string;
+  propertyAddress: string;
+  unitNumber?: string;
+  monthsBehind: number;
+  totalOwed: string;
+  companyName?: string;
+  companyPhone?: string;
+}) {
+  const name = opts.tenantName || 'Tenant';
+  const location = [opts.propertyAddress, opts.unitNumber ? `Unit ${opts.unitNumber}` : null].filter(Boolean).join(', ');
+  const co = opts.companyName || 'MH Dunn Property';
+  const phone = opts.companyPhone ? ` at ${opts.companyPhone}` : '';
+
+  const text = [
+    `Dear ${name},`,
+    '',
+    `This is a courtesy warning that your rent account at ${location} is currently past due in the amount of ${opts.totalOwed}, covering ${opts.monthsBehind} month${opts.monthsBehind > 1 ? 's' : ''} of unpaid rent.`,
+    '',
+    'We are reaching out before taking formal legal action. Under Illinois law (735 ILCS 5/9-209), a landlord may serve a 5 Day Notice to Pay or Quit when rent is past due. Once that formal notice is served, you will have only 5 days to pay the full balance or vacate the premises.',
+    '',
+    `Please contact our office${phone} immediately to make payment arrangements or discuss your situation. Our goal is to resolve this without legal action.`,
+    '',
+    'Thank you,',
+    co,
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">${escapeHtml(co)}</div>
+      <p style="margin:0 0 16px;font-size:15px;">Dear ${escapeHtml(name)},</p>
+      <div style="background:#fef3f2;border:1px solid #fecdca;border-radius:10px;padding:16px 20px;margin:0 0 20px;">
+        <p style="margin:0;font-size:14px;color:#912018;font-weight:600;">Courtesy Warning: Rent Past Due</p>
+        <table style="width:100%;font-size:14px;color:#1b1a17;margin-top:12px;" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;">Property</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(location)}</td></tr>
+          <tr><td style="padding:4px 0;">Months behind</td><td style="padding:4px 0;text-align:right;font-weight:600;">${opts.monthsBehind}</td></tr>
+          <tr><td style="padding:4px 0;border-top:1px solid #fecdca;font-weight:600;">Total owed</td><td style="padding:4px 0;border-top:1px solid #fecdca;text-align:right;font-weight:600;">${escapeHtml(opts.totalOwed)}</td></tr>
+        </table>
+      </div>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        We are reaching out before taking formal legal action. Under Illinois law (735 ILCS 5/9&#8209;209), a landlord may serve a <strong>5 Day Notice to Pay or Quit</strong> when rent is past due. Once that formal notice is served, you will have only 5 days to pay the full balance or vacate the premises.
+      </p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Please contact our office${escapeHtml(phone)} immediately to make payment arrangements or discuss your situation. Our goal is to resolve this without legal action.
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;color:#6b6a63;">Thank you,<br>${escapeHtml(co)}</p>
+    </div>
+  </div>`;
+
+  return { subject: `Courtesy Warning: Rent Past Due at ${location}`, html, text };
+}
+
+/**
  * A free-form email the office writes to a tenant, wrapped in the app's branded
  * shell. The body is plain text the office typed; newlines become paragraphs.
  */
@@ -685,3 +743,66 @@ export function portalWelcomeEmail(opts: {
 }
 
 function formatUSD(n: number) { return `$${n.toFixed(2)}`; }
+
+export function paymentLinkEmail(opts: {
+  name: string;
+  amount: number;
+  fee: number;
+  monthLabel: string;
+  paymentUrl: string;
+  note?: string;
+}) {
+  const total = opts.amount + opts.fee;
+  const noteBlock = opts.note?.trim()
+    ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:14px 16px;">${escapeHtml(opts.note.trim())}</p>`
+    : '';
+
+  const text = [
+    `Hi ${opts.name},`,
+    '',
+    `You have a rent payment of ${formatUSD(opts.amount)} due for ${opts.monthLabel}.`,
+    `A card processing fee of ${formatUSD(opts.fee)} applies, for a total of ${formatUSD(total)}.`,
+    opts.note?.trim() ? `\nNote from management: ${opts.note.trim()}` : '',
+    '',
+    'Pay securely using the link below:',
+    opts.paymentUrl,
+    '',
+    'This link expires in 24 hours. If you have any questions, contact the office.',
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].filter((line) => line !== '').join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">Hi ${escapeHtml(opts.name)},</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        You have a rent payment due for <strong>${escapeHtml(opts.monthLabel)}</strong>. Please use the secure link below to pay by card.
+      </p>
+      <div style="background:#f8f7f4;border:1px solid #e7e4dd;border-radius:10px;padding:16px 20px;margin:0 0 20px;">
+        <table style="width:100%;font-size:14px;color:#1b1a17;" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;">Rent</td><td style="padding:4px 0;text-align:right;font-weight:600;">${formatUSD(opts.amount)}</td></tr>
+          <tr><td style="padding:4px 0;color:#75726a;">Card processing fee</td><td style="padding:4px 0;text-align:right;color:#75726a;">${formatUSD(opts.fee)}</td></tr>
+          <tr><td style="padding:8px 0 0;border-top:1px solid #e7e4dd;font-weight:600;">Total</td><td style="padding:8px 0 0;border-top:1px solid #e7e4dd;text-align:right;font-weight:600;">${formatUSD(total)}</td></tr>
+        </table>
+      </div>
+      ${noteBlock}
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${opts.paymentUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;">
+          Pay ${formatUSD(total)} now
+        </a>
+      </p>
+      <p style="margin:0 0 8px;font-size:13px;color:#75726a;line-height:1.55;">
+        This link expires in 24 hours. You can also pay through your tenant portal at any time.
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Rent payment for ${opts.monthLabel}: ${formatUSD(total)}`, html, text };
+}

@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock } from 'lucide-react';
+import { Calendar, DollarSign, User, ShieldAlert, CalendarClock, Wrench, MessageSquare, FileText, Clock, Phone, Mail, X } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { portalApi, type PortalMeResponse, type PortalLease, type HouseholdMember, type RealtorContact } from '../../lib/api';
-import { formatCurrency, formatDate, formatMonthYear } from '../../lib/utils';
-import { settleMonthWithCredit, leasesOwingMonth, monthsBehind, PAST_DUE_MONTHS } from '../../lib/rent';
+import { formatCurrency, formatDate, formatMonthYear, formatPhone } from '../../lib/utils';
+import { settleMonthWithCredit, leasesOwingMonth, monthsBehind, unsettledMonths } from '../../lib/rent';
 import { NotificationsCard } from '../../components/NotificationsCard';
 import { PayRent } from '../../components/portal/PayRent';
 import type { Lease, RentPayment, PaymentAllocation, Tenant } from '../../types';
 
-// Time-of-day greeting for the home header.
 function greetingFor(d = new Date()): string {
   const h = d.getHours();
   if (h < 12) return 'Good morning';
@@ -21,16 +20,12 @@ function greetingFor(d = new Date()): string {
   return 'Good evening';
 }
 
-// "1st", "2nd", "3rd", "21st"... for the rent due day.
 function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 }
 
-// The rent-math functions expect a full Lease. The portal serializer carries
-// pauses (so paused months read correctly) but not tenantIds, which the math
-// does not use, so an empty default is safe.
 function toLease(pl: PortalLease): Lease {
   return { ...pl, tenantIds: [] };
 }
@@ -43,8 +38,6 @@ export function TenantHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // The tenant's realtor(s) and announcements, loaded independently so a
-  // failure in either never blocks the rest of the dashboard.
   useEffect(() => {
     portalApi.myRealtors().then(setRealtors).catch(() => {});
   }, []);
@@ -56,9 +49,6 @@ export function TenantHome() {
         if (cancelled) return;
         setMe(meRes);
         const leaseId = paymentsRes.lease?.id;
-        // The payments endpoint scopes its rows to the caller's own current
-        // lease already, so stamping that lease's id onto each row here is
-        // safe: it lets settleMonth's paymentsForMonth filter match them.
         setPayments(
           leaseId
             ? paymentsRes.payments.map((p, i) => ({ id: `${leaseId}-${i}`, leaseId, ...p }))
@@ -78,18 +68,11 @@ export function TenantHome() {
     };
   }, []);
 
-  // All leases this tenant is on (including ended ones), so leasesOwingMonth
-  // can de-duplicate months when a renewal overlaps with its parent lease.
   const allLeases = useMemo(() => {
     if (!me?.siblingLeases?.length) return me?.lease ? [toLease(me.lease)] : [];
     return me.siblingLeases.map(toLease);
   }, [me]);
 
-  // This month's settlement, gated by leasesOwingMonth so it matches the
-  // owner's Rent Management exactly: a lease starting next month owes nothing
-  // yet, and a month the owner paused is not owed either. Showing "Not yet
-  // paid" for a month that was never billed would alarm the tenant over rent
-  // they do not owe.
   const thisMonth = useMemo(() => {
     if (!me?.lease) return null;
     const lease = toLease(me.lease);
@@ -104,13 +87,16 @@ export function TenantHome() {
   const pastDue = useMemo(() => {
     if (!me?.lease) return null;
     const now = new Date();
-    const threshold = me.pastDueMonths ?? PAST_DUE_MONTHS;
     const pd = monthsBehind(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear(), allLeases, allocations);
-    return pd.months >= threshold ? pd : null;
+    return pd.months >= 1 ? pd : null;
   }, [me, payments, allLeases, allocations]);
 
-  // Nudge the tenant when their lease is within a month of expiring (or has
-  // expired), so they know to reach out about renewing.
+  const owedMonths = useMemo(() => {
+    if (!me?.lease) return [];
+    const now = new Date();
+    return unsettledMonths(toLease(me.lease), payments, now.getMonth() + 1, now.getFullYear(), allLeases, allocations);
+  }, [me, payments, allLeases, allocations]);
+
   const leaseExpiry = useMemo(() => {
     const end = me?.lease?.endDate;
     if (!end) return null;
@@ -144,8 +130,6 @@ export function TenantHome() {
 
   const { tenant, lease, unit, property } = me;
 
-  // The exact memo the tenant should put on their Zelle payment: street, unit,
-  // current month, and their name (the household who signed the lease).
   const nowD = new Date();
   const paymentMemo = [
     property?.address,
@@ -154,17 +138,24 @@ export function TenantHome() {
     `${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim(),
   ].filter(Boolean).join(', ');
 
-  // Whole days until this month's rent due date (negative once it has passed),
-  // for the hero card's "due in N days" line.
-  const dueDay = me.rentDueDay ?? 1;
+  const rawDueDay = me.rentDueDay ?? 1;
+  const daysInMonth = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate();
+  const dueDay = Math.min(rawDueDay, daysInMonth);
   const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
   const daysToDue = Math.round(
     (startOfDay(new Date(nowD.getFullYear(), nowD.getMonth(), dueDay)) - startOfDay(nowD)) / 86400000
   );
 
+  const currentPaid = thisMonth?.status === 'paid';
+  const firstOwed = owedMonths[0];
+  const payMonth = currentPaid && firstOwed ? firstOwed.month : nowD.getMonth() + 1;
+  const payYear = currentPaid && firstOwed ? firstOwed.year : nowD.getFullYear();
+  const payStatus = currentPaid && firstOwed ? 'unpaid' as const : (thisMonth?.status ?? null);
+  const payAmount = currentPaid && firstOwed ? firstOwed.amount : (thisMonth?.due ?? lease?.monthlyRent ?? 0);
+  const payBalance = currentPaid && firstOwed ? firstOwed.amount : (thisMonth?.balance ?? 0);
+
   return (
     <div className="space-y-5">
-      {/* Premium hero: the tenant's identity fused with their rent in one frame. */}
       {lease ? (
         <RentHero
           monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
@@ -196,9 +187,6 @@ export function TenantHome() {
           />
         </div>
       )}
-
-      {/* Contact + emergency details, right under the hero. */}
-      <ProfileCard tenant={tenant} />
 
       {leaseExpiry && (() => {
         const isDanger = leaseExpiry.urgency === 'expired' || leaseExpiry.urgency === 'critical';
@@ -236,7 +224,7 @@ export function TenantHome() {
         );
       })()}
 
-      <QuickActions />
+      <QuickActions tenant={tenant} />
 
       {!lease ? (
         <Card>
@@ -252,12 +240,12 @@ export function TenantHome() {
           {import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ? (
             <PayRent
               leaseId={lease.id}
-              amount={thisMonth?.due ?? lease.monthlyRent}
-              month={nowD.getMonth() + 1}
-              year={nowD.getFullYear()}
-              monthLabel={formatMonthYear(nowD.getMonth() + 1, nowD.getFullYear())}
-              status={thisMonth?.status ?? null}
-              balance={thisMonth?.balance ?? 0}
+              amount={payAmount}
+              month={payMonth}
+              year={payYear}
+              monthLabel={formatMonthYear(payMonth, payYear)}
+              status={payStatus}
+              balance={payBalance}
               tenantName={`${tenant.firstName ?? ''} ${tenant.lastName ?? ''}`.trim() || 'Tenant'}
               paymentInstructions={me.paymentInstructions}
               paymentMemo={paymentMemo}
@@ -277,8 +265,6 @@ export function TenantHome() {
   );
 }
 
-// The signature surface of the tenant app: this month's rent, its status, and
-// how close the due date is, on a rich evergreen card.
 function RentHero({
   monthLabel, amount, status, balance, creditApplied, creditRemaining, dueDay, daysToDue, greeting, firstName, initials, photoUrl, pastDue,
 }: {
@@ -315,12 +301,11 @@ function RentHero({
     >
       <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 40% at 12% 8%, rgba(255,255,255,0.14), transparent 60%)' }} />
       <div className="relative">
-        {/* Identity header, fused onto the rent card so they read as one frame. */}
         <div className="flex items-center gap-3">
           {photoUrl ? (
-            <img src={photoUrl} alt="" className="w-11 h-11 rounded-full object-cover ring-1 ring-white/30" />
+            <img src={photoUrl} alt="" className="w-11 h-11 rounded-full object-cover ring-2 ring-[#c9a96e]/40" />
           ) : (
-            <span className="w-11 h-11 rounded-full bg-white/15 ring-1 ring-white/25 grid place-items-center text-white font-medium">{initials}</span>
+            <span className="w-11 h-11 rounded-full bg-white/15 ring-2 ring-[#c9a96e]/40 grid place-items-center text-white font-medium">{initials}</span>
           )}
           <div className="min-w-0">
             <p className="text-[13px] text-white/60 leading-tight">{greeting},</p>
@@ -328,9 +313,9 @@ function RentHero({
           </div>
         </div>
 
-        <div className="my-5 h-px bg-white/12" />
+        <div className="my-5 h-px bg-[#c9a96e]/20" />
 
-        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/65">{monthLabel} rent</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#c9a96e]">{monthLabel} rent</p>
         <p className="text-[42px] leading-none font-semibold mt-2 tnum">{formatCurrency(amount)}</p>
 
         <div className="mt-3 flex items-center gap-2 flex-wrap">
@@ -345,13 +330,13 @@ function RentHero({
             </span>
           )}
           {status === 'partial' && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full text-[#f0d199] border border-[#f3d699]/30 bg-[#f3d699]/12">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full text-[#c9a96e] border border-[#c9a96e]/30 bg-[#c9a96e]/12">
               Balance {formatCurrency(balance)}
             </span>
           )}
           {status === 'unpaid' && (
             <>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full text-[#f0d199] border border-[#f3d699]/30 bg-[#f3d699]/12">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full text-[#c9a96e] border border-[#c9a96e]/30 bg-[#c9a96e]/12">
                 <span className="w-1.5 h-1.5 rounded-full bg-current" /> Due {dueText}
               </span>
               <span className="text-xs text-white/60">the {ordinal(dueDay)}</span>
@@ -359,7 +344,6 @@ function RentHero({
           )}
         </div>
 
-        {/* Credit info: show when credit was applied or is remaining */}
         {(creditApplied > 0 || creditRemaining > 0) && (
           <div className="mt-3 rounded-xl bg-[#a9e0c3]/15 border border-[#a9e0c3]/25 px-4 py-3">
             {creditApplied > 0 && (
@@ -392,7 +376,7 @@ function RentHero({
         <button
           type="button"
           onClick={scrollToPay}
-          className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#f1ecdf] text-[#1c3e30] text-sm font-semibold py-3 transition-transform hover:-translate-y-0.5"
+          className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#c9a96e] text-[#1c3e30] text-sm font-semibold py-3.5 transition-all hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(201,169,110,0.4)]"
         >
           <DollarSign className="h-4 w-4" /> {import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ? 'Pay now' : 'How to pay'}
         </button>
@@ -401,83 +385,15 @@ function RentHero({
   );
 }
 
-// Four large, thumb-friendly shortcuts to the rest of the app.
-function QuickActions() {
-  const actions = [
-    { label: 'Request a repair', to: '/portal/maintenance', Icon: Wrench },
-    { label: 'Message office', to: '/portal/messages', Icon: MessageSquare },
-    { label: 'My documents', to: '/portal/documents', Icon: FileText },
-    { label: 'Payment history', to: '/portal/payments', Icon: Clock },
-  ];
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {actions.map((a) => (
-        <Link
-          key={a.to}
-          to={a.to}
-          className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-line-strong"
-        >
-          <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center flex-shrink-0">
-            <a.Icon className="h-5 w-5" strokeWidth={1.8} />
-          </span>
-          <span className="text-sm font-semibold text-ink leading-tight">{a.label}</span>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-// Where the tenant lives, with the lease term and an at-a-glance status.
-function HomeCard({
-  property, unit, lease,
-}: {
-  property?: { name?: string; address?: string } | null;
-  unit?: { unitNumber?: string } | null;
-  lease: PortalLease;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="eyebrow mb-2.5">Your home</p>
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="font-display text-xl text-ink truncate">
-            {property?.name || property?.address || 'Property not on file'}
-          </p>
-          {unit?.unitNumber && <span className="text-sm text-muted flex-shrink-0">Unit {unit.unitNumber}</span>}
-        </div>
-        {property?.name && property?.address && (
-          <p className="text-sm text-muted mt-0.5 truncate">{property.address}</p>
-        )}
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line text-sm text-muted">
-          <Calendar className="h-4 w-4 text-faint flex-shrink-0" />
-          <span className="truncate">
-            {lease.startDate ? formatDate(lease.startDate) : 'Start date unknown'}
-            {lease.leaseType === 'month_to_month'
-              ? ' · Month to Month'
-              : (lease.endDate ? ` to ${formatDate(lease.endDate)}` : ', ongoing')}
-          </span>
-          {lease.status === 'active' && (
-            <span className="ml-auto flex-shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary-soft text-primary">
-              Active
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// The tenant's own profile, front and center on their Home page (folded in
-// from the retired "My information" tab). Details are read-only except the
-// photo, which they manage here with the same self-service photo API the
-// realtor Dashboard uses.
-function ProfileCard({ tenant }: { tenant: Tenant }) {
+function QuickActions({ tenant }: { tenant: Tenant }) {
   const { showToast } = useToast();
-  // The tenant can ADD an emergency contact if they have none yet; once saved
-  // it overlays the (read-only) value from the server.
-  const [emergencyOverride, setEmergencyOverride] = useState<Tenant['emergencyContact'] | null>(null);
+  const [ecModal, setEcModal] = useState(false);
   const [ecForm, setEcForm] = useState({ name: '', phone: '', relationship: '' });
   const [ecBusy, setEcBusy] = useState(false);
+  const [emergencyOverride, setEmergencyOverride] = useState<Tenant['emergencyContact'] | null>(null);
+
+  const emergency = emergencyOverride ?? tenant.emergencyContact;
+  const hasEmergency = !!(emergency?.name || emergency?.phone);
 
   const handleAddEmergency = async () => {
     if (ecBusy || !ecForm.name.trim()) return;
@@ -489,6 +405,7 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
         relationship: ecForm.relationship.trim(),
       });
       setEmergencyOverride(saved);
+      setEcModal(false);
       showToast('Emergency contact added.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Could not save your emergency contact.', 'error');
@@ -497,80 +414,177 @@ function ProfileCard({ tenant }: { tenant: Tenant }) {
     }
   };
 
-  const emergency = emergencyOverride ?? tenant.emergencyContact;
-  const hasEmergency = !!(emergency?.name || emergency?.phone || emergency?.relationship);
+  const actions = [
+    { label: 'Request a repair', to: '/portal/maintenance', Icon: Wrench },
+    { label: 'Message office', to: '/portal/messages', Icon: MessageSquare },
+    { label: 'My documents', to: '/portal/documents', Icon: FileText },
+    { label: 'Payment history', to: '/portal/payments', Icon: Clock },
+  ];
 
   return (
-    <Card>
-      <CardContent className="p-5 space-y-5">
-        <div className="space-y-3">
-          <h3 className="font-semibold text-ink flex items-center gap-2">
-            <User className="h-4 w-4 text-faint" /> Contact
-          </h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <ProfileField label="Email" value={tenant.email} />
-            <ProfileField label="Phone" value={tenant.phone} />
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        {/* Contact info tile */}
+        <div className="rounded-2xl border border-gold-line bg-surface p-4 shadow-sm">
+          <div className="flex items-center gap-2.5 mb-3">
+            <span className="w-9 h-9 rounded-xl bg-gold-soft text-gold grid place-items-center flex-shrink-0">
+              <User className="h-[18px] w-[18px]" strokeWidth={1.8} />
+            </span>
+            <span className="text-sm font-semibold text-ink">Contact</span>
+          </div>
+          <div className="space-y-1.5">
+            {tenant.email && (
+              <div className="flex items-center gap-2 text-muted">
+                <Mail className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="text-xs truncate">{tenant.email}</span>
+              </div>
+            )}
+            {tenant.phone && (
+              <div className="flex items-center gap-2 text-muted">
+                <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="text-xs">{formatPhone(tenant.phone)}</span>
+              </div>
+            )}
+            {!tenant.email && !tenant.phone && (
+              <p className="text-xs text-muted">Not on file</p>
+            )}
           </div>
         </div>
 
-        <div className="space-y-3 border-t border-line pt-4">
-          <h3 className="font-semibold text-ink flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-faint" /> Emergency contact
-          </h3>
-          {hasEmergency ? (
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <ProfileField label="Name" value={emergency?.name} />
-              <ProfileField label="Phone" value={emergency?.phone} />
-              <ProfileField label="Relationship" value={emergency?.relationship} />
+        {/* Emergency contact tile */}
+        {hasEmergency ? (
+          <div className="rounded-2xl border border-gold-line bg-surface p-4 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-9 h-9 rounded-xl bg-gold-soft text-gold grid place-items-center flex-shrink-0">
+                <ShieldAlert className="h-[18px] w-[18px]" strokeWidth={1.8} />
+              </span>
+              <span className="text-sm font-semibold text-ink">Emergency</span>
             </div>
-          ) : (
-            <div className="space-y-2.5 rounded-xl border border-warning/40 bg-warning-soft p-4">
-              <p className="text-sm font-medium text-ink flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-warning flex-shrink-0" />
-                Please add an emergency contact
-              </p>
-              <p className="text-sm text-muted">
-                We do not have one on file yet. Please add someone we can reach in an emergency.
-              </p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input
-                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  placeholder="Name"
-                  value={ecForm.name}
-                  onChange={e => setEcForm({ ...ecForm, name: e.target.value })}
-                />
-                <input
-                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  placeholder="Relationship"
-                  value={ecForm.relationship}
-                  onChange={e => setEcForm({ ...ecForm, relationship: e.target.value })}
-                />
-                <input
-                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  placeholder="Phone"
-                  value={ecForm.phone}
-                  onChange={e => setEcForm({ ...ecForm, phone: e.target.value })}
-                />
-              </div>
-              <Button size="sm" disabled={!ecForm.name.trim() || ecBusy} onClick={handleAddEmergency}>
-                {ecBusy ? 'Saving...' : 'Add emergency contact'}
+            <div className="space-y-1.5">
+              {emergency?.name && <p className="text-xs font-medium text-ink">{emergency.name}</p>}
+              {emergency?.phone && (
+                <div className="flex items-center gap-2 text-muted">
+                  <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="text-xs">{formatPhone(emergency.phone)}</span>
+                </div>
+              )}
+              {emergency?.relationship && (
+                <p className="text-xs text-muted">{emergency.relationship}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEcModal(true)}
+            className="rounded-2xl border border-warning/40 bg-warning-soft p-4 shadow-sm text-left transition hover:-translate-y-0.5"
+          >
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-9 h-9 rounded-xl bg-warning/15 text-warning grid place-items-center flex-shrink-0">
+                <ShieldAlert className="h-[18px] w-[18px]" strokeWidth={1.8} />
+              </span>
+              <span className="text-sm font-semibold text-ink">Emergency</span>
+            </div>
+            <p className="text-xs text-warning font-medium">Tap to add a contact</p>
+          </button>
+        )}
+
+        {/* Navigation action tiles */}
+        {actions.map((a) => (
+          <Link
+            key={a.to}
+            to={a.to}
+            className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-gold-line"
+          >
+            <span className="w-9 h-9 rounded-xl bg-gold-soft text-gold grid place-items-center flex-shrink-0">
+              <a.Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
+            </span>
+            <span className="text-sm font-semibold text-ink leading-tight">{a.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Emergency contact modal */}
+      {ecModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => setEcModal(false)} />
+          <div className="relative w-full max-w-md bg-surface rounded-2xl shadow-xl border border-line p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg text-ink">Add emergency contact</h3>
+              <button type="button" onClick={() => setEcModal(false)} className="p-1 rounded-lg hover:bg-canvas">
+                <X className="h-5 w-5 text-muted" />
+              </button>
+            </div>
+            <p className="text-sm text-muted">Someone we can reach in case of an emergency at your unit.</p>
+            <div className="space-y-3">
+              <input
+                className="w-full rounded-xl border border-line bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
+                placeholder="Full name"
+                value={ecForm.name}
+                onChange={e => setEcForm({ ...ecForm, name: e.target.value })}
+              />
+              <input
+                className="w-full rounded-xl border border-line bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
+                placeholder="Relationship"
+                value={ecForm.relationship}
+                onChange={e => setEcForm({ ...ecForm, relationship: e.target.value })}
+              />
+              <input
+                className="w-full rounded-xl border border-line bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
+                placeholder="Phone number"
+                value={formatPhone(ecForm.phone)}
+                onChange={e => setEcForm({ ...ecForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setEcModal(false)}>Cancel</Button>
+              <Button className="flex-1" disabled={!ecForm.name.trim() || ecBusy} onClick={handleAddEmergency}>
+                {ecBusy ? 'Saving...' : 'Save contact'}
               </Button>
             </div>
-          )}
+          </div>
         </div>
-
-        <p className="text-xs text-muted">To change details already on file, please contact us.</p>
-      </CardContent>
-    </Card>
+      )}
+    </>
   );
 }
 
-function ProfileField({ label, value }: { label: string; value?: string }) {
+function HomeCard({
+  property, unit, lease,
+}: {
+  property?: { name?: string; address?: string } | null;
+  unit?: { unitNumber?: string } | null;
+  lease: PortalLease;
+}) {
   return (
-    <div>
-      <p className="text-sm font-medium text-ink mb-1">{label}</p>
-      <p className="text-sm text-muted">{value || 'Not on file'}</p>
-    </div>
+    <Card>
+      <CardContent className="p-5">
+        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-gold mb-2.5">Your home</p>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-display text-xl text-ink truncate">
+            {property?.name || property?.address || 'Property not on file'}
+          </p>
+          {unit?.unitNumber && <span className="text-sm text-muted flex-shrink-0">Unit {unit.unitNumber}</span>}
+        </div>
+        {property?.name && property?.address && (
+          <p className="text-sm text-muted mt-0.5 truncate">{property.address}</p>
+        )}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line text-sm text-muted">
+          <Calendar className="h-4 w-4 text-gold flex-shrink-0" />
+          <span className="truncate">
+            {lease.startDate ? formatDate(lease.startDate) : 'Start date unknown'}
+            {lease.leaseType === 'month_to_month'
+              ? ' · Month to Month'
+              : (lease.endDate ? ` to ${formatDate(lease.endDate)}` : ', ongoing')}
+          </span>
+          {lease.status === 'active' && (
+            <span className="ml-auto flex-shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gold-soft text-gold border border-gold-line">
+              Active
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -581,18 +595,18 @@ function HowToPayCard({ instructions, memo }: { instructions?: string; memo: str
       await navigator.clipboard.writeText(memo);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch { /* clipboard unavailable; the memo is shown to copy by hand */ }
+    } catch { /* clipboard unavailable */ }
   };
   return (
     <Card id="how-to-pay">
       <CardContent className="p-5 space-y-3">
         <h3 className="font-semibold text-ink flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-faint" /> How to pay
+          <DollarSign className="h-4 w-4 text-gold" /> How to pay
         </h3>
         {instructions && <p className="text-sm text-ink">{instructions}</p>}
         {memo && (
           <div className="rounded-lg border border-line bg-canvas p-3 space-y-2">
-            <p className="eyebrow">Put this in the memo</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-gold">Put this in the memo</p>
             <div className="flex items-center gap-2">
               <code className="text-sm text-ink flex-1 break-words">{memo}</code>
               <Button type="button" variant="outline" size="sm" onClick={copy} className="flex-shrink-0">
@@ -617,7 +631,7 @@ function RealtorCard({ realtors }: { realtors: RealtorContact[] }) {
             <li key={i} className="space-y-0.5">
               <p className="text-ink font-medium">{r.name || 'Realtor'}</p>
               <p className="text-muted text-sm">{r.email}</p>
-              {r.phone && <p className="text-muted text-sm">{r.phone}</p>}
+              {r.phone && <p className="text-muted text-sm">{formatPhone(r.phone)}</p>}
             </li>
           ))}
         </ul>
@@ -654,7 +668,7 @@ function HouseholdCard({ hasLease }: { hasLease: boolean }) {
   return (
     <Card>
       <CardContent className="p-5 space-y-4">
-        <h2 className="font-display text-lg font-medium text-ink">Who lives here</h2>
+        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-gold">Who lives here</p>
         {!hasLease ? (
           <p className="text-muted text-sm">Once your lease is active you can add the people living with you.</p>
         ) : (
@@ -665,7 +679,7 @@ function HouseholdCard({ hasLease }: { hasLease: boolean }) {
                   <div>
                     <p className="text-ink font-medium">{m.name}</p>
                     <p className="text-muted text-sm">
-                      {[m.relationship, m.phone].filter(Boolean).join(' · ')}
+                      {[m.relationship, m.phone ? formatPhone(m.phone) : null].filter(Boolean).join(' · ')}
                     </p>
                   </div>
                 </li>
@@ -675,7 +689,7 @@ function HouseholdCard({ hasLease }: { hasLease: boolean }) {
             <div className="grid gap-2 sm:grid-cols-3">
               <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
               <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Relationship" value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })} />
-              <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <input className="rounded-lg border border-line px-3 py-2 text-sm" placeholder="Phone" value={formatPhone(form.phone)} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
             </div>
             <div className="flex gap-2">
               <Button size="sm" disabled={!form.name.trim() || busy} onClick={submit}>Add person</Button>
@@ -687,11 +701,9 @@ function HouseholdCard({ hasLease }: { hasLease: boolean }) {
   );
 }
 
-/** Skeleton that mirrors the RentHero + quick-actions + cards structure. */
 function TenantHomeSkeleton() {
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
-      {/* Hero skeleton */}
       <div className="rounded-3xl p-6 bg-[#1f4535]">
         <div className="flex items-center gap-3">
           <Skeleton className="w-11 h-11 rounded-full bg-white/10" />
@@ -704,18 +716,16 @@ function TenantHomeSkeleton() {
         <Skeleton className="h-3 w-20 bg-white/10" />
         <Skeleton className="mt-2 h-10 w-36 bg-white/10" />
         <Skeleton className="mt-4 h-7 w-40 rounded-full bg-white/10" />
-        <Skeleton className="mt-5 h-12 w-full rounded-xl bg-white/10" />
+        <Skeleton className="mt-5 h-12 w-full rounded-xl bg-[#c9a96e]/30" />
       </div>
-      {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3">
-            <Skeleton className="w-10 h-10 rounded-xl" />
+            <Skeleton className="w-9 h-9 rounded-xl" />
             <Skeleton className="h-4 w-20" />
           </div>
         ))}
       </div>
-      {/* Cards */}
       {Array.from({ length: 2 }).map((_, i) => (
         <div key={i} className="rounded-xl border border-line bg-surface p-5 space-y-3">
           <Skeleton className="h-3 w-16" />

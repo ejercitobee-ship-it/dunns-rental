@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { formatCurrency } from '../lib/utils';
@@ -635,16 +636,16 @@ export function DataMigration() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Data Migration</h1>
-        </div>
-        <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
-          <Download className="h-4 w-4 mr-2" />
-          Download Template
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Administration"
+        title="Data Migration"
+        actions={
+          <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
+            <Download className="h-4 w-4 mr-2" />
+            Download Template
+          </Button>
+        }
+      />
 
       {/* Instructions */}
       <Card>
@@ -698,7 +699,7 @@ export function DataMigration() {
         <CardContent>
           <div className="space-y-4">
             <div className="bg-canvas rounded-lg p-4 space-y-2">
-              <p className="text-sm font-medium text-ink">Your CSV file should have sections separated by headers.</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Your CSV file should have sections separated by headers.</p>
               <code className="block bg-sidebar text-primary-soft px-4 py-3 rounded-lg text-xs font-mono overflow-x-auto">
                 === PROPERTIES ===<br/>
                 id,name,address,city,state,zipCode,type,description<br/>
@@ -778,7 +779,7 @@ export function DataMigration() {
             onChange={(e) => setCsvData(e.target.value)}
             rows={15}
             placeholder="Paste your CSV data here..."
-            className="w-full px-4 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 font-mono text-sm"
+            className="w-full px-4 py-3 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 font-mono text-sm"
           />
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -866,52 +867,52 @@ export function DataMigration() {
                 <div className="max-h-96 overflow-y-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-line bg-canvas">
+                      <tr className="border-b border-line bg-canvas/60">
                         {activeTab === 'properties' && (
                           <>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Name</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Address</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">City</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Type</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Name</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Address</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">City</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Type</th>
                           </>
                         )}
                         {activeTab === 'units' && (
                           <>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Unit</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Property</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Bed/Bath</th>
-                            <th className="text-right py-2 px-3 text-sm font-medium text-ink">Rent</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Property</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Bed/Bath</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Rent</th>
                           </>
                         )}
                         {activeTab === 'tenants' && (
                           <>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Name</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Email</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Phone</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Name</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Email</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Phone</th>
                           </>
                         )}
                         {activeTab === 'leases' && (
                           <>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Unit</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Tenants</th>
-                            <th className="text-right py-2 px-3 text-sm font-medium text-ink">Rent</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Status</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Unit</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Tenants</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Rent</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
                           </>
                         )}
                         {activeTab === 'rents' && (
                           <>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Lease</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Paid By</th>
-                            <th className="text-right py-2 px-3 text-sm font-medium text-ink">Amount</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Status</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Lease</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Paid By</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
                           </>
                         )}
                         {activeTab === 'expenses' && (
                           <>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Category</th>
-                            <th className="text-right py-2 px-3 text-sm font-medium text-ink">Amount</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Date</th>
-                            <th className="text-left py-2 px-3 text-sm font-medium text-ink">Description</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Category</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Amount</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Date</th>
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase tracking-wider">Description</th>
                           </>
                         )}
                       </tr>

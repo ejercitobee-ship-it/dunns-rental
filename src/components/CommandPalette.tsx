@@ -12,6 +12,7 @@ import { useExitAnimation } from '../lib/useExitAnimation';
 import { handymenApi, tenantsApi } from '../lib/api';
 import type { RealtorUserOption } from '../lib/api';
 import type { Handyman } from '../types';
+import { formatPhone } from '../lib/utils';
 
 const ROUTES: { name: string; path: string; icon: LucideIcon; keywords: string }[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard, keywords: 'home overview stats' },
@@ -131,7 +132,7 @@ export function CommandPalette() {
           if (prop) parts.push(prop.address);
           if (unit) parts.push(`Unit ${unit.unitNumber}`);
         }
-        if (t.phone) parts.push(t.phone);
+        if (t.phone) parts.push(formatPhone(t.phone));
         if (!parts.length && t.email) parts.push(t.email);
 
         out.push({
@@ -175,7 +176,7 @@ export function CommandPalette() {
       ) {
         const hParts: string[] = [];
         if (h.companyName) hParts.push(h.companyName);
-        if (h.phone) hParts.push(h.phone);
+        if (h.phone) hParts.push(formatPhone(h.phone));
         if (!hParts.length && h.email) hParts.push(h.email);
         out.push({
           kind: 'handyman',
@@ -200,7 +201,7 @@ export function CommandPalette() {
         (qDigits.length >= 3 && rPhone.includes(qDigits))
       ) {
         const rParts: string[] = [r.email];
-        if (r.phone) rParts.push(r.phone);
+        if (r.phone) rParts.push(formatPhone(r.phone));
         out.push({
           kind: 'realtor',
           label: r.name,

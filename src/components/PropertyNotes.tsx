@@ -8,6 +8,7 @@ import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { propertyNotesApi } from '../lib/api';
+import { TextInput, SelectInput, TextareaInput } from './ui/FormField';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type { PropertyNote, NoteCategory, NoteAttachment } from '../types';
@@ -217,7 +218,7 @@ export function PropertyNotes({ propertyId }: Props) {
             placeholder="Search notes..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-line bg-surface text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-line bg-surface text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10"
           />
         </div>
         <select
@@ -254,7 +255,7 @@ export function PropertyNotes({ propertyId }: Props) {
           {notes.map(note => {
             const isExpanded = expanded.has(note.id);
             return (
-              <Card key={note.id} className={`transition-shadow ${note.isPinned ? 'ring-1 ring-primary/30' : ''}`}>
+              <Card key={note.id} className={`transition-shadow ${note.isPinned ? 'ring-1 ring-primary/10' : ''}`}>
                 <CardContent className="p-4">
                   {/* Header */}
                   <div className="flex items-start gap-3">
@@ -410,38 +411,18 @@ export function PropertyNotes({ propertyId }: Props) {
       {/* Create/Edit modal */}
       <Modal isOpen={modalOpen} onClose={() => !saving && setModalOpen(false)} title={editingNote ? 'Edit Note' : 'New Note'} size="lg">
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Title</label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              placeholder="Note title"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-line bg-surface text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
-            <select
-              value={form.category}
-              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-line bg-surface text-ink"
-            >
-              {CATEGORIES.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Content</label>
-            <textarea
-              value={form.content}
-              onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-              rows={8}
-              placeholder="Write your note here..."
-              className="w-full px-3 py-2 text-sm rounded-lg border border-line bg-surface text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
-            />
-          </div>
+          <TextInput label="Title" name="noteTitle"
+            value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            placeholder="Note title" />
+          <SelectInput label="Category" name="noteCategory"
+            value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+            {CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </SelectInput>
+          <TextareaInput label="Content" name="noteContent" rows={8}
+            value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+            placeholder="Write your note here..." />
           {canPin && (
             <label className="flex items-center gap-2 text-sm">
               <input

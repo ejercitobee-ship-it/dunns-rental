@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Wrench, MapPin, User, Phone, Calendar, Clock, CheckCircle2, Plus, Upload, FileText, X } from 'lucide-react';
+import { Wrench, MapPin, User, Phone, Calendar, Clock, CheckCircle2, Plus, Upload, FileText, X, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -10,9 +10,12 @@ import { STATUS_BADGE, STATUS_LABEL, tradeLabel, approvalBadge } from '../../lib
 import { formatDate, formatCurrency, todayLocalDate } from '../../lib/utils';
 import { MAINTENANCE_TRADES } from '../../types';
 import { HandymanProfileCard } from '../../components/HandymanProfileCard';
+import { TextInput, SelectInput, TextareaInput } from '../../components/ui/FormField';
 
 type Places = { properties: { id: string; name: string; address: string }[]; units: { id: string; propertyId: string; unitNumber: string }[] };
-const emptyReport = { propertyId: '', unitId: '', title: '', description: '', category: 'general', cost: '', date: todayLocalDate() };
+type ReportItem = { propertyId: string; unitId: string; title: string; cost: string };
+const emptyItem = (): ReportItem => ({ propertyId: '', unitId: '', title: '', cost: '' });
+const emptyReport = () => ({ items: [emptyItem()], description: '', category: 'general', date: todayLocalDate() });
 
 const emptyInvoice = {
   invoiceNumber: '',
@@ -146,7 +149,7 @@ function JobCard({
                   type="datetime-local"
                   value={when}
                   onChange={(e) => setWhen(e.target.value)}
-                  className="px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 />
               </div>
               <Button onClick={() => onSchedule(when)} disabled={busy || !when}>Confirm time</Button>
@@ -161,7 +164,7 @@ function JobCard({
                 type="datetime-local"
                 value={when}
                 onChange={(e) => setWhen(e.target.value)}
-                className="px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 aria-label="Change time"
               />
               <Button variant="secondary" onClick={() => onSchedule(when)} disabled={busy || !when}>Change time</Button>
@@ -217,7 +220,7 @@ export function HandymanJobs() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [places, setPlaces] = useState<Places>({ properties: [], units: [] });
-  const [report, setReport] = useState(emptyReport);
+  const [report, setReport] = useState(emptyReport());
 
   // Invoice upload state.
   const [invoiceJob, setInvoiceJob] = useState<PortalMaintenanceRequest | null>(null);
@@ -239,27 +242,39 @@ export function HandymanJobs() {
     portalApi.handymanPlaces().then(setPlaces).catch(() => setPlaces({ properties: [], units: [] }));
   }, []);
 
+  const updateItem = (idx: number, patch: Partial<ReportItem>) => {
+    setReport(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, ...patch } : it) }));
+  };
+  const addItem = () => setReport(prev => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  const removeItem = (idx: number) => setReport(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+
   const submitReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (reportBusy) return;
-    const cost = Number(report.cost);
-    if (!report.title.trim()) { showToast('Add a short title for the work.', 'error'); return; }
-    if (!report.propertyId) { showToast('Choose the property.', 'error'); return; }
-    if (!Number.isFinite(cost) || cost < 0) { showToast('Enter a valid cost.', 'error'); return; }
+    for (let i = 0; i < report.items.length; i++) {
+      const it = report.items[i];
+      if (!it.title.trim()) { showToast(`Item ${i + 1}: add a short title for the work.`, 'error'); return; }
+      if (!it.propertyId) { showToast(`Item ${i + 1}: choose the property.`, 'error'); return; }
+      const c = Number(it.cost);
+      if (!Number.isFinite(c) || c < 0) { showToast(`Item ${i + 1}: enter a valid cost.`, 'error'); return; }
+    }
     setReportBusy(true);
     try {
       await portalApi.reportWork({
-        propertyId: report.propertyId,
-        unitId: report.unitId || undefined,
-        title: report.title.trim(),
+        items: report.items.map(it => ({
+          propertyId: it.propertyId,
+          unitId: it.unitId || undefined,
+          title: it.title.trim(),
+          cost: Number(it.cost),
+        })),
         description: report.description.trim() || undefined,
         category: report.category,
-        cost,
         date: report.date,
       });
-      showToast('Work logged. The office will review and approve it.', 'success');
+      const count = report.items.length;
+      showToast(`${count > 1 ? `${count} items` : 'Work'} logged. The office will review and approve.`, 'success');
       setReportOpen(false);
-      setReport(emptyReport);
+      setReport(emptyReport());
       setTab('completed');
       load();
     } catch (err) {
@@ -366,7 +381,7 @@ export function HandymanJobs() {
           <h1 className="font-display text-[26px] text-ink mt-1">Jobs</h1>
           <p className="text-sm text-muted mt-1">Claim available jobs in your trades, confirm a time, and update progress.</p>
         </div>
-        <Button onClick={() => { setReport(emptyReport); setReportOpen(true); }} className="flex-shrink-0">
+        <Button onClick={() => { setReport(emptyReport()); setReportOpen(true); }} className="flex-shrink-0">
           <Plus className="h-4 w-4 mr-1.5" /> Report work
         </Button>
       </div>
@@ -420,94 +435,85 @@ export function HandymanJobs() {
 
       {/* Report work I did (for jobs the tenant never filed). Goes to the office
           for approval before it counts as an expense. */}
-      <Modal isOpen={reportOpen} onClose={() => setReportOpen(false)} title="Report work I did" size="md">
+      <Modal isOpen={reportOpen} onClose={() => setReportOpen(false)} title="Report work I did" size="lg">
         <form onSubmit={submitReport} className="space-y-4">
           <p className="text-sm text-muted">
             Log work you did so the office can approve it. It does not count as an expense until they approve the cost.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">What did you do? *</label>
-            <input
-              type="text"
-              value={report.title}
-              onChange={(e) => setReport({ ...report, title: e.target.value })}
-              placeholder="e.g. Replaced kitchen faucet"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+
+          {report.items.map((item, idx) => (
+            <div key={idx} className="relative rounded-lg border border-line p-3 space-y-3">
+              {report.items.length > 1 && (
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-muted">Location {idx + 1}</span>
+                  <button type="button" onClick={() => removeItem(idx)} className="text-muted hover:text-danger transition-colors p-0.5">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <TextInput label="What did you do?" name={`reportTitle${idx}`} required
+                value={item.title} onChange={(e) => updateItem(idx, { title: e.target.value })}
+                placeholder="e.g. Replaced kitchen faucet" />
+              <div className="grid grid-cols-2 gap-3">
+                <SelectInput label="Property" name={`reportProperty${idx}`} required
+                  value={item.propertyId} onChange={(e) => updateItem(idx, { propertyId: e.target.value, unitId: '' })}>
+                  <option value="">Select property</option>
+                  {places.properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </SelectInput>
+                <SelectInput label="Unit" name={`reportUnit${idx}`}
+                  value={item.unitId} onChange={(e) => updateItem(idx, { unitId: e.target.value })}>
+                  <option value="">Whole property</option>
+                  {places.units.filter(u => u.propertyId === item.propertyId).map(u => (
+                    <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
+                  ))}
+                </SelectInput>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">Your cost *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.cost}
+                    onChange={(e) => updateItem(idx, { cost: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addItem}
+            className="flex items-center gap-1.5 text-sm text-primary hover:text-primary-hover font-medium transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add another location
+          </button>
+
+          {report.items.length > 1 && (
+            <p className="text-xs text-muted">
+              Total: {formatCurrency(report.items.reduce((s, it) => s + (Number(it.cost) || 0), 0))}
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Property *</label>
-              <select
-                value={report.propertyId}
-                onChange={(e) => setReport({ ...report, propertyId: e.target.value, unitId: '' })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                <option value="">Select property</option>
-                {places.properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Unit</label>
-              <select
-                value={report.unitId}
-                onChange={(e) => setReport({ ...report, unitId: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                <option value="">Whole property</option>
-                {places.units.filter(u => u.propertyId === report.propertyId).map(u => (
-                  <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>
-                ))}
-              </select>
-            </div>
+            <SelectInput label="Trade" name="reportTrade"
+              value={report.category} onChange={(e) => setReport({ ...report, category: e.target.value })}>
+              {MAINTENANCE_TRADES.map(t => <option key={t} value={t} className="capitalize">{tradeLabel(t)}</option>)}
+            </SelectInput>
+            <TextInput label="Date done" name="reportDate" type="date"
+              value={report.date} onChange={(e) => setReport({ ...report, date: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Trade</label>
-              <select
-                value={report.category}
-                onChange={(e) => setReport({ ...report, category: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface capitalize focus:outline-none focus:ring-2 focus:ring-primary/25"
-              >
-                {MAINTENANCE_TRADES.map(t => <option key={t} value={t} className="capitalize">{tradeLabel(t)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Date done</label>
-              <input
-                type="date"
-                value={report.date}
-                onChange={(e) => setReport({ ...report, date: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Your cost *</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={report.cost}
-                onChange={(e) => setReport({ ...report, cost: e.target.value })}
-                placeholder="0.00"
-                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
-            <p className="text-xs text-muted mt-1">The office reviews and approves the final amount.</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Notes (optional)</label>
-            <textarea
-              rows={2}
-              value={report.description}
-              onChange={(e) => setReport({ ...report, description: e.target.value })}
-              placeholder="Anything the office should know"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+
+          <TextareaInput label="Notes (optional)" name="reportNotes" rows={2}
+            value={report.description} onChange={(e) => setReport({ ...report, description: e.target.value })}
+            placeholder="Anything the office should know" />
+          <p className="text-xs text-muted">The office reviews and approves the final amounts.</p>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setReportOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={reportBusy}>{reportBusy ? 'Submitting...' : 'Submit for approval'}</Button>
@@ -567,25 +573,11 @@ export function HandymanJobs() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Invoice # *</label>
-              <input
-                type="text"
-                value={invoice.invoiceNumber}
-                onChange={(e) => setInvoice({ ...invoice, invoiceNumber: e.target.value })}
-                placeholder="e.g. INV-001"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Invoice date *</label>
-              <input
-                type="date"
-                value={invoice.invoiceDate}
-                onChange={(e) => setInvoice({ ...invoice, invoiceDate: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-              />
-            </div>
+            <TextInput label="Invoice #" name="invoiceNumber" required
+              value={invoice.invoiceNumber} onChange={(e) => setInvoice({ ...invoice, invoiceNumber: e.target.value })}
+              placeholder="e.g. INV-001" />
+            <TextInput label="Invoice date" name="invoiceDate" type="date" required
+              value={invoice.invoiceDate} onChange={(e) => setInvoice({ ...invoice, invoiceDate: e.target.value })} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -600,7 +592,7 @@ export function HandymanJobs() {
                   value={invoice.laborAmount}
                   onChange={(e) => setInvoice({ ...invoice, laborAmount: e.target.value })}
                   placeholder="0.00"
-                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 />
               </div>
             </div>
@@ -615,7 +607,7 @@ export function HandymanJobs() {
                   value={invoice.materialAmount}
                   onChange={(e) => setInvoice({ ...invoice, materialAmount: e.target.value })}
                   placeholder="0.00"
-                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 />
               </div>
             </div>
@@ -629,16 +621,9 @@ export function HandymanJobs() {
             </span>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Notes (optional)</label>
-            <textarea
-              rows={2}
-              value={invoice.notes}
-              onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
-              placeholder="Anything the office should know about this invoice"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+          <TextareaInput label="Notes (optional)" name="invoiceNotes" rows={2}
+            value={invoice.notes} onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
+            placeholder="Anything the office should know about this invoice" />
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setInvoiceJob(null)}>Cancel</Button>

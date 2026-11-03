@@ -7,8 +7,11 @@ import {
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Modal } from '../components/ui/Modal';
-import { formatCurrency, formatDate, todayLocalDate, cn } from '../lib/utils';
+import { TextInput, TextareaInput } from '../components/ui/FormField';
+import { formatCurrency, formatDate, todayLocalDate, cn, formatPhone } from '../lib/utils';
+import { EmailInput } from '../components/ui/EmailInput';
 import { ProspectiveTenantsPanel } from '../components/ProspectiveTenantsPanel';
 import { tenantsApi, leasesApi } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -542,26 +545,26 @@ export function Tenants() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">People</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Tenants</h1>
-        </div>
-        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-          {view === 'active' && (
-            <Button variant="outline" onClick={exportActiveCSV} className="w-full sm:w-auto">
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-          )}
-          {canCreateTenant && view === 'active' && (
-            <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Tenancy
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="People"
+        title="Tenants"
+        actions={
+          <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+            {view === 'active' && (
+              <Button variant="outline" onClick={exportActiveCSV} className="w-full sm:w-auto">
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
+            {canCreateTenant && view === 'active' && (
+              <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Tenancy
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {/* Current tenants vs terminated tenancies vs prospective applicants */}
       <div className="rounded-xl border border-line bg-surface p-1 inline-flex -mt-2">
@@ -622,7 +625,7 @@ export function Tenants() {
           <input
             type="text"
             placeholder="Search by name, email, or phone..."
-            className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -646,13 +649,13 @@ export function Tenants() {
           <div className="overflow-x-auto sm:overflow-visible">
             <table className="w-full min-w-[860px] sm:min-w-0">
               <thead>
-                <tr className="border-b border-line bg-canvas">
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Household</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Property &amp; Unit</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Contact</th>
-                  <th className="text-left py-3 px-4 font-semibold text-ink text-sm">Lease Term</th>
-                  <th className="text-right py-3 px-4 font-semibold text-ink text-sm">Rent</th>
-                  <th className="text-center py-3 px-4 font-semibold text-ink text-sm">Status</th>
+                <tr className="border-b border-line bg-canvas/60">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Household</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Property & Unit</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Contact</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Lease Term</th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Rent</th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -753,7 +756,7 @@ export function Tenants() {
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted">
                                   <Phone className="h-3 w-3 text-faint" />
-                                  <span>{occupants[0].phone ? highlightMatch(occupants[0].phone) : '—'}</span>
+                                  <span>{occupants[0].phone ? highlightMatch(formatPhone(occupants[0].phone)) : '—'}</span>
                                 </div>
                               </div>
                             ) : (
@@ -855,7 +858,7 @@ export function Tenants() {
               <label className="block text-sm font-medium text-ink mb-1.5">Unit *</label>
               <select
                 required
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 value={tenancyForm.unitId}
                 onChange={(e) => handleUnitChange(e.target.value)}
               >
@@ -899,49 +902,40 @@ export function Tenants() {
             </div>
 
             <div className={`grid gap-4 ${tenancyForm.leaseType === 'month_to_month' ? '' : 'grid-cols-2'}`}>
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">Start Date</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  value={tenancyForm.startDate}
-                  onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
-                />
-              </div>
+              <TextInput
+                label="Start Date"
+                type="date"
+                value={tenancyForm.startDate}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, startDate: e.target.value })}
+              />
               {tenancyForm.leaseType === 'fixed' && (
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-1.5">End Date</label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                    value={tenancyForm.endDate}
-                    onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
-                  />
-                </div>
+                <TextInput
+                  label="End Date"
+                  type="date"
+                  value={tenancyForm.endDate}
+                  onChange={(e) => setTenancyForm({ ...tenancyForm, endDate: e.target.value })}
+                />
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">Monthly Rent *</label>
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  step="0.01"
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  value={tenancyForm.monthlyRent}
-                  onChange={(e) => setTenancyForm({ ...tenancyForm, monthlyRent: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
+              <TextInput
+                label="Monthly Rent"
+                required
+                type="number"
+                min={0}
+                step="0.01"
+                value={tenancyForm.monthlyRent}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, monthlyRent: e.target.value })}
+                placeholder="0.00"
+              />
               <div>
                 <label className="block text-sm font-medium text-ink mb-1.5">Move-In Fee</label>
                 <input
                   type="number"
                   min={0}
                   step="0.01"
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                   value={tenancyForm.securityDeposit}
                   onChange={(e) => setTenancyForm({ ...tenancyForm, securityDeposit: e.target.value })}
                   placeholder="0.00"
@@ -961,7 +955,7 @@ export function Tenants() {
                       <label className="block text-xs font-medium text-muted mb-1">Date Paid *</label>
                       <input
                         type="date"
-                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                         value={tenancyForm.moveInFeePaidDate}
                         onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeePaidDate: e.target.value })}
                       />
@@ -969,7 +963,7 @@ export function Tenants() {
                     <div>
                       <label className="block text-xs font-medium text-muted mb-1">Method</label>
                       <select
-                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                         value={tenancyForm.moveInFeeMethod}
                         onChange={(e) => setTenancyForm({ ...tenancyForm, moveInFeeMethod: e.target.value })}
                       >
@@ -996,7 +990,7 @@ export function Tenants() {
                     type="number"
                     min={0}
                     step="0.01"
-                    className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    className="w-full pl-7 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                     value={tenancyForm.depositAmount}
                     onChange={(e) => setTenancyForm({ ...tenancyForm, depositAmount: e.target.value })}
                     placeholder="0.00"
@@ -1017,7 +1011,7 @@ export function Tenants() {
                       <label className="block text-xs font-medium text-muted mb-1">Date Collected</label>
                       <input
                         type="date"
-                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                         value={tenancyForm.depositPaidDate}
                         onChange={(e) => setTenancyForm({ ...tenancyForm, depositPaidDate: e.target.value })}
                       />
@@ -1025,7 +1019,7 @@ export function Tenants() {
                     <div>
                       <label className="block text-xs font-medium text-muted mb-1">Method</label>
                       <select
-                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 text-sm"
+                        className="w-full px-3 py-1.5 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 text-sm"
                         value={tenancyForm.depositMethod}
                         onChange={(e) => setTenancyForm({ ...tenancyForm, depositMethod: e.target.value })}
                       >
@@ -1044,31 +1038,25 @@ export function Tenants() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-ink mb-1.5">Rent Due Day</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={31}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                  value={tenancyForm.rentDueDay}
-                  onChange={(e) => setTenancyForm({ ...tenancyForm, rentDueDay: e.target.value })}
-                  placeholder="Global default"
-                />
-                <p className="text-xs text-muted mt-1">Leave blank to use the global setting from Settings.</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Notes</label>
-              <textarea
-                rows={2}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                value={tenancyForm.notes}
-                onChange={(e) => setTenancyForm({ ...tenancyForm, notes: e.target.value })}
-                placeholder="Any additional notes..."
+              <TextInput
+                label="Rent Due Day"
+                type="number"
+                min={1}
+                max={31}
+                value={tenancyForm.rentDueDay}
+                onChange={(e) => setTenancyForm({ ...tenancyForm, rentDueDay: e.target.value })}
+                placeholder="Global default"
+                hint="Leave blank to use the global setting from Settings."
               />
             </div>
+
+            <TextareaInput
+              label="Notes"
+              rows={2}
+              value={tenancyForm.notes}
+              onChange={(e) => setTenancyForm({ ...tenancyForm, notes: e.target.value })}
+              placeholder="Any additional notes..."
+            />
           </div>
 
           <hr className="border-line" />
@@ -1100,46 +1088,34 @@ export function Tenants() {
                 )}
                 <p className="eyebrow">Person {index + 1}</p>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-ink mb-1.5">First Name *</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                      value={row.firstName}
-                      onChange={(e) => updatePersonRow(row.key, { firstName: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-ink mb-1.5">Last Name *</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                      value={row.lastName}
-                      onChange={(e) => updatePersonRow(row.key, { lastName: e.target.value })}
-                    />
-                  </div>
+                  <TextInput
+                    label="First Name"
+                    required
+                    value={row.firstName}
+                    onChange={(e) => updatePersonRow(row.key, { firstName: e.target.value })}
+                  />
+                  <TextInput
+                    label="Last Name"
+                    required
+                    value={row.lastName}
+                    onChange={(e) => updatePersonRow(row.key, { lastName: e.target.value })}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
-                    <input
-                      type="email"
-                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    <EmailInput
+                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                       value={row.email}
                       onChange={(e) => updatePersonRow(row.key, { email: e.target.value })}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
-                    <input
-                      type="tel"
-                      className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-                      value={row.phone}
-                      onChange={(e) => updatePersonRow(row.key, { phone: e.target.value })}
-                    />
-                  </div>
+                  <TextInput
+                    label="Phone"
+                    type="tel"
+                    value={formatPhone(row.phone)}
+                    onChange={(e) => updatePersonRow(row.key, { phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  />
                 </div>
               </div>
             ))}

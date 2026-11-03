@@ -4,20 +4,27 @@ import {
   DollarSign, Calendar, CheckCircle, XCircle, Clock, AlertCircle,
   Search, Download, Upload,
   TrendingUp, TrendingDown, FileText, ChevronRight, ChevronDown,
-  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2, Edit2, AlertTriangle,
+  CreditCard, Banknote, Wallet, Smartphone, Receipt, Trash2, Edit2, AlertTriangle, Send,
+  FileWarning,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StatCard } from '../components/ui/StatCard';
+import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID } from '../components/ui/chartConstants';
 import { Modal } from '../components/ui/Modal';
+import { TextInput } from '../components/ui/FormField';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi, leasesApi, tenantsApi } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi, tenantsApi, noticesApi, settingsApi, type AppSettings } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { activeLeases, settleMonthWithCredit, leasesOwingMonth, rentIncomeForMonthsAccrual, groupLeaseMonthRows, unsettledMonths, vacancyLossForYear, type MonthSettlement, type TenantRentGroup } from '../lib/rent';
+import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { Lease, RentPayment, LateFee, PaymentMethod, Property, Unit, Tenant } from '../types';
+import { SendPaymentLinkModal } from '../components/SendPaymentLinkModal';
 import {
   BarChart,
   Bar,
@@ -115,6 +122,7 @@ export function Rents() {
   } = useApp();
   const { hasPermission } = useAuth();
   const { showToast } = useToast();
+  const pastDueThreshold = usePastDueMonths();
   const [searchTerm, setSearchTerm] = useState('');
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
   const [view, setView] = useState<'payments' | 'annual' | 'tax' | 'late_fees'>('payments');
@@ -267,6 +275,11 @@ export function Rents() {
   const [settlePayer, setSettlePayer] = useState('');
   const [isSettling, setIsSettling] = useState(false);
   const isSettlingRef = useRef(false);
+
+  const [paymentLinkTarget, setPaymentLinkTarget] = useState<{
+    tenantName: string; tenantEmail: string; tenantId: string; leaseId: string;
+    owedMonths: { month: number; year: number; amount: number }[];
+  } | null>(null);
 
   // Which tenant rows are expanded to show their month-by-month detail.
   // Everything starts collapsed; the row summary carries this month's status
@@ -554,10 +567,10 @@ export function Rents() {
   }, [units, leases, yearFilter]);
 
   const statCards = [
-    { label: 'Total Collected', value: formatCurrency(yearStats.totalCollected), icon: <DollarSign />, valueClass: 'text-ink' },
-    { label: 'Outstanding', value: formatCurrency(yearStats.outstanding), icon: <AlertCircle />, valueClass: yearStats.outstanding > 0 ? 'text-danger' : 'text-ink' },
-    { label: 'Collection Rate', value: `${yearStats.collectionRate.toFixed(1)}%`, icon: <TrendingUp />, valueClass: 'text-ink' },
-    { label: 'Overdue', value: yearStats.overdueCount, icon: <XCircle />, valueClass: yearStats.overdueCount > 0 ? 'text-danger' : 'text-ink' },
+    { label: 'Total Collected', value: formatCurrency(yearStats.totalCollected), icon: <DollarSign /> },
+    { label: 'Outstanding', value: formatCurrency(yearStats.outstanding), icon: <AlertCircle />, valueColor: yearStats.outstanding > 0 ? 'text-danger' : undefined },
+    { label: 'Collection Rate', value: `${yearStats.collectionRate.toFixed(1)}%`, icon: <TrendingUp /> },
+    { label: 'Overdue', value: yearStats.overdueCount, icon: <XCircle />, valueColor: yearStats.overdueCount > 0 ? 'text-danger' : undefined },
   ];
 
   // Shared confirm dialog state for destructive actions on this page.
@@ -565,6 +578,25 @@ export function Rents() {
     open: boolean; title: string; message: string; onConfirm: () => void;
     variant?: 'danger' | 'warning' | 'info'; confirmText?: string;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  // Pre 5 Day bulk notice state
+  interface Pre5DayTarget {
+    leaseId: string;
+    tenantId: string;
+    tenantName: string;
+    tenantEmail: string;
+    propertyId: string;
+    unitId: string;
+    propertyAddress: string;
+    unitNumber: string;
+    monthlyRent: number;
+    monthsBehind: number;
+    totalOwed: number;
+  }
+  const [pre5DayModalOpen, setPre5DayModalOpen] = useState(false);
+  const [pre5DayTargets, setPre5DayTargets] = useState<Pre5DayTarget[]>([]);
+  const [pre5DaySending, setPre5DaySending] = useState(false);
+  const [pre5DaySettings, setPre5DaySettings] = useState<AppSettings | null>(null);
 
   // Super Admin only: undo a mistakenly recorded payment. Removes every payment
   // logged for this lease-month (and its receipt), so the month goes back to owed.
@@ -1246,28 +1278,158 @@ export function Rents() {
     showToast(`Exported ${rows.length} tenant${rows.length === 1 ? '' : 's'} who owe rent.`, 'success');
   };
 
+  const openPre5DayModal = async () => {
+    const year = parseInt(yearFilter, 10);
+    const todayDate = new Date();
+    const todayYear = todayDate.getFullYear();
+    const todayMonth = todayDate.getMonth() + 1;
+    const elapsedThrough = year < todayYear ? 12 : year > todayYear ? 0 : todayMonth;
+
+    const targets: Pre5DayTarget[] = [];
+
+    for (const group of tenantGroups) {
+      if (group.lease.status === 'ended') continue;
+
+      let totalOwed = 0;
+      let behind = 0;
+      for (const mr of group.monthRows) {
+        if (mr.month > elapsedThrough) continue;
+        if (mr.settlement.balance <= 0.005) continue;
+        totalOwed = Math.round((totalOwed + mr.settlement.balance) * 100) / 100;
+        behind += 1;
+      }
+      if (behind < pastDueThreshold) continue;
+
+      const head = group.monthRows[0];
+      const occupants = head?.occupants ?? [];
+      if (occupants.length === 0) continue;
+
+      const primary = occupants[0];
+      targets.push({
+        leaseId: group.lease.id,
+        tenantId: primary.id,
+        tenantName: `${primary.firstName} ${primary.lastName}`.trim(),
+        tenantEmail: primary.email || '',
+        propertyId: head?.property?.id || group.lease.propertyId || '',
+        unitId: head?.unit?.id || group.lease.unitId || '',
+        propertyAddress: head?.property?.address || head?.property?.name || '',
+        unitNumber: head?.unit?.unitNumber || '',
+        monthlyRent: group.lease.monthlyRent || 0,
+        monthsBehind: behind,
+        totalOwed,
+      });
+    }
+
+    if (targets.length === 0) {
+      showToast(`No tenants are ${pastDueThreshold}+ months behind for ${yearFilter}.`, 'success');
+      return;
+    }
+
+    targets.sort((a, b) => b.totalOwed - a.totalOwed);
+    setPre5DayTargets(targets);
+
+    try {
+      const s = await settingsApi.get();
+      setPre5DaySettings(s);
+    } catch { /* use defaults */ }
+
+    setPre5DayModalOpen(true);
+  };
+
+  const sendPre5DayNotices = async (emailTenants: boolean) => {
+    if (pre5DaySending) return;
+    setPre5DaySending(true);
+
+    const co = pre5DaySettings?.company;
+    const companyName = co?.companyName || 'MH Dunn Property';
+    const companyAddress = co ? `${co.address}, ${co.city}, ${co.state} ${co.zipCode}` : '';
+    const companyPhone = co?.phone || '';
+    const today = todayLocalDate();
+
+    const notices = pre5DayTargets.map(t => {
+      const location = [t.propertyAddress, t.unitNumber ? `Unit ${t.unitNumber}` : null].filter(Boolean).join(', ');
+      const body =
+`Date: ${formatDate(today)}
+
+To: ${t.tenantName}
+Property: ${location}
+
+RE: Courtesy Warning: Rent Past Due (${t.monthsBehind} month${t.monthsBehind > 1 ? 's' : ''})
+
+Dear ${t.tenantName},
+
+This letter serves as a courtesy warning that your rent account is currently past due in the amount of ${formatCurrency(t.totalOwed)}, covering ${t.monthsBehind} month${t.monthsBehind > 1 ? 's' : ''} of unpaid rent.
+
+We are reaching out before taking formal legal action. Under Illinois law (735 ILCS 5/9 209), a landlord may serve a 5 Day Notice to Pay or Quit when rent is past due. Once that formal notice is served, you will have only 5 days to pay the full balance or vacate the premises. Failure to comply with the formal 5 Day Notice may result in eviction proceedings being filed in court.
+
+We strongly encourage you to contact our office immediately to make payment arrangements or discuss your situation. Our goal is to resolve this without legal action.
+
+Please remit full payment of ${formatCurrency(t.totalOwed)} as soon as possible to avoid receiving a formal 5 Day Notice.
+
+Sincerely,
+
+${companyName}
+${companyAddress}
+${companyPhone}`;
+
+      return {
+        propertyId: t.propertyId,
+        unitId: t.unitId,
+        leaseId: t.leaseId,
+        tenantId: t.tenantId,
+        tenantEmail: t.tenantEmail || undefined,
+        type: 'pre_5_day',
+        title: 'Pre 5 Day Notice: Courtesy Warning',
+        body,
+        noticeDate: today,
+        monthsBehind: t.monthsBehind,
+        totalOwed: formatCurrency(t.totalOwed),
+        tenantName: t.tenantName,
+        propertyAddress: t.propertyAddress,
+        unitNumber: t.unitNumber,
+      };
+    });
+
+    try {
+      const result = await noticesApi.createBulk({ notices, sendEmail: emailTenants });
+      const verb = emailTenants ? 'created and emailed' : 'created as drafts';
+      showToast(`${result.created} Pre 5 Day notice${result.created > 1 ? 's' : ''} ${verb}.`, 'success');
+      setPre5DayModalOpen(false);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not create notices.', 'error');
+    } finally {
+      setPre5DaySending(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="eyebrow">Rent collection</p>
-          <h1 className="font-display text-[28px] sm:text-[34px] text-ink mt-1">Rent Management</h1>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="w-full sm:w-auto">
-            <Upload className="h-4 w-4 mr-2" />
-            Import
-          </Button>
-          <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <Button variant="outline" onClick={exportDelinquentToCSV} className="w-full sm:w-auto">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Export overdue
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Rent collection"
+        title="Rent Management"
+        actions={
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="w-full sm:w-auto">
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+            <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button variant="outline" onClick={exportDelinquentToCSV} className="w-full sm:w-auto">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              Export overdue
+            </Button>
+            {hasPermission('tenants_edit') && (
+              <Button variant="outline" onClick={openPre5DayModal} className="w-full sm:w-auto">
+                <FileWarning className="h-4 w-4 mr-2" />
+                Pre 5 Day Notices
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {/* Needs review: draft leases a realtor placed, not yet finalized. These
           owe no rent, so they never appear in the table below. */}
@@ -1338,7 +1500,7 @@ export function Rents() {
       <div className="flex items-center gap-4">
         <label className="text-sm font-medium text-ink">Year:</label>
         <select
-          className="px-4 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+          className="px-4 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
           value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}
         >
@@ -1360,17 +1522,9 @@ export function Rents() {
       {view === 'payments' && (
         <>
           {/* Stats Cards */}
-          <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             {statCards.map(s => (
-              <Card key={s.label}>
-                <div className="p-5">
-                  <div className="flex items-center justify-between">
-                    <span className="eyebrow">{s.label}</span>
-                    <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{s.icon}</span>
-                  </div>
-                  <div className={`mt-3 font-display text-[27px] leading-none font-semibold tnum ${s.valueClass}`}>{s.value}</div>
-                </div>
-              </Card>
+              <StatCard key={s.label} title={s.label} value={s.value} icon={s.icon} valueColor={s.valueColor} />
             ))}
           </div>
 
@@ -1458,7 +1612,7 @@ export function Rents() {
               <input
                 type="text"
                 placeholder="Search by unit, property, or occupant..."
-                className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-10 pr-4 py-2 border border-line rounded-lg bg-surface text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary-line"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -1535,6 +1689,25 @@ export function Rents() {
                           <Button size="sm" variant="outline" onClick={() => openRecordModal(group.thisMonth!)}>
                             Record
                           </Button>
+                        )}
+                        {hasPermission('rents_manage') && occupants[0]?.email && (
+                          <button
+                            onClick={() => {
+                              const t = occupants[0];
+                              const owedMonths = unsettledMonths(group.lease, rentPayments, new Date().getMonth() + 1, parseInt(yearFilter, 10), leases, paymentAllocations);
+                              setPaymentLinkTarget({
+                                tenantName: `${t.firstName} ${t.lastName}`,
+                                tenantEmail: t.email!,
+                                tenantId: t.id,
+                                leaseId: group.lease.id,
+                                owedMonths,
+                              });
+                            }}
+                            title="Send payment link"
+                            className="p-1.5 text-faint hover:text-primary hover:bg-primary-soft rounded-md transition-colors flex-shrink-0"
+                          >
+                            <Send className="h-4 w-4" />
+                          </button>
                         )}
                         {hasPermission('leases_terminate') && (
                           <button
@@ -1709,10 +1882,10 @@ export function Rents() {
             <CardContent>
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={annualData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                  <CartesianGrid {...CHART_GRID} />
+                  <XAxis dataKey="name" {...CHART_AXIS} />
+                  <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} {...CHART_AXIS} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={CHART_TOOLTIP} />
                   <Bar dataKey="expected" fill="#3b82f6" name="Expected" />
                   <Bar dataKey="collected" fill="#10b981" name="Collected" />
                   <Bar dataKey="outstanding" fill="#ef4444" name="Outstanding" />
@@ -1730,12 +1903,12 @@ export function Rents() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b bg-canvas">
-                      <th className="text-left py-3 px-4 font-medium">Month</th>
-                      <th className="text-right py-3 px-4 font-medium">Expected</th>
-                      <th className="text-right py-3 px-4 font-medium">Collected</th>
-                      <th className="text-right py-3 px-4 font-medium">Outstanding</th>
-                      <th className="text-right py-3 px-4 font-medium">Collection Rate</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Month</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Expected</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Collected</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Outstanding</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Collection Rate</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1820,12 +1993,12 @@ export function Rents() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b bg-canvas">
-                      <th className="text-left py-3 px-4 font-medium">Quarter</th>
-                      <th className="text-right py-3 px-4 font-medium">Expected Rent</th>
-                      <th className="text-right py-3 px-4 font-medium">Collected Rent</th>
-                      <th className="text-right py-3 px-4 font-medium">Outstanding</th>
-                      <th className="text-right py-3 px-4 font-medium">Collection Rate</th>
+                    <tr className="border-b border-line bg-canvas/60">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Quarter</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Expected Rent</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Collected Rent</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Outstanding</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">Collection Rate</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2217,7 +2390,7 @@ export function Rents() {
               onChange={(e) => setImportData(e.target.value)}
               rows={10}
               placeholder="property,unit,tenant_name,amount,month,year&#10;Sunset Apartments,101,John Doe,2800,1,2026"
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25 font-mono text-sm"
+              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10 font-mono text-sm"
             />
           </div>
 
@@ -2342,7 +2515,7 @@ export function Rents() {
                   step="0.01"
                   value={recordForm.amount}
                   onChange={(e) => setRecordForm({ ...recordForm, amount: e.target.value })}
-                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                   placeholder="0.00"
                 />
               </div>
@@ -2412,7 +2585,7 @@ export function Rents() {
                                     updated[i] = { ...updated[i], amount: e.target.value };
                                     setManualAllocations(updated);
                                   }}
-                                  className="w-24 text-right px-2 py-1 border border-line rounded bg-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary/25"
+                                  className="w-24 text-right px-2 py-1 border border-line rounded bg-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary/10"
                                 />
                               ) : (
                                 <span className="font-medium text-primary">{formatCurrency(Number(alloc.amount) || 0)}</span>
@@ -2457,7 +2630,7 @@ export function Rents() {
               <select
                 value={recordForm.paidByTenantId}
                 onChange={(e) => setRecordForm({ ...recordForm, paidByTenantId: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
               >
                 <option value="">Not specified</option>
                 {recordRow.occupants.map(t => (
@@ -2472,7 +2645,7 @@ export function Rents() {
                 type="date"
                 value={recordForm.receivedDate}
                 onChange={(e) => setRecordForm({ ...recordForm, receivedDate: e.target.value })}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
             </div>
 
@@ -2508,7 +2681,7 @@ export function Rents() {
                 value={recordForm.notes}
                 onChange={(e) => setRecordForm({ ...recordForm, notes: e.target.value })}
                 placeholder="Optional note about this payment (e.g. partial, paid in cash to office)"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 resize-none"
               />
             </div>
 
@@ -2519,7 +2692,7 @@ export function Rents() {
                   type="checkbox"
                   checked={includeLateFee}
                   onChange={(e) => setIncludeLateFee(e.target.checked)}
-                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary/25"
+                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary/10"
                 />
                 <AlertTriangle className={`h-4 w-4 ${includeLateFee ? 'text-amber-600' : 'text-muted'}`} />
                 <span className="text-sm font-medium text-ink">Assess late fee</span>
@@ -2535,7 +2708,7 @@ export function Rents() {
                       value={lateFeeAmount}
                       onChange={(e) => setLateFeeAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white dark:bg-ink/10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg bg-white dark:bg-ink/10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/10"
                     />
                   </div>
                   <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -2604,7 +2777,7 @@ export function Rents() {
                     step="0.01"
                     value={editForm.amount}
                     onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
-                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                   />
                 </div>
               </div>
@@ -2614,7 +2787,7 @@ export function Rents() {
                   type="date"
                   value={editForm.paidDate}
                   onChange={(e) => setEditForm({ ...editForm, paidDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 />
               </div>
             </div>
@@ -2625,7 +2798,7 @@ export function Rents() {
                 <select
                   value={editForm.month}
                   onChange={(e) => setEditForm({ ...editForm, month: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 >
                   {Array.from({ length: 12 }, (_, i) => (
                     <option key={i + 1} value={i + 1}>{formatMonthYear(i + 1, Number(editForm.year) || new Date().getFullYear())}</option>
@@ -2640,7 +2813,7 @@ export function Rents() {
                   max={2099}
                   value={editForm.year}
                   onChange={(e) => setEditForm({ ...editForm, year: e.target.value })}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 />
               </div>
             </div>
@@ -2677,7 +2850,7 @@ export function Rents() {
                 value={editForm.notes}
                 onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                 placeholder="Optional note about this payment"
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 resize-none"
               />
             </div>
 
@@ -2725,7 +2898,7 @@ export function Rents() {
                 type="month"
                 value={settleThrough}
                 onChange={(e) => setSettleThrough(e.target.value)}
-                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
             </div>
 
@@ -2735,7 +2908,7 @@ export function Rents() {
                 <select
                   value={settlePayer}
                   onChange={(e) => setSettlePayer(e.target.value)}
-                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                  className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
                 >
                   <option value="">Not specified</option>
                   {settleTarget.occupants.map((t) => (
@@ -2790,19 +2963,16 @@ export function Rents() {
                 type="number" min="0" step="0.01"
                 value={mifForm.amount}
                 onChange={(e) => setMifForm({ ...mifForm, amount: e.target.value })}
-                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="w-full pl-8 pr-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Date paid</label>
-            <input
-              type="date"
-              value={mifForm.date}
-              onChange={(e) => setMifForm({ ...mifForm, date: e.target.value })}
-              className="w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
-            />
-          </div>
+          <TextInput
+            label="Date paid"
+            type="date"
+            value={mifForm.date}
+            onChange={(e) => setMifForm({ ...mifForm, date: e.target.value })}
+          />
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Payment method</label>
             <div className="flex flex-wrap gap-2">
@@ -2839,6 +3009,67 @@ export function Rents() {
         confirmText={confirmState.confirmText}
         variant={confirmState.variant}
       />
+
+      {paymentLinkTarget && (
+        <SendPaymentLinkModal
+          isOpen={!!paymentLinkTarget}
+          onClose={() => setPaymentLinkTarget(null)}
+          tenantName={paymentLinkTarget.tenantName}
+          tenantEmail={paymentLinkTarget.tenantEmail}
+          tenantId={paymentLinkTarget.tenantId}
+          leaseId={paymentLinkTarget.leaseId}
+          owedMonths={paymentLinkTarget.owedMonths}
+        />
+      )}
+
+      {/* Pre 5 Day Notices bulk modal */}
+      <Modal
+        isOpen={pre5DayModalOpen}
+        onClose={() => !pre5DaySending && setPre5DayModalOpen(false)}
+        title="Pre 5 Day Notices"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            {pre5DayTargets.length} tenant{pre5DayTargets.length !== 1 ? 's are' : ' is'} {pastDueThreshold}+ months behind on rent.
+            You can create draft notices to review first, or send them by email right now.
+          </p>
+
+          <div className="max-h-[360px] overflow-y-auto border border-line rounded-lg divide-y divide-line">
+            {pre5DayTargets.map(t => (
+              <div key={t.leaseId} className="flex items-center justify-between p-3 gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-ink truncate">{t.tenantName}</div>
+                  <div className="text-xs text-muted truncate">
+                    {[t.propertyAddress, t.unitNumber ? `Unit ${t.unitNumber}` : null].filter(Boolean).join(', ')}
+                  </div>
+                  {t.tenantEmail && (
+                    <div className="text-xs text-muted truncate">{t.tenantEmail}</div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-semibold text-destructive">{formatCurrency(t.totalOwed)}</div>
+                  <div className="text-xs text-muted">{t.monthsBehind} month{t.monthsBehind > 1 ? 's' : ''} behind</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPre5DayModalOpen(false)} disabled={pre5DaySending}>
+              Cancel
+            </Button>
+            <Button variant="outline" onClick={() => sendPre5DayNotices(false)} disabled={pre5DaySending}>
+              <FileText className="h-4 w-4 mr-2" />
+              {pre5DaySending ? 'Creating...' : 'Create as Drafts'}
+            </Button>
+            <Button onClick={() => sendPre5DayNotices(true)} disabled={pre5DaySending}>
+              <Send className="h-4 w-4 mr-2" />
+              {pre5DaySending ? 'Sending...' : 'Send by Email'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

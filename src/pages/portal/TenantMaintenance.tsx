@@ -10,9 +10,10 @@ import { MAINTENANCE_TRADES } from '../../types';
 import { STATUS_BADGE, STATUS_LABEL, tradeLabel } from '../../lib/maintenance';
 import { formatDate } from '../../lib/utils';
 import { resizeImage } from '../../lib/image';
+import { TextInput, SelectInput, TextareaInput } from '../../components/ui/FormField';
 
 const inputClass =
-  'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25';
+  'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10';
 
 interface Window {
   date: string;
@@ -152,7 +153,7 @@ export function TenantMaintenance() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-ink">{r.title}</span>
-                      <Badge variant={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                      <Badge variant={STATUS_BADGE[r.status]}>{r.status === 'available' ? 'Under review' : STATUS_LABEL[r.status]}</Badge>
                     </div>
                     <p className="text-xs text-muted mt-1">
                       {tradeLabel(r.category)} · reported {r.reportedDate ? formatDate(r.reportedDate) : '—'}
@@ -198,35 +199,18 @@ export function TenantMaintenance() {
 
       <Modal isOpen={isOpen} onClose={() => setOpen(false)} title="Report an issue" size="lg">
         <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">What is the issue? *</label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Leaking kitchen faucet"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Type</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
-              {MAINTENANCE_TRADES.map((t) => (
-                <option key={t} value={t}>{tradeLabel(t)}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Details</label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Anything that helps us come prepared."
-              className={inputClass}
-            />
-          </div>
+          <TextInput label="What is the issue?" name="maintenanceTitle" required
+            value={title} onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Leaking kitchen faucet" />
+          <SelectInput label="Type" name="maintenanceCategory"
+            value={category} onChange={(e) => setCategory(e.target.value)}>
+            {MAINTENANCE_TRADES.map((t) => (
+              <option key={t} value={t}>{tradeLabel(t)}</option>
+            ))}
+          </SelectInput>
+          <TextareaInput label="Details" name="maintenanceDescription" rows={3}
+            value={description} onChange={(e) => setDescription(e.target.value)}
+            placeholder="Anything that helps us come prepared." />
           <div>
             <label className="block text-sm font-medium text-ink mb-1.5">Photo (optional)</label>
             <input

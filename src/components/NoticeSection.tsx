@@ -8,6 +8,7 @@ import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { TextInput, SelectInput, TextareaInput } from './ui/FormField';
 import { formatDate, formatCurrency, todayLocalDate } from '../lib/utils';
 import { noticesApi, settingsApi, type AppSettings } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,8 @@ interface TemplateContext {
   today: string;
   lateFeeAmount: string;
   gracePeriod: string;
+  monthsBehind?: number;
+  totalOwed?: string;
 }
 
 const NOTICE_TEMPLATES: Record<Exclude<NoticeType, 'custom'>, { title: string; body: (ctx: TemplateContext) => string }> = {
@@ -49,6 +52,33 @@ This letter is to notify you that your rent payment of ${ctx.monthlyRent} is pas
 Please remit full payment immediately to avoid further action. If you have already submitted your payment, please disregard this notice.
 
 If you are experiencing financial difficulties, please contact our office to discuss payment arrangements.
+
+Sincerely,
+
+${ctx.companyName}
+${ctx.companyAddress}
+${ctx.companyPhone}`,
+  },
+
+  pre_5_day: {
+    title: 'Pre 5 Day Notice: Courtesy Warning',
+    body: (ctx) =>
+`Date: ${ctx.today}
+
+To: ${ctx.tenantName}
+Property: ${ctx.propertyAddress}${ctx.unitNumber ? `, Unit ${ctx.unitNumber}` : ''}
+
+RE: Courtesy Warning: Rent Past Due ${ctx.monthsBehind ? `(${ctx.monthsBehind} month${ctx.monthsBehind > 1 ? 's' : ''})` : ''}
+
+Dear ${ctx.tenantName},
+
+This letter serves as a courtesy warning that your rent account is currently past due${ctx.totalOwed ? ` in the amount of ${ctx.totalOwed}` : ''}${ctx.monthsBehind ? `, covering ${ctx.monthsBehind} month${ctx.monthsBehind > 1 ? 's' : ''} of unpaid rent` : ''}.
+
+We are reaching out before taking formal legal action. Under Illinois law (735 ILCS 5/9 209), a landlord may serve a 5 Day Notice to Pay or Quit when rent is past due. Once that formal notice is served, you will have only 5 days to pay the full balance or vacate the premises. Failure to comply with the formal 5 Day Notice may result in eviction proceedings being filed in court.
+
+We strongly encourage you to contact our office immediately to make payment arrangements or discuss your situation. Our goal is to resolve this without legal action.
+
+Please remit full payment of ${ctx.totalOwed || ctx.monthlyRent} as soon as possible to avoid receiving a formal 5 Day Notice.
 
 Sincerely,
 
@@ -145,6 +175,7 @@ ${ctx.companyPhone}`,
 
 const TYPE_LABEL: Record<NoticeType, string> = {
   late_rent: 'Late Rent',
+  pre_5_day: 'Pre 5 Day',
   violation: 'Lease Violation',
   non_renewal: 'Non-Renewal',
   rent_increase: 'Rent Increase',
@@ -364,6 +395,9 @@ export function NoticeSection({
                 <Button size="sm" onClick={() => openCreate('late_rent')}>
                   <Plus className="h-3.5 w-3.5 mr-1" /> Late Rent
                 </Button>
+                <Button size="sm" variant="outline" onClick={() => openCreate('pre_5_day')}>
+                  Pre 5 Day
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => openCreate('violation')}>
                   Violation
                 </Button>
@@ -470,82 +504,43 @@ export function NoticeSection({
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Template</label>
-              <select
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formType}
-                onChange={e => handleTemplateChange(e.target.value as NoticeType)}
-              >
-                <option value="late_rent">Late Rent</option>
-                <option value="violation">Lease Violation</option>
-                <option value="non_renewal">Non-Renewal</option>
-                <option value="rent_increase">Rent Increase</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Notice Date</label>
-              <input
-                type="date"
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formDate}
-                onChange={e => setFormDate(e.target.value)}
-              />
-            </div>
+            <SelectInput label="Template" name="noticeTemplate"
+              value={formType} onChange={e => handleTemplateChange(e.target.value as NoticeType)}>
+              <option value="late_rent">Late Rent</option>
+              <option value="pre_5_day">Pre 5 Day Warning</option>
+              <option value="violation">Lease Violation</option>
+              <option value="non_renewal">Non-Renewal</option>
+              <option value="rent_increase">Rent Increase</option>
+              <option value="custom">Custom</option>
+            </SelectInput>
+            <TextInput label="Notice Date" name="noticeDate" type="date"
+              value={formDate} onChange={e => setFormDate(e.target.value)} />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Title</label>
-            <input
-              type="text"
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-              value={formTitle}
-              onChange={e => setFormTitle(e.target.value)}
-              placeholder="Notice title"
-            />
-          </div>
+          <TextInput label="Title" name="noticeTitle"
+            value={formTitle} onChange={e => setFormTitle(e.target.value)}
+            placeholder="Notice title" />
 
-          <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">Body</label>
-            <textarea
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink font-mono min-h-[300px]"
-              value={formBody}
-              onChange={e => setFormBody(e.target.value)}
-              placeholder="Notice content..."
-            />
-            <p className="text-xs text-muted mt-1">
-              Edit the text above as needed. Bracketed items like [DESCRIBE THE VIOLATION HERE] should be replaced with actual details.
-            </p>
-          </div>
+          <TextareaInput label="Body" name="noticeBody" className="font-mono min-h-[300px]"
+            value={formBody} onChange={e => setFormBody(e.target.value)}
+            placeholder="Notice content..."
+            hint="Edit the text above as needed. Bracketed items like [DESCRIBE THE VIOLATION HERE] should be replaced with actual details." />
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Delivery Method</label>
-              <select
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formDelivery}
-                onChange={e => setFormDelivery(e.target.value as DeliveryMethod | '')}
-              >
-                <option value="">Select method</option>
-                <option value="hand_delivered">Hand Delivered</option>
-                <option value="posted">Posted (Mail)</option>
-                <option value="email">Email</option>
-                <option value="certified_mail">Certified Mail</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Status</label>
-              <select
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
-                value={formStatus}
-                onChange={e => setFormStatus(e.target.value as NoticeStatus)}
-              >
-                <option value="draft">Draft</option>
-                <option value="sent">Sent</option>
-                <option value="acknowledged">Acknowledged</option>
-              </select>
-            </div>
+            <SelectInput label="Delivery Method" name="noticeDelivery"
+              value={formDelivery} onChange={e => setFormDelivery(e.target.value as DeliveryMethod | '')}>
+              <option value="">Select method</option>
+              <option value="hand_delivered">Hand Delivered</option>
+              <option value="posted">Posted (Mail)</option>
+              <option value="email">Email</option>
+              <option value="certified_mail">Certified Mail</option>
+            </SelectInput>
+            <SelectInput label="Status" name="noticeStatus"
+              value={formStatus} onChange={e => setFormStatus(e.target.value as NoticeStatus)}>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="acknowledged">Acknowledged</option>
+            </SelectInput>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

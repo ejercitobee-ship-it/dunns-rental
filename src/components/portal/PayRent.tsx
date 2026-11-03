@@ -8,11 +8,11 @@ import { formatCurrency } from '../../lib/utils';
 import { useToast } from '../../context/ToastContext';
 
 function achFee(amount: number): number {
-  return Math.min(Math.round(amount * 0.008 * 100) / 100, 5);
+  return Math.min(Math.round(((amount * 0.008) / (1 - 0.008)) * 100) / 100, 5);
 }
 
 function cardFee(amount: number): number {
-  return Math.round((amount * 0.029 + 0.30) * 100) / 100;
+  return Math.round(((amount * 0.029 + 0.30) / (1 - 0.029)) * 100) / 100;
 }
 
 function feeForMethod(amount: number, type: 'us_bank_account' | 'card'): number {
@@ -213,7 +213,6 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
       if (!stripe) { showToast('Online payments are not available right now.', 'error'); setLinking(null); return; }
 
       const { clientSecret } = await portalApi.stripe.createSetupIntent('card');
-      await createCardElement(stripe);
       setCardClientSecret(clientSecret);
       setCardInputReady(true);
       setLinking(null);
@@ -223,6 +222,17 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
       cleanupCardElement();
     }
   };
+
+  useEffect(() => {
+    if (!cardInputReady || !cardClientSecret) return;
+    let cancelled = false;
+    (async () => {
+      const stripe = await getStripeJs();
+      if (!stripe || cancelled) return;
+      await createCardElement(stripe);
+    })();
+    return () => { cancelled = true; };
+  }, [cardInputReady, cardClientSecret]);
 
   const handleConfirmCard = async () => {
     if (!cardClientSecret || !_cardElement) return;
@@ -326,6 +336,7 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
     }
   };
 
+  const [showAddMethod, setShowAddMethod] = useState(false);
   const [autopayConfirmPmId, setAutopayConfirmPmId] = useState<string | null>(null);
 
   const handleToggleAutopay = async (pmId: string) => {
@@ -385,24 +396,35 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
       <CardContent className="p-5 space-y-4">
         <p className="eyebrow">Pay rent</p>
 
-        {/* Card element mount point for adding a card */}
-        <div id="stripe-card-element" className="hidden" />
         {cardInputReady && (
-          <div className="flex gap-2">
-            <Button onClick={handleConfirmCard} disabled={linking === 'card'}>
-              {linking === 'card' ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Saving...</>
-              ) : (
-                'Save card'
-              )}
-            </Button>
-            <Button variant="secondary" onClick={handleCancelCard} disabled={linking === 'card'}>
-              Cancel
-            </Button>
+          <div className="rounded-xl border border-line bg-canvas p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-lg bg-ink/5 text-ink grid place-items-center flex-shrink-0">
+                <CreditCard className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-ink">Add your card</p>
+                <p className="text-xs text-muted">2.9% + $0.30 processing fee per payment</p>
+              </div>
+            </div>
+            <div id="stripe-card-element" />
+            <div className="flex gap-2">
+              <Button onClick={handleConfirmCard} disabled={linking === 'card'}>
+                {linking === 'card' ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Saving...</>
+                ) : (
+                  'Save card'
+                )}
+              </Button>
+              <Button variant="secondary" onClick={handleCancelCard} disabled={linking === 'card'}>
+                Cancel
+              </Button>
+            </div>
           </div>
         )}
+        {!cardInputReady && <div id="stripe-card-element" className="hidden" />}
 
-        {walletAvailable && !isPaid && !payResult && (
+        {walletAvailable && !isPaid && !payResult && !cardInputReady && (
           <div className="rounded-xl border border-line bg-canvas p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -434,9 +456,8 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
           </div>
         )}
 
-        {methods.length > 0 ? (
+        {methods.length > 0 && !cardInputReady ? (
           <div className="space-y-3">
-            {/* Bank accounts */}
             {bankMethods.map(pm => (
               <PaymentMethodRow
                 key={pm.id}
@@ -454,7 +475,6 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
               />
             ))}
 
-            {/* Cards */}
             {cardMethods.map(pm => (
               <PaymentMethodRow
                 key={pm.id}
@@ -496,47 +516,29 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
                 <CheckCircle className="h-4 w-4 text-primary" /> {monthLabel} rent is paid. Nothing due.
               </p>
             )}
-          </div>
-        ) : (
-          <div className="text-center py-3">
-            <CreditCard className="h-8 w-8 text-faint mx-auto mb-2" />
-            <p className="text-sm text-muted mb-3">Add a payment method to pay rent online.</p>
-            <div className="flex flex-col sm:flex-row gap-2 justify-center">
-              <Button onClick={handleLinkBank} disabled={!!linking}>
-                {linking === 'bank' ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Connecting...</>
-                ) : (
-                  <><Building2 className="h-3.5 w-3.5 mr-1" /> Link bank account</>
-                )}
-              </Button>
-              <Button variant="secondary" onClick={handleAddCard} disabled={!!linking}>
-                {linking === 'card' ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Adding...</>
-                ) : (
-                  <><CreditCard className="h-3.5 w-3.5 mr-1" /> Add card</>
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
 
-        {methods.length > 0 && !cardInputReady && (
-          <div className="flex flex-wrap gap-3">
             <button
-              onClick={handleLinkBank}
-              disabled={!!linking}
-              className="text-sm text-primary hover:underline disabled:opacity-50"
+              onClick={() => setShowAddMethod(true)}
+              className="text-sm text-primary hover:underline"
             >
-              {linking === 'bank' ? 'Connecting...' : '+ Link bank account'}
-            </button>
-            <button
-              onClick={handleAddCard}
-              disabled={!!linking}
-              className="text-sm text-primary hover:underline disabled:opacity-50"
-            >
-              {linking === 'card' ? 'Adding...' : '+ Add card'}
+              + Add another payment method
             </button>
           </div>
+        ) : !cardInputReady ? (
+          <AddPaymentMethodPicker
+            linking={linking}
+            onLinkBank={handleLinkBank}
+            onAddCard={handleAddCard}
+          />
+        ) : null}
+
+        {showAddMethod && !cardInputReady && (
+          <AddPaymentMethodPicker
+            linking={linking}
+            onLinkBank={() => { setShowAddMethod(false); handleLinkBank(); }}
+            onAddCard={() => { setShowAddMethod(false); handleAddCard(); }}
+            onCancel={() => setShowAddMethod(false)}
+          />
         )}
 
         {paymentInstructions && (
@@ -544,18 +546,17 @@ export function PayRent({ leaseId, amount, month, year, monthLabel, status, bala
         )}
 
         <p className="text-xs text-muted leading-relaxed">
-          Online payment is optional. You may also pay by check, money order, or Zelle.
-          Contact the office at{' '}
+          Online payments are optional. For payment instructions or assistance, please contact the office at{' '}
           <a href="tel:+17732346422" className="text-primary hover:underline">(773) 234-6422</a>
           {' '}or{' '}
-          <a href="mailto:info@mhdunnproperty.net" className="text-primary hover:underline">info@mhdunnproperty.net</a>
-          {' '}for details. Processing fees apply only to online payments and are shown before you pay.
+          <a href="mailto:info@mhdunnproperty.net" className="text-primary hover:underline">info@mhdunnproperty.net</a>.
+          {' '}Please note that applicable processing fees apply and will be displayed before you complete your payment.
         </p>
       </CardContent>
     </Card>
 
     {autopayConfirmPmId && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px] px-4">
         <div className="bg-surface rounded-2xl border border-line shadow-xl max-w-md w-full p-6 space-y-4">
           <h3 className="text-base font-semibold text-ink">Enable Autopay</h3>
           <div className="text-sm text-ink leading-relaxed space-y-3">
@@ -744,6 +745,72 @@ function ZelleOption({ instructions, memo }: { instructions: string; memo?: stri
   );
 }
 
+function AddPaymentMethodPicker({
+  linking,
+  onLinkBank,
+  onAddCard,
+  onCancel,
+}: {
+  linking: 'bank' | 'card' | null;
+  onLinkBank: () => void;
+  onAddCard: () => void;
+  onCancel?: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-ink">Choose a payment method</p>
+        {onCancel && (
+          <button onClick={onCancel} className="text-xs text-muted hover:text-ink">Cancel</button>
+        )}
+      </div>
+
+      <button
+        onClick={onLinkBank}
+        disabled={!!linking}
+        className="w-full text-left rounded-xl border border-line hover:border-primary/40 bg-canvas p-4 transition disabled:opacity-50"
+      >
+        <div className="flex items-start gap-3">
+          <span className="w-10 h-10 rounded-lg bg-primary-soft text-primary grid place-items-center flex-shrink-0 mt-0.5">
+            <Building2 className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-ink">Bank account</p>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary-soft px-1.5 py-0.5 rounded">Lowest fee</span>
+            </div>
+            <p className="text-xs text-muted mt-0.5">
+              {linking === 'bank' ? 'Connecting to your bank...' : 'Connect your checking or savings account securely through your bank.'}
+            </p>
+            <p className="text-xs text-muted mt-1.5 font-medium">0.8% processing fee, max $5</p>
+          </div>
+          {linking === 'bank' && <Loader2 className="h-4 w-4 animate-spin text-primary flex-shrink-0 mt-1" />}
+        </div>
+      </button>
+
+      <button
+        onClick={onAddCard}
+        disabled={!!linking}
+        className="w-full text-left rounded-xl border border-line hover:border-primary/40 bg-canvas p-4 transition disabled:opacity-50"
+      >
+        <div className="flex items-start gap-3">
+          <span className="w-10 h-10 rounded-lg bg-ink/5 text-ink grid place-items-center flex-shrink-0 mt-0.5">
+            <CreditCard className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink">Debit or credit card</p>
+            <p className="text-xs text-muted mt-0.5">
+              {linking === 'card' ? 'Setting up card entry...' : 'Visa, Mastercard, Amex, Discover.'}
+            </p>
+            <p className="text-xs text-muted mt-1.5 font-medium">2.9% + $0.30 processing fee</p>
+          </div>
+          {linking === 'card' && <Loader2 className="h-4 w-4 animate-spin text-primary flex-shrink-0 mt-1" />}
+        </div>
+      </button>
+    </div>
+  );
+}
+
 let _cardElement: any = null;
 
 async function createCardElement(stripe: any): Promise<any> {
@@ -762,7 +829,6 @@ async function createCardElement(stripe: any): Promise<any> {
   const container = document.getElementById('stripe-card-element');
   if (container) {
     container.classList.remove('hidden');
-    container.classList.add('rounded-xl', 'border', 'border-line', 'bg-canvas', 'p-4', 'mb-3');
     _cardElement.mount(container);
   }
   await new Promise<void>((resolve) => {
@@ -779,6 +845,5 @@ function cleanupCardElement() {
   const container = document.getElementById('stripe-card-element');
   if (container) {
     container.classList.add('hidden');
-    container.classList.remove('rounded-xl', 'border', 'border-line', 'bg-canvas', 'p-4', 'mb-3');
   }
 }

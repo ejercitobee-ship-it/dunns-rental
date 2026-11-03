@@ -8,10 +8,13 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { handymenApi, type HandymanInput } from '../lib/api';
 import { MAINTENANCE_TRADES, type Handyman } from '../types';
+import { TextInput } from './ui/FormField';
+import { formatPhone } from '../lib/utils';
+import { EmailInput } from './ui/EmailInput';
 import { tradeLabel } from '../lib/maintenance';
 
 const inputClass =
-  'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/25';
+  'w-full px-3 py-2 border border-line rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/10';
 
 const emptyForm: HandymanInput = { name: '', companyName: '', phone: '', email: '', trades: [], isActive: true };
 
@@ -162,7 +165,7 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-muted flex-wrap">
                     {h.phone && (
-                      <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{h.phone}</span>
+                      <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{formatPhone(h.phone)}</span>
                     )}
                     {h.email && (
                       <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{h.email}</span>
@@ -227,42 +230,19 @@ export function HandymenManager({ onCountChange }: { onCountChange?: (n: number)
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Name *</label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Mike Reyes"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Company Name</label>
-              <input
-                type="text"
-                value={form.companyName || ''}
-                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                placeholder="e.g. Reyes Plumbing LLC"
-                className={inputClass}
-              />
-            </div>
+            <TextInput label="Name" name="contractorName" required
+              value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Mike Reyes" />
+            <TextInput label="Company Name" name="contractorCompany"
+              value={form.companyName || ''} onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+              placeholder="e.g. Reyes Plumbing LLC" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className={inputClass}
-              />
-            </div>
+            <TextInput label="Phone" name="contractorPhone" type="tel"
+              value={formatPhone(form.phone || '')} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
-              <input
-                type="email"
+              <EmailInput
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="Optional. Enables portal login"

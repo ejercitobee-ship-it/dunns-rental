@@ -34,7 +34,7 @@ function toLease(pl: PortalLease): Lease {
 // and RentPayment requires an id even though nothing here reads it.
 function toRentPayments(leaseId: string, payments: PortalPayment[]): RentPayment[] {
   return payments.map((p, i) => ({
-    id: `${leaseId}-${i}`,
+    id: p.id || `${leaseId}-${i}`,
     leaseId,
     amount: p.amount,
     dueDate: p.dueDate,
@@ -74,6 +74,7 @@ export function TenantPayments() {
   // can offer its receipt; `payments` above stays the id-less shape settleMonth uses.
   const [rawPayments, setRawPayments] = useState<PortalPayment[]>([]);
   const [allocations, setAllocations] = useState<PaymentAllocation[]>([]);
+  const [allLeases, setAllLeases] = useState<Lease[]>([]);
   const [moveInFee, setMoveInFee] = useState<PortalMoveInFee | null>(null);
   const [creditBalance, setCreditBalance] = useState(0);
   const [receiptOverrides, setReceiptOverrides] = useState<Record<string, string>>({});
@@ -83,9 +84,8 @@ export function TenantPayments() {
 
   useEffect(() => {
     let cancelled = false;
-    portalApi
-      .payments()
-      .then((res) => {
+    Promise.all([portalApi.payments(), portalApi.me()])
+      .then(([res, meRes]) => {
         if (cancelled) return;
         setLease(res.lease);
         setPayments(res.lease ? toRentPayments(res.lease.id, res.payments) : []);
@@ -93,6 +93,11 @@ export function TenantPayments() {
         setAllocations(res.allocations ?? []);
         setMoveInFee(res.moveInFee ?? null);
         setCreditBalance(res.creditBalance ?? 0);
+        if (meRes.siblingLeases?.length) {
+          setAllLeases(meRes.siblingLeases.map(toLease));
+        } else if (res.lease) {
+          setAllLeases([toLease(res.lease)]);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -150,7 +155,7 @@ export function TenantPayments() {
         });
       }
 
-      const settlement = settleMonthWithCredit(fullLease, payments, month, year, undefined, allocations);
+      const settlement = settleMonthWithCredit(fullLease, payments, month, year, allLeases.length ? allLeases : undefined, allocations);
       if (settlement.creditApplied > 0) {
         out.push({ key: `${year}-${month}-credit`, label, amount: settlement.creditApplied, method: 'From overpayment', status: 'credit' });
       }
@@ -172,7 +177,7 @@ export function TenantPayments() {
       });
     }
     return out;
-  }, [lease, payments, rawPayments, allocations, receiptOverrides, moveInFee]);
+  }, [lease, payments, rawPayments, allocations, allLeases, receiptOverrides, moveInFee]);
 
   const handleGenerateReceipt = async (paymentId: string) => {
     if (generating) return;

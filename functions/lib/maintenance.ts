@@ -16,6 +16,7 @@ export const MAINTENANCE_TRADES = [
 
 export const MAINTENANCE_STATUSES = [
   'submitted',
+  'available',
   'assigned',
   'scheduled',
   'in_progress',
