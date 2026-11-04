@@ -2444,6 +2444,17 @@ ${companyPhone}`;
               </div>
             </div>
 
+            {/* Already-paid warning */}
+            {recordRow.settlement.balance <= 0 && (
+              <div className="flex items-start gap-3 p-3 bg-warning-soft border border-warning/30 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-warning">This period is already fully paid.</p>
+                  <p className="text-xs text-warning/80 mt-0.5">Recording another payment will create a duplicate. Only continue if this is an intentional overpayment or correction.</p>
+                </div>
+              </div>
+            )}
+
             {/* Credit balance banner */}
             {creditBalance > 0 && (
               <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">

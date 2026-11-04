@@ -51,6 +51,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const paymentType = body.type === 'credit' ? 'credit' : 'payment';
     const creditReason = paymentType === 'credit' ? (body.creditReason ?? null) : null;
 
+    const recentDup = await env.DB.prepare(
+      `SELECT id FROM rent_payments
+       WHERE lease_id = ? AND month = ? AND year = ? AND type = ?
+         AND ABS(amount - ?) < 0.01
+         AND created_at > datetime('now', '-60 seconds')`
+    ).bind(body.leaseId, body.month, body.year, paymentType, amount).first();
+    if (recentDup) {
+      return jsonError('A matching payment was just recorded for this period. If this is intentional, wait a moment and try again.', 409);
+    }
+
     const id = crypto.randomUUID();
     const stmts = [
       env.DB.prepare(
