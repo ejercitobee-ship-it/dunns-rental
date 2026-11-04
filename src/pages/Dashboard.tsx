@@ -447,7 +447,7 @@ export function Dashboard() {
           <div className="px-5 py-4 flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
               <div className="flex items-center gap-2.5 flex-shrink-0">
-                <span className="w-[34px] h-[34px] rounded-[10px] bg-amber-100 text-amber-600 grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                <span className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                   <AlertTriangle />
                 </span>
                 <span className="text-sm font-medium text-ink">Vacancy loss</span>

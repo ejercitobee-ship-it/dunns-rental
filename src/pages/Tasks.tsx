@@ -775,10 +775,10 @@ function TaskStatCard({ title, value, icon, iconBg = 'bg-primary-soft text-prima
       <div className="p-5">
         <div className="flex items-center justify-between mb-1">
           <span className="eyebrow">{title}</span>
-          <span className={`w-[34px] h-[34px] rounded-[10px] grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${iconBg}`}>{icon}</span>
+          <span className={`w-10 h-10 rounded-xl grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] ${iconBg}`}>{icon}</span>
         </div>
         <div className="mt-3">
-          <span className={`font-display text-[24px] leading-none font-medium tnum ${valueColor || 'text-ink'}`}>{value}</span>
+          <span className={`font-display text-[28px] leading-none font-semibold tnum ${valueColor || 'text-ink'}`}>{value}</span>
         </div>
       </div>
     </Card>

@@ -33,11 +33,11 @@ export function ForgotPassword() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-primary rounded-2xl ring-1 ring-black/5 mb-4">
             <Building2 className="h-7 w-7 text-[#c9ddd2]" />
           </div>
-          <h1 className="text-[26px] font-medium text-ink">MH Dunn Property</h1>
+          <h1 className="font-display text-[26px] font-medium text-ink">MH Dunn Property</h1>
           <p className="text-muted mt-1 text-sm">Property Management</p>
         </div>
 
-        <div className="bg-surface rounded-2xl border border-line shadow-[0_2px_12px_rgba(27,26,23,0.05)] p-8">
+        <div className="bg-surface rounded-2xl border border-line/60 shadow-[0_1px_3px_rgba(27,26,23,0.05),0_1px_2px_rgba(27,26,23,0.03)] p-8">
           {sent ? (
             <div className="text-center space-y-4">
               {emailConfigured ? (
