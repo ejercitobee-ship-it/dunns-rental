@@ -125,8 +125,8 @@ export function Login() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-surface rounded-2xl border border-line shadow-[0_2px_12px_rgba(27,26,23,0.05)] p-8">
-          <h2 className="text-lg font-semibold text-ink mb-6">Sign in</h2>
+        <div className="bg-surface rounded-2xl border border-line/60 shadow-[0_1px_3px_rgba(27,26,23,0.05),0_1px_2px_rgba(27,26,23,0.03)] p-8">
+          <h2 className="font-display text-lg font-semibold text-ink mb-6">Sign in</h2>
 
           {error && (
             <div className="mb-4 p-4 bg-danger-soft border border-[#e8cdc8] rounded-xl flex gap-3">

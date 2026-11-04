@@ -493,7 +493,7 @@ export function Dashboard() {
         <Card className="group cursor-pointer hover:border-line-strong hover:shadow-[0_4px_16px_rgba(27,26,23,0.08)] transition-all" onClick={() => navigate('/finances')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[16px] [&_svg]:w-[16px]"><BarChart3 /></span>
+              <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><BarChart3 /></span>
               Income vs expenses
               <ArrowRight className="h-4 w-4 text-faint ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
             </CardTitle>
@@ -525,7 +525,7 @@ export function Dashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[16px] [&_svg]:w-[16px]"><PieChartIcon /></span>
+                <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><PieChartIcon /></span>
                 By category
               </CardTitle>
               <div
@@ -598,7 +598,7 @@ export function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center [&_svg]:h-[16px] [&_svg]:w-[16px]"><CalendarDays /></span>
+              <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><CalendarDays /></span>
               Upcoming ({upcomingActivities.length})
               <button
                 type="button"
