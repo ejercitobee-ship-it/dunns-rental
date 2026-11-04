@@ -153,8 +153,8 @@ function Section({ id, title, icon: Icon, badge, collapsed, toggle, children }: 
       <CardHeader className="cursor-pointer select-none" onClick={() => toggle(id)}>
         <CardTitle className="flex items-center gap-2.5">
           <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has(id) && '-rotate-90')} />
-          <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0">
-            <Icon className="h-[18px] w-[18px]" />
+          <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
+            <Icon className="h-[20px] w-[20px]" />
           </span>
           <span className="flex-1">{title}</span>
           {badge}
@@ -444,11 +444,11 @@ export function Reports() {
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="eyebrow">{s.label}</span>
-                    <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                    <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                       {s.icon}
                     </span>
                   </div>
-                  <div className={`mt-3 font-display text-[26px] leading-none font-semibold tnum ${s.color}`}>{s.value}</div>
+                  <div className={`mt-3 font-display text-[28px] leading-none font-semibold tnum ${s.color}`}>{s.value}</div>
                   <p className="mt-1.5 text-[12px] text-muted">{s.sub}</p>
                 </div>
               </Card>
@@ -579,11 +579,11 @@ export function Reports() {
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="eyebrow">{s.label}</span>
-                    <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                    <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                       {s.icon}
                     </span>
                   </div>
-                  <div className={`mt-3 font-display text-[26px] leading-none font-semibold tnum ${s.color}`}>{formatCurrency(s.value)}</div>
+                  <div className={`mt-3 font-display text-[28px] leading-none font-semibold tnum ${s.color}`}>{formatCurrency(s.value)}</div>
                 </div>
               </Card>
             ))}
@@ -636,11 +636,11 @@ export function Reports() {
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="eyebrow">{tier.label}</span>
-                    <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                    <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                       <TrendingDown />
                     </span>
                   </div>
-                  <div className="mt-3 font-display text-[26px] leading-none font-semibold text-danger tnum">
+                  <div className="mt-3 font-display text-[28px] leading-none font-semibold text-danger tnum">
                     {formatCurrency(expenseData.byTier[tier.value])}
                   </div>
                 </div>
@@ -763,11 +763,11 @@ export function Reports() {
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="eyebrow">{s.label}</span>
-                    <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
+                    <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                       {s.icon}
                     </span>
                   </div>
-                  <div className={`mt-3 font-display text-[24px] leading-none font-semibold tnum ${s.color}`}>{formatCurrency(s.value)}</div>
+                  <div className={`mt-3 font-display text-[28px] leading-none font-semibold tnum ${s.color}`}>{formatCurrency(s.value)}</div>
                   {'sub' in s && s.sub && <p className="mt-1.5 text-[12px] text-muted">{s.sub}</p>}
                 </div>
               </Card>
@@ -851,18 +851,18 @@ export function Reports() {
               <div className="p-5">
                 <div className="flex items-center justify-between mb-1">
                   <span className="eyebrow">Total Maintenance Cost</span>
-                  <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><Wrench /></span>
+                  <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Wrench /></span>
                 </div>
-                <div className="mt-3 font-display text-[26px] leading-none font-semibold text-danger tnum">{formatCurrency(maintData.totalCost)}</div>
+                <div className="mt-3 font-display text-[28px] leading-none font-semibold text-danger tnum">{formatCurrency(maintData.totalCost)}</div>
               </div>
             </Card>
             <Card>
               <div className="p-5">
                 <div className="flex items-center justify-between mb-1">
                   <span className="eyebrow">Jobs Completed</span>
-                  <span className="w-9 h-9 rounded-xl bg-positive-soft text-positive grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]"><ClipboardList /></span>
+                  <span className="w-10 h-10 rounded-xl bg-positive-soft text-positive grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><ClipboardList /></span>
                 </div>
-                <div className="mt-3 font-display text-[26px] leading-none font-semibold text-ink tnum">
+                <div className="mt-3 font-display text-[28px] leading-none font-semibold text-ink tnum">
                   {maintenance.filter(m => m.status === 'completed' || m.status === 'paid').length}
                 </div>
               </div>

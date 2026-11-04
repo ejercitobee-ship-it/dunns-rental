@@ -1003,9 +1003,9 @@ export function TaxReport() {
             <div className="p-5">
               <div className="flex items-center justify-between mb-1">
                 <span className="eyebrow">{s.label}</span>
-                <span className={`w-9 h-9 rounded-xl grid place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${s.bg}`}>{s.icon}</span>
+                <span className={`w-10 h-10 rounded-xl grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] ${s.bg}`}>{s.icon}</span>
               </div>
-              <div className={`mt-3 font-display text-[26px] leading-none font-semibold tnum ${s.color}`}>{s.value}</div>
+              <div className={`mt-3 font-display text-[28px] leading-none font-semibold tnum ${s.color}`}>{s.value}</div>
               <p className="mt-1.5 text-[12px] text-muted">{s.sub}</p>
             </div>
           </Card>
@@ -1089,7 +1089,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('income')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('income') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-positive-soft text-positive grid place-items-center shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-positive-soft text-positive grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><FileText className="h-[20px] w-[20px]" /></span>
             Income Breakdown
           </CardTitle>
         </CardHeader>
@@ -1222,7 +1222,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('expenses')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('expenses') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-danger-soft text-danger grid place-items-center shrink-0"><Calculator className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-danger-soft text-danger grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Calculator className="h-[20px] w-[20px]" /></span>
             Deductible Expenses by Category
           </CardTitle>
         </CardHeader>
@@ -1306,7 +1306,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('opVsCap')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('opVsCap') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0"><Calculator className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Calculator className="h-[20px] w-[20px]" /></span>
             Operating vs Capital Expenses
           </CardTitle>
         </CardHeader>
@@ -1330,7 +1330,7 @@ export function TaxReport() {
                 <span className="eyebrow">Operating Expenses</span>
                 <Badge variant="secondary">Deduct this year</Badge>
               </div>
-              <div className="mt-2 text-[24px] leading-none font-semibold text-ink tnum">
+              <div className="mt-2 text-[28px] leading-none font-semibold text-ink tnum">
                 {formatCurrency(main.operatingExpenses)}
               </div>
               <p className="mt-1.5 text-[13px] text-muted">
@@ -1348,7 +1348,7 @@ export function TaxReport() {
                 <span className="eyebrow">Capital Improvements</span>
                 <Badge variant="warning">Capitalize / depreciate</Badge>
               </div>
-              <div className="mt-2 text-[24px] leading-none font-semibold text-ink tnum">
+              <div className="mt-2 text-[28px] leading-none font-semibold text-ink tnum">
                 {formatCurrency(main.capitalExpenses)}
               </div>
               <p className="mt-1.5 text-[13px] text-muted">
@@ -1437,7 +1437,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('depreciation')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('depreciation') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Home className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Home className="h-[20px] w-[20px]" /></span>
             Depreciation ({year})
           </CardTitle>
         </CardHeader>
@@ -1516,7 +1516,7 @@ export function TaxReport() {
           <CardHeader className="cursor-pointer select-none" onClick={() => toggle('mortgage')}>
             <CardTitle className="flex items-center gap-2.5">
               <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('mortgage') && '-rotate-90')} />
-              <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
+              <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><FileText className="h-[20px] w-[20px]" /></span>
               Mortgage Interest
             </CardTitle>
           </CardHeader>
@@ -1559,7 +1559,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('property')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('property') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Home className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Home className="h-[20px] w-[20px]" /></span>
             Property Performance
           </CardTitle>
         </CardHeader>
@@ -1616,7 +1616,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('tips')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('tips') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0"><AlertCircle className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><AlertCircle className="h-[20px] w-[20px]" /></span>
             Tax Tips & Reminders
           </CardTitle>
         </CardHeader>
@@ -1673,7 +1673,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('scheduleE')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('scheduleE') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><FileText className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><FileText className="h-[20px] w-[20px]" /></span>
             <span className="flex-1">Schedule E (Form 1040)</span>
             <Badge variant="default" className="text-xs">IRS Reference</Badge>
           </CardTitle>
@@ -1734,7 +1734,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('estTax')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('estTax') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-danger-soft text-danger grid place-items-center shrink-0"><Calculator className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-danger-soft text-danger grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Calculator className="h-[20px] w-[20px]" /></span>
             Estimated Tax Liability
           </CardTitle>
         </CardHeader>
@@ -1905,7 +1905,7 @@ export function TaxReport() {
           <CardHeader className="cursor-pointer select-none" onClick={() => toggle('vendors1099')}>
             <CardTitle className="flex items-center gap-2.5">
               <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('vendors1099') && '-rotate-90')} />
-              <span className="w-9 h-9 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0"><Users className="h-[18px] w-[18px]" /></span>
+              <span className="w-10 h-10 rounded-xl bg-warning-soft text-warning grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Users className="h-[20px] w-[20px]" /></span>
               <span className="flex-1">1099 Vendor Tracker</span>
               {main.vendors1099.filter(v => v.total >= VENDOR_1099_THRESHOLD).length > 0 && (
                 <Badge variant="warning" className="ml-auto">
@@ -1963,7 +1963,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('mileage')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('mileage') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Car className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Car className="h-[20px] w-[20px]" /></span>
             Mileage Deduction
           </CardTitle>
         </CardHeader>
@@ -2014,7 +2014,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('taxCalendar')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('taxCalendar') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Calendar className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><Calendar className="h-[20px] w-[20px]" /></span>
             Tax Calendar ({year + 1} Filing)
           </CardTitle>
         </CardHeader>
@@ -2071,7 +2071,7 @@ export function TaxReport() {
         <CardHeader className="cursor-pointer select-none" onClick={() => toggle('multiYear')}>
           <CardTitle className="flex items-center gap-2.5">
             <ChevronDown className={cn('h-4 w-4 text-muted transition-transform', collapsed.has('multiYear') && '-rotate-90')} />
-            <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><BarChart3 className="h-[18px] w-[18px]" /></span>
+            <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"><BarChart3 className="h-[20px] w-[20px]" /></span>
             Multi-Year Trend
           </CardTitle>
         </CardHeader>
