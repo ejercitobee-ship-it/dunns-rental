@@ -251,15 +251,18 @@ export function rentReminderEmail(opts: {
   portalUrl: string;
   paymentInstructions?: string;
   name?: string;
+  lateFeeWarning?: string;
 }) {
   const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
   const instructions = (opts.paymentInstructions || '').trim();
+  const feeWarning = (opts.lateFeeWarning || '').trim();
 
   const text = [
     greeting,
     '',
     `This is a friendly reminder that your rent for ${opts.monthLabel} is due today.`,
     instructions ? `\n${instructions}` : '',
+    feeWarning ? `\n${feeWarning}` : '',
     '',
     `You can view your balance and payment details in your portal:`,
     opts.portalUrl,
@@ -277,6 +280,7 @@ export function rentReminderEmail(opts: {
         This is a friendly reminder that your rent for <strong>${opts.monthLabel}</strong> is due today.
       </p>
       ${instructions ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:14px 16px;">${escapeHtml(instructions)}</p>` : ''}
+      ${feeWarning ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#8b4513;background:#fdf6ee;border:1px solid #e8d5b7;border-radius:8px;padding:14px 16px;">${escapeHtml(feeWarning)}</p>` : ''}
       <p style="margin:0 0 24px;">
         <a href="${opts.portalUrl}"
            style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">

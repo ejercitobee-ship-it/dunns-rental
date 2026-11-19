@@ -4,6 +4,7 @@ import { getSetting, putSetting } from '../../lib/google';
 import { sendPushToUser } from '../../lib/push';
 import { sendEmail, rentReminderEmail } from '../../lib/email';
 import { SITE_URL } from '../../lib/site';
+import { lateFeeDescription } from '../../lib/late-fee-calc';
 
 const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay rent via Zelle to 773-991-7112, payable to Marlene Dunn.';
 const STATE_KEY = 'rentReminderState';
@@ -63,6 +64,12 @@ interface RecipientRow {
   first_name: string | null;
   email: string | null;
   lease_due_day: number | null;
+  late_fee_enabled: number;
+  late_fee_amount: number | null;
+  late_fee_type: string | null;
+  late_fee_grace_days: number | null;
+  late_fee_jurisdiction: string | null;
+  monthly_rent: number;
 }
 
 /**
@@ -103,10 +110,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // not reminded.
     const { results: allRows } = await env.DB.prepare(
       `SELECT DISTINCT t.id AS tenant_id, t.user_id, t.first_name, t.email,
-              l.rent_due_day AS lease_due_day
+              l.rent_due_day AS lease_due_day, l.late_fee_enabled, l.monthly_rent,
+              p.late_fee_amount, p.late_fee_type, p.late_fee_grace_days, p.late_fee_jurisdiction
          FROM leases l
          JOIN lease_tenants lt ON lt.lease_id = l.id
          JOIN tenants t ON t.id = lt.tenant_id
+         LEFT JOIN properties p ON p.id = l.property_id
         WHERE l.status = 'active'
           AND NOT EXISTS (
             SELECT 1 FROM rent_payments rp
@@ -159,12 +168,31 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let emailed = 0;
 
     for (const r of recipients) {
+      // Build late fee warning if enabled on this lease.
+      let lateFeeWarning: string | undefined;
+      if (r.late_fee_enabled) {
+        const feeInput = {
+          monthlyRent: r.monthly_rent,
+          jurisdiction: r.late_fee_jurisdiction,
+          configuredAmount: r.late_fee_amount,
+          feeType: r.late_fee_type || 'flat',
+        };
+        const feeStr = lateFeeDescription(feeInput);
+        if (feeStr) {
+          const grace = r.late_fee_grace_days ?? 5;
+          lateFeeWarning = `A late fee of ${feeStr} will be applied if payment is not received within ${grace} days of the due date.`;
+        }
+      }
+
       // Best-effort per tenant: one failure must not stop the rest.
       try {
         if (r.user_id) {
+          const pushBody = lateFeeWarning
+            ? `Your rent for ${monthLabel} is due today. ${lateFeeWarning}`
+            : `Your rent for ${monthLabel} is due today.`;
           await sendPushToUser(env, r.user_id, {
             title: 'Rent is due',
-            body: `Your rent for ${monthLabel} is due today.`,
+            body: pushBody,
             url: '/portal/payments',
           });
           pushed++;
@@ -179,6 +207,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             portalUrl,
             paymentInstructions,
             name: r.first_name || undefined,
+            lateFeeWarning,
           });
           const ok = await sendEmail(env, { to: r.email, ...mail });
           if (ok) emailed++;

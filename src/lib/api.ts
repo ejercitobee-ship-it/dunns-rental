@@ -1,4 +1,4 @@
-import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, PaymentAllocation, LateFee, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice, Task, TaskComment, TaskActivityEntry, Project } from '../types';
+import type { Property, Unit, Tenant, Lease, LeaseStatus, LeaseType, RentPayment, PaymentAllocation, LateFee, Expense, Income, MaintenanceRequest, PortalPayment, Handyman, UtilityAccount, Appliance, CalendarEvent, LeaseAuditEntry, LeaseNotification, PropertyProfile, PropertyNote, NoteAttachment, ExpenseImport, ExpenseImportDetail, CapitalProject, CapitalProjectDetail, DepositReturn, Inspection, Notice, Task, TaskComment, TaskActivityEntry, Project, Eviction, EvictionCost } from '../types';
 
 const API_BASE = '/api';
 
@@ -463,6 +463,8 @@ export const leasesApi = {
     apiRequest(`/leases/${id}/notifications`),
   resendNotification: (id: string): Promise<void> =>
     apiRequest(`/leases/${id}/notifications`, { method: 'POST' }),
+  toggleLateFee: (id: string, enabled: boolean): Promise<{ lateFeeEnabled: boolean }> =>
+    apiRequest(`/leases/${id}/late-fee-toggle`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
 };
 
 // Payments API
@@ -686,6 +688,53 @@ export const noticesApi = {
     sendEmail?: boolean;
   }): Promise<{ created: number; emailed: boolean }> =>
     apiRequest('/notices/bulk', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// Evictions API
+export const evictionsApi = {
+  getAll: (filters?: { tenantId?: string; status?: string }): Promise<Eviction[]> => {
+    const params = new URLSearchParams();
+    if (filters?.tenantId) params.set('tenantId', filters.tenantId);
+    if (filters?.status) params.set('status', filters.status);
+    const qs = params.toString();
+    return apiRequest(`/evictions${qs ? `?${qs}` : ''}`);
+  },
+  getById: (id: string): Promise<Eviction & { costs: EvictionCost[] }> =>
+    apiRequest(`/evictions/${id}`),
+  create: (data: {
+    tenantId: string;
+    leaseId?: string;
+    propertyId?: string;
+    unitId?: string;
+    status?: string;
+    reason: string;
+    reasonNotes?: string;
+    noticeServedDate?: string;
+    filedDate?: string;
+    courtDate?: string;
+    lawyerName?: string;
+    lawyerPhone?: string;
+    caseNumber?: string;
+    courtName?: string;
+    notes?: string;
+  }): Promise<{ id: string }> =>
+    apiRequest('/evictions', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>): Promise<void> =>
+    apiRequest(`/evictions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string): Promise<void> =>
+    apiRequest(`/evictions/${id}`, { method: 'DELETE' }),
+  getCosts: (evictionId: string): Promise<EvictionCost[]> =>
+    apiRequest(`/evictions/${evictionId}/costs`),
+  addCost: (evictionId: string, data: {
+    description: string;
+    amount: number;
+    costDate: string;
+    category?: string;
+    notes?: string;
+  }): Promise<{ id: string }> =>
+    apiRequest(`/evictions/${evictionId}/costs`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteCost: (evictionId: string, costId: string): Promise<void> =>
+    apiRequest(`/evictions/${evictionId}/costs/${costId}`, { method: 'DELETE' }),
 };
 
 // Documents API (files stored in R2)
@@ -1257,6 +1306,7 @@ async function postMessageForm<T>(path: string, body: string, file?: File | null
 // Maintenance API
 export const maintenanceApi = {
   getAll: (): Promise<MaintenanceRequest[]> => apiRequest('/maintenance'),
+  incompleteCount: (): Promise<{ count: number }> => apiRequest('/maintenance/incomplete-count'),
   getById: (id: string): Promise<MaintenanceRequest> => apiRequest(`/maintenance/${id}`),
   create: (data: Omit<MaintenanceRequest, 'id'>): Promise<MaintenanceRequest> =>
     apiRequest('/maintenance', { method: 'POST', body: JSON.stringify(data) }),

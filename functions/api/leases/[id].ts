@@ -81,6 +81,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
           security_deposit = ?, move_in_fee_paid = ?, status = ?, needs_review = 0, notes = ?,
           end_reason = ?, ended_property_label = ?, ended_unit_label = ?, rent_due_day = ?,
           deposit_amount = ?, deposit_paid = ?, deposit_paid_date = ?, deposit_method = ?,
+          late_fee_enabled = ?,
           updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
@@ -103,6 +104,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.depositPaid ? 1 : 0,
         body.depositPaidDate ?? null,
         body.depositMethod ?? null,
+        body.lateFeeEnabled ? 1 : 0,
         id
       ),
     ];
