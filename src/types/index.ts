@@ -13,7 +13,14 @@ export interface Property {
   /** Non-depreciable land portion of the cost basis. Only the building
    * depreciates, so this is subtracted from purchasePrice for depreciation. */
   landValue?: number;
+  /** Depreciation already claimed on prior tax returns before using this app. */
+  priorDepreciation?: number;
   driveFolderId?: string;
+  /** Late fee policy for this property. */
+  lateFeeAmount?: number;
+  lateFeeType?: 'flat' | 'percent';
+  lateFeeGraceDays?: number;
+  lateFeeJurisdiction?: string;
 }
 
 export type UtilityType = 'water' | 'gas' | 'electric';
@@ -144,6 +151,8 @@ export interface Lease {
   renewalGeneratedAt?: number;
   previousRent?: number;
   renewalStatus?: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
+  /** Whether automatic late fees are enabled for this lease. */
+  lateFeeEnabled?: boolean;
 }
 
 export interface LeaseAuditEntry {
@@ -419,7 +428,8 @@ export type MaintenanceStatus =
   | 'invoice_submitted'
   | 'invoice_approved'
   | 'paid'
-  | 'cancelled';
+  | 'cancelled'
+  | 'resolved_no_cost';
 export type MaintenancePriority = 'low' | 'medium' | 'high' | 'urgent';
 
 /** The trade categories a handyman works and a request is filed under. */
@@ -429,6 +439,13 @@ export const MAINTENANCE_TRADES = [
   'hvac',
   'appliance',
   'carpentry',
+  'pest_control',
+  'painting',
+  'landscaping',
+  'roofing',
+  'flooring',
+  'cleaning',
+  'locksmith',
   'general',
   'other',
 ] as const;
@@ -482,6 +499,10 @@ export interface MaintenanceRequest {
   invoiceApprovedAt?: string;
   invoiceApprovedBy?: string;
   invoiceRejectionReason?: string;
+  /** True when resolved under manufacturer warranty (no cost to landlord). */
+  warrantyCovered?: boolean;
+  /** The specific appliance this request was linked to for warranty tracking. */
+  warrantyApplianceId?: string;
   /** Unix epoch seconds when the request was created. */
   createdAt?: number;
 }
@@ -859,6 +880,8 @@ export interface CapitalProject {
   updatedAt: number;
   recoveryYears?: number;
   placedInServiceDate?: string;
+  /** Depreciation already claimed on prior tax returns before using this app. */
+  priorDepreciation?: number;
   /** Rolled-up total of all linked expenses (server-computed). */
   totalCost: number;
   /** Count of linked expenses (server-computed). */
@@ -977,6 +1000,54 @@ export interface Notice {
   tenantName?: string;
   propertyName?: string;
   unitNumber?: string;
+}
+
+// ── Evictions ──
+
+export type EvictionStatus = 'notice_served' | 'filed_with_lawyer' | 'court_date_set' | 'judgment' | 'completed' | 'dismissed';
+export type EvictionReason = 'nonpayment' | 'lease_violation' | 'holdover' | 'other';
+export type EvictionJudgmentResult = 'landlord_favor' | 'tenant_favor' | 'settled' | 'dismissed';
+export type EvictionCostCategory = 'lawyer_fee' | 'filing_fee' | 'service_fee' | 'court_cost' | 'other';
+
+export interface Eviction {
+  id: string;
+  tenantId: string;
+  leaseId?: string;
+  propertyId?: string;
+  unitId?: string;
+  status: EvictionStatus;
+  reason: EvictionReason;
+  reasonNotes?: string;
+  noticeServedDate?: string;
+  filedDate?: string;
+  courtDate?: string;
+  judgmentDate?: string;
+  vacateByDate?: string;
+  completedDate?: string;
+  lawyerName?: string;
+  lawyerPhone?: string;
+  caseNumber?: string;
+  courtName?: string;
+  judgmentResult?: EvictionJudgmentResult;
+  notes?: string;
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+  tenantName?: string;
+  propertyName?: string;
+  unitNumber?: string;
+  totalCosts?: number;
+}
+
+export interface EvictionCost {
+  id: string;
+  evictionId: string;
+  description: string;
+  amount: number;
+  costDate: string;
+  category: EvictionCostCategory;
+  notes?: string;
+  createdAt: number;
 }
 
 // ── Task Management ──

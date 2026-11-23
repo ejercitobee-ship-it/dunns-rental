@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
+import { ALL_PERMISSIONS, roleCan } from '../../lib/permissions';
 import { serializeRole } from './index';
 
 interface RoleRow {
@@ -39,6 +40,26 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const permissions = Array.isArray(body.permissions)
       ? body.permissions
       : JSON.parse(existing.permissions || '[]');
+
+    // Only known permission names may be stored, and a non-owner cannot grant a
+    // permission they do not themselves hold (so editing a role can never be a
+    // self- or proxy-escalation above the editor's own privileges).
+    if (Array.isArray(body.permissions)) {
+      const known: readonly string[] = ALL_PERMISSIONS;
+      const unknown = body.permissions.filter((p) => !known.includes(p));
+      if (unknown.length > 0) return jsonError(`Unknown permission(s): ${unknown.join(', ')}`, 400);
+      if (auth.role !== 'super_admin') {
+        const held = new Set(
+          auth.permissions && auth.permissions.length
+            ? auth.permissions
+            : known.filter((p) => roleCan(auth.role, p))
+        );
+        const tooHigh = body.permissions.filter((p) => !held.has(p));
+        if (tooHigh.length > 0) {
+          return jsonError(`You cannot grant permissions you do not have: ${tooHigh.join(', ')}`, 403);
+        }
+      }
+    }
 
     await env.DB.prepare(
       'UPDATE roles SET name = ?, description = ?, permissions = ?, updated_at = unixepoch() WHERE id = ?'

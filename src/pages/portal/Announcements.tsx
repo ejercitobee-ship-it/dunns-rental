@@ -4,6 +4,7 @@ import { ArrowLeft, Megaphone } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { portalApi, type PortalAnnouncement } from '../../lib/api';
+import { sanitizeHtml } from '../../lib/sanitizeHtml';
 
 function isHtml(text: string): boolean {
   return /<[a-z][\s\S]*>/i.test(text);
@@ -133,7 +134,7 @@ export function Announcements() {
                 {isHtml(a.body) ? (
                   <div
                     className="announcement-html text-sm text-muted leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: a.body }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(a.body) }}
                   />
                 ) : (
                   renderPlainBody(a.body)

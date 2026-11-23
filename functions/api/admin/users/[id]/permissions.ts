@@ -59,6 +59,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonError('You cannot grant permissions to yourself.', 403);
     }
 
+    // You may only grant permissions you yourself hold (super admin exempt), so
+    // the grant cannot hand another account more privilege than the grantor has.
+    if (auth.role !== 'super_admin') {
+      const held = new Set(auth.permissions || []);
+      const tooHigh = body.permissions.filter((p) => !held.has(p));
+      if (tooHigh.length > 0) {
+        return jsonError(`You cannot grant permissions you do not have: ${tooHigh.join(', ')}`, 403);
+      }
+    }
+
     const stmts: ReturnType<typeof env.DB.prepare>[] = [];
     const now = Math.floor(Date.now() / 1000);
 

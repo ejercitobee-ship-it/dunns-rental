@@ -203,6 +203,12 @@ export function Properties() {
     purchasePrice: '',
     purchaseDate: '',
     landValue: '',
+    priorDepreciation: '',
+    // Late fee policy (per property).
+    lateFeeAmount: '',
+    lateFeeType: 'flat' as 'flat' | 'percent',
+    lateFeeGraceDays: '5',
+    lateFeeJurisdiction: '',
   });
 
   const [unitForm, setUnitForm] = useState({
@@ -235,6 +241,11 @@ export function Properties() {
       purchasePrice: '',
       purchaseDate: '',
       landValue: '',
+      priorDepreciation: '',
+      lateFeeAmount: '',
+      lateFeeType: 'flat' as 'flat' | 'percent',
+      lateFeeGraceDays: '5',
+      lateFeeJurisdiction: '',
     });
   };
 
@@ -250,6 +261,11 @@ export function Properties() {
     purchasePrice: propertyForm.purchasePrice ? Number(propertyForm.purchasePrice) : undefined,
     purchaseDate: propertyForm.purchaseDate || undefined,
     landValue: propertyForm.landValue ? Number(propertyForm.landValue) : undefined,
+    priorDepreciation: propertyForm.priorDepreciation ? Number(propertyForm.priorDepreciation) : undefined,
+    lateFeeAmount: propertyForm.lateFeeAmount ? Number(propertyForm.lateFeeAmount) : undefined,
+    lateFeeType: propertyForm.lateFeeType,
+    lateFeeGraceDays: Number(propertyForm.lateFeeGraceDays) || 5,
+    lateFeeJurisdiction: propertyForm.lateFeeJurisdiction || undefined,
   });
 
   const resetUnitForm = () => {
@@ -293,6 +309,11 @@ export function Properties() {
       purchasePrice: property.purchasePrice != null ? String(property.purchasePrice) : '',
       purchaseDate: property.purchaseDate || '',
       landValue: property.landValue != null ? String(property.landValue) : '',
+      priorDepreciation: property.priorDepreciation != null ? String(property.priorDepreciation) : '',
+      lateFeeAmount: property.lateFeeAmount != null ? String(property.lateFeeAmount) : '',
+      lateFeeType: (property.lateFeeType || 'flat') as 'flat' | 'percent',
+      lateFeeGraceDays: String(property.lateFeeGraceDays ?? 5),
+      lateFeeJurisdiction: property.lateFeeJurisdiction || '',
     });
     setIsEditPropertyOpen(true);
   };
@@ -849,6 +870,67 @@ export function Properties() {
               </div>
               <p className="text-xs text-muted mt-1">Land does not depreciate. Enter its assessed value from your county tax bill so only the building is depreciated. Blank assumes 20% of the price.</p>
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Prior depreciation claimed</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+                  value={propertyForm.priorDepreciation} onChange={(e) => setPropertyForm({...propertyForm, priorDepreciation: e.target.value})} placeholder="0.00" />
+              </div>
+              <p className="text-xs text-muted mt-1">Total depreciation already claimed on prior tax returns before using this app. Leave blank or zero if none.</p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-line space-y-4">
+            <div>
+              <p className="text-sm font-medium text-ink">Late fee policy</p>
+              <p className="text-xs text-muted mt-0.5">Configure automatic late fees for this property. Tenants must also have late fees enabled on their lease.</p>
+            </div>
+            <SelectInput label="Jurisdiction" name="addPropJurisdiction"
+              value={propertyForm.lateFeeJurisdiction} onChange={(e) => {
+                const v = e.target.value;
+                const updates: Partial<typeof propertyForm> = { lateFeeJurisdiction: v };
+                if (v === 'chicago_rlto') updates.lateFeeGraceDays = '5';
+                else if (v === 'cook_county_rtlo') updates.lateFeeGraceDays = '5';
+                setPropertyForm({...propertyForm, ...updates});
+              }}>
+              <option value="">No jurisdiction (manual amount)</option>
+              <option value="chicago_rlto">Chicago, IL (RLTO)</option>
+              <option value="cook_county_rtlo">Cook County, IL (RTLO)</option>
+              <option value="">Other / no local cap</option>
+            </SelectInput>
+            {propertyForm.lateFeeJurisdiction === 'chicago_rlto' && (
+              <p className="text-xs text-muted -mt-2">Legal max per RLTO sec. 5-12-140: $10 + 5% of rent above $500. Grace period minimum 5 days.</p>
+            )}
+            {propertyForm.lateFeeJurisdiction === 'cook_county_rtlo' && (
+              <p className="text-xs text-muted -mt-2">Legal max per Cook County RTLO: $10 + 5% of rent above $1,000. Grace period minimum 5 days.</p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Late fee amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">{propertyForm.lateFeeType === 'flat' ? '$' : '%'}</span>
+                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+                    value={propertyForm.lateFeeAmount} onChange={(e) => setPropertyForm({...propertyForm, lateFeeAmount: e.target.value})} placeholder="0.00" />
+                </div>
+                {propertyForm.lateFeeJurisdiction && (
+                  <p className="text-xs text-muted mt-1">Set your contract amount here. Leave blank to use the legal maximum.</p>
+                )}
+              </div>
+              <SelectInput label="Fee type" name="addPropLateFeeType"
+                value={propertyForm.lateFeeType} onChange={(e) => setPropertyForm({...propertyForm, lateFeeType: e.target.value as 'flat' | 'percent'})}>
+                <option value="flat">Flat ($)</option>
+                <option value="percent">Percent of rent (%)</option>
+              </SelectInput>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Grace period (days)</label>
+              <input type="number" min="0" max="30" step="1" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+                value={propertyForm.lateFeeGraceDays} onChange={(e) => setPropertyForm({...propertyForm, lateFeeGraceDays: e.target.value})} />
+              {(propertyForm.lateFeeJurisdiction === 'chicago_rlto' || propertyForm.lateFeeJurisdiction === 'cook_county_rtlo') && (
+                <p className="text-xs text-muted mt-1">Minimum 5 days required by ordinance.</p>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -915,6 +997,67 @@ export function Properties() {
                   value={propertyForm.landValue} onChange={(e) => setPropertyForm({...propertyForm, landValue: e.target.value})} placeholder="Leave blank to estimate 20% of price" />
               </div>
               <p className="text-xs text-muted mt-1">Land does not depreciate. Enter its assessed value from your county tax bill so only the building is depreciated. Blank assumes 20% of the price.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Prior depreciation claimed</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+                  value={propertyForm.priorDepreciation} onChange={(e) => setPropertyForm({...propertyForm, priorDepreciation: e.target.value})} placeholder="0.00" />
+              </div>
+              <p className="text-xs text-muted mt-1">Total depreciation already claimed on prior tax returns before using this app. Leave blank or zero if none.</p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-line space-y-4">
+            <div>
+              <p className="text-sm font-medium text-ink">Late fee policy</p>
+              <p className="text-xs text-muted mt-0.5">Configure automatic late fees for this property. Tenants must also have late fees enabled on their lease.</p>
+            </div>
+            <SelectInput label="Jurisdiction" name="editPropJurisdiction"
+              value={propertyForm.lateFeeJurisdiction} onChange={(e) => {
+                const v = e.target.value;
+                const updates: Partial<typeof propertyForm> = { lateFeeJurisdiction: v };
+                if (v === 'chicago_rlto') updates.lateFeeGraceDays = '5';
+                else if (v === 'cook_county_rtlo') updates.lateFeeGraceDays = '5';
+                setPropertyForm({...propertyForm, ...updates});
+              }}>
+              <option value="">No jurisdiction (manual amount)</option>
+              <option value="chicago_rlto">Chicago, IL (RLTO)</option>
+              <option value="cook_county_rtlo">Cook County, IL (RTLO)</option>
+              <option value="">Other / no local cap</option>
+            </SelectInput>
+            {propertyForm.lateFeeJurisdiction === 'chicago_rlto' && (
+              <p className="text-xs text-muted -mt-2">Legal max per RLTO sec. 5-12-140: $10 + 5% of rent above $500. Grace period minimum 5 days.</p>
+            )}
+            {propertyForm.lateFeeJurisdiction === 'cook_county_rtlo' && (
+              <p className="text-xs text-muted -mt-2">Legal max per Cook County RTLO: $10 + 5% of rent above $1,000. Grace period minimum 5 days.</p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Late fee amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">{propertyForm.lateFeeType === 'flat' ? '$' : '%'}</span>
+                  <input type="number" min="0" step="0.01" className="w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+                    value={propertyForm.lateFeeAmount} onChange={(e) => setPropertyForm({...propertyForm, lateFeeAmount: e.target.value})} placeholder="0.00" />
+                </div>
+                {propertyForm.lateFeeJurisdiction && (
+                  <p className="text-xs text-muted mt-1">Set your contract amount here. Leave blank to use the legal maximum.</p>
+                )}
+              </div>
+              <SelectInput label="Fee type" name="editPropLateFeeType"
+                value={propertyForm.lateFeeType} onChange={(e) => setPropertyForm({...propertyForm, lateFeeType: e.target.value as 'flat' | 'percent'})}>
+                <option value="flat">Flat ($)</option>
+                <option value="percent">Percent of rent (%)</option>
+              </SelectInput>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Grace period (days)</label>
+              <input type="number" min="0" max="30" step="1" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+                value={propertyForm.lateFeeGraceDays} onChange={(e) => setPropertyForm({...propertyForm, lateFeeGraceDays: e.target.value})} />
+              {(propertyForm.lateFeeJurisdiction === 'chicago_rlto' || propertyForm.lateFeeJurisdiction === 'cook_county_rtlo') && (
+                <p className="text-xs text-muted mt-1">Minimum 5 days required by ordinance.</p>
+              )}
             </div>
           </div>
 

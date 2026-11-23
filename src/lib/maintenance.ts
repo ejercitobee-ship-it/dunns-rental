@@ -13,6 +13,7 @@ export const STATUS_LABEL: Record<MaintenanceStatus, string> = {
   invoice_approved: 'Invoice approved',
   paid: 'Paid',
   cancelled: 'Cancelled',
+  resolved_no_cost: 'Resolved (no cost)',
 };
 
 type BadgeVariant = 'warning' | 'default' | 'success' | 'secondary' | 'destructive';
@@ -29,6 +30,7 @@ export const STATUS_BADGE: Record<MaintenanceStatus, BadgeVariant> = {
   invoice_approved: 'success',
   paid: 'success',
   cancelled: 'secondary',
+  resolved_no_cost: 'success',
 };
 
 /** Trade slug to label. HVAC stays upper; the rest are simple title case. */
@@ -38,6 +40,13 @@ export const TRADE_LABEL: Record<string, string> = {
   hvac: 'HVAC',
   appliance: 'Appliance',
   carpentry: 'Carpentry',
+  pest_control: 'Pest Control',
+  painting: 'Painting',
+  landscaping: 'Landscaping',
+  roofing: 'Roofing',
+  flooring: 'Flooring',
+  cleaning: 'Cleaning',
+  locksmith: 'Locksmith',
   general: 'General',
   other: 'Other',
 };
@@ -49,7 +58,7 @@ export function tradeLabel(slug?: string): string {
 
 /** Statuses that are still open work (not paid, invoice_approved, or cancelled). */
 export function isActiveStatus(status: MaintenanceStatus): boolean {
-  return status !== 'paid' && status !== 'invoice_approved' && status !== 'cancelled';
+  return status !== 'paid' && status !== 'invoice_approved' && status !== 'cancelled' && status !== 'resolved_no_cost';
 }
 
 /**

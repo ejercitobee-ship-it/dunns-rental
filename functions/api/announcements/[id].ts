@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
 import { logActivityStmt } from '../../lib/activity';
+import { stripDangerousHtml } from '../../lib/sanitize';
 
 /**
  * PUT /api/announcements/:id — edit an announcement's title, body, and/or
@@ -24,7 +25,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     const input = (await request.json()) as Record<string, unknown>;
     const newTitle = typeof input.title === 'string' ? input.title.trim() : existing.title;
-    const newBody = typeof input.body === 'string' ? input.body.trim() : existing.body;
+    const newBody = typeof input.body === 'string' ? stripDangerousHtml(input.body.trim()) : existing.body;
     const newExpires = input.expiresAt === null ? null
       : typeof input.expiresAt === 'string' ? input.expiresAt
       : undefined; // undefined = don't change

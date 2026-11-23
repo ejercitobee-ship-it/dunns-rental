@@ -2,12 +2,16 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser, jsonOk, jsonError } from '../../../lib/session';
 import { tenantIdForUser } from '../../../lib/portal';
 import { getStripe, getOrCreateCustomer } from '../../../lib/stripe';
+import { checkRateLimit } from '../../../lib/rate-limit';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requireUser(env, request);
   if (auth instanceof Response) return auth;
   if (auth.role !== 'tenant') return jsonError('Not a tenant account', 403);
+
+  const rl = await checkRateLimit(env, `setup-intent:${auth.id}`, 10, 60);
+  if (!rl.allowed) return jsonError('Too many attempts. Please wait a moment and try again.', 429);
 
   const tenantId = await tenantIdForUser(env, auth.id);
   if (!tenantId) return jsonError('No tenant record linked', 404);

@@ -1,0 +1,18 @@
+# Cloudflare Pages response headers.
+#
+# These apply to the static app (the HTML document and assets). Pages Functions
+# set their own headers where needed (the file-streaming endpoints already send
+# their own strict CSP and nosniff).
+#
+# IMPORTANT after first deploy: smoke-test the Stripe rent payment flow and the
+# in-app PDF viewer against this CSP. If Stripe needs more (their docs may add
+# m.stripe.network or q.stripe.com), widen script-src / frame-src / img-src to
+# match https://docs.stripe.com/security/guide#content-security-policy.
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self)
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; worker-src 'self' blob:; manifest-src 'self'; form-action 'self'

@@ -12,7 +12,13 @@ import { getDriveFileStream, DriveNotConnected } from '../../lib/google';
  */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  const auth = await requirePermission(env, request, 'maintenance_view');
+  // These are management-only files (maintenance invoices, property note
+  // attachments, expense receipts). 'dashboard_view' is held by every
+  // management role and by no portal role, so this both restores intended staff
+  // access and keeps tenants/realtors/handymen out. ('maintenance_view', used
+  // previously, is not a defined permission, so the route was unintentionally
+  // super_admin-only.)
+  const auth = await requirePermission(env, request, 'dashboard_view');
   if (auth instanceof Response) return auth;
 
   try {

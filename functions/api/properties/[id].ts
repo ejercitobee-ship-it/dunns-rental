@@ -36,7 +36,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       env.DB.prepare(
         `UPDATE properties SET
           name = ?, address = ?, city = ?, state = ?, zip_code = ?, type = ?, description = ?,
-          purchase_date = ?, purchase_price = ?, land_value = ?, updated_at = unixepoch()
+          purchase_date = ?, purchase_price = ?, land_value = ?, prior_depreciation = ?,
+          late_fee_amount = ?, late_fee_type = ?, late_fee_grace_days = ?, late_fee_jurisdiction = ?,
+          updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
         body.name,
@@ -49,6 +51,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.purchaseDate ?? null,
         body.purchasePrice ?? null,
         body.landValue ?? null,
+        body.priorDepreciation ?? null,
+        body.lateFeeAmount ?? null,
+        body.lateFeeType ?? 'flat',
+        typeof body.lateFeeGraceDays === 'number' ? Math.floor(body.lateFeeGraceDays) : 5,
+        body.lateFeeJurisdiction ?? null,
         id
       ),
       logActivityStmt(env.DB, auth, {

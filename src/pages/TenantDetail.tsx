@@ -4,7 +4,7 @@ import {
   ArrowLeft, Mail, Phone, User, Edit2, Home, DoorOpen, Calendar, DollarSign,
   FileText, Upload, Trash2, Users, ShieldAlert, KeyRound, Briefcase, Check, CheckCircle,
   Pause, Play, LogOut, MessageSquare, Send, Clock, RotateCcw, Plus, Download, UserPlus, MapPin,
-  ChevronDown,
+  ChevronDown, AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -29,6 +29,7 @@ import { ActivityTimeline } from '../components/ActivityTimeline';
 import { DepositReturnSection } from '../components/DepositReturnSection';
 import { InspectionSection } from '../components/InspectionSection';
 import { NoticeSection } from '../components/NoticeSection';
+import { EvictionSection, EvictionBadge } from '../components/EvictionSection';
 import { SendPaymentLinkModal } from '../components/SendPaymentLinkModal';
 import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 
@@ -100,6 +101,7 @@ export function TenantDetail() {
   const [docs, setDocs] = useState<AppDocument[]>([]);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasLeaseDoc = useMemo(() => docs.some(d => /lease/i.test(d.name)), [docs]);
 
   // Credits
   const [creditBalance, setCreditBalance] = useState(0);
@@ -1365,6 +1367,7 @@ export function TenantDetail() {
                   <Check className="h-3 w-3" /> Verified
                 </Badge>
               )}
+              {id && <EvictionBadge tenantId={id} />}
             </div>
           </div>
         </div>
@@ -1517,6 +1520,20 @@ export function TenantDetail() {
                     }
                   </span>
                 </div>
+                <div className="flex items-center gap-2">
+                  {hasLeaseDoc ? (
+                    <button type="button" onClick={() => document.getElementById('docs-section')?.scrollIntoView({ behavior: 'smooth' })} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                      <CheckCircle className="h-3.5 w-3.5 text-success" />
+                      <span className="text-success text-sm font-medium">Lease on file</span>
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                      <AlertCircle className="h-3.5 w-3.5 text-warning" />
+                      <span className="text-warning text-sm">No lease uploaded</span>
+                      <Upload className="h-3 w-3 text-warning" />
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 text-ink">
                   <DollarSign className="h-3.5 w-3.5 text-faint" />
                   <span className="font-semibold tnum">{formatCurrency(lease.monthlyRent)}</span>
@@ -1571,6 +1588,27 @@ export function TenantDetail() {
                   <div className="pt-2 border-t border-line flex items-center justify-between">
                     <span className="eyebrow">This Month</span>
                     <Badge variant={settlementBadge[thisMonth.status]} className="capitalize">{thisMonth.status}</Badge>
+                  </div>
+                )}
+                {lease.status === 'active' && canManagePortal && (
+                  <div className="pt-2 border-t border-line flex items-center justify-between">
+                    <span className="eyebrow">Late Fees</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!lease.lateFeeEnabled}
+                      onClick={async () => {
+                        try {
+                          await leasesApi.toggleLateFee(lease.id, !lease.lateFeeEnabled);
+                          refreshData();
+                        } catch (err) {
+                          alert((err as Error).message);
+                        }
+                      }}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${lease.lateFeeEnabled ? 'bg-primary' : 'bg-muted/40'}`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${lease.lateFeeEnabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -1961,11 +1999,12 @@ export function TenantDetail() {
       />
 
       {/* Documents */}
-      <Card>
+      <Card id="docs-section">
         <CardContent className="p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-ink flex items-center gap-2">
               <FileText className="h-4 w-4 text-faint" /> Documents
+              {hasLeaseDoc && <Badge variant="success" className="text-[10px] px-1.5 py-0">Lease</Badge>}
             </h3>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleUploadDoc} />
             <button
@@ -2186,6 +2225,16 @@ export function TenantDetail() {
           unitNumber={(unit || endedUnitRow)?.unitNumber}
           monthlyRent={(lease || endedLease)!.monthlyRent}
           leaseEndDate={(lease || endedLease)!.endDate}
+        />
+      )}
+
+      {/* Eviction Cases */}
+      {id && (
+        <EvictionSection
+          tenantId={id}
+          leaseId={(lease || endedLease)?.id}
+          propertyId={(lease || endedLease)?.propertyId}
+          unitId={(lease || endedLease)?.unitId}
         />
       )}
 

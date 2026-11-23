@@ -4,6 +4,7 @@ import { sendEmail, announcementEmail } from '../../lib/email';
 import { sendPushToTenant } from '../../lib/push';
 import { logActivityStmt } from '../../lib/activity';
 import { SITE_URL } from '../../lib/site';
+import { stripDangerousHtml } from '../../lib/sanitize';
 
 /** GET /api/announcements — list all announcements (admin). */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -35,7 +36,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const title = typeof body.title === 'string' ? body.title.trim() : '';
-    const text = typeof body.body === 'string' ? body.body.trim() : '';
+    const text = stripDangerousHtml(typeof body.body === 'string' ? body.body.trim() : '');
     if (!title) return jsonError('Title is required', 400);
     if (!text) return jsonError('Message body is required', 400);
 

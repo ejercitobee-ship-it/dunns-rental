@@ -48,6 +48,14 @@ export default {
         } catch (err) {
           console.error(`lease-expirations: request failed: ${err && err.message ? err.message : err}`);
         }
+
+        try {
+          const res = await fetch(`${base}/late-fees`, { method: 'POST', headers });
+          const body = await res.text();
+          console.log(`late-fees: HTTP ${res.status} ${body}`);
+        } catch (err) {
+          console.error(`late-fees: request failed: ${err && err.message ? err.message : err}`);
+        }
       })()
     );
   },

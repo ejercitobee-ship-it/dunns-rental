@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requirePermission, jsonOk, jsonError } from '../../lib/session';
 import { AI_TOOLS, executeTool, type ToolDefinition } from '../../lib/ai-tools';
+import { checkRateLimit } from '../../lib/rate-limit';
 
 // Cloudflare Workers AI model (free tier: 10,000 neurons/day).
 const WORKERS_AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
@@ -85,6 +86,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return jsonError('AI Assistant is not configured. The Workers AI binding is required.', 503);
   }
 
+  // Cost guard: cap how fast one user can spend Workers AI neurons.
+  const rl = await checkRateLimit(env, `ai:${auth.id}`, 20, 60);
+  if (!rl.allowed) {
+    return jsonError('You are sending messages too quickly. Please wait a moment and try again.', 429);
+  }
+
   try {
     const body = (await request.json()) as ChatRequest;
     const userMessage = typeof body.message === 'string' ? body.message.trim() : '';
@@ -153,8 +160,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }) as WorkersAIResponse;
       } catch (aiErr) {
         console.error('Workers AI tool call failed:', aiErr);
-        const errMsg = (aiErr as Error).message || String(aiErr);
-        return jsonError(`AI service error: ${errMsg}`, 502);
+        return jsonError('The AI assistant is temporarily unavailable. Please try again.', 502);
       }
 
       // If the model did NOT call tools, use its response directly.
@@ -257,10 +263,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   } catch (err) {
     console.error('AI chat error:', err);
     const msg = (err as Error).message || String(err);
-    // Surface the real error so the UI can show something useful.
+    // A usage-limit hint is safe and useful; everything else is logged above
+    // and returned opaquely so no internal detail reaches the client.
     if (msg.includes('quota') || msg.includes('limit') || msg.includes('neuron')) {
       return jsonError('The AI assistant has reached its daily usage limit. Please try again tomorrow.', 429);
     }
-    return jsonError(`Something went wrong with the AI assistant: ${msg}`, 500);
+    return jsonError('Something went wrong with the AI assistant. Please try again.', 500);
   }
 };

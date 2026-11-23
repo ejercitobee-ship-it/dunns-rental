@@ -3,12 +3,16 @@ import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../
 import { tenantIdForUser } from '../../../lib/portal';
 import { getStripe, getOrCreateCustomer } from '../../../lib/stripe';
 import { stripeFee } from '../../../lib/stripe-fee';
+import { checkRateLimit } from '../../../lib/rate-limit';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   const auth = await requireUser(env, request);
   if (auth instanceof Response) return auth;
   if (auth.role !== 'tenant') return jsonError('Not a tenant account', 403);
+
+  const rl = await checkRateLimit(env, `pay-rent:${auth.id}`, 10, 60);
+  if (!rl.allowed) return jsonError('Too many payment attempts. Please wait a moment and try again.', 429);
 
   try {
     const body = (await request.json()) as {
