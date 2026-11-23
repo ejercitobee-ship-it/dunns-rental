@@ -129,6 +129,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (PORTAL_ROLES.has(roleId)) {
       return jsonError('That role is managed elsewhere, not on the Users page', 400);
     }
+    if (roleId === 'super_admin' && caller.role !== 'super_admin') {
+      return jsonError('Only a super admin can create another super admin', 403);
+    }
     if (!ASSIGNABLE_ROLES.has(roleId)) {
       // Allow custom roles that exist in the roles table.
       const role = await env.DB.prepare('SELECT id FROM roles WHERE id = ?').bind(roleId).first();

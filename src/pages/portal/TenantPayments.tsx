@@ -6,6 +6,7 @@ import { portalApi, type PortalLease, type PortalMoveInFee } from '../../lib/api
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency, getMonthName, formatDate } from '../../lib/utils';
 import { settleMonthWithCredit, rentMonthsToShow } from '../../lib/rent';
+import { TenantPaymentPlans } from './TenantPaymentPlans';
 import type { Lease, RentPayment, PaymentAllocation, PortalPayment } from '../../types';
 
 // This app has had a React #310 white screen from a useMemo called after an
@@ -301,6 +302,9 @@ export function TenantPayments() {
           </CardContent>
         </Card>
       )}
+
+      {/* Payment plans section */}
+      <TenantPaymentPlans />
     </div>
   );
 }

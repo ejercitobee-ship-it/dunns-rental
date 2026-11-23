@@ -3,8 +3,9 @@ import { type Env, requireUser, jsonOk, jsonError, serverError } from '../../../
 import { handymanForUser } from '../../../../../lib/portal';
 import { tradeMatches, logStatusChange } from '../../../../../lib/maintenance';
 import { serializeJob, loadOwnedJob } from '../../../../../lib/handyman-jobs';
-import { notifyTenant, notifyOffice } from '../../../../../lib/maintenance-notify';
+import { notifyTenant, notifyOffice, notifyHandyman, availabilityText } from '../../../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../../../lib/push';
+import { SITE_URL } from '../../../../../lib/site';
 
 /**
  * POST /api/portal/handyman/jobs/:id/claim — the handyman takes an available job.
@@ -53,8 +54,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(handyman.id)
       .first<{ name: string; phone: string | null }>();
     const job2 = serializeJob(row);
+    const tName = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim();
+    const tPhone = (row.tenant_phone as string) || '';
+    const portalUrl = `${SITE_URL}/portal`;
     context.waitUntil(
       Promise.all([
+        (async () => {
+          const cat = (job2.category as string) || 'General';
+          const desc = (job2.description as string) || '';
+          const emailRows: [string, string][] = [
+            ['Issue', job2.title],
+            ['Category', cat],
+            ['Location', job2.locationLabel || 'Not set'],
+            ...(desc ? [['Details', desc] as [string, string]] : []),
+            ...(tName ? [['Tenant', tName] as [string, string]] : []),
+            ...(tPhone ? [['Tenant phone', tPhone] as [string, string]] : []),
+            ['Availability', availabilityText(job2.availability)],
+          ];
+          await notifyHandyman(env, handyman!.id, `Job confirmed: ${job2.title}`, emailRows, { url: portalUrl, label: 'Open your portal' });
+        })().catch((e) => console.error('claim handyman email failed', e)),
         notifyTenant(env, row.tenant_email as string | null, `Your maintenance request is being handled`, [
           ['Issue', job2.title],
           ['Handyman', hName?.name || 'Assigned'],

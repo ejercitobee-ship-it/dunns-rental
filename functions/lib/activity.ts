@@ -32,6 +32,7 @@ const RESOURCE_LABEL: Record<string, string> = {
   messages: 'message',
   tasks: 'task',
   projects: 'project',
+  'payment-plans': 'payment plan',
 };
 
 // Map resource slug to module.
@@ -62,6 +63,7 @@ const RESOURCE_MODULE: Record<string, ActivityModule> = {
   'handyman-messages': 'maintenance',
   tasks: 'tasks',
   projects: 'tasks',
+  'payment-plans': 'finances',
 };
 
 const VERB: Record<string, string> = {

@@ -31,6 +31,7 @@ import { InspectionSection } from '../components/InspectionSection';
 import { NoticeSection } from '../components/NoticeSection';
 import { EvictionSection, EvictionBadge } from '../components/EvictionSection';
 import { SendPaymentLinkModal } from '../components/SendPaymentLinkModal';
+import { PaymentPlansSection } from '../components/PaymentPlansSection';
 import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 
 const leaseStatusBadge: Record<LeaseStatus, 'success' | 'warning' | 'secondary'> = {
@@ -2225,6 +2226,7 @@ export function TenantDetail() {
           unitNumber={(unit || endedUnitRow)?.unitNumber}
           monthlyRent={(lease || endedLease)!.monthlyRent}
           leaseEndDate={(lease || endedLease)!.endDate}
+          leaseType={(lease || endedLease)!.leaseType}
         />
       )}
 
@@ -2237,6 +2239,9 @@ export function TenantDetail() {
           unitId={(lease || endedLease)?.unitId}
         />
       )}
+
+      {/* Payment Plans */}
+      {id && <PaymentPlansSection tenantId={id} />}
 
       {/* Payment history */}
       <Card>
@@ -3408,7 +3413,7 @@ function AgentNotesCard({ tenantId }: { tenantId: string }) {
           className="w-full flex items-center justify-between"
         >
           <h3 className="font-semibold text-ink flex items-center gap-2">
-            <FileText className="h-4 w-4 text-faint" /> Agent Notes
+            <FileText className="h-4 w-4 text-faint" /> Internal Notes
             {!loading && notes.length > 0 && (
               <span className="text-xs font-normal text-muted bg-canvas border border-line rounded-full px-2 py-0.5">
                 {notes.length}

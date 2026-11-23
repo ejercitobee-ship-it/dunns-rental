@@ -76,7 +76,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 SET status = 'completed', cost = ?,
                     vendor = COALESCE(NULLIF(?, ''), vendor),
                     updated_at = unixepoch()
-              WHERE id = ? AND status NOT IN ('paid', 'cancelled')`
+              WHERE id = ? AND status NOT IN ('paid', 'cancelled', 'resolved_no_cost')`
           ).bind(
             amount,
             (sub.company_name as string) || (sub.vendor_name as string) || '',

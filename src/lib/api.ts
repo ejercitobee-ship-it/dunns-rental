@@ -688,6 +688,13 @@ export const noticesApi = {
     sendEmail?: boolean;
   }): Promise<{ created: number; emailed: boolean }> =>
     apiRequest('/notices/bulk', { method: 'POST', body: JSON.stringify(data) }),
+  nonRenewalToggle: (data: {
+    tenantId: string;
+    leaseId: string;
+    propertyId?: string;
+    unitId?: string;
+  }): Promise<Notice & { calendarEventId?: string }> =>
+    apiRequest('/notices/non-renewal-toggle', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Evictions API
@@ -1161,6 +1168,8 @@ export const portalApi = {
   },
   // Vacant units the realtor may market, asking rent included on purpose.
   availableUnits: (): Promise<AvailableUnit[]> => apiRequest('/portal/realtor/available-units'),
+  paymentPlans: (): Promise<PaymentPlan[]> => apiRequest('/portal/payment-plans'),
+  paymentPlanPdfUrl: (id: string) => `${API_BASE}/payment-plans/${id}/generate-pdf`,
   // A tenant's own maintenance requests, with the assigned handyman's name and
   // phone attached when there is one.
   maintenance: (): Promise<PortalMaintenanceRequest[]> => apiRequest('/portal/maintenance'),
@@ -1892,4 +1901,89 @@ export const mgmtNotificationsApi = {
 
   updatePreferences: (preferences: Record<string, boolean>): Promise<void> =>
     apiRequest('/mgmt-notifications/preferences', { method: 'PUT', body: JSON.stringify({ preferences }) }),
+};
+
+// Payment Plans API
+
+export interface PaymentPlanInstallment {
+  id: string;
+  plan_id: string;
+  installment_number: number;
+  due_date: string;
+  amount: number;
+  status: 'pending' | 'paid' | 'missed';
+  paid_date: string | null;
+  paid_amount: number | null;
+  notes: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface PaymentPlan {
+  id: string;
+  lease_id: string;
+  tenant_id: string;
+  created_by: string;
+  total_amount: number;
+  num_installments: number;
+  start_date: string;
+  status: 'active' | 'completed' | 'defaulted' | 'cancelled';
+  reason: string | null;
+  notes: string | null;
+  tenant_signature_date: string | null;
+  created_at: number;
+  updated_at: number;
+  first_name?: string;
+  last_name?: string;
+  created_by_name?: string;
+  property_name?: string;
+  property_address?: string;
+  unit_number?: string;
+  monthly_rent?: number;
+  email?: string;
+  installments: PaymentPlanInstallment[];
+}
+
+export const paymentPlansApi = {
+  list: (filters?: { tenantId?: string; leaseId?: string; status?: string }): Promise<PaymentPlan[]> => {
+    const params = new URLSearchParams();
+    if (filters?.tenantId) params.set('tenantId', filters.tenantId);
+    if (filters?.leaseId) params.set('leaseId', filters.leaseId);
+    if (filters?.status) params.set('status', filters.status);
+    const qs = params.toString();
+    return apiRequest(`/payment-plans${qs ? `?${qs}` : ''}`);
+  },
+
+  get: (id: string): Promise<PaymentPlan> =>
+    apiRequest(`/payment-plans/${id}`),
+
+  create: (data: {
+    leaseId: string;
+    tenantId: string;
+    totalAmount: number;
+    reason?: string;
+    notes?: string;
+    installments: { dueDate: string; amount: number }[];
+  }): Promise<{ success: boolean; id: string }> =>
+    apiRequest('/payment-plans', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: string, data: {
+    status?: string;
+    notes?: string;
+    tenantSignatureDate?: string;
+  }): Promise<{ success: boolean }> =>
+    apiRequest(`/payment-plans/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  delete: (id: string): Promise<{ success: boolean }> =>
+    apiRequest(`/payment-plans/${id}`, { method: 'DELETE' }),
+
+  updateInstallment: (planId: string, instId: string, data: {
+    status: 'paid' | 'missed' | 'pending';
+    paidDate?: string;
+    paidAmount?: number;
+    notes?: string;
+  }): Promise<{ success: boolean }> =>
+    apiRequest(`/payment-plans/${planId}/installments/${instId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  pdfUrl: (id: string) => `${API_BASE}/payment-plans/${id}/generate-pdf`,
 };

@@ -56,6 +56,22 @@ export default {
         } catch (err) {
           console.error(`late-fees: request failed: ${err && err.message ? err.message : err}`);
         }
+
+        try {
+          const res = await fetch(`${base}/installment-reminders`, { method: 'POST', headers });
+          const body = await res.text();
+          console.log(`installment-reminders: HTTP ${res.status} ${body}`);
+        } catch (err) {
+          console.error(`installment-reminders: request failed: ${err && err.message ? err.message : err}`);
+        }
+
+        try {
+          const res = await fetch(`${base}/activity-cleanup`, { method: 'POST', headers });
+          const body = await res.text();
+          console.log(`activity-cleanup: HTTP ${res.status} ${body}`);
+        } catch (err) {
+          console.error(`activity-cleanup: request failed: ${err && err.message ? err.message : err}`);
+        }
       })()
     );
   },

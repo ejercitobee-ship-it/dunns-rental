@@ -17,7 +17,7 @@ import { Modal } from '../components/ui/Modal';
 import { TextInput } from '../components/ui/FormField';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { formatCurrency, formatMonthYear, todayLocalDate, formatDate } from '../lib/utils';
-import { rentSheetApi, documentsApi, leasesApi, tenantsApi, noticesApi, settingsApi, type AppSettings } from '../lib/api';
+import { rentSheetApi, documentsApi, leasesApi, tenantsApi, noticesApi, settingsApi, paymentPlansApi, type AppSettings, type PaymentPlan, type PaymentPlanInstallment } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -164,6 +164,12 @@ export function Rents() {
   // 'manual' lets the user edit amounts per month in a grid.
   const [allocMode, setAllocMode] = useState<'auto' | 'manual'>('auto');
   const [manualAllocations, setManualAllocations] = useState<Array<{ month: number; year: number; amount: string; due: number }>>([]);
+
+  // Payment plan integration: when a tenant has an active plan, link the
+  // payment to a specific installment so both systems stay in sync.
+  const [activePlan, setActivePlan] = useState<PaymentPlan | null>(null);
+  const [selectedInstallment, setSelectedInstallment] = useState<PaymentPlanInstallment | null>(null);
+  const [linkToPlan, setLinkToPlan] = useState(false);
 
   // Late Fee management state
   const [lfModalOpen, setLfModalOpen] = useState(false);
@@ -598,39 +604,108 @@ export function Rents() {
   const [pre5DaySending, setPre5DaySending] = useState(false);
   const [pre5DaySettings, setPre5DaySettings] = useState<AppSettings | null>(null);
 
-  // Super Admin only: undo a mistakenly recorded payment. Removes every payment
-  // logged for this lease-month (and its receipt), so the month goes back to owed.
+  // Super Admin only: undo a mistakenly recorded payment.
   const [deletingRow, setDeletingRow] = useState<string | null>(null);
+
+  // When a month has both direct and cross-month allocated payments, show a
+  // picker modal so the admin can choose which payment(s) to delete.
+  const [deletePicker, setDeletePicker] = useState<{
+    monthLabel: string;
+    leaseId: string;
+    month: number;
+    year: number;
+    directPmts: RentPayment[];
+    directTotal: number;
+    crossPmts: Array<{ payment: RentPayment; otherMonths: string[] }>;
+  } | null>(null);
+
+  const executeDeletePayments = async (pmts: RentPayment[], leaseId: string, month: number, year: number) => {
+    const rowKey = `${leaseId}-${month}-${year}`;
+    setDeletingRow(rowKey);
+    try {
+      for (const p of pmts) await deleteRentPayment(p.id);
+      showToast('Payment deleted successfully.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete the payment', 'error');
+    } finally {
+      setDeletingRow(null);
+      setDeletePicker(null);
+    }
+  };
+
   const handleDeleteRent = (mr: LeaseMonthRow) => {
-    const pmts = rentPayments.filter(
+    const directPmts = rentPayments.filter(
       pm => pm.leaseId === mr.lease.id && pm.month === mr.month && pm.year === mr.year
     );
-    if (pmts.length === 0) return;
-    const total = pmts.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const creditCount = pmts.filter(p => p.type === 'credit').length;
-    const payCount = pmts.length - creditCount;
+
+    // Find payments allocated TO this month from a different primary month.
+    const directIds = new Set(directPmts.map(p => p.id));
+    const allocsHere = paymentAllocations.filter(
+      a => a.leaseId === mr.lease.id && a.month === mr.month && a.year === mr.year
+    );
+    const crossMonthIds = new Set(
+      allocsHere.map(a => a.paymentId).filter(pid => !directIds.has(pid))
+    );
+    const crossMonthPmts = rentPayments.filter(p => crossMonthIds.has(p.id));
+
+    const allPmts = [...directPmts, ...crossMonthPmts];
+    if (allPmts.length === 0) return;
+
+    // When there are BOTH direct and cross-month payments, show a picker so
+    // the admin can choose which to delete.
+    if (directPmts.length > 0 && crossMonthPmts.length > 0) {
+      const directTotal = directPmts.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const crossPmts = crossMonthPmts.map(cmp => {
+        const allAllocs = paymentAllocations.filter(a => a.paymentId === cmp.id);
+        const otherMonths = allAllocs
+          .filter(a => !(a.month === mr.month && a.year === mr.year))
+          .map(a => formatMonthYear(a.month, a.year));
+        return { payment: cmp, otherMonths };
+      });
+      setDeletePicker({
+        monthLabel: formatMonthYear(mr.month, mr.year),
+        leaseId: mr.lease.id,
+        month: mr.month,
+        year: mr.year,
+        directPmts,
+        directTotal,
+        crossPmts,
+      });
+      return;
+    }
+
+    // Single type: build a standard confirmation.
+    const total = allPmts.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const creditCount = allPmts.filter(p => p.type === 'credit').length;
+    const payCount = allPmts.length - creditCount;
     const parts: string[] = [];
     if (payCount > 0) parts.push(`${payCount} payment${payCount > 1 ? 's' : ''}`);
     if (creditCount > 0) parts.push(`${creditCount} credit${creditCount > 1 ? 's' : ''}`);
-    const label = `${parts.join(' and ')} totaling ${formatCurrency(total)}`;
+
+    let message = `Delete the recorded rent for ${formatMonthYear(mr.month, mr.year)}?\n\nThis removes ${parts.join(' and ')} totaling ${formatCurrency(total)} and any receipt, and the month goes back to owed.`;
+
+    // Add cross-month warning if only allocated payments exist.
+    if (crossMonthPmts.length > 0) {
+      for (const cmp of crossMonthPmts) {
+        const allAllocs = paymentAllocations.filter(a => a.paymentId === cmp.id);
+        const otherMonths = allAllocs
+          .filter(a => !(a.month === mr.month && a.year === mr.year))
+          .map(a => formatMonthYear(a.month, a.year));
+        if (otherMonths.length > 0) {
+          message += `\n\nThis payment was allocated across months. Deleting it will also remove it from: ${otherMonths.join(', ')}.`;
+        }
+      }
+    }
+
+    message += '\n\nThis cannot be undone.';
+
     setConfirmState({
       open: true,
       title: 'Delete recorded rent',
-      message: `Delete the recorded rent for ${formatMonthYear(mr.month, mr.year)}?\n\nThis removes ${label} and any receipt, and the month goes back to owed. This cannot be undone.`,
+      message,
       confirmText: 'Delete',
       variant: 'danger',
-      onConfirm: async () => {
-        const rowKey = `${mr.lease.id}-${mr.month}-${mr.year}`;
-        setDeletingRow(rowKey);
-        try {
-          for (const p of pmts) await deleteRentPayment(p.id);
-          showToast('Rent payment deleted. The month is back to owed.', 'success');
-        } catch (err) {
-          showToast((err as Error).message || 'Could not delete the payment', 'error');
-        } finally {
-          setDeletingRow(null);
-        }
-      },
+      onConfirm: () => executeDeletePayments(allPmts, mr.lease.id, mr.month, mr.year),
     });
   };
 
@@ -738,13 +813,30 @@ export function Rents() {
     setAllocMode('auto');
     setManualAllocations([]);
 
-    // Fetch credit balance for the first occupant.
+    // Reset payment plan state.
+    setActivePlan(null);
+    setSelectedInstallment(null);
+    setLinkToPlan(false);
+
+    // Fetch credit balance and active payment plans for the first occupant.
     const tenantId = row.occupants[0]?.id;
     if (tenantId) {
       tenantsApi.getCredits(tenantId).then(res => {
         setCreditBalance(res.balance);
         if (res.balance > 0) {
           setCreditAmount(String(Math.min(res.balance, row.settlement.balance)));
+        }
+      }).catch(() => {});
+
+      paymentPlansApi.list({ tenantId, status: 'active' }).then(plans => {
+        if (plans.length > 0) {
+          const plan = plans[0];
+          setActivePlan(plan);
+          const nextPending = plan.installments.find(i => i.status === 'pending');
+          if (nextPending) {
+            setSelectedInstallment(nextPending);
+            setLinkToPlan(true);
+          }
         }
       }).catch(() => {});
     }
@@ -768,6 +860,9 @@ export function Rents() {
     setLateFeeAmount('');
     setAllocMode('auto');
     setManualAllocations([]);
+    setActivePlan(null);
+    setSelectedInstallment(null);
+    setLinkToPlan(false);
   };
 
   /** Build auto-apply allocations: current month balance first, then past due,
@@ -920,6 +1015,20 @@ export function Rents() {
           notes: recordForm.notes.trim() || undefined,
           allocations: allocs,
         });
+      }
+
+      // Mark the linked payment plan installment as paid.
+      if (linkToPlan && activePlan && selectedInstallment) {
+        try {
+          await paymentPlansApi.updateInstallment(activePlan.id, selectedInstallment.id, {
+            status: 'paid',
+            paidDate: recordForm.receivedDate,
+            paidAmount: Number(recordForm.amount) || Number(creditAmount) || 0,
+            notes: `Recorded via Rent Management`,
+          });
+        } catch {
+          // Non-fatal: the rent payment is already saved.
+        }
       }
 
       // Assess a late fee if the checkbox is on and amount is entered.
@@ -1427,6 +1536,12 @@ ${companyPhone}`;
                 Pre 5 Day Notices
               </Button>
             )}
+            <Link to="/payment-plans">
+              <Button variant="outline" className="w-full sm:w-auto">
+                <FileText className="h-4 w-4 mr-2" />
+                Payment Plans
+              </Button>
+            </Link>
           </div>
         }
       />
@@ -1504,18 +1619,9 @@ ${companyPhone}`;
           value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}
         >
-          <option value="2030">2030</option>
-          <option value="2029">2029</option>
-          <option value="2028">2028</option>
-          <option value="2027">2027</option>
-          <option value="2026">2026</option>
-          <option value="2025">2025</option>
-          <option value="2024">2024</option>
-          <option value="2023">2023</option>
-          <option value="2022">2022</option>
-          <option value="2021">2021</option>
-          <option value="2020">2020</option>
-          <option value="2019">2019</option>
+          {Array.from({ length: new Date().getFullYear() + 5 - 2019 }, (_, i) => new Date().getFullYear() + 4 - i).map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
         </select>
       </div>
 
@@ -2636,6 +2742,58 @@ ${companyPhone}`;
               </div>
             )}
 
+            {/* Payment Plan Installment Link */}
+            {activePlan && activePlan.installments.filter(i => i.status === 'pending').length > 0 && (
+              <div className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Payment Plan</h5>
+                  <button
+                    type="button"
+                    onClick={() => setLinkToPlan(!linkToPlan)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      linkToPlan
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-surface text-muted hover:text-ink border border-line'
+                    }`}
+                  >
+                    {linkToPlan ? 'Linked ✓' : 'Link to Installment'}
+                  </button>
+                </div>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                  This tenant has an active payment plan ({formatCurrency(activePlan.total_amount)} in {activePlan.num_installments} installments).
+                </p>
+                {linkToPlan && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Installment</label>
+                    <select
+                      value={selectedInstallment?.id || ''}
+                      onChange={(e) => {
+                        const inst = activePlan.installments.find(i => i.id === e.target.value) || null;
+                        setSelectedInstallment(inst);
+                        if (inst && !applyCredit) {
+                          setRecordForm(f => ({ ...f, amount: String(inst.amount) }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-indigo-200 dark:border-indigo-700 rounded-lg bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/25"
+                    >
+                      {activePlan.installments
+                        .filter(i => i.status === 'pending')
+                        .map(i => (
+                          <option key={i.id} value={i.id}>
+                            #{i.installment_number} : Due {i.due_date} : {formatCurrency(i.amount)}
+                          </option>
+                        ))}
+                    </select>
+                    {selectedInstallment && (
+                      <p className="text-xs text-indigo-500">
+                        Installment #{selectedInstallment.installment_number}: {formatCurrency(selectedInstallment.amount)} due {selectedInstallment.due_date}. Recording this payment will mark it as paid.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-ink">Who Paid</label>
               <select
@@ -3009,6 +3167,87 @@ ${companyPhone}`;
             <Button onClick={submitMoveInFee} disabled={mifBusy}>{mifBusy ? 'Recording...' : 'Record payment'}</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Payment delete picker: shown when a month has both direct and allocated payments */}
+      <Modal
+        isOpen={!!deletePicker}
+        onClose={() => setDeletePicker(null)}
+        title="Delete payments"
+        size="sm"
+      >
+        {deletePicker && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              {deletePicker.monthLabel} has payments from different sources. Choose which to delete.
+            </p>
+
+            {/* Direct payments: one card per payment */}
+            {deletePicker.directPmts.map(dp => (
+              <div key={dp.id} className="border border-line rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-ink">
+                      {formatCurrency(dp.amount)}{dp.type === 'credit' ? ' (credit)' : ''}
+                    </p>
+                    <p className="text-xs text-muted mt-0.5">
+                      Recorded for {deletePicker.monthLabel}
+                      {dp.receivedDate ? ` · received ${formatDate(dp.receivedDate)}` : ''}
+                      {dp.paymentMethod ? ` · ${dp.paymentMethod}` : ''}
+                    </p>
+                    {dp.notes && <p className="text-xs text-muted mt-0.5 italic">{dp.notes}</p>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => executeDeletePayments([dp], deletePicker.leaseId, deletePicker.month, deletePicker.year)}
+                    disabled={!!deletingRow}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {/* Cross-month allocated payments */}
+            {deletePicker.crossPmts.map(({ payment: cmp, otherMonths }) => (
+              <div key={cmp.id} className="border border-line rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-ink">
+                      {formatCurrency(cmp.amount)} from {formatMonthYear(cmp.month, cmp.year)}
+                    </p>
+                    <p className="text-xs text-muted mt-0.5">
+                      Allocated across months
+                      {cmp.receivedDate ? ` · received ${formatDate(cmp.receivedDate)}` : ''}
+                      {cmp.paymentMethod ? ` · ${cmp.paymentMethod}` : ''}
+                    </p>
+                    {cmp.notes && <p className="text-xs text-muted mt-0.5 italic">{cmp.notes}</p>}
+                    {otherMonths.length > 0 && (
+                      <p className="text-xs text-danger mt-1">
+                        Also removes from: {otherMonths.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => executeDeletePayments([cmp], deletePicker.leaseId, deletePicker.month, deletePicker.year)}
+                    disabled={!!deletingRow}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex justify-end pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setDeletePicker(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

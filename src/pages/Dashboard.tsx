@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DollarSign, CreditCard, TrendingUp,
-  Activity, Building2, BarChart3, Users, AlertTriangle,
+  DollarSign, Building2, BarChart3, Users, AlertTriangle,
   Clock, CalendarCheck, Home, ChevronRight, ChevronDown,
   CalendarDays, ArrowRight, PieChart as PieChartIcon, Check,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
-import { StatCard, ContextCard } from '../components/ui/StatCard';
+import { Skeleton } from '../components/ui/Skeleton';
 import { PageHeader } from '../components/ui/PageHeader';
 import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID, INCOME_COLOR, EXPENSE_COLOR } from '../components/ui/chartConstants';
 import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
@@ -17,7 +15,7 @@ import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
 import { calendarApi, depositReturnsApi } from '../lib/api';
-import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd, vacancyLossForYear, leaseCoversMonth } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, daysUntilLeaseEnd, vacancyLossForYear, leaseCoversMonth } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { DashboardStats, Expense, Unit, CalendarEvent, DepositReturn } from '../types';
 import {
@@ -227,11 +225,11 @@ export function Dashboard() {
     return rows.sort((a, b) => b.total - a.total);
   }, [leases, rentPayments, paymentAllocations, properties, units, getLeaseTenants]);
 
-  // Leases expiring within 60 days.
+  // All active fixed-term leases with an end date, sorted by soonest expiration.
   const expiringSoon = useMemo(() => {
     const today = todayLocalDate();
     return activeLeases(leases)
-      .filter(lease => isLeaseExpiringSoon(lease, today))
+      .filter(lease => lease.endDate && daysUntilLeaseEnd(lease, today) !== null)
       .map(lease => ({
         lease,
         days: daysUntilLeaseEnd(lease, today) ?? 0,
@@ -398,91 +396,62 @@ export function Dashboard() {
       />
 
       {/* ================================================================
-          ZONE 1: THIS MONTH SNAPSHOT
+          ZONE 1: HERO SNAPSHOT
           ================================================================ */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Collected"
-          value={formatCurrency(stats.monthlyIncome)}
-          subtitle={`of ${formatCurrency(projectedMonthlyRent)} projected`}
-          icon={<DollarSign />}
-          onClick={() => navigate('/rents')}
-        />
-        <StatCard
-          title="Expenses"
-          value={formatCurrency(stats.monthlyExpenses)}
-          subtitle={`${monthlyExpenseCount} transaction${monthlyExpenseCount !== 1 ? 's' : ''}`}
-          icon={<CreditCard />}
-          iconBg="bg-warning-soft text-warning"
-          onClick={() => navigate('/finances')}
-        />
-        <StatCard
-          title="Net cash flow"
-          value={`${stats.netIncome >= 0 ? '+' : ''}${formatCurrency(stats.netIncome)}`}
-          subtitle="Income minus expenses"
-          icon={<TrendingUp />}
-          valueColor={stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}
-          onClick={() => navigate('/finances')}
-        />
-        <StatCard
-          title="Collection rate"
-          value={`${collectionRate}%`}
-          subtitle={`${unitsPaid.paid} of ${unitsPaid.total} units paid`}
-          icon={<Activity />}
-          onClick={() => navigate('/rents')}
-        />
+      <div className="rounded-2xl overflow-hidden relative" style={{ background: 'linear-gradient(135deg, #1e3a2e 0%, #24503f 40%, #2c5c4a 100%)' }}>
+        <div className="absolute -top-20 -right-10 w-72 h-72 rounded-full pointer-events-none" style={{ background: 'rgba(201,169,110,0.06)' }} />
+
+        <div className="flex items-center justify-between px-5 sm:px-7 pt-5 relative z-10">
+          <span className="text-[13px] text-white/55 font-medium">{getMonthName(new Date().getMonth() + 1)} {new Date().getFullYear()}</span>
+          <span className="flex items-center gap-1.5 text-[12px] text-white/40">
+            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+            Live
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 px-5 sm:px-7 pt-5 pb-6 gap-y-5 relative z-10">
+          <button type="button" onClick={() => navigate('/rents')} className="text-left lg:pr-5 lg:border-r lg:border-white/[0.08] hover:opacity-80 transition-opacity">
+            <p className="text-[11px] text-white/45 uppercase tracking-wider font-medium">Collected</p>
+            <p className="font-display text-[26px] font-semibold leading-tight tnum mt-1.5" style={{ color: '#c9a96e' }}>{formatCurrency(stats.monthlyIncome)}</p>
+            <p className="text-[11px] text-white/35 mt-1">of {formatCurrency(projectedMonthlyRent)} projected</p>
+          </button>
+          <button type="button" onClick={() => navigate('/finances')} className="text-left lg:px-5 lg:border-r lg:border-white/[0.08] hover:opacity-80 transition-opacity">
+            <p className="text-[11px] text-white/45 uppercase tracking-wider font-medium">Expenses</p>
+            <p className="font-display text-[26px] font-semibold text-white leading-tight tnum mt-1.5">{formatCurrency(stats.monthlyExpenses)}</p>
+            <p className="text-[11px] text-white/35 mt-1">{monthlyExpenseCount} transaction{monthlyExpenseCount !== 1 ? 's' : ''}</p>
+          </button>
+          <button type="button" onClick={() => navigate('/finances')} className="text-left lg:px-5 lg:border-r lg:border-white/[0.08] hover:opacity-80 transition-opacity">
+            <p className="text-[11px] text-white/45 uppercase tracking-wider font-medium">Net cash flow</p>
+            <p className="font-display text-[26px] font-semibold leading-tight tnum mt-1.5" style={{ color: stats.netIncome >= 0 ? '#6ee7a0' : '#f87171' }}>{stats.netIncome >= 0 ? '+' : ''}{formatCurrency(stats.netIncome)}</p>
+            <p className="text-[11px] text-white/35 mt-1">Income minus expenses</p>
+          </button>
+          <button type="button" onClick={() => navigate('/rents')} className="text-left lg:pl-5 hover:opacity-80 transition-opacity">
+            <p className="text-[11px] text-white/45 uppercase tracking-wider font-medium">Collection</p>
+            <p className="font-display text-[26px] font-semibold text-white leading-tight tnum mt-1.5">{collectionRate}%</p>
+            <p className="text-[11px] text-white/35 mt-1">{unitsPaid.paid} of {unitsPaid.total} units paid</p>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 border-t border-white/[0.06] relative z-10" style={{ background: 'rgba(0,0,0,0.12)' }}>
+          <button type="button" onClick={() => navigate('/properties')} className="flex items-center gap-2 px-4 sm:px-5 py-3.5 lg:border-r border-white/[0.06] hover:bg-white/[0.03] transition-colors">
+            <span className="w-7 h-7 rounded-lg bg-white/[0.08] grid place-items-center flex-shrink-0"><Building2 className="h-3.5 w-3.5 text-white/50" /></span>
+            <div><p className="text-[15px] font-semibold text-white tnum">{stats.totalProperties}</p><p className="text-[10px] text-white/35 uppercase tracking-wide">Properties</p></div>
+          </button>
+          <button type="button" onClick={() => navigate('/properties')} className="flex items-center gap-2 px-4 sm:px-5 py-3.5 lg:border-r border-white/[0.06] hover:bg-white/[0.03] transition-colors">
+            <span className="w-7 h-7 rounded-lg bg-white/[0.08] grid place-items-center flex-shrink-0"><Home className="h-3.5 w-3.5 text-white/50" /></span>
+            <div><p className="text-[15px] font-semibold text-white tnum">{stats.totalUnits}</p><p className="text-[10px] text-white/35 uppercase tracking-wide">Units</p></div>
+          </button>
+          <button type="button" onClick={() => navigate('/tenants')} className="flex items-center gap-2 px-4 sm:px-5 py-3.5 lg:border-r border-white/[0.06] hover:bg-white/[0.03] transition-colors">
+            <span className="w-7 h-7 rounded-lg bg-white/[0.08] grid place-items-center flex-shrink-0"><Users className="h-3.5 w-3.5 text-white/50" /></span>
+            <div><p className="text-[15px] font-semibold text-white tnum">{stats.totalTenants}</p><p className="text-[10px] text-white/35 uppercase tracking-wide">Tenants</p></div>
+          </button>
+          <button type="button" onClick={() => navigate('/properties')} className="flex items-center gap-2 px-4 sm:px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+            <span className="w-7 h-7 rounded-lg bg-white/[0.08] grid place-items-center flex-shrink-0"><BarChart3 className="h-3.5 w-3.5 text-white/50" /></span>
+            <div><p className="text-[15px] font-semibold text-white tnum">{stats.occupancyRate.toFixed(0)}%</p><p className="text-[10px] text-white/35 uppercase tracking-wide">Occupancy</p></div>
+          </button>
+        </div>
       </div>
 
-      {/* Context row: portfolio at a glance */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <ContextCard icon={<Building2 />} label="Properties" value={stats.totalProperties} onClick={() => navigate('/properties')} />
-        <ContextCard icon={<Home />} label="Units" value={stats.totalUnits} onClick={() => navigate('/properties')} />
-        <ContextCard icon={<Users />} label="Active tenants" value={stats.totalTenants} onClick={() => navigate('/tenants')} />
-        <ContextCard icon={<BarChart3 />} label="Occupancy" value={`${stats.occupancyRate.toFixed(0)}%`} onClick={() => navigate('/properties')} />
-      </div>
-
-      {/* Vacancy loss banner: only visible when there is vacancy */}
-      {(stats.vacancyLossThisMonth > 0 || stats.vacancyLossYTD > 0) && (
-        <Card className="border-amber-200 bg-amber-50/40">
-          <div className="px-5 py-4 flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-              <div className="flex items-center gap-2.5 flex-shrink-0">
-                <span className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 grid place-items-center [&_svg]:h-[20px] [&_svg]:w-[20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
-                  <AlertTriangle />
-                </span>
-                <span className="text-sm font-medium text-ink">Vacancy loss</span>
-              </div>
-              <div className="flex items-center gap-6 flex-1 flex-wrap">
-                {stats.vacancyLossThisMonth > 0 && (
-                  <div>
-                    <p className="eyebrow !text-[10px] text-amber-700">This month</p>
-                    <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossThisMonth)}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="eyebrow !text-[10px] text-amber-700">Year to date</p>
-                  <p className="text-[17px] font-medium text-amber-800 tnum">{formatCurrency(stats.vacancyLossYTD)}</p>
-                </div>
-                {stats.vacancyRate > 0 && (
-                  <div>
-                    <p className="eyebrow !text-[10px] text-amber-700">Vacancy rate</p>
-                    <p className="text-[17px] font-medium text-amber-800 tnum">{stats.vacancyRate.toFixed(1)}%</p>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-amber-700 border-t border-amber-200/60 pt-2.5">
-              <span>{vacantUnits.length} vacant {vacantUnits.length === 1 ? 'unit' : 'units'}</span>
-              {futureLeaseUnitIds.size > 0 && (
-                <span>{futureLeaseUnitIds.size} leased (not available) · {vacantUnits.length - futureLeaseUnitIds.size} available</span>
-              )}
-              {stats.grossPotentialRentMonth > 0 && (
-                <span className="ml-auto hidden sm:block">Gross potential: {formatCurrency(stats.grossPotentialRentMonth)}/mo</span>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
 
       {/* ================================================================
           ZONE 2: TRENDS
@@ -662,7 +631,7 @@ export function Dashboard() {
             { key: 'pastDue' as const, label: 'Past due', icon: <AlertTriangle className="h-3.5 w-3.5" />, count: attentionCounts.pastDue, color: 'danger' },
             { key: 'overdue' as const, label: 'Overdue', icon: <Clock className="h-3.5 w-3.5" />, count: attentionCounts.overdue, color: 'danger' },
             { key: 'deposits' as const, label: 'Deposits', icon: <DollarSign className="h-3.5 w-3.5" />, count: attentionCounts.deposits, color: 'warning' },
-            { key: 'expiring' as const, label: 'Expiring', icon: <CalendarCheck className="h-3.5 w-3.5" />, count: attentionCounts.expiring, color: 'warning' },
+            { key: 'expiring' as const, label: 'Contracts', icon: <CalendarCheck className="h-3.5 w-3.5" />, count: attentionCounts.expiring, color: 'warning' },
             { key: 'vacant' as const, label: 'Vacant', icon: <Home className="h-3.5 w-3.5" />, count: attentionCounts.vacant, color: 'muted' },
           ]).map(tab => (
             <button
@@ -759,11 +728,17 @@ export function Dashboard() {
 
               {/* Expiring tab */}
               {attentionTab === 'expiring' && (expiringSoon.length === 0 ? (
-                <p className="text-center text-sm text-muted py-8">No leases expiring soon.</p>
+                <p className="text-center text-sm text-muted py-8">All tenants are on month to month leases.</p>
               ) : expiringSoon.map(row => {
                 const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
                 const where = [row.property?.name ?? row.property?.address, row.unit ? `Unit ${row.unit.unitNumber}` : null]
                   .filter(Boolean).join(' · ');
+                const urgent = row.days <= 60;
+                const timeLabel = row.days <= 0
+                  ? (row.days === 0 ? 'Expires today' : `${Math.abs(row.days)} day${Math.abs(row.days) === 1 ? '' : 's'} past`)
+                  : row.days > 90
+                    ? `${Math.round(row.days / 30)} months`
+                    : `${row.days} day${row.days === 1 ? '' : 's'}`;
                 return (
                   <button
                     key={row.lease.id}
@@ -771,15 +746,17 @@ export function Dashboard() {
                     onClick={() => row.occupants[0] && navigate(`/tenants/${row.occupants[0].id}`)}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas/60 transition-colors"
                   >
-                    <span className="w-[30px] h-[30px] rounded-lg bg-warning-soft text-warning grid place-items-center flex-shrink-0">
+                    <span className={`w-[30px] h-[30px] rounded-lg grid place-items-center flex-shrink-0 ${
+                      row.days <= 0 ? 'bg-danger-soft text-danger' : urgent ? 'bg-warning-soft text-warning' : 'bg-canvas text-muted'
+                    }`}>
                       <CalendarCheck className="h-[15px] w-[15px]" />
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium text-ink truncate">{names}</p>
                       {where && <p className="text-[11px] text-muted truncate">{where}</p>}
                     </div>
-                    <Badge variant="warning" className="whitespace-nowrap">
-                      {row.days === 0 ? 'Expires today' : `${row.days} day${row.days === 1 ? '' : 's'}`}
+                    <Badge variant={row.days <= 0 ? 'destructive' : urgent ? 'warning' : 'default'} className="whitespace-nowrap">
+                      {timeLabel}
                     </Badge>
                     {row.lease.endDate && (
                       <span className="text-xs text-faint flex-shrink-0">{formatDate(row.lease.endDate)}</span>
@@ -825,9 +802,42 @@ export function Dashboard() {
               }))}
 
               {/* Vacant tab */}
-              {attentionTab === 'vacant' && (vacantUnits.length === 0 ? (
-                <p className="text-center text-sm text-muted py-8">No vacant units.</p>
-              ) : vacantByProperty.map(group => {
+              {attentionTab === 'vacant' && (<>
+                {(stats.vacancyLossThisMonth > 0 || stats.vacancyLossYTD > 0) && (
+                  <div className="px-4 py-3 bg-amber-50/40 border-b border-amber-200/60">
+                    <div className="flex items-center gap-6 flex-wrap">
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <span className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Vacancy loss</span>
+                      </div>
+                      {stats.vacancyLossThisMonth > 0 && (
+                        <div>
+                          <p className="text-[10px] text-amber-600 uppercase tracking-wide">This month</p>
+                          <p className="text-sm font-semibold text-amber-800 tnum">{formatCurrency(stats.vacancyLossThisMonth)}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[10px] text-amber-600 uppercase tracking-wide">Year to date</p>
+                        <p className="text-sm font-semibold text-amber-800 tnum">{formatCurrency(stats.vacancyLossYTD)}</p>
+                      </div>
+                      {stats.vacancyRate > 0 && (
+                        <div>
+                          <p className="text-[10px] text-amber-600 uppercase tracking-wide">Rate</p>
+                          <p className="text-sm font-semibold text-amber-800 tnum">{stats.vacancyRate.toFixed(1)}%</p>
+                        </div>
+                      )}
+                      {stats.grossPotentialRentMonth > 0 && (
+                        <div className="ml-auto hidden sm:block">
+                          <p className="text-[10px] text-amber-600 uppercase tracking-wide">Gross potential</p>
+                          <p className="text-sm font-semibold text-amber-800 tnum">{formatCurrency(stats.grossPotentialRentMonth)}/mo</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {vacantUnits.length === 0 ? (
+                  <p className="text-center text-sm text-muted py-8">No vacant units.</p>
+                ) : vacantByProperty.map(group => {
                 const isOpen = expandedVacant.has(group.key);
                 return (
                   <div key={group.key}>
@@ -873,7 +883,8 @@ export function Dashboard() {
                     )}
                   </div>
                 );
-              }))}
+              })}
+              </>)}
             </div>
           </CardContent>
         )}
@@ -903,11 +914,25 @@ function DashboardSkeleton() {
         </div>
         <Skeleton className="h-4 w-24 mt-3" />
       </div>
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
-      </div>
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      <div className="rounded-2xl p-6 sm:p-7" style={{ background: 'linear-gradient(135deg, #1e3a2e 0%, #24503f 40%, #2c5c4a 100%)' }}>
+        <Skeleton className="h-3 w-32 opacity-20" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-5 mt-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-2.5 w-16 opacity-20" />
+              <Skeleton className="h-7 w-24 opacity-20" />
+              <Skeleton className="h-2.5 w-20 opacity-20" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6 pt-4 border-t border-white/[0.06]">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Skeleton className="h-7 w-7 rounded-lg opacity-20" />
+              <div><Skeleton className="h-4 w-8 opacity-20" /><Skeleton className="h-2 w-14 mt-1 opacity-20" /></div>
+            </div>
+          ))}
+        </div>
       </div>
       <Skeleton className="h-3 w-16" />
       <div className="grid gap-4 md:grid-cols-[5fr_3fr]">

@@ -1,5 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../../lib/session';
+import { type Env, requirePermission, jsonOk, jsonError } from '../../lib/session';
 import { DriveNotConnected } from '../../lib/google';
 import { rebuildRentSheet, rentSheetUrl } from '../../lib/sheets';
 
@@ -17,6 +17,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (err instanceof DriveNotConnected) {
       return jsonError('Google Drive is not connected. Connect it in Settings.', 503);
     }
-    return serverError();
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(`Sync failed: ${msg}`, 500);
   }
 };

@@ -1,9 +1,6 @@
 import { type Env } from './session';
 import { sendEmail } from './email';
 import { companySettings } from './receipts';
-import { tradeMatches } from './maintenance';
-import { serializeHandyman } from './serializers';
-import { SITE_URL } from './site';
 
 /** A tenant availability window, as stored on the request. */
 export interface AvailabilityWindow {
@@ -77,13 +74,13 @@ function textBlock(companyName: string, heading: string, rows: [string, string][
 }
 
 /**
- * Email every active handyman whose trade matches the request, plus the office,
- * when a new request comes in. Best-effort: callers run this in waitUntil, and a
- * mail failure never blocks the request.
+ * Email the office when a new maintenance request comes in. Handymen are
+ * notified only when they are actually assigned to the job (see assign.ts).
+ * Best-effort: callers run this in waitUntil, and a mail failure never blocks
+ * the request.
  */
 export async function notifyNewRequest(env: Env, req: RequestNotice): Promise<void> {
   const c = await companySettings(env);
-  const portalUrl = `${SITE_URL}/portal`;
   const rows: [string, string][] = [
     ['Issue', req.title],
     ['Category', req.category || 'General'],
@@ -92,25 +89,6 @@ export async function notifyNewRequest(env: Env, req: RequestNotice): Promise<vo
   ];
   if (req.description) rows.push(['Details', req.description]);
 
-  // Matching handymen with a login and email.
-  const { results } = await env.DB.prepare(
-    `SELECT h.* FROM handymen h
-       JOIN user u ON u.id = h.user_id
-      WHERE h.is_active = 1 AND u.is_active = 1 AND h.email IS NOT NULL AND h.email != ''`
-  ).all();
-
-  const heading = `New ${(req.category || 'general')} job available`;
-  const html = shell(c.companyName, heading, rows, { url: portalUrl, label: 'Open your portal' });
-  const text = textBlock(c.companyName, heading, rows, portalUrl);
-
-  for (const row of results || []) {
-    const h = serializeHandyman(row as Record<string, unknown>);
-    const email = typeof h.email === 'string' ? h.email : '';
-    if (!email || !tradeMatches(h.trades, req.category)) continue;
-    await sendEmail(env, { to: email, subject: heading, html, text });
-  }
-
-  // The office copy.
   if (c.email) {
     const adminHeading = `New maintenance request from ${req.tenantName || 'a tenant'}`;
     await sendEmail(env, {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, FileText, Download, User, MapPin, Calendar, ChevronRight, Image, Send, Copy, Check } from 'lucide-react';
+import { Plus, Wrench, Search, Edit2, Trash2, Clock, AlertTriangle, ShieldCheck, FileText, Download, User, MapPin, Calendar, ChevronRight, Image, Send, Copy, Check } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -13,18 +13,28 @@ import { EmailInput } from '../components/ui/EmailInput';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { MAINTENANCE_TRADES, type Handyman } from '../types';
+import { MAINTENANCE_TRADES, type Handyman, type Appliance } from '../types';
 import type { MaintenanceRequest, MaintenancePriority, MaintenanceStatus, MaintenanceStatusLog } from '../types';
 import { STATUS_BADGE, STATUS_LABEL, approvalBadge, tradeLabel } from '../lib/maintenance';
-import { handymenApi, maintenanceApi, vendorSubmissionsApi, type VendorSubmission } from '../lib/api';
+import { handymenApi, maintenanceApi, vendorSubmissionsApi, appliancesApi, type VendorSubmission } from '../lib/api';
 
-/** Which active handymen may take a job in this category (general sees all). */
+/** Which active handymen may take a job in this category (general or no trades = sees all). */
 function eligibleHandymen(handymen: Handyman[], category?: string): Handyman[] {
   const cat = category && category.trim() ? category : 'general';
-  return handymen.filter((h) => h.isActive && (h.trades.includes('general') || h.trades.includes(cat)));
+  return handymen.filter((h) => h.isActive && (h.trades.length === 0 || h.trades.includes('general') || h.trades.includes(cat)));
 }
 
 const CATEGORIES = [...MAINTENANCE_TRADES];
+
+const APPLIANCE_TYPE_LABEL: Record<string, string> = {
+  refrigerator: 'Refrigerator', stove_oven: 'Stove / Oven', dishwasher: 'Dishwasher',
+  washer: 'Washer', dryer: 'Dryer', hvac: 'HVAC', water_heater: 'Water Heater',
+  microwave: 'Microwave', garbage_disposal: 'Garbage Disposal', furnace: 'Furnace',
+  air_conditioner: 'Air Conditioner', range_hood: 'Range Hood', freezer: 'Freezer', other: 'Other',
+};
+function applianceLabel(type: string): string {
+  return APPLIANCE_TYPE_LABEL[type] ?? type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+}
 
 const priorityBadge: Record<MaintenancePriority, 'secondary' | 'warning' | 'destructive'> = {
   low: 'secondary',
@@ -95,12 +105,29 @@ export function Maintenance() {
   const [detailHistory, setDetailHistory] = useState<MaintenanceStatusLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Appliance warranty awareness.
+  const [appliances, setAppliances] = useState<Appliance[]>([]);
+
+  // Warranty resolution state.
+  const [warrantyTarget, setWarrantyTarget] = useState<MaintenanceRequest | null>(null);
+  const [warrantyApplianceId, setWarrantyApplianceId] = useState('');
+
   useEffect(() => {
     handymenApi.getAll().then(setHandymen).catch(() => setHandymen([]));
+    appliancesApi.getAll().then(setAppliances).catch(() => setAppliances([]));
     if (canApproveMaintenance) {
       vendorSubmissionsApi.list().then(setVendorSubmissions).catch(() => {});
     }
   }, [canApproveMaintenance]);
+
+  /** Appliances at a property that still have an active warranty. */
+  const activeWarranties = useCallback((propertyId?: string): Appliance[] => {
+    if (!propertyId) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    return appliances.filter(
+      a => a.propertyId === propertyId && a.warrantyExpiration && a.warrantyExpiration >= today,
+    );
+  }, [appliances]);
 
   const handymanName = (id?: string) => handymen.find(h => h.id === id)?.name;
   const handymanCompany = (id?: string) => handymen.find(h => h.id === id)?.companyName;
@@ -165,6 +192,35 @@ export function Maintenance() {
       setPayTarget(null);
     } catch (err) {
       showToast((err as Error).message || 'Could not record payment', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const openWarrantyResolve = (m: MaintenanceRequest) => {
+    const warranted = activeWarranties(m.propertyId);
+    setWarrantyTarget(m);
+    setWarrantyApplianceId(warranted.length === 1 ? warranted[0].id : '');
+  };
+
+  const confirmWarrantyResolve = async () => {
+    if (!warrantyTarget) return;
+    setBusyId(warrantyTarget.id);
+    try {
+      const updated = await maintenanceApi.update(warrantyTarget.id, {
+        ...warrantyTarget,
+        status: 'paid',
+        cost: 0,
+        warrantyCovered: true,
+        warrantyApplianceId: warrantyApplianceId || undefined,
+        resolvedDate: todayLocalDate(),
+      });
+      dispatch({ type: 'UPDATE_MAINTENANCE', payload: updated });
+      await refreshData();
+      showToast('Resolved under warranty. No expense recorded.', 'success');
+      setWarrantyTarget(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Could not resolve', 'error');
     } finally {
       setBusyId(null);
     }
@@ -240,13 +296,13 @@ export function Maintenance() {
   const unitNumber = (id?: string) => units.find(u => u.id === id)?.unitNumber;
 
   const stats = useMemo(() => {
-    const pendingApproval = maintenance.filter(m => m.needsApproval && m.status !== 'cancelled').length;
+    const pendingApproval = maintenance.filter(m => m.needsApproval && m.status !== 'cancelled' && m.status !== 'resolved_no_cost').length;
     // "Invoices to review" counts jobs awaiting the handyman's invoice AND invoices already submitted for admin review.
     const invoicesActionNeeded = maintenance.filter(m => m.status === 'approved_for_invoicing' || m.status === 'invoice_submitted').length;
     // "In progress" counts all active work statuses before the invoice phase.
     const activeStatuses = new Set<string>(['submitted', 'available', 'assigned', 'scheduled', 'in_progress', 'completed']);
     const inProgress = maintenance.filter(m => activeStatuses.has(m.status) && !m.needsApproval).length;
-    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'invoice_approved' && m.status !== 'cancelled').length;
+    const urgent = maintenance.filter(m => m.priority === 'urgent' && m.status !== 'paid' && m.status !== 'invoice_approved' && m.status !== 'cancelled' && m.status !== 'resolved_no_cost').length;
     const spend = maintenance.filter(m => m.status === 'paid' || m.status === 'invoice_approved').reduce((s, m) => s + (m.cost || 0), 0);
     return { pendingApproval, invoicesActionNeeded, inProgress, urgent, spend };
   }, [maintenance]);
@@ -440,7 +496,7 @@ export function Maintenance() {
   // Helper: can the quick Start/Complete buttons show.
   const showQuickToggle = (m: MaintenanceRequest) =>
     !m.needsApproval && !isInvoiceStatus(m.status) &&
-    m.status !== 'paid' && m.status !== 'cancelled';
+    m.status !== 'paid' && m.status !== 'cancelled' && m.status !== 'resolved_no_cost';
 
   const statCards = [
     { label: 'Pending approval', value: stats.pendingApproval, icon: <Clock /> },
@@ -502,6 +558,7 @@ export function Maintenance() {
           <option value="invoice_approved">Invoice approved</option>
           <option value="paid">Paid</option>
           <option value="cancelled">Cancelled</option>
+          <option value="resolved_no_cost">Resolved (no cost)</option>
         </select>
       </div>
 
@@ -535,6 +592,17 @@ export function Maintenance() {
                         <div className="min-w-0">
                           <p className="font-medium text-ink">{m.title}</p>
                           {m.category && <p className="text-xs text-muted capitalize">{m.category}</p>}
+                          {m.warrantyCovered ? (
+                            <p className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 mt-0.5">
+                              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+                              Warranty covered
+                            </p>
+                          ) : m.category === 'appliance' && activeWarranties(m.propertyId).length > 0 && (
+                            <p className="flex items-center gap-1 text-[11px] font-medium text-amber-600 mt-0.5">
+                              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+                              {activeWarranties(m.propertyId).length} appliance{activeWarranties(m.propertyId).length > 1 ? 's' : ''} under warranty
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -560,7 +628,7 @@ export function Maintenance() {
                       )}
                     </td>
                     <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
-                      {m.status === 'paid' || m.status === 'cancelled' || isInvoiceStatus(m.status) ? (
+                      {m.status === 'paid' || m.status === 'cancelled' || m.status === 'resolved_no_cost' || isInvoiceStatus(m.status) ? (
                         <div className="min-w-0">
                           <span className="text-sm text-muted">{handymanName(m.assignedHandymanId) || m.vendor || '—'}</span>
                           {handymanCompany(m.assignedHandymanId) && (
@@ -619,7 +687,7 @@ export function Maintenance() {
                           </button>
                         )}
                         {/* Approve: for needsApproval OR completed jobs with a handyman */}
-                        {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && (
+                        {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && m.status !== 'resolved_no_cost' && (
                           <button
                             onClick={() => openApprove(m)}
                             className="text-xs font-semibold text-white bg-primary hover:bg-primary-hover px-2.5 py-1 rounded-md transition-colors"
@@ -647,7 +715,7 @@ export function Maintenance() {
                         )}
                         {/* Mark paid: available on any non-terminal status so the admin can
                             bypass the vendor form when an invoice arrives via chat/email. */}
-                        {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
+                        {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && m.status !== 'resolved_no_cost' && (
                           <button
                             onClick={() => openPay(m)}
                             className="text-xs font-medium text-positive hover:opacity-80 px-2 py-1 rounded-md hover:bg-positive-soft transition-colors"
@@ -712,6 +780,64 @@ export function Maintenance() {
             <Button onClick={confirmPay} disabled={busyId === payTarget?.id}>Mark paid</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Warranty covered resolution */}
+      <Modal isOpen={!!warrantyTarget} onClose={() => setWarrantyTarget(null)} title="Resolve under warranty" size="sm">
+        {warrantyTarget && (() => {
+          const warranted = activeWarranties(warrantyTarget.propertyId);
+          return (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+                <ShieldCheck className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">This repair was covered by the manufacturer warranty.</p>
+                  <p className="text-xs text-amber-700 mt-1">No expense will be recorded. The request will be marked as completed.</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-surface-alt border border-line">
+                <p className="text-xs uppercase tracking-wider font-semibold text-muted mb-1">Work order</p>
+                <p className="text-sm font-medium text-ink">{warrantyTarget.title}</p>
+              </div>
+
+              {warranted.length > 1 && (
+                <SelectInput
+                  label="Which appliance was repaired?"
+                  value={warrantyApplianceId}
+                  onChange={(e) => setWarrantyApplianceId(e.target.value)}
+                >
+                  <option value="">Select the appliance</option>
+                  {warranted.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {applianceLabel(a.type)}{a.brand ? ` (${a.brand})` : ''}{a.modelNumber ? ` — ${a.modelNumber}` : ''}
+                    </option>
+                  ))}
+                </SelectInput>
+              )}
+              {warranted.length === 1 && (
+                <div className="p-3 rounded-lg bg-surface-alt border border-line">
+                  <p className="text-xs uppercase tracking-wider font-semibold text-muted mb-1">Appliance</p>
+                  <p className="text-sm font-medium text-ink">
+                    {applianceLabel(warranted[0].type)}{warranted[0].brand ? ` (${warranted[0].brand})` : ''}
+                  </p>
+                  {warranted[0].warrantyExpiration && (
+                    <p className="text-xs text-muted mt-0.5">
+                      Warranty expires {new Date(warranted[0].warrantyExpiration + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setWarrantyTarget(null)}>Cancel</Button>
+                <Button onClick={confirmWarrantyResolve} disabled={busyId === warrantyTarget.id}>
+                  <ShieldCheck className="h-4 w-4 mr-1.5" />Confirm warranty
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* Approve reported work */}
@@ -965,6 +1091,7 @@ export function Maintenance() {
               <option value="invoice_approved">Invoice Approved</option>
               <option value="paid">Paid</option>
               <option value="cancelled">Cancelled</option>
+              <option value="resolved_no_cost">Resolved (no cost)</option>
             </SelectInput>
             <TextInput
               label="Cost"
@@ -1024,7 +1151,39 @@ export function Maintenance() {
                   : <Badge variant={STATUS_BADGE[m.status]}>{STATUS_LABEL[m.status]}</Badge>}
                 <Badge variant={priorityBadge[m.priority]} className="capitalize">{m.priority} priority</Badge>
                 {m.category && <Badge variant="secondary" className="capitalize">{tradeLabel(m.category)}</Badge>}
+                {m.warrantyCovered && <Badge variant="default"><ShieldCheck className="h-3.5 w-3.5 mr-1 inline" />Warranty covered</Badge>}
               </div>
+
+              {/* Warranty warning for appliance requests */}
+              {m.category === 'appliance' && (() => {
+                const warranted = activeWarranties(m.propertyId);
+                if (!warranted.length) return null;
+                return (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                      <p className="text-sm font-semibold text-amber-800">
+                        Check warranty before dispatching
+                      </p>
+                    </div>
+                    <p className="text-xs text-amber-700">
+                      This property has {warranted.length} appliance{warranted.length > 1 ? 's' : ''} with an active warranty. The manufacturer may cover this repair at no cost.
+                    </p>
+                    <div className="space-y-1.5 pt-1">
+                      {warranted.map(a => (
+                        <div key={a.id} className="flex items-center justify-between text-xs bg-white/60 rounded-md px-3 py-2">
+                          <span className="font-medium text-amber-900">
+                            {applianceLabel(a.type)}{a.brand ? ` (${a.brand})` : ''}
+                          </span>
+                          <span className="text-amber-700">
+                            Warranty expires {a.warrantyExpiration ? new Date(a.warrantyExpiration + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Overview grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1324,16 +1483,21 @@ export function Maintenance() {
 
               {/* Quick actions from the detail view */}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-line">
-                {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && (
+                {canApproveMaintenance && m.needsApproval && m.status !== 'cancelled' && m.status !== 'resolved_no_cost' && (
                   <Button onClick={() => { setDetailTarget(null); openApprove(m); }}>Approve</Button>
                 )}
                 {canApproveMaintenance && m.status === 'invoice_submitted' && (
                   <Button onClick={() => { setDetailTarget(null); openInvoiceReview(m); }}>Review invoice</Button>
                 )}
-                {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && (
+                {canApproveMaintenance && !m.needsApproval && m.status !== 'paid' && m.status !== 'cancelled' && m.status !== 'resolved_no_cost' && (
                   <Button variant="secondary" onClick={() => { setDetailTarget(null); openPay(m); }}>Mark paid</Button>
                 )}
-                {canApproveMaintenance && m.status !== 'paid' && m.status !== 'cancelled' && (
+                {canApproveMaintenance && m.category === 'appliance' && activeWarranties(m.propertyId).length > 0 && m.status !== 'paid' && m.status !== 'cancelled' && m.status !== 'resolved_no_cost' && !m.warrantyCovered && (
+                  <Button variant="outline" onClick={() => { setDetailTarget(null); openWarrantyResolve(m); }}>
+                    <ShieldCheck className="h-4 w-4 mr-1.5" />Warranty covered
+                  </Button>
+                )}
+                {canApproveMaintenance && m.status !== 'paid' && m.status !== 'cancelled' && m.status !== 'resolved_no_cost' && (
                   <Button variant="outline" onClick={() => { setDetailTarget(null); openVendorLink(m); }}>
                     <Send className="h-4 w-4 mr-1.5" />Send vendor form
                   </Button>

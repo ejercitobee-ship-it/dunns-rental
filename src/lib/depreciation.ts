@@ -26,12 +26,14 @@ export interface DepreciationInput {
   purchasePrice?: number;
   purchaseDate?: string; // YYYY-MM-DD (used as the placed-in-service date)
   landValue?: number;
+  priorDepreciation?: number; // already claimed on prior tax returns
 }
 
 export interface CapitalDepreciationInput {
   totalCost: number;
   placedInServiceDate?: string; // YYYY-MM-DD
   recoveryYears?: number;       // 5, 7, 15, or 27.5
+  priorDepreciation?: number;   // already claimed on prior tax returns
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -66,14 +68,18 @@ function parsePlacedInService(date?: string): { year: number; month: number } | 
  * Cumulative depreciation taken through the END of `taxYear`, capped at the
  * basis. Mid-month convention: the placed-in-service month counts as half a
  * month, so the first year is prorated by (12 - month + 0.5) / 12.
+ *
+ * When priorDepreciation is set, it is added to the computed total so the
+ * accumulated figure reflects what was already claimed before this app.
  */
 export function accumulatedDepreciation(input: DepreciationInput, taxYear: number): number {
   const basis = depreciableBasis(input);
   const pis = parsePlacedInService(input.purchaseDate);
   if (basis === 0 || !pis || taxYear < pis.year) return 0;
 
+  const prior = input.priorDepreciation && input.priorDepreciation > 0 ? input.priorDepreciation : 0;
   const annual = basis / RESIDENTIAL_RECOVERY_YEARS;
-  let acc = 0;
+  let acc = prior;
   for (let y = pis.year; y <= taxYear; y++) {
     const fraction = y === pis.year ? (12 - pis.month + 0.5) / 12 : 1;
     acc += annual * fraction;
@@ -124,9 +130,10 @@ export function accumulatedProjectDepreciation(
   const pis = parsePlacedInService(input.placedInServiceDate)!;
   if (taxYear < pis.year) return 0;
 
+  const prior = input.priorDepreciation && input.priorDepreciation > 0 ? input.priorDepreciation : 0;
   const annual = basis / recoveryYears;
   const useMidMonth = recoveryYears === 27.5;
-  let acc = 0;
+  let acc = prior;
 
   for (let y = pis.year; y <= taxYear; y++) {
     let fraction: number;

@@ -10,6 +10,13 @@ export const MAINTENANCE_TRADES = [
   'hvac',
   'appliance',
   'carpentry',
+  'pest_control',
+  'painting',
+  'landscaping',
+  'roofing',
+  'flooring',
+  'cleaning',
+  'locksmith',
   'general',
   'other',
 ] as const;

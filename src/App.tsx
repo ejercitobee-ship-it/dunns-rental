@@ -22,6 +22,7 @@ const PropertyProfile = lazy(() => import('./pages/PropertyProfile').then(m => (
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
 const TenantDetail = lazy(() => import('./pages/TenantDetail').then(m => ({ default: m.TenantDetail })));
 const Rents = lazy(() => import('./pages/Rents').then(m => ({ default: m.Rents })));
+const PaymentPlans = lazy(() => import('./pages/PaymentPlans').then(m => ({ default: m.PaymentPlans })));
 const Maintenance = lazy(() => import('./pages/Maintenance').then(m => ({ default: m.Maintenance })));
 const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const Expenses = lazy(() => import('./pages/Expenses').then(m => ({ default: m.Expenses })));
@@ -54,6 +55,7 @@ const RealtorAvailableUnits = lazy(() => import('./pages/portal/RealtorAvailable
 const Announcements = lazy(() => import('./pages/Announcements').then(m => ({ default: m.Announcements })));
 const AIAssistant = lazy(() => import('./pages/AIAssistant').then(m => ({ default: m.AIAssistant })));
 const Tasks = lazy(() => import('./pages/Tasks').then(m => ({ default: m.Tasks })));
+const Evictions = lazy(() => import('./pages/Evictions').then(m => ({ default: m.Evictions })));
 const NotificationsPage = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfService = lazy(() => import('./pages/TermsOfService').then(m => ({ default: m.TermsOfService })));
@@ -312,6 +314,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/payment-plans" element={
+        <ProtectedRoute requiredPermission="rents_view">
+          <Layout><PaymentPlans /></Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/maintenance" element={
         <ProtectedRoute requiredPermission="properties_view">
           <Layout><Maintenance /></Layout>
@@ -395,6 +403,12 @@ function AppRoutes() {
       <Route path="/tasks" element={
         <ProtectedRoute requiredPermission="tasks_view">
           <Layout><Tasks /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/evictions" element={
+        <ProtectedRoute requiredPermission="evictions_view">
+          <Layout><Evictions /></Layout>
         </ProtectedRoute>
       } />
 

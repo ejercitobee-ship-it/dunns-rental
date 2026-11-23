@@ -33,6 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .first<{ status: string; title: string; property_id: string | null; unit_id: string | null; assigned_handyman_id: string | null; vendor: string | null }>();
     if (!req) return jsonError('Request not found', 404);
     if (req.status === 'cancelled') return jsonError('This request was cancelled', 400);
+    if (req.status === 'resolved_no_cost') return jsonError('This request was already resolved', 400);
 
     // Use the roster handyman name if assigned, otherwise fall back to the
     // free-text vendor field so one-off contractors still appear on the expense.

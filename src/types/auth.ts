@@ -4,7 +4,7 @@ export interface Permission {
   id: string;
   name: string;
   description: string;
-  module: 'dashboard' | 'properties' | 'tenants' | 'rents' | 'finances' | 'leases' | 'maintenance' | 'documents' | 'reports' | 'users' | 'settings' | 'announcements' | 'ai_assistant' | 'tasks';
+  module: 'dashboard' | 'properties' | 'tenants' | 'rents' | 'finances' | 'leases' | 'maintenance' | 'documents' | 'reports' | 'users' | 'settings' | 'announcements' | 'ai_assistant' | 'tasks' | 'evictions';
   /** If true, this permission is only available for granular user grants, not
    * included in the basic role builder. Keeps the role editor clean. */
   advanced?: boolean;
@@ -142,6 +142,8 @@ export const SYSTEM_PERMISSIONS: Permission[] = [
   { id: 'tasks_delete', name: 'Delete Tasks', description: 'Can delete tasks permanently', module: 'tasks', advanced: true },
   { id: 'tasks_assign', name: 'Assign Tasks', description: 'Can assign and reassign tasks to team members', module: 'tasks' },
   { id: 'projects_manage', name: 'Manage Projects', description: 'Can create, edit, and manage projects', module: 'tasks' },
+  { id: 'evictions_view', name: 'View Evictions', description: 'Can view eviction cases and their status', module: 'evictions' },
+  { id: 'evictions_manage', name: 'Manage Evictions', description: 'Can create, edit, and update eviction cases', module: 'evictions' },
 ];
 
 /** Permission module labels for the UI. */
@@ -160,6 +162,7 @@ export const PERMISSION_MODULES: Record<Permission['module'], string> = {
   announcements: 'Announcements',
   ai_assistant: 'AI Assistant',
   tasks: 'Task Management',
+  evictions: 'Eviction Management',
 };
 
 // Default System Roles
@@ -184,6 +187,7 @@ export const DEFAULT_ROLES: Role[] = [
       'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
       'settings_view', 'activity_view',
       'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_assign', 'projects_manage',
+      'evictions_view', 'evictions_manage',
     ],
     isSystem: true,
   },

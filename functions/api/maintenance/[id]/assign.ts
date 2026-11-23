@@ -3,10 +3,9 @@ import { type Env, requirePermission, jsonOk, jsonError, serverError } from '../
 import { serializeMaintenance } from '../../../lib/serializers';
 import { logStatusChange } from '../../../lib/maintenance';
 import { JOB_COLUMNS, JOB_JOINS, buildNotice, tenantEmail, type JobRow } from '../../../lib/handyman-jobs';
-import { availabilityText, notifyTenant } from '../../../lib/maintenance-notify';
-import { sendEmail } from '../../../lib/email';
-import { companySettings } from '../../../lib/receipts';
+import { availabilityText, notifyTenant, notifyHandyman } from '../../../lib/maintenance-notify';
 import { sendPushToTenant } from '../../../lib/push';
+import { SITE_URL } from '../../../lib/site';
 import { getManagementUserIds, notifyMultiple } from '../../../lib/notify';
 
 /**
@@ -61,26 +60,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (handyman) {
       const notice = buildNotice(row);
-      const c = await companySettings(env);
-      const handymanEmail = handyman.email;
       const hName = handyman.name;
+      const tName = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim();
+      const tPhone = (row.tenant_phone as string) || '';
+      const portalUrl = `${SITE_URL}/portal`;
       context.waitUntil(
         Promise.all([
           (async () => {
-            if (handymanEmail) {
-              const rows: [string, string][] = [
-                ['Issue', notice.title],
-                ['Category', notice.category || 'General'],
-                ['Location', notice.locationLabel || 'Not set'],
-                ['Availability', availabilityText(notice.availability)],
-              ];
-              await sendEmail(env, {
-                to: handymanEmail,
-                subject: `You have been assigned a job: ${notice.title}`,
-                html: `<div style="font-family:sans-serif"><b>${c.companyName}</b><p>You have been assigned a maintenance job. Open your portal to confirm a time.</p></div>`,
-                text: `${c.companyName}\nYou have been assigned: ${notice.title}\n${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}`,
-              });
-            }
+            const emailRows: [string, string][] = [
+              ['Issue', notice.title],
+              ['Category', notice.category || 'General'],
+              ['Location', notice.locationLabel || 'Not set'],
+              ...(notice.description ? [['Details', notice.description] as [string, string]] : []),
+              ...(tName ? [['Tenant', tName] as [string, string]] : []),
+              ...(tPhone ? [['Tenant phone', tPhone] as [string, string]] : []),
+              ['Availability', availabilityText(notice.availability)],
+            ];
+            await notifyHandyman(env, handyman!.id, `You have been assigned a job: ${notice.title}`, emailRows, { url: portalUrl, label: 'Open your portal' });
             await notifyTenant(env, tenantEmail(row), 'Your maintenance request is being handled', [
               ['Issue', notice.title],
               ['Handyman', hName],

@@ -87,7 +87,8 @@ export function receiptEmailHtml(d: ReceiptEmailData): string {
           ${row('Property', d.location)}
           ${row('Rent period', d.period)}
           ${row('Payment method', d.method)}
-          ${d.notes ? row('Notes', d.notes) : ''}
+          ${d.notes ? `<tr><td colspan="2" style="padding:10px 0 2px;color:#75726b;font-size:13px;">Notes</td></tr>
+          <tr><td colspan="2" style="padding:0 0 7px;font-size:13px;color:#1c1a17;line-height:1.5;">${d.notes.replace(/\n/g, '<br>')}</td></tr>` : ''}
         </table>
       </td></tr>
       <tr><td style="padding:16px 32px 4px;">
@@ -212,12 +213,33 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
     text(value || '—', left, y - 16, 13, font, ink);
     y -= 44;
   };
+
+  const wrapWidth = right - left;
+  const multiLineField = (label: string, value: string) => {
+    text(label.toUpperCase(), left, y, 9, bold, muted);
+    y -= 16;
+    const words = (value || '—').split(/\s+/);
+    let line_ = '';
+    for (const word of words) {
+      const test = line_ ? `${line_} ${word}` : word;
+      if (font.widthOfTextAtSize(safeText(test), 11) > wrapWidth && line_) {
+        text(line_, left, y, 11, font, ink);
+        y -= 16;
+        line_ = word;
+      } else {
+        line_ = test;
+      }
+    }
+    if (line_) { text(line_, left, y, 11, font, ink); y -= 16; }
+    y -= 12;
+  };
+
   field('Received from', data.tenantName);
   if (data.tenantNumber) field('Tenant ID', data.tenantNumber);
   field('Property', data.location);
   field(data.periodFieldLabel || 'For rent period', data.period);
   field('Payment method', data.method);
-  if (data.notes) field('Notes', data.notes);
+  if (data.notes) multiLineField('Notes', data.notes);
 
   // Amount box
   y -= 6;

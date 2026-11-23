@@ -62,6 +62,12 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       .run();
 
     if (body.roleId && body.roleId !== existing.role) {
+      if (existing.role === 'super_admin' && auth.role !== 'super_admin') {
+        return jsonError('Only a super admin can change another super admin role', 403);
+      }
+      if (body.roleId === 'super_admin' && auth.role !== 'super_admin') {
+        return jsonError('Only a super admin can promote to super admin', 403);
+      }
       // Validate the role exists, then set it as the user's single role.
       const role = await env.DB.prepare('SELECT id FROM roles WHERE id = ?').bind(body.roleId).first();
       if (!role) return jsonError('Invalid role', 400);
@@ -100,8 +106,12 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       return jsonError('You cannot delete your own account', 400);
     }
 
-    const existing = await env.DB.prepare('SELECT id FROM user WHERE id = ?').bind(id).first();
+    const existing = await loadUser(env, id);
     if (!existing) return jsonError('User not found', 404);
+
+    if (existing.role === 'super_admin' && auth.role !== 'super_admin') {
+      return jsonError('Only a super admin can delete another super admin', 403);
+    }
 
     const isSuper = auth.role === 'super_admin';
 

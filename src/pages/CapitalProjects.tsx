@@ -41,7 +41,7 @@ export function CapitalProjects() {
   // Forms
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  const [form, setForm] = useState({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress' as CapitalProjectStatus, startDate: '', completionDate: '', budget: '', recoveryYears: '', placedInServiceDate: '' });
+  const [form, setForm] = useState({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress' as CapitalProjectStatus, startDate: '', completionDate: '', budget: '', recoveryYears: '', placedInServiceDate: '', priorDepreciation: '' });
 
   // Link expenses modal
   const [showLink, setShowLink] = useState(false);
@@ -132,6 +132,7 @@ export function CapitalProjects() {
         budget: form.budget ? Number(form.budget) : undefined,
         recoveryYears: form.recoveryYears ? Number(form.recoveryYears) : undefined,
         placedInServiceDate: form.placedInServiceDate || undefined,
+        priorDepreciation: form.priorDepreciation ? Number(form.priorDepreciation) : undefined,
       });
       showToast('Capital project created.', 'success');
       setShowCreate(false);
@@ -156,6 +157,7 @@ export function CapitalProjects() {
         budget: form.budget ? Number(form.budget) : undefined,
         recoveryYears: form.recoveryYears ? Number(form.recoveryYears) : undefined,
         placedInServiceDate: form.placedInServiceDate || undefined,
+        priorDepreciation: form.priorDepreciation ? Number(form.priorDepreciation) : undefined,
       });
       showToast('Project updated.', 'success');
       setShowEdit(false);
@@ -219,7 +221,7 @@ export function CapitalProjects() {
       .catch(err => showToast(err instanceof Error ? err.message : 'Upload failed', 'error'));
   };
 
-  const resetForm = () => setForm({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress', startDate: '', completionDate: '', budget: '', recoveryYears: '', placedInServiceDate: '' });
+  const resetForm = () => setForm({ name: '', propertyId: '', unitId: '', description: '', status: 'in_progress', startDate: '', completionDate: '', budget: '', recoveryYears: '', placedInServiceDate: '', priorDepreciation: '' });
 
   const openEdit = () => {
     if (!detail) return;
@@ -234,6 +236,7 @@ export function CapitalProjects() {
       budget: detail.budget != null ? String(detail.budget) : '',
       recoveryYears: detail.recoveryYears != null ? String(detail.recoveryYears) : '',
       placedInServiceDate: detail.placedInServiceDate || '',
+      priorDepreciation: detail.priorDepreciation != null ? String(detail.priorDepreciation) : '',
     });
     setShowEdit(true);
   };
@@ -593,7 +596,7 @@ export function CapitalProjects() {
 function ProjectForm({
   form, setForm, properties, units, onSubmit, onCancel, submitLabel,
 }: {
-  form: { name: string; propertyId: string; unitId: string; description: string; status: CapitalProjectStatus; startDate: string; completionDate: string; budget: string; recoveryYears: string; placedInServiceDate: string };
+  form: { name: string; propertyId: string; unitId: string; description: string; status: CapitalProjectStatus; startDate: string; completionDate: string; budget: string; recoveryYears: string; placedInServiceDate: string; priorDepreciation: string };
   setForm: (f: typeof form) => void;
   properties: { id: string; name: string }[];
   units: { id: string; propertyId: string; unitNumber: string }[];
@@ -713,6 +716,20 @@ function ProjectForm({
       <p className="text-xs text-muted">
         Recovery period and placed in service date are used to calculate MACRS depreciation on your tax report. Set these once the project is completed and in use.
       </p>
+
+      <div>
+        <label className="block text-xs text-muted mb-1">Prior depreciation claimed ($)</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          className="w-full px-3 py-2 border border-line rounded-lg bg-surface text-sm"
+          placeholder="0.00"
+          value={form.priorDepreciation}
+          onChange={e => setForm({ ...form, priorDepreciation: e.target.value })}
+        />
+        <p className="text-xs text-muted mt-1">Total depreciation already claimed on prior tax returns before using this app. Leave blank or zero if none.</p>
+      </div>
 
       <div>
         <label className="block text-xs text-muted mb-1">Budget</label>

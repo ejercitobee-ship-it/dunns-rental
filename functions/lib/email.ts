@@ -296,6 +296,121 @@ export function rentReminderEmail(opts: {
   return { subject: `Your rent for ${opts.monthLabel} is due`, html, text };
 }
 
+/** Pre-due "heads up" email sent 3 days before the rent due day. */
+export function rentPreReminderEmail(opts: {
+  monthLabel: string;
+  portalUrl: string;
+  paymentInstructions?: string;
+  name?: string;
+  dueDay: number;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+  const instructions = (opts.paymentInstructions || '').trim();
+  const ord = ordinalStr(opts.dueDay);
+
+  const text = [
+    greeting,
+    '',
+    `Just a heads up: your rent for ${opts.monthLabel} is due on the ${ord}. Paying early means one less thing on your plate.`,
+    instructions ? `\n${instructions}` : '',
+    '',
+    `You can pay and view your balance in your portal:`,
+    opts.portalUrl,
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].filter((line) => line !== '').join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${greeting}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Just a heads up: your rent for <strong>${opts.monthLabel}</strong> is due on the <strong>${ord}</strong>. Paying early means one less thing on your plate.
+      </p>
+      ${instructions ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#3a382f;background:#f2f1ea;border-radius:8px;padding:14px 16px;">${escapeHtml(instructions)}</p>` : ''}
+      <p style="margin:0 0 24px;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          Pay now
+        </a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Rent for ${opts.monthLabel} is due in 3 days`, html, text };
+}
+
+/** Grace period warning email sent 3 days after the rent due day. */
+export function rentGraceWarningEmail(opts: {
+  monthLabel: string;
+  portalUrl: string;
+  name?: string;
+  feeStr: string;
+  graceDaysRemaining: number;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+  const hasRemaining = opts.graceDaysRemaining > 0;
+  const feeNote = opts.feeStr
+    ? hasRemaining
+      ? `A late fee of ${opts.feeStr} will be assessed in ${opts.graceDaysRemaining} day${opts.graceDaysRemaining > 1 ? 's' : ''} if payment is not received.`
+      : `A late fee of ${opts.feeStr} will be assessed shortly if payment is not received.`
+    : 'Please pay as soon as possible to avoid additional charges.';
+
+  const text = [
+    greeting,
+    '',
+    `Your rent for ${opts.monthLabel} is now past due.`,
+    '',
+    feeNote,
+    '',
+    'If you are experiencing difficulty making your payment, please contact the office so we can discuss options.',
+    '',
+    `Pay now through your portal:`,
+    opts.portalUrl,
+    '',
+    'MH Dunn Property',
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${greeting}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Your rent for <strong>${opts.monthLabel}</strong> is now past due.
+      </p>
+      <div style="background:#fef3f2;border:1px solid #fecdca;border-radius:10px;padding:14px 18px;margin:0 0 20px;">
+        <p style="margin:0;font-size:14px;color:#912018;line-height:1.55;">${escapeHtml(feeNote)}</p>
+      </div>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.55;">
+        If you are experiencing difficulty making your payment, please contact the office so we can discuss options.
+      </p>
+      <p style="margin:0 0 24px;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          Pay now
+        </a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Urgent: Rent for ${opts.monthLabel} is past due`, html, text };
+}
+
+function ordinalStr(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 /** Lease status change notification to a tenant. */
 export function leaseStatusEmail(opts: {
   name: string;
@@ -809,4 +924,121 @@ export function paymentLinkEmail(opts: {
   </div>`;
 
   return { subject: `Rent payment for ${opts.monthLabel}: ${formatUSD(total)}`, html, text };
+}
+
+export function paymentPlanCreatedEmail(opts: {
+  name: string;
+  totalAmount: number;
+  numInstallments: number;
+  firstDueDate: string;
+  reason?: string;
+  portalUrl: string;
+  pdfUrl: string;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+  const reasonLine = opts.reason ? ` for ${opts.reason}` : '';
+
+  const text = [
+    greeting,
+    '',
+    `A payment plan has been created on your account${reasonLine}.`,
+    '',
+    `Total: ${formatUSD(opts.totalAmount)}`,
+    `Installments: ${opts.numInstallments} monthly payments`,
+    `First payment due: ${opts.firstDueDate}`,
+    '',
+    'You can view the full schedule and download the agreement in your portal:',
+    opts.portalUrl,
+    '',
+    'If you have questions about this plan, please contact the office.',
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        A payment plan has been created on your account${reasonLine ? ` <strong>${escapeHtml(reasonLine.trim())}</strong>` : ''}.
+      </p>
+      <div style="background:#f8f7f4;border:1px solid #e7e4dd;border-radius:10px;padding:16px 20px;margin:0 0 20px;">
+        <table style="width:100%;font-size:14px;color:#1b1a17;" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;">Total amount</td><td style="padding:4px 0;text-align:right;font-weight:600;">${formatUSD(opts.totalAmount)}</td></tr>
+          <tr><td style="padding:4px 0;">Installments</td><td style="padding:4px 0;text-align:right;">${opts.numInstallments} monthly payments</td></tr>
+          <tr><td style="padding:4px 0;">First due date</td><td style="padding:4px 0;text-align:right;">${escapeHtml(opts.firstDueDate)}</td></tr>
+        </table>
+      </div>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          View payment plan
+        </a>
+      </p>
+      <p style="margin:0 0 8px;font-size:13px;color:#75726a;line-height:1.55;">
+        A formal agreement is attached to this plan in your portal. If you have any questions, please contact the office.
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Payment plan created: ${formatUSD(opts.totalAmount)} in ${opts.numInstallments} installments`, html, text };
+}
+
+export function installmentReminderEmail(opts: {
+  name: string;
+  installmentNumber: number;
+  amount: number;
+  dueDate: string;
+  totalRemaining: number;
+  portalUrl: string;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+
+  const text = [
+    greeting,
+    '',
+    `This is a reminder that installment #${opts.installmentNumber} of your payment plan is due on ${opts.dueDate}.`,
+    '',
+    `Amount due: ${formatUSD(opts.amount)}`,
+    `Remaining balance after this payment: ${formatUSD(opts.totalRemaining)}`,
+    '',
+    'You can view your payment plan in your portal:',
+    opts.portalUrl,
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Installment <strong>#${opts.installmentNumber}</strong> of your payment plan is due on <strong>${escapeHtml(opts.dueDate)}</strong>.
+      </p>
+      <div style="background:#f8f7f4;border:1px solid #e7e4dd;border-radius:10px;padding:16px 20px;margin:0 0 20px;">
+        <table style="width:100%;font-size:14px;color:#1b1a17;" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;">Amount due</td><td style="padding:4px 0;text-align:right;font-weight:600;">${formatUSD(opts.amount)}</td></tr>
+          <tr><td style="padding:4px 0;color:#75726a;">Remaining after this</td><td style="padding:4px 0;text-align:right;color:#75726a;">${formatUSD(opts.totalRemaining)}</td></tr>
+        </table>
+      </div>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          View payment plan
+        </a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Payment plan installment #${opts.installmentNumber} due ${opts.dueDate}: ${formatUSD(opts.amount)}`, html, text };
 }

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, Users, DollarSign, Receipt, FileText,
   Wrench, ClipboardList, ScrollText, MessageSquare, CalendarDays,
   Settings, Shield, Upload, Search, Megaphone, User, Home, Bot,
-  HardHat, Briefcase, ListChecks,
+  HardHat, Briefcase, ListChecks, Gavel,
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -32,6 +32,7 @@ const ROUTES: { name: string; path: string; icon: LucideIcon; keywords: string }
   { name: 'Announcements', path: '/announcements', icon: Megaphone, keywords: 'broadcast notice tenants' },
   { name: 'AI Assistant', path: '/ai-assistant', icon: Bot, keywords: 'ai chat ask question intelligence' },
   { name: 'Tasks', path: '/tasks', icon: ListChecks, keywords: 'tasks projects todo checklist work management' },
+  { name: 'Evictions', path: '/evictions', icon: Gavel, keywords: 'eviction court lawyer legal notice served' },
 ];
 
 interface SearchResult {

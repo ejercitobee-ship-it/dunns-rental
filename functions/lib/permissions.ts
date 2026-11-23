@@ -23,6 +23,7 @@ export const ALL_PERMISSIONS = [
   'ai_assistant_use',
   'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_delete', 'tasks_assign',
   'projects_manage',
+  'evictions_view', 'evictions_manage',
 ] as const;
 
 export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
@@ -36,6 +37,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'finances_view', 'finances_expenses', 'finances_income', 'finances_export',
     'settings_view', 'activity_view',
     'tasks_view', 'tasks_create', 'tasks_edit', 'tasks_assign', 'projects_manage',
+    'evictions_view', 'evictions_manage',
   ],
   manager: [
     'dashboard_view',

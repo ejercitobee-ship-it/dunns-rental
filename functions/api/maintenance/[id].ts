@@ -48,6 +48,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         `UPDATE maintenance_requests SET
           property_id = ?, unit_id = ?, tenant_id = ?, title = ?, description = ?, category = ?,
           priority = ?, status = ?, cost = ?, vendor = ?, reported_date = ?, resolved_date = ?, notes = ?,
+          warranty_covered = ?, warranty_appliance_id = ?,
           updated_at = unixepoch()
          WHERE id = ?`
       )
@@ -65,6 +66,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
           body.reportedDate ?? null,
           body.resolvedDate ?? null,
           body.notes ?? null,
+          body.warrantyCovered ? 1 : 0,
+          body.warrantyApplianceId ?? null,
           id
         ),
     ];
@@ -109,16 +112,18 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     await env.DB.batch(stmts);
 
-    if (newStatus !== prev.status && (newStatus === 'completed' || newStatus === 'paid')) {
-      const priority = newStatus === 'paid' ? 'informational' as const : 'normal' as const;
+    if (newStatus !== prev.status && (newStatus === 'completed' || newStatus === 'paid' || newStatus === 'resolved_no_cost')) {
+      const priority = newStatus === 'paid' || newStatus === 'resolved_no_cost' ? 'informational' as const : 'normal' as const;
+      const category = newStatus === 'completed' ? 'maintenance_completed' : newStatus === 'resolved_no_cost' ? 'maintenance_resolved' : 'maintenance_paid';
+      const ntitle = newStatus === 'completed' ? 'Maintenance completed' : newStatus === 'resolved_no_cost' ? 'Resolved (no cost)' : 'Maintenance paid';
       context.waitUntil(
         getManagementUserIds(env, auth.id).then(userIds =>
           notifyMultiple(env, userIds.map(uid => ({
             userId: uid,
             type: 'maintenance',
-            category: newStatus === 'completed' ? 'maintenance_completed' : 'maintenance_paid',
+            category,
             priority,
-            title: newStatus === 'completed' ? 'Maintenance completed' : 'Maintenance paid',
+            title: ntitle,
             message: title,
             entityType: 'maintenance_requests',
             entityId: id,

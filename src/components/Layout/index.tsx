@@ -28,11 +28,12 @@ import {
   Megaphone,
   Bot,
   ListChecks,
+  Gavel,
   Bell,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { messagesApi, vendorMessagesApi, realtorMessagesApi } from '../../lib/api';
+import { messagesApi, vendorMessagesApi, realtorMessagesApi, maintenanceApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useScrolled } from '../../lib/useScrolled';
 import { Avatar } from '../ui/Avatar';
@@ -119,6 +120,7 @@ export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [incompleteMaintenance, setIncompleteMaintenance] = useState(0);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(loadOpenGroups);
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [flyoutGroup, setFlyoutGroup] = useState<string | null>(null);
@@ -183,6 +185,28 @@ export function Layout({ children }: LayoutProps) {
     };
   }, [canSeeMessages, location.pathname]);
 
+  // Badge for incomplete maintenance jobs.
+  const canSeeMaintenance = hasModuleAccess('properties');
+  useEffect(() => {
+    if (!canSeeMaintenance) return;
+    let cancelled = false;
+    const load = () =>
+      maintenanceApi.incompleteCount()
+        .then(r => { if (!cancelled) setIncompleteMaintenance(r.count); })
+        .catch(() => {});
+    load();
+    const tick = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    const id = window.setInterval(tick, 30000);
+    window.addEventListener('focus', load);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener('focus', load);
+    };
+  }, [canSeeMaintenance, location.pathname]);
+
   // Build navigation with groups.
   const navigation: NavEntry[] = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true, badge: 0 },
@@ -192,8 +216,9 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },
     { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
-    { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
+    { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: incompleteMaintenance },
     { name: 'Tasks', path: '/tasks', icon: ListChecks, show: hasModuleAccess('tasks'), badge: 0 },
+    { name: 'Evictions', path: '/evictions', icon: Gavel, show: hasModuleAccess('evictions'), badge: 0 },
     { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
     // Finances group
     {

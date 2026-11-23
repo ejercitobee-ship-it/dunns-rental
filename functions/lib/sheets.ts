@@ -142,13 +142,27 @@ export async function ensureRentSheet(env: Env): Promise<string> {
   return id;
 }
 
+async function ensureTab(env: Env, id: string, tab: string): Promise<void> {
+  try {
+    await sheetsBatchUpdate(env, id, [{ addSheet: { properties: { title: tab } } }]);
+  } catch {
+    // Tab already exists — that's fine.
+  }
+}
+
 async function clearTab(env: Env, id: string, tab: string): Promise<void> {
   const token = await getAccessToken(env);
   const res = await fetch(`${SHEETS_API}/${id}/values/${encodeURIComponent(`${tab}!A:Z`)}:clear`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Sheets clear failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    if (res.status === 400) {
+      await ensureTab(env, id, tab);
+      return;
+    }
+    throw new Error(`Sheets clear failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 async function writeTab(env: Env, id: string, tab: string, values: (string | number)[][]): Promise<void> {

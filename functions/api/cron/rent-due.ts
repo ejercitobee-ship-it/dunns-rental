@@ -2,19 +2,20 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, getSessionUser, jsonOk, jsonError, serverError, constantTimeStrEqual } from '../../lib/session';
 import { getSetting, putSetting } from '../../lib/google';
 import { sendPushToUser } from '../../lib/push';
-import { sendEmail, rentReminderEmail } from '../../lib/email';
+import { sendEmail, rentReminderEmail, rentPreReminderEmail, rentGraceWarningEmail } from '../../lib/email';
 import { SITE_URL } from '../../lib/site';
 import { lateFeeDescription } from '../../lib/late-fee-calc';
 
 const DEFAULT_PAYMENT_INSTRUCTIONS = 'Pay rent via Zelle to 773-991-7112, payable to Marlene Dunn.';
 const STATE_KEY = 'rentReminderState';
 
+type Touch = 'pre' | 'due' | 'grace';
+
 interface RentSettings {
   rentDueDay: number;
   paymentInstructions: string;
 }
 
-/** Read the rent due day and payment instructions from app_settings. */
 async function rentSettings(env: Env): Promise<RentSettings> {
   const raw = await getSetting(env, 'rent');
   let rentDueDay = 1;
@@ -28,16 +29,11 @@ async function rentSettings(env: Env): Promise<RentSettings> {
       if (typeof r.paymentInstructions === 'string' && r.paymentInstructions.trim()) {
         paymentInstructions = r.paymentInstructions;
       }
-    } catch {
-      /* fall through to defaults */
-    }
+    } catch { /* fall through to defaults */ }
   }
   return { rentDueDay, paymentInstructions };
 }
 
-/** Today's calendar date in the property's timezone (America/Chicago). The
- * worker fires this at 13:00 UTC, when Chicago is already on the same day, so
- * the day-of-month check lands on the intended date regardless of DST. */
 function chicagoToday(): { day: number; monthNum: number; yearNum: number; monthKey: string; monthLabel: string } {
   const now = new Date();
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -73,19 +69,40 @@ interface RecipientRow {
 }
 
 /**
- * POST /api/cron/rent-due — send the monthly "your rent is due" reminder to
- * every tenant on an active lease. Triggered on the rent due day by the
- * scheduled worker (which presents the CRON_SECRET); an admin may also call it.
+ * Determine which touch (if any) a tenant should receive today.
  *
- * Guards against sending twice: it records the month it last sent and skips a
- * repeat call in the same month. `?dryRun=1` reports who would be notified
- * without sending or recording anything.
+ * Touch 1 ("pre"):   3 days before the due day
+ * Touch 2 ("due"):   the due day itself
+ * Touch 3 ("grace"): 3 days into the grace period (dueDay + 3)
+ */
+function touchForToday(day: number, dueDay: number): Touch | null {
+  if (day === dueDay) return 'due';
+  // 3 days before. Handle month wrap: if due day is 1-3, the pre-reminder
+  // falls in the previous month and would have been sent then. The cron
+  // runs daily so we only check the current calendar day.
+  const preTrigger = dueDay - 3;
+  if (preTrigger >= 1 && day === preTrigger) return 'pre';
+  // Grace warning on day dueDay + 3.
+  const graceDay = dueDay + 3;
+  if (day === graceDay) return 'grace';
+  return null;
+}
+
+/**
+ * POST /api/cron/rent-due — 3-touch rent reminder sequence.
+ *
+ * Touch 1 (3 days before due): friendly heads-up to pay early.
+ * Touch 2 (due day): rent is due today, with late fee warning.
+ * Touch 3 (grace day 3): urgent warning, late fee coming in X days.
+ *
+ * Each touch is sent at most once per month per tenant (tracked in
+ * app_settings). The cron fires daily; it checks every active lease
+ * and sends the appropriate touch for today's date relative to each
+ * tenant's individual due day.
  */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
 
-  // Authorize either the scheduled worker (bearer CRON_SECRET) or a signed-in
-  // admin (so it can be triggered by hand and to keep the surface small).
   const auth = request.headers.get('Authorization') || '';
   const presented = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   const cronOk = !!env.CRON_SECRET && constantTimeStrEqual(presented, env.CRON_SECRET);
@@ -104,10 +121,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const { rentDueDay: globalDueDay, paymentInstructions } = await rentSettings(env);
     const { day, monthNum, yearNum, monthKey, monthLabel } = chicagoToday();
 
-    // Every distinct tenant on an active lease whose rent for this month is not
-    // already paid. The NOT EXISTS subquery checks whether a paid rent_payment
-    // already exists for this lease/month/year, so tenants who have paid are
-    // not reminded.
+    // All active tenants who have NOT fully paid this month's rent.
     const { results: allRows } = await env.DB.prepare(
       `SELECT DISTINCT t.id AS tenant_id, t.user_id, t.first_name, t.email,
               l.rent_due_day AS lease_due_day, l.late_fee_enabled, l.monthly_rent,
@@ -126,95 +140,145 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           )`
     ).bind(monthNum, yearNum).all<RecipientRow>();
 
-    const recipients = (allRows || []).filter(r => {
-      const effectiveDay = r.lease_due_day ?? globalDueDay;
-      return effectiveDay === day;
-    });
+    // Determine which touch each tenant gets today.
+    const tagged: { row: RecipientRow; touch: Touch }[] = [];
+    for (const row of allRows || []) {
+      const dueDay = row.lease_due_day ?? globalDueDay;
+      const touch = touchForToday(day, dueDay);
+      if (touch) tagged.push({ row, touch });
+    }
 
     if (dryRun) {
+      const counts = { pre: 0, due: 0, grace: 0 };
+      for (const t of tagged) counts[t.touch]++;
       return jsonOk({
         success: true,
         dryRun: true,
         globalDueDay,
         today: day,
         month: monthKey,
-        totalActive: (allRows || []).length,
-        dueToday: recipients.length,
-        withLogin: recipients.filter((r) => r.user_id).length,
-        withEmail: recipients.filter((r) => r.email).length,
+        totalUnpaid: (allRows || []).length,
+        touches: counts,
       });
     }
 
-    if (recipients.length === 0) {
-      return jsonOk({ success: true, skipped: 'no leases due today', globalDueDay, today: day });
+    if (tagged.length === 0) {
+      return jsonOk({ success: true, skipped: 'no reminders to send today', globalDueDay, today: day });
     }
 
-    // Never send the same day twice.
+    // Dedup guard: never send the same touch on the same day twice.
     const dayKey = `${monthKey}-${String(day).padStart(2, '0')}`;
     const stateRaw = await getSetting(env, STATE_KEY);
-    let lastSentDay = '';
+    let sentToday = false;
     if (stateRaw) {
       try {
-        const st = JSON.parse(stateRaw) as { lastSentDay?: string; lastSentMonth?: string };
-        lastSentDay = st.lastSentDay || st.lastSentMonth || '';
+        const st = JSON.parse(stateRaw) as { lastSentDay?: string };
+        sentToday = st.lastSentDay === dayKey;
       } catch { /* ignore */ }
     }
-    if (lastSentDay === dayKey) {
+    if (sentToday) {
       return jsonOk({ success: true, skipped: 'already sent today', day: dayKey });
     }
 
     const portalUrl = `${SITE_URL}/portal/payments`;
     let pushed = 0;
     let emailed = 0;
+    const touchCounts = { pre: 0, due: 0, grace: 0 };
 
-    for (const r of recipients) {
-      // Build late fee warning if enabled on this lease.
-      let lateFeeWarning: string | undefined;
+    for (const { row: r, touch } of tagged) {
+      const dueDay = r.lease_due_day ?? globalDueDay;
+      const grace = r.late_fee_grace_days ?? 5;
+
+      // Build late fee info for due and grace touches.
+      let feeStr = '';
       if (r.late_fee_enabled) {
-        const feeInput = {
+        feeStr = lateFeeDescription({
           monthlyRent: r.monthly_rent,
           jurisdiction: r.late_fee_jurisdiction,
           configuredAmount: r.late_fee_amount,
           feeType: r.late_fee_type || 'flat',
-        };
-        const feeStr = lateFeeDescription(feeInput);
-        if (feeStr) {
-          const grace = r.late_fee_grace_days ?? 5;
-          lateFeeWarning = `A late fee of ${feeStr} will be applied if payment is not received within ${grace} days of the due date.`;
-        }
+        });
       }
 
-      // Best-effort per tenant: one failure must not stop the rest.
+      // Push notification
       try {
         if (r.user_id) {
-          const pushBody = lateFeeWarning
-            ? `Your rent for ${monthLabel} is due today. ${lateFeeWarning}`
-            : `Your rent for ${monthLabel} is due today.`;
+          let pushTitle = '';
+          let pushBody = '';
+
+          if (touch === 'pre') {
+            pushTitle = 'Rent due in 3 days';
+            pushBody = `Your rent for ${monthLabel} is due on the ${ordinal(dueDay)}. Tap to pay now and avoid any hassle.`;
+          } else if (touch === 'due') {
+            pushTitle = 'Rent is due';
+            pushBody = `Your rent for ${monthLabel} is due today.`;
+            if (feeStr) pushBody += ` A late fee of ${feeStr} will apply after the ${grace} day grace period.`;
+          } else {
+            const remaining = grace - 3;
+            pushTitle = 'Rent is past due';
+            if (remaining > 0 && feeStr) {
+              pushBody = `Your rent for ${monthLabel} is past due. A late fee of ${feeStr} will be assessed in ${remaining} day${remaining > 1 ? 's' : ''} if not paid.`;
+            } else if (feeStr) {
+              pushBody = `Your rent for ${monthLabel} is past due. A late fee of ${feeStr} will be assessed shortly.`;
+            } else {
+              pushBody = `Your rent for ${monthLabel} is past due. Please pay as soon as possible.`;
+            }
+          }
+
           await sendPushToUser(env, r.user_id, {
-            title: 'Rent is due',
+            title: pushTitle,
             body: pushBody,
             url: '/portal/payments',
           });
           pushed++;
         }
       } catch (err) {
-        console.error(`rent-due: push failed for tenant ${r.tenant_id}: ${(err as Error).message}`);
+        console.error(`rent-due [${touch}]: push failed for tenant ${r.tenant_id}: ${(err as Error).message}`);
       }
+
+      // Email
       try {
         if (r.email) {
-          const mail = rentReminderEmail({
-            monthLabel,
-            portalUrl,
-            paymentInstructions,
-            name: r.first_name || undefined,
-            lateFeeWarning,
-          });
+          let mail: { subject: string; html: string; text: string };
+
+          if (touch === 'pre') {
+            mail = rentPreReminderEmail({
+              monthLabel,
+              portalUrl,
+              paymentInstructions,
+              name: r.first_name || undefined,
+              dueDay,
+            });
+          } else if (touch === 'due') {
+            const lateFeeWarning = feeStr
+              ? `A late fee of ${feeStr} will be applied if payment is not received within ${grace} days of the due date.`
+              : undefined;
+            mail = rentReminderEmail({
+              monthLabel,
+              portalUrl,
+              paymentInstructions,
+              name: r.first_name || undefined,
+              lateFeeWarning,
+            });
+          } else {
+            const remaining = grace - 3;
+            mail = rentGraceWarningEmail({
+              monthLabel,
+              portalUrl,
+              name: r.first_name || undefined,
+              feeStr,
+              graceDaysRemaining: remaining > 0 ? remaining : 0,
+            });
+          }
+
           const ok = await sendEmail(env, { to: r.email, ...mail });
           if (ok) emailed++;
         }
       } catch (err) {
-        console.error(`rent-due: email failed for tenant ${r.tenant_id}: ${(err as Error).message}`);
+        console.error(`rent-due [${touch}]: email failed for tenant ${r.tenant_id}: ${(err as Error).message}`);
       }
+
+      touchCounts[touch]++;
     }
 
     await putSetting(env, STATE_KEY, JSON.stringify({ lastSentDay: dayKey }));
@@ -222,7 +286,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return jsonOk({
       success: true,
       month: monthKey,
-      recipients: recipients.length,
+      today: day,
+      touches: touchCounts,
       pushed,
       emailed,
     });
@@ -230,3 +295,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return serverError();
   }
 };
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}

@@ -403,7 +403,7 @@ export function TaxReport() {
     const projectRows: DepreciationRow[] = capitalProjects
       .filter(cp => cp.totalCost > 0 && cp.recoveryYears && cp.placedInServiceDate)
       .map(cp => {
-        const input = { totalCost: cp.totalCost, placedInServiceDate: cp.placedInServiceDate, recoveryYears: cp.recoveryYears };
+        const input = { totalCost: cp.totalCost, placedInServiceDate: cp.placedInServiceDate, recoveryYears: cp.recoveryYears, priorDepreciation: cp.priorDepreciation };
         return {
           name: cp.name,
           placedInService: cp.placedInServiceDate,
@@ -433,7 +433,7 @@ export function TaxReport() {
     const projectDeprByProperty = new Map<string, number>();
     capitalProjects.forEach(cp => {
       if (cp.totalCost > 0 && cp.recoveryYears && cp.placedInServiceDate) {
-        const pd = projectDepreciationForYear({ totalCost: cp.totalCost, placedInServiceDate: cp.placedInServiceDate, recoveryYears: cp.recoveryYears }, y);
+        const pd = projectDepreciationForYear({ totalCost: cp.totalCost, placedInServiceDate: cp.placedInServiceDate, recoveryYears: cp.recoveryYears, priorDepreciation: cp.priorDepreciation }, y);
         projectDeprByProperty.set(cp.propertyId, (projectDeprByProperty.get(cp.propertyId) || 0) + pd);
       }
     });

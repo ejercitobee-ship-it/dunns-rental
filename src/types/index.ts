@@ -21,6 +21,7 @@ export interface Property {
   lateFeeType?: 'flat' | 'percent';
   lateFeeGraceDays?: number;
   lateFeeJurisdiction?: string;
+  lateFeeEffectiveDate?: string;
 }
 
 export type UtilityType = 'water' | 'gas' | 'electric';

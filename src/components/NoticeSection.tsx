@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   FileWarning, Plus, ChevronDown, ChevronUp, Pencil, Trash2,
-  Eye, Send, Mail,
+  Eye, Send, Mail, TriangleAlert,
 } from 'lucide-react';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
@@ -214,11 +214,12 @@ interface Props {
   unitNumber?: string;
   monthlyRent?: number;
   leaseEndDate?: string;
+  leaseType?: 'fixed' | 'month_to_month';
 }
 
 export function NoticeSection({
   tenantId, tenantName, leaseId, propertyId, unitId,
-  propertyAddress, unitNumber, monthlyRent, leaseEndDate,
+  propertyAddress, unitNumber, monthlyRent, leaseEndDate, leaseType,
 }: Props) {
   const { hasPermission } = useAuth();
   const { showToast } = useToast();
@@ -245,6 +246,21 @@ export function NoticeSection({
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // Non-renewal toggle
+  const [toggleLoading, setToggleLoading] = useState(false);
+  const [showToggleConfirm, setShowToggleConfirm] = useState(false);
+
+  const isFixedTerm = leaseType === 'fixed';
+  const expiringWithin2Months = (() => {
+    if (!isFixedTerm || !leaseEndDate) return false;
+    const today = new Date();
+    const end = new Date(leaseEndDate + 'T00:00:00');
+    const diffMs = end.getTime() - today.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    return diffDays > 0 && diffDays <= 62;
+  })();
+  const hasNonRenewalNotice = notices.some(n => n.type === 'non_renewal');
 
   const load = useCallback(async () => {
     try {
@@ -379,6 +395,25 @@ export function NoticeSection({
     }
   }, [showToast, load]);
 
+  const handleNonRenewalToggle = useCallback(async () => {
+    setShowToggleConfirm(false);
+    setToggleLoading(true);
+    try {
+      await noticesApi.nonRenewalToggle({
+        tenantId,
+        leaseId,
+        propertyId,
+        unitId,
+      });
+      showToast('Non-renewal notice sent and calendar event added', 'success');
+      load();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setToggleLoading(false);
+    }
+  }, [tenantId, leaseId, propertyId, unitId, showToast, load]);
+
   if (loading) return null;
 
   return (
@@ -401,9 +436,11 @@ export function NoticeSection({
                 <Button size="sm" variant="outline" onClick={() => openCreate('violation')}>
                   Violation
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => openCreate('non_renewal')}>
-                  Non-Renewal
-                </Button>
+                {isFixedTerm && (
+                  <Button size="sm" variant="outline" onClick={() => openCreate('non_renewal')}>
+                    Non-Renewal
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" onClick={() => openCreate('rent_increase')}>
                   Rent Increase
                 </Button>
@@ -413,6 +450,65 @@ export function NoticeSection({
               </div>
             )}
           </div>
+
+          {canEdit && isFixedTerm && (
+            <div className={`flex items-start gap-3 rounded-lg border p-3 ${
+              hasNonRenewalNotice
+                ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30'
+                : expiringWithin2Months
+                  ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30'
+                  : 'border-border bg-surface'
+            }`}>
+              {hasNonRenewalNotice ? (
+                <Mail className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+              ) : (
+                <TriangleAlert className={`h-5 w-5 shrink-0 mt-0.5 ${expiringWithin2Months ? 'text-amber-600 dark:text-amber-400' : 'text-muted'}`} />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className={`text-sm font-medium ${
+                      hasNonRenewalNotice
+                        ? 'text-green-800 dark:text-green-200'
+                        : expiringWithin2Months
+                          ? 'text-amber-800 dark:text-amber-200'
+                          : 'text-ink'
+                    }`}>
+                      {hasNonRenewalNotice
+                        ? 'Non-renewal notice sent'
+                        : `Lease expires ${leaseEndDate ? formatDate(leaseEndDate) : 'soon'}`}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${
+                      hasNonRenewalNotice
+                        ? 'text-green-700 dark:text-green-300'
+                        : expiringWithin2Months
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-muted'
+                    }`}>
+                      {hasNonRenewalNotice
+                        ? 'Email was sent to tenant and the lease expiration was added to the calendar.'
+                        : 'Toggle to send the non-renewal notice, email the tenant, and add it to the calendar.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={hasNonRenewalNotice || toggleLoading}
+                    onClick={() => setShowToggleConfirm(true)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-60 disabled:cursor-not-allowed ${
+                      hasNonRenewalNotice ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                    role="switch"
+                    aria-checked={hasNonRenewalNotice}
+                    aria-label="Non-renewal notice toggle"
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ease-in-out ${
+                      hasNonRenewalNotice ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {notices.length === 0 ? (
             <p className="text-sm text-muted">
@@ -595,6 +691,17 @@ export function NoticeSection({
         variant="danger"
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      {/* Non-renewal toggle confirmation */}
+      <ConfirmDialog
+        isOpen={showToggleConfirm}
+        title="Send Non-Renewal Notice"
+        message={`This will send a formal non-renewal notice to ${tenantName} via email and add the lease expiration to the calendar. This action cannot be undone.`}
+        confirmText="Send Notice"
+        variant="danger"
+        onConfirm={handleNonRenewalToggle}
+        onClose={() => setShowToggleConfirm(false)}
       />
     </>
   );

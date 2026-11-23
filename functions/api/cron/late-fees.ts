@@ -36,6 +36,7 @@ interface LeaseRow {
   late_fee_type: string;
   late_fee_grace_days: number;
   late_fee_jurisdiction: string | null;
+  late_fee_effective_date: string | null;
 }
 
 /**
@@ -67,16 +68,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const { day, monthNum, yearNum, dateStr } = chicagoToday();
 
-    // All active leases where late fees are turned on, joined with property
-    // config for the fee amount and grace period.
+    // Exclude tenants with an active eviction (adding charges during litigation is risky).
     const { results: rows } = await env.DB.prepare(
       `SELECT l.id AS lease_id, l.property_id, l.unit_id, l.monthly_rent,
               l.rent_due_day AS lease_due_day,
-              p.late_fee_amount, p.late_fee_type, p.late_fee_grace_days, p.late_fee_jurisdiction
+              p.late_fee_amount, p.late_fee_type, p.late_fee_grace_days,
+              p.late_fee_jurisdiction, p.late_fee_effective_date
          FROM leases l
          LEFT JOIN properties p ON p.id = l.property_id
         WHERE l.status = 'active'
-          AND l.late_fee_enabled = 1`
+          AND l.late_fee_enabled = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM evictions e
+             WHERE e.lease_id = l.id
+               AND e.status NOT IN ('completed', 'dismissed')
+          )`
     ).all<LeaseRow>();
 
     if (!rows || rows.length === 0) {
@@ -109,6 +115,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         continue;
       }
 
+      // Effective date gate: skip if the property has an effective date
+      // and the current month is before it (lets Belle enable now for Dec).
+      if (row.late_fee_effective_date) {
+        const [effYear, effMonth] = row.late_fee_effective_date.split('-').map(Number);
+        if (yearNum < effYear || (yearNum === effYear && monthNum < effMonth)) {
+          skipped.push(`${row.lease_id}: before effective date ${row.late_fee_effective_date}`);
+          continue;
+        }
+      }
+
       // Calculate fee: custom amount takes priority; jurisdiction formula is the fallback.
       const feeAmount = calculateLateFee({
         monthlyRent: row.monthly_rent,
@@ -121,13 +137,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         continue;
       }
 
-      // Check if rent is already paid for this month.
-      const paid = await env.DB.prepare(
-        `SELECT 1 FROM rent_payments
-          WHERE lease_id = ? AND month = ? AND year = ? AND status = 'paid'`
-      ).bind(row.lease_id, monthNum, yearNum).first();
-      if (paid) {
-        skipped.push(`${row.lease_id}: rent already paid`);
+      // Check if rent is fully paid for this month. A tenant who made a
+      // partial payment should still get the late fee. Sum from allocations
+      // first (a single payment can cover multiple months), then add legacy
+      // payments that have no allocations for backwards compatibility.
+      const { total: totalPaid } = await env.DB.prepare(
+        `SELECT
+           COALESCE((
+             SELECT SUM(pa.amount) FROM payment_allocations pa
+              JOIN rent_payments rp ON rp.id = pa.payment_id
+             WHERE pa.lease_id = ? AND pa.month = ? AND pa.year = ?
+               AND pa.type = 'rent' AND rp.status = 'paid'
+           ), 0)
+           +
+           COALESCE((
+             SELECT SUM(rp.amount) FROM rent_payments rp
+             WHERE rp.lease_id = ? AND rp.month = ? AND rp.year = ?
+               AND rp.status = 'paid'
+               AND NOT EXISTS (
+                 SELECT 1 FROM payment_allocations pa2
+                  WHERE pa2.payment_id = rp.id
+               )
+           ), 0)
+           AS total`
+      ).bind(
+        row.lease_id, monthNum, yearNum,
+        row.lease_id, monthNum, yearNum
+      ).first<{ total: number }>() ?? { total: 0 };
+
+      if (totalPaid >= row.monthly_rent) {
+        skipped.push(`${row.lease_id}: rent fully paid ($${totalPaid})`);
         continue;
       }
 

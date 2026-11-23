@@ -22,10 +22,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const userId = body.userId;
     if (!userId) return jsonError('userId is required', 400);
 
-    const user = await env.DB.prepare('SELECT id, email FROM user WHERE id = ?')
+    const user = await env.DB.prepare('SELECT id, email, role FROM user WHERE id = ?')
       .bind(userId)
-      .first<{ id: string; email: string }>();
+      .first<{ id: string; email: string; role: string }>();
     if (!user) return jsonError('User not found', 404);
+
+    if (user.role === 'super_admin' && auth.role !== 'super_admin') {
+      return jsonError('Only a super admin can reset another super admin password', 403);
+    }
 
     const tempPassword = await resetUserPassword(env, user.id, user.email);
 
