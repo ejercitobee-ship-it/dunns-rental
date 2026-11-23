@@ -192,6 +192,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },
     { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
+    { name: 'Payment Plans', path: '/payment-plans', icon: CalendarDays, show: hasModuleAccess('rents'), badge: 0 },
     { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
     { name: 'Tasks', path: '/tasks', icon: ListChecks, show: hasModuleAccess('tasks'), badge: 0 },
     { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
