@@ -4,6 +4,7 @@ import { getStripe } from '../../lib/stripe';
 import { syncRentSheet } from '../../lib/sheets';
 import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
 import { generateReceipt } from '../../lib/receipts';
+import { linkPaymentToInstallment } from '../../lib/payment-plan-link';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -24,10 +25,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return new Response('Invalid signature', { status: 400 });
   }
 
-  const already = await env.DB.prepare(
-    'SELECT 1 FROM processed_stripe_events WHERE event_id = ?'
-  ).bind(event.id).first();
-  if (already) return new Response('ok', { status: 200 });
+  // Idempotency, race-safe. Claim the event id FIRST: INSERT OR IGNORE against
+  // the event_id primary key means only the first delivery of a given event
+  // creates a row. Concurrent Stripe retries see 0 changes and return early,
+  // before any side effect runs, which closes the duplicate-processing window
+  // that a separate read-then-write check left open.
+  const claim = await env.DB.prepare(
+    'INSERT OR IGNORE INTO processed_stripe_events (event_id, created_at) VALUES (?, ?)'
+  ).bind(event.id, new Date().toISOString()).run();
+  if (!claim.meta.changes) return new Response('ok', { status: 200 });
 
   if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object;
@@ -42,7 +48,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         "UPDATE rent_payments SET status = 'paid', paid_date = ? WHERE id = ?"
       ).bind(new Date().toISOString().slice(0, 10), row.id).run();
 
-      try { syncRentSheet({ env, waitUntil: context.waitUntil.bind(context) }); } catch {}
+      try { syncRentSheet({ env, waitUntil: context.waitUntil.bind(context) }); } catch { /* sheet sync is best-effort */ }
+
+      // Auto-link to payment plan installment.
+      const rpForLink = await env.DB.prepare(
+        'SELECT month, year, paid_date FROM rent_payments WHERE id = ?'
+      ).bind(row.id).first<{ month: number; year: number; paid_date: string | null }>();
+      if (rpForLink?.month && rpForLink?.year) {
+        context.waitUntil(
+          linkPaymentToInstallment(
+            env, row.lease_id, rpForLink.month, rpForLink.year,
+            rpForLink.paid_date || new Date().toISOString().slice(0, 10)
+          ).catch(err => console.error('stripe payment-plan link error:', err))
+        );
+      }
 
       const isAutopay = pi.metadata?.autopay === 'true';
       context.waitUntil(
@@ -122,9 +141,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
   }
 
-  await env.DB.prepare(
-    'INSERT INTO processed_stripe_events (event_id, created_at) VALUES (?, ?)'
-  ).bind(event.id, new Date().toISOString()).run();
-
+  // The event was already claimed at the top of the handler, so there is no
+  // second insert to do here.
   return new Response('ok', { status: 200 });
 };

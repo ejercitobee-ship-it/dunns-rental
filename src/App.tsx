@@ -22,6 +22,7 @@ const PropertyProfile = lazy(() => import('./pages/PropertyProfile').then(m => (
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
 const TenantDetail = lazy(() => import('./pages/TenantDetail').then(m => ({ default: m.TenantDetail })));
 const Rents = lazy(() => import('./pages/Rents').then(m => ({ default: m.Rents })));
+const PaymentPlans = lazy(() => import('./pages/PaymentPlans').then(m => ({ default: m.PaymentPlans })));
 const Maintenance = lazy(() => import('./pages/Maintenance').then(m => ({ default: m.Maintenance })));
 const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const Expenses = lazy(() => import('./pages/Expenses').then(m => ({ default: m.Expenses })));
@@ -309,6 +310,12 @@ function AppRoutes() {
       <Route path="/rents" element={
         <ProtectedRoute requiredPermission="rents_view">
           <Layout><Rents /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/payment-plans" element={
+        <ProtectedRoute requiredPermission="rents_view">
+          <Layout><PaymentPlans /></Layout>
         </ProtectedRoute>
       } />
 
