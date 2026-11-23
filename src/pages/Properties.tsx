@@ -209,6 +209,7 @@ export function Properties() {
     lateFeeType: 'flat' as 'flat' | 'percent',
     lateFeeGraceDays: '5',
     lateFeeJurisdiction: '',
+    lateFeeEffectiveDate: '',
   });
 
   const [unitForm, setUnitForm] = useState({
@@ -246,6 +247,7 @@ export function Properties() {
       lateFeeType: 'flat' as 'flat' | 'percent',
       lateFeeGraceDays: '5',
       lateFeeJurisdiction: '',
+      lateFeeEffectiveDate: '',
     });
   };
 
@@ -266,6 +268,7 @@ export function Properties() {
     lateFeeType: propertyForm.lateFeeType,
     lateFeeGraceDays: Number(propertyForm.lateFeeGraceDays) || 5,
     lateFeeJurisdiction: propertyForm.lateFeeJurisdiction || undefined,
+    lateFeeEffectiveDate: propertyForm.lateFeeEffectiveDate || undefined,
   });
 
   const resetUnitForm = () => {
@@ -314,6 +317,7 @@ export function Properties() {
       lateFeeType: (property.lateFeeType || 'flat') as 'flat' | 'percent',
       lateFeeGraceDays: String(property.lateFeeGraceDays ?? 5),
       lateFeeJurisdiction: property.lateFeeJurisdiction || '',
+      lateFeeEffectiveDate: property.lateFeeEffectiveDate || '',
     });
     setIsEditPropertyOpen(true);
   };
@@ -932,6 +936,13 @@ export function Properties() {
               )}
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Effective date (auto assessment starts this month)</label>
+            <input type="month" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+              value={propertyForm.lateFeeEffectiveDate ? propertyForm.lateFeeEffectiveDate.slice(0, 7) : ''}
+              onChange={(e) => setPropertyForm({...propertyForm, lateFeeEffectiveDate: e.target.value ? e.target.value + '-01' : ''})} />
+            <p className="text-xs text-muted mt-1">Leave blank to assess immediately once enabled on a lease.</p>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddPropertyOpen(false)}>Cancel</Button>
@@ -1059,6 +1070,13 @@ export function Properties() {
                 <p className="text-xs text-muted mt-1">Minimum 5 days required by ordinance.</p>
               )}
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Effective date (auto assessment starts this month)</label>
+            <input type="month" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/10"
+              value={propertyForm.lateFeeEffectiveDate ? propertyForm.lateFeeEffectiveDate.slice(0, 7) : ''}
+              onChange={(e) => setPropertyForm({...propertyForm, lateFeeEffectiveDate: e.target.value ? e.target.value + '-01' : ''})} />
+            <p className="text-xs text-muted mt-1">Leave blank to assess immediately once enabled on a lease.</p>
           </div>
 
           <div className="flex gap-3 pt-4">
