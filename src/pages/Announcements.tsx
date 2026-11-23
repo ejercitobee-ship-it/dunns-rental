@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 import {
   Megaphone,
   Send,
@@ -667,7 +668,7 @@ export function Announcements() {
                             {bodyIsHtml && isExpanded ? (
                               <div
                                 className={`announcement-html text-sm mt-2 leading-relaxed ${expired ? 'text-faint' : 'text-muted'}`}
-                                dangerouslySetInnerHTML={{ __html: g.body }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(g.body) }}
                               />
                             ) : (
                               <p className={`text-sm mt-2 whitespace-pre-line leading-relaxed ${

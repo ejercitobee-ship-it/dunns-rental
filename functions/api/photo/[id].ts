@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { type Env, requireUser } from '../../lib/session';
 import { getDriveFileStream } from '../../lib/google';
+import { canAccessPhotoId } from '../../lib/photo-access';
 
 /**
  * GET /api/photo/:id — stream a profile photo from Drive. Any logged-in user
@@ -14,7 +15,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (auth instanceof Response) return auth;
 
   try {
-    const driveRes = await getDriveFileStream(env, params.id as string);
+    const fileId = params.id as string;
+    // Object level authorization: management users may view photos app-wide;
+    // portal users (tenant/realtor/handyman) only within their reachable scope.
+    // A miss is a 404 so the endpoint never confirms a file it will not serve.
+    if (!(await canAccessPhotoId(env, auth, fileId))) {
+      return new Response('Not found', { status: 404 });
+    }
+    const driveRes = await getDriveFileStream(env, fileId);
     if (!driveRes.ok) return new Response('Not found', { status: 404 });
 
     // This route serves profile photos AND message attachments, which can be any

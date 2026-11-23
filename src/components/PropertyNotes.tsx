@@ -10,6 +10,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { propertyNotesApi } from '../lib/api';
 import { TextInput, SelectInput, TextareaInput } from './ui/FormField';
 import { useAuth } from '../context/AuthContext';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 import { useToast } from '../context/ToastContext';
 import type { PropertyNote, NoteCategory, NoteAttachment } from '../types';
 
@@ -330,7 +331,7 @@ export function PropertyNotes({ propertyId }: Props) {
                       {note.content ? (
                         <div
                           className="text-sm text-ink prose prose-sm max-w-none dark:prose-invert"
-                          dangerouslySetInnerHTML={{ __html: sanitize(note.content) }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(note.content) }}
                         />
                       ) : (
                         <p className="text-sm text-faint italic">No content.</p>
@@ -456,33 +457,4 @@ export function PropertyNotes({ propertyId }: Props) {
   );
 }
 
-const ALLOWED_TAGS = new Set([
-  'a','b','blockquote','br','code','dd','div','dl','dt','em','h1','h2','h3',
-  'h4','h5','h6','hr','i','li','ol','p','pre','span','strong','sub','sup',
-  'table','tbody','td','th','thead','tr','u','ul',
-]);
-const ALLOWED_ATTRS = new Set(['href','src','alt','title','class','style','colspan','rowspan']);
-
-function sanitize(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const walk = (node: Node) => {
-    const children = Array.from(node.childNodes);
-    for (const child of children) {
-      if (child.nodeType === Node.ELEMENT_NODE) {
-        const el = child as Element;
-        if (!ALLOWED_TAGS.has(el.tagName.toLowerCase())) {
-          el.remove();
-          continue;
-        }
-        for (const attr of Array.from(el.attributes)) {
-          if (!ALLOWED_ATTRS.has(attr.name.toLowerCase()) || /^\s*javascript:/i.test(attr.value)) {
-            el.removeAttribute(attr.name);
-          }
-        }
-        walk(el);
-      }
-    }
-  };
-  walk(doc.body);
-  return doc.body.innerHTML;
-}
+// HTML sanitizing now lives in src/lib/sanitizeHtml.ts (shared with Announcements).

@@ -104,8 +104,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const token = params.token as string;
     const sub = await env.DB.prepare(
-      'SELECT id, status, maintenance_request_id FROM vendor_submissions WHERE token = ?'
-    ).bind(token).first<{ id: string; status: string; maintenance_request_id: string | null }>();
+      'SELECT id, status, maintenance_request_id, property_id FROM vendor_submissions WHERE token = ?'
+    ).bind(token).first<{ id: string; status: string; maintenance_request_id: string | null; property_id: string | null }>();
 
     if (!sub) return jsonError('This link is not valid or has expired.', 404);
     if (sub.status !== 'draft') {
@@ -117,7 +117,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const companyName = ((body.companyName as string) || '').trim();
     const vendorEmail = ((body.vendorEmail as string) || '').trim();
     const vendorPhone = ((body.vendorPhone as string) || '').trim();
-    const propertyId = ((body.propertyId as string) || '').trim();
+    // The property is fixed to the one the office scoped this submission to.
+    // Never trust a client-supplied propertyId: it could point at a property
+    // the vendor has nothing to do with and misattribute the invoice.
+    const propertyId = (sub.property_id || '').trim() || ((body.propertyId as string) || '').trim();
     const unitId = ((body.unitId as string) || '').trim();
     const workDescription = ((body.workDescription as string) || '').trim();
     const amount = Number(body.amount);
@@ -126,6 +129,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!vendorName) return jsonError('Please enter your name.');
     if (!amount || !Number.isFinite(amount) || amount <= 0) return jsonError('Please enter a valid amount.');
     if (!propertyId) return jsonError('Please select a property.');
+    // A chosen unit must belong to the scoped property.
+    if (unitId) {
+      const unitOk = await env.DB.prepare(
+        'SELECT 1 FROM units WHERE id = ? AND property_id = ?'
+      ).bind(unitId, propertyId).first();
+      if (!unitOk) return jsonError('The selected unit does not belong to this property.');
+    }
 
     await env.DB.prepare(
       `UPDATE vendor_submissions
