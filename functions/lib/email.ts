@@ -810,3 +810,120 @@ export function paymentLinkEmail(opts: {
 
   return { subject: `Rent payment for ${opts.monthLabel}: ${formatUSD(total)}`, html, text };
 }
+
+export function paymentPlanCreatedEmail(opts: {
+  name: string;
+  totalAmount: number;
+  numInstallments: number;
+  firstDueDate: string;
+  reason?: string;
+  portalUrl: string;
+  pdfUrl: string;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+  const reasonLine = opts.reason ? ` for ${opts.reason}` : '';
+
+  const text = [
+    greeting,
+    '',
+    `A payment plan has been created on your account${reasonLine}.`,
+    '',
+    `Total: ${formatUSD(opts.totalAmount)}`,
+    `Installments: ${opts.numInstallments} monthly payments`,
+    `First payment due: ${opts.firstDueDate}`,
+    '',
+    'You can view the full schedule and download the agreement in your portal:',
+    opts.portalUrl,
+    '',
+    'If you have questions about this plan, please contact the office.',
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        A payment plan has been created on your account${reasonLine ? ` <strong>${escapeHtml(reasonLine.trim())}</strong>` : ''}.
+      </p>
+      <div style="background:#f8f7f4;border:1px solid #e7e4dd;border-radius:10px;padding:16px 20px;margin:0 0 20px;">
+        <table style="width:100%;font-size:14px;color:#1b1a17;" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;">Total amount</td><td style="padding:4px 0;text-align:right;font-weight:600;">${formatUSD(opts.totalAmount)}</td></tr>
+          <tr><td style="padding:4px 0;">Installments</td><td style="padding:4px 0;text-align:right;">${opts.numInstallments} monthly payments</td></tr>
+          <tr><td style="padding:4px 0;">First due date</td><td style="padding:4px 0;text-align:right;">${escapeHtml(opts.firstDueDate)}</td></tr>
+        </table>
+      </div>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          View payment plan
+        </a>
+      </p>
+      <p style="margin:0 0 8px;font-size:13px;color:#75726a;line-height:1.55;">
+        A formal agreement is attached to this plan in your portal. If you have any questions, please contact the office.
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Payment plan created: ${formatUSD(opts.totalAmount)} in ${opts.numInstallments} installments`, html, text };
+}
+
+export function installmentReminderEmail(opts: {
+  name: string;
+  installmentNumber: number;
+  amount: number;
+  dueDate: string;
+  totalRemaining: number;
+  portalUrl: string;
+}) {
+  const greeting = opts.name ? `Hi ${opts.name},` : 'Hi,';
+
+  const text = [
+    greeting,
+    '',
+    `This is a reminder that installment #${opts.installmentNumber} of your payment plan is due on ${opts.dueDate}.`,
+    '',
+    `Amount due: ${formatUSD(opts.amount)}`,
+    `Remaining balance after this payment: ${formatUSD(opts.totalRemaining)}`,
+    '',
+    'You can view your payment plan in your portal:',
+    opts.portalUrl,
+    '',
+    'Thank you,',
+    'MH Dunn Property',
+  ].join('\n');
+
+  const html = `
+  <div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;padding:32px;">
+      <div style="font-family:Georgia,serif;font-size:20px;color:#1b1a17;margin-bottom:24px;">MH Dunn Property</div>
+      <p style="margin:0 0 16px;font-size:15px;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.55;">
+        Installment <strong>#${opts.installmentNumber}</strong> of your payment plan is due on <strong>${escapeHtml(opts.dueDate)}</strong>.
+      </p>
+      <div style="background:#f8f7f4;border:1px solid #e7e4dd;border-radius:10px;padding:16px 20px;margin:0 0 20px;">
+        <table style="width:100%;font-size:14px;color:#1b1a17;" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;">Amount due</td><td style="padding:4px 0;text-align:right;font-weight:600;">${formatUSD(opts.amount)}</td></tr>
+          <tr><td style="padding:4px 0;color:#75726a;">Remaining after this</td><td style="padding:4px 0;text-align:right;color:#75726a;">${formatUSD(opts.totalRemaining)}</td></tr>
+        </table>
+      </div>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${opts.portalUrl}"
+           style="display:inline-block;background:#24503f;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:500;">
+          View payment plan
+        </a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#75726a;line-height:1.55;">
+        Thank you,<br>MH Dunn Property
+      </p>
+    </div>
+  </div>`;
+
+  return { subject: `Payment plan installment #${opts.installmentNumber} due ${opts.dueDate}: ${formatUSD(opts.amount)}`, html, text };
+}

@@ -30,6 +30,7 @@ import { DepositReturnSection } from '../components/DepositReturnSection';
 import { InspectionSection } from '../components/InspectionSection';
 import { NoticeSection } from '../components/NoticeSection';
 import { EvictionSection, EvictionBadge } from '../components/EvictionSection';
+import { PaymentPlansSection } from '../components/PaymentPlansSection';
 import { SendPaymentLinkModal } from '../components/SendPaymentLinkModal';
 import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
 
@@ -2237,6 +2238,9 @@ export function TenantDetail() {
           unitId={(lease || endedLease)?.unitId}
         />
       )}
+
+      {/* Payment Plans */}
+      {id && <PaymentPlansSection tenantId={id} />}
 
       {/* Payment history */}
       <Card>

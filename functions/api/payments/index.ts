@@ -5,6 +5,7 @@ import { syncRentSheet } from '../../lib/sheets';
 import { generateReceipt } from '../../lib/receipts';
 import { logActivityStmt } from '../../lib/activity';
 import { getManagementUserIds, notifyMultiple } from '../../lib/notify';
+import { linkPaymentToInstallment } from '../../lib/payment-plan-link';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
@@ -176,6 +177,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     await env.DB.batch(stmts);
+
+    // Auto-link to payment plan installment if the tenant has an active plan.
+    if (body.status === 'paid') {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        await linkPaymentToInstallment(
+          env,
+          body.leaseId as string,
+          body.month as number,
+          body.year as number,
+          (body.paidDate as string) || today
+        );
+      } catch (linkErr) {
+        console.error('payment-plan auto-link error (non-fatal):', linkErr);
+      }
+    }
 
     // Fetch allocations for the response.
     const [row, allocRows] = await Promise.all([
