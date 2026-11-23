@@ -37,7 +37,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         `UPDATE properties SET
           name = ?, address = ?, city = ?, state = ?, zip_code = ?, type = ?, description = ?,
           purchase_date = ?, purchase_price = ?, land_value = ?, prior_depreciation = ?,
-          late_fee_amount = ?, late_fee_type = ?, late_fee_grace_days = ?, late_fee_jurisdiction = ?,
+          late_fee_amount = ?, late_fee_type = ?, late_fee_grace_days = ?, late_fee_jurisdiction = ?, late_fee_effective_date = ?,
           updated_at = unixepoch()
          WHERE id = ?`
       ).bind(
@@ -56,6 +56,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         body.lateFeeType ?? 'flat',
         typeof body.lateFeeGraceDays === 'number' ? Math.floor(body.lateFeeGraceDays) : 5,
         body.lateFeeJurisdiction ?? null,
+        body.lateFeeEffectiveDate ?? null,
         id
       ),
       logActivityStmt(env.DB, auth, {
