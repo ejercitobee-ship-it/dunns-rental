@@ -550,6 +550,49 @@ export function announcementEmail(opts: {
   return { subject: opts.title, html, text };
 }
 
+/**
+ * A general reminder blast to a tenant (from the Reminders page). Plain text or
+ * simple HTML; mirrors the announcement look with a "Reminder" badge.
+ */
+export function tenantReminderEmail(opts: {
+  subject: string;
+  message: string;
+  tenantName?: string;
+}) {
+  const greeting = opts.tenantName ? `Hi ${opts.tenantName},` : 'Hi,';
+  const isHtml = /<[a-z][\s\S]*>/i.test(opts.message);
+  const plainBody = isHtml ? opts.message.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : opts.message;
+  const text = [greeting, '', `Reminder: ${opts.subject}`, '', plainBody, '', '— MH Dunn Property'].join('\n');
+
+  const bodyParas = isHtml
+    ? `<div style="font-size:15px;line-height:1.55;">${opts.message}</div>`
+    : opts.message
+        .split(/\n{2,}/)
+        .map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(p)}</p>`)
+        .join('');
+
+  const html = `
+<div style="background:#f6f5f1;padding:32px 16px;font-family:'Hanken Grotesk',Helvetica,Arial,sans-serif;color:#1b1a17;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e7e4dd;border-radius:12px;">
+    <div style="padding:28px 32px 18px;border-bottom:1px solid #eeece6;">
+      <div style="font-size:20px;font-weight:bold;color:#24503f;">MH Dunn Property</div>
+    </div>
+    <div style="padding:26px 32px 24px;">
+      <p style="margin:0 0 10px;font-size:15px;">${escapeHtml(greeting)}</p>
+      <div style="display:inline-block;margin-bottom:12px;padding:3px 10px;background:#fff6e5;color:#9a7636;border-radius:999px;font-size:12px;font-weight:600;">Reminder</div>
+      <div style="font-size:17px;font-weight:bold;color:#1c1a17;margin-bottom:14px;">${escapeHtml(opts.subject)}</div>
+      ${bodyParas}
+      <a href="https://mhdunnproperty.net/portal" style="display:inline-block;margin-top:8px;padding:10px 24px;background:#24503f;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">View in Portal</a>
+    </div>
+    <div style="padding:16px 32px;border-top:1px solid #eeece6;font-size:11px;color:#8a887f;">
+      MH Dunn Property
+    </div>
+  </div>
+</div>`.trim();
+
+  return { subject: `Reminder: ${opts.subject}`, html, text };
+}
+
 // ── Vendor invoice form emails ────────────────────────────────────────
 
 /** Invite a vendor to fill out an invoice form via a secure link. */

@@ -1944,6 +1944,12 @@ export interface PaymentPlan {
   installments: PaymentPlanInstallment[];
 }
 
+export const remindersApi = {
+  /** Email + push a reminder to every active tenant. Server-gated by announcements_send. */
+  sendToAll: (subject: string, message: string): Promise<{ recipientCount: number }> =>
+    apiRequest('/tenants/reminder-blast', { method: 'POST', body: JSON.stringify({ subject, message }) }),
+};
+
 export const paymentPlansApi = {
   list: (filters?: { tenantId?: string; leaseId?: string; status?: string }): Promise<PaymentPlan[]> => {
     const params = new URLSearchParams();
