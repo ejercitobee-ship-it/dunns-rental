@@ -58,7 +58,13 @@ export function serializeProperty(r: Row) {
     purchaseDate: r.purchase_date ?? undefined,
     purchasePrice: r.purchase_price ?? undefined,
     landValue: r.land_value ?? undefined,
+    priorDepreciation: r.prior_depreciation ?? undefined,
     driveFolderId: r.drive_folder_id ?? undefined,
+    lateFeeAmount: r.late_fee_amount ?? undefined,
+    lateFeeType: (r.late_fee_type as string) || 'flat',
+    lateFeeGraceDays: r.late_fee_grace_days != null ? Number(r.late_fee_grace_days) : 5,
+    lateFeeJurisdiction: r.late_fee_jurisdiction ?? undefined,
+    lateFeeEffectiveDate: r.late_fee_effective_date ?? undefined,
   };
 }
 
@@ -193,6 +199,7 @@ export function serializeLease(r: Row) {
     renewalGeneratedAt: r.renewal_generated_at ?? undefined,
     previousRent: r.previous_rent != null ? Number(r.previous_rent) : undefined,
     renewalStatus: (r.renewal_status as string) ?? 'approved',
+    lateFeeEnabled: !!r.late_fee_enabled,
   };
 }
 
@@ -323,6 +330,7 @@ export function serializeCapitalProject(r: Row, totalCost = 0, expenseCount = 0)
     updatedAt: r.updated_at,
     recoveryYears: r.recovery_years ?? undefined,
     placedInServiceDate: r.placed_in_service_date ?? undefined,
+    priorDepreciation: r.prior_depreciation ?? undefined,
     totalCost,
     expenseCount,
   };
@@ -393,6 +401,8 @@ export function serializeMaintenance(r: Row) {
     invoiceApprovedAt: r.invoice_approved_at ?? undefined,
     invoiceApprovedBy: r.invoice_approved_by ?? undefined,
     invoiceRejectionReason: r.invoice_rejection_reason ?? undefined,
+    warrantyCovered: !!r.warranty_covered,
+    warrantyApplianceId: r.warranty_appliance_id ?? undefined,
     // Timestamps (unix epoch).
     createdAt: r.created_at ?? undefined,
   };
@@ -544,6 +554,47 @@ export function serializeNotice(r: Row) {
     createdBy: r.created_by ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+export function serializeEviction(r: Row) {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    leaseId: r.lease_id ?? undefined,
+    propertyId: r.property_id ?? undefined,
+    unitId: r.unit_id ?? undefined,
+    status: r.status,
+    reason: r.reason,
+    reasonNotes: r.reason_notes ?? undefined,
+    noticeServedDate: r.notice_served_date ?? undefined,
+    filedDate: r.filed_date ?? undefined,
+    courtDate: r.court_date ?? undefined,
+    judgmentDate: r.judgment_date ?? undefined,
+    vacateByDate: r.vacate_by_date ?? undefined,
+    completedDate: r.completed_date ?? undefined,
+    lawyerName: r.lawyer_name ?? undefined,
+    lawyerPhone: r.lawyer_phone ?? undefined,
+    caseNumber: r.case_number ?? undefined,
+    courtName: r.court_name ?? undefined,
+    judgmentResult: r.judgment_result ?? undefined,
+    notes: r.notes ?? undefined,
+    createdBy: r.created_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function serializeEvictionCost(r: Row) {
+  return {
+    id: r.id,
+    evictionId: r.eviction_id,
+    description: r.description,
+    amount: Number(r.amount),
+    costDate: r.cost_date,
+    category: r.category,
+    notes: r.notes ?? undefined,
+    createdAt: r.created_at,
   };
 }
 
