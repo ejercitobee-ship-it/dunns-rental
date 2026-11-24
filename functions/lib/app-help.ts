@@ -140,6 +140,102 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ['ai assistant', 'assistant', 'ai', 'chatbot', 'help', 'ask', 'how to use ai'],
     body: 'This assistant does two things: (1) answers questions about your live data (who owes rent, a tenant\'s balance, this month\'s expenses, open maintenance) by querying the real records, and (2) helps you learn and use the app (how-tos, where features are, training). Ask in plain English. For data questions it looks up the real numbers and never makes them up; for how-to questions it explains the steps. It is available to staff with the AI Assistant permission.',
   },
+  {
+    id: 'deposits-fees',
+    title: 'Security deposits and move-in fees',
+    keywords: ['deposit', 'security deposit', 'move-in fee', 'move in', 'fees', 'first month', 'holding'],
+    body: 'When a tenant moves in you record their security deposit (held, not income) and any move-in fee (which IS income and generates a receipt) from the Tenant Profile. Both capture the amount, date, and method with an audit entry. Deposits are tracked separately so they are never counted as revenue and stay available to return at move-out.',
+  },
+  {
+    id: 'deposit-returns',
+    title: 'Returning a deposit at move-out',
+    keywords: ['deposit return', 'return deposit', 'move out', 'refund deposit', 'deductions', 'move-out'],
+    body: 'At move-out, record the deposit return with any deductions. The app tracks the return deadline, so it appears on the Dashboard "Deposits" tab as it approaches. A returned deposit is not an expense (it was never income); anything you keep for damages is handled as its own entry.',
+  },
+  {
+    id: 'inspections',
+    title: 'Inspections',
+    keywords: ['inspection', 'inspections', 'walkthrough', 'condition', 'move-in inspection', 'move-out inspection'],
+    body: 'Inspections live on the Tenant Profile. Record move-in, periodic, or move-out inspections with notes so you keep a documented condition history for each tenancy.',
+  },
+  {
+    id: 'notices',
+    title: 'Serving notices',
+    keywords: ['notice', 'notices', 'eviction', 'late notice', 'legal notice', 'serve', 'pay or quit', 'violation'],
+    body: 'Notices are recorded on the Tenant Profile to document formal communications (for example a pay-or-quit or lease-violation notice) with the date and type, keeping a paper trail alongside the tenancy.',
+  },
+  {
+    id: 'documents-signing',
+    title: 'Document templates and tenant e-signing',
+    keywords: ['document', 'template', 'lease document', 'application', 'rules', 'sign', 'signing', 'e-sign', 'send document'],
+    body: 'Settings > Templates is a library where you upload lease, application, and rules documents once. From a prospective tenant you can send a template with a picker; the tenant gets a secure no-login link to review and sign, their status advances automatically, and the signed copy is stored.',
+  },
+  {
+    id: 'rent-receipts',
+    title: 'Rent receipts',
+    keywords: ['receipt', 'receipts', 'rent receipt', 'pdf', 'proof of payment'],
+    body: 'When you manually record a paid rent payment, the app generates a PDF receipt automatically, saves it, and makes it available to the tenant in their portal Documents and as a per-payment download. Receipts use your company identity from Settings.',
+  },
+  {
+    id: 'rent-spreadsheet',
+    title: 'Master rent spreadsheet and Drive documents',
+    keywords: ['spreadsheet', 'google sheet', 'drive', 'export rent', 'sync', 'master sheet', 'storage'],
+    body: 'Tenant documents (receipts, signed leases) are stored in Google Drive, and a live-mirror master rent Google Sheet can be synced from the app for an at-a-glance ledger. If documents are not syncing, connect Drive from Settings.',
+  },
+  {
+    id: 'utility-accounts',
+    title: 'Utility accounts',
+    keywords: ['utility', 'utilities', 'water', 'gas', 'electric', 'account number'],
+    body: 'The Utilities area records the water, gas, and electric accounts you (the landlord) pay, per property, with the account details so they are easy to reference when you record a utility expense.',
+  },
+  {
+    id: 'realtors',
+    title: 'Realtors and available units',
+    keywords: ['realtor', 'realtors', 'agent', 'referral', 'available units', 'listing', 'leasing'],
+    body: 'You can invite a realtor to a limited portal where they see available units and the prospective tenants they refer, for a set window. Referred applicants can be tagged to their source. Realtors never see management data.',
+  },
+  {
+    id: 'push-notifications',
+    title: 'Tenant push notifications',
+    keywords: ['push', 'phone alert', 'mobile notification', 'remind tenant', 'notify tenant'],
+    body: 'Tenant push notifications are on by default and enable themselves on the tenant\'s first visit, so tenants get rent reminders and messages on their phone with no toggle to find. The platform only needs the tenant to allow notifications once.',
+  },
+  {
+    id: 'login-security',
+    title: 'Login, two-factor, and passwords',
+    keywords: ['login', 'password', 'reset password', '2fa', 'two factor', 'security', 'sign in', 'forgot password'],
+    body: 'Everyone signs in at the same login. Accounts support two-factor authentication (authenticator app or emailed code). A forgotten password is reset through a secure emailed link. New staff and tenants are onboarded with a personal set-password invite, never a shared password.',
+  },
+  {
+    id: 'vacancy-loss',
+    title: 'Vacancy loss',
+    keywords: ['vacancy', 'vacant', 'vacancy loss', 'empty unit', 'lost rent'],
+    body: 'When a unit has no active lease covering a month, the app tracks the lost rent as vacancy loss (with daily proration) and surfaces it on the Dashboard — showing the cost of empty units this month and year to date.',
+  },
+  {
+    id: 'attention-tabs',
+    title: 'Understanding the Dashboard "Needs Attention" tabs',
+    keywords: ['needs attention', 'dashboard tabs', 'past due', 'overdue', 'contracts', 'vacant', 'deposits'],
+    body: 'Past due = tenants with an unpaid balance for the current or an earlier month. Overdue = past due where the monthly due day has already passed. Deposits = deposit returns approaching their deadline. Contracts = active fixed-term leases by soonest expiry (month-to-month tenants have no end date, so they are not listed). Vacant = units with no lease covering this month.',
+  },
+  {
+    id: 'rent-reminders',
+    title: 'Automatic rent reminders and how tenants pay',
+    keywords: ['rent reminder', 'due reminder', 'auto reminder', 'how to pay', 'payment instructions', 'remind rent'],
+    body: 'A monthly rent-due reminder is emailed and pushed to active tenants automatically around the due day (set in Settings); it runs on its own schedule, separate from Email Campaigns. Your payment instructions, shown to tenants as "How to pay", are set in Settings so every reminder and portal tells tenants exactly how to pay.',
+  },
+  {
+    id: 'troubleshoot-rent',
+    title: 'Why a tenant shows no or unexpected rent owed',
+    keywords: ['no rent', 'not showing', 'why owe', 'wrong balance', 'missing rent', 'troubleshoot', 'needs review'],
+    body: 'Common reasons a tenant owes less than expected: rent tracking only starts January 2026 (nothing before counts); the lease is paused for that month; it is a pending/draft/rejected renewal (only approved renewals bill); the lease is flagged needs-review; an overpayment carried forward and covered the month; or the month falls before the lease start or after its end. The tenant profile shows the true current balance.',
+  },
+  {
+    id: 'troubleshoot-vacant',
+    title: 'Why a unit shows vacant',
+    keywords: ['vacant', 'why vacant', 'unit empty', 'not occupied', 'occupancy wrong'],
+    body: 'A unit shows vacant when no active lease covers the current month, even if a future lease exists. Check that the lease start date has arrived, the lease status is active (not ended or needs-review), and it is linked to the correct unit. Units you are holding or that are under maintenance are treated separately from ordinary vacancy.',
+  },
 ];
 
 /** A compact list of every help topic, for discovery / when nothing matches. */
