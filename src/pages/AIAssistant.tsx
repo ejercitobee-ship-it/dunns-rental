@@ -71,9 +71,11 @@ function relativeTime(unixSeconds: number): string {
 
 const SUGGESTIONS = [
   'Who are my tenants with overdue rent?',
-  'Give me a summary of all my properties',
-  'What maintenance requests are currently open?',
   'How much rent did we collect this month?',
+  'What maintenance requests are currently open?',
+  'How do I record a rent payment?',
+  'How do I send an email campaign to tenants?',
+  'Walk me through the maintenance workflow',
 ];
 
 export function AIAssistant() {
@@ -386,7 +388,7 @@ export function AIAssistant() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your properties, tenants, rent, maintenance..."
+              placeholder="Ask about your data, or how to use the app..."
               rows={1}
               disabled={loading}
               className="flex-1 resize-y rounded-lg border border-line bg-canvas px-3 py-2.5 text-sm placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 transition-colors"
