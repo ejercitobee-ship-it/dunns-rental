@@ -17,7 +17,7 @@ import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
 import { calendarApi, depositReturnsApi } from '../lib/api';
-import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, isLeaseExpiringSoon, daysUntilLeaseEnd, vacancyLossForYear, leaseCoversMonth } from '../lib/rent';
+import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, daysUntilLeaseEnd, vacancyLossForYear, leaseCoversMonth } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
 import type { DashboardStats, Expense, Unit, CalendarEvent, DepositReturn } from '../types';
 import {
@@ -227,11 +227,17 @@ export function Dashboard() {
     return rows.sort((a, b) => b.total - a.total);
   }, [leases, rentPayments, paymentAllocations, properties, units, getLeaseTenants]);
 
-  // Leases expiring within 60 days.
+  // Active fixed-term (contract) leases, soonest expiry first. Month-to-month
+  // leases carry no end date and are excluded. Shows the whole contract roster
+  // so the office can see who is on a contract and who renews next; the ones
+  // ending within ~90 days are flagged as expiring soon in the list.
   const expiringSoon = useMemo(() => {
     const today = todayLocalDate();
     return activeLeases(leases)
-      .filter(lease => isLeaseExpiringSoon(lease, today))
+      .filter(lease => {
+        const d = daysUntilLeaseEnd(lease, today);
+        return d !== null && d >= 0;
+      })
       .map(lease => ({
         lease,
         days: daysUntilLeaseEnd(lease, today) ?? 0,
@@ -664,7 +670,7 @@ export function Dashboard() {
             { key: 'pastDue' as const, label: 'Past due', icon: <AlertTriangle className="h-3.5 w-3.5" />, count: attentionCounts.pastDue, color: 'danger' },
             { key: 'overdue' as const, label: 'Overdue', icon: <Clock className="h-3.5 w-3.5" />, count: attentionCounts.overdue, color: 'danger' },
             { key: 'deposits' as const, label: 'Deposits', icon: <DollarSign className="h-3.5 w-3.5" />, count: attentionCounts.deposits, color: 'warning' },
-            { key: 'expiring' as const, label: 'Expiring', icon: <CalendarCheck className="h-3.5 w-3.5" />, count: attentionCounts.expiring, color: 'warning' },
+            { key: 'expiring' as const, label: 'Contracts', icon: <CalendarCheck className="h-3.5 w-3.5" />, count: attentionCounts.expiring, color: 'warning' },
             { key: 'vacant' as const, label: 'Vacant', icon: <Home className="h-3.5 w-3.5" />, count: attentionCounts.vacant, color: 'muted' },
           ]).map(tab => (
             <button
@@ -759,9 +765,9 @@ export function Dashboard() {
                 </button>
               )))}
 
-              {/* Expiring tab */}
+              {/* Contracts tab: fixed-term leases, soonest expiry first */}
               {attentionTab === 'expiring' && (expiringSoon.length === 0 ? (
-                <p className="text-center text-sm text-muted py-8">No leases expiring soon.</p>
+                <p className="text-center text-sm text-muted py-8">No active fixed-term contracts. Month-to-month tenants have no end date.</p>
               ) : expiringSoon.map(row => {
                 const names = row.occupants.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'Tenant';
                 const where = [row.property?.name ?? row.property?.address, row.unit ? `Unit ${row.unit.unitNumber}` : null]
@@ -780,11 +786,19 @@ export function Dashboard() {
                       <p className="text-[13px] font-medium text-ink truncate">{names}</p>
                       {where && <p className="text-[11px] text-muted truncate">{where}</p>}
                     </div>
-                    <Badge variant="warning" className="whitespace-nowrap">
-                      {row.days === 0 ? 'Expires today' : `${row.days} day${row.days === 1 ? '' : 's'}`}
-                    </Badge>
+                    {(() => {
+                      const soon = row.days <= 90;
+                      const label = row.days === 0 ? 'Expires today'
+                        : row.days <= 60 ? `${row.days} day${row.days === 1 ? '' : 's'}`
+                        : `~${Math.round(row.days / 30)} months`;
+                      return (
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${soon ? 'bg-warning-soft text-warning' : 'bg-canvas text-muted'}`}>
+                          {label}
+                        </span>
+                      );
+                    })()}
                     {row.lease.endDate && (
-                      <span className="text-xs text-faint flex-shrink-0">{formatDate(row.lease.endDate)}</span>
+                      <span className="text-xs text-faint flex-shrink-0 hidden sm:block">{formatDate(row.lease.endDate)}</span>
                     )}
                     <ChevronRight className="h-3.5 w-3.5 text-faint flex-shrink-0" />
                   </button>
