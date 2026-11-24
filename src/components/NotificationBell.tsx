@@ -119,7 +119,7 @@ export function NotificationBell({ collapsed, placement = 'footer' }: Props) {
           'relative flex items-center justify-center rounded-lg transition-colors',
           iconOnly ? 'p-2' : 'gap-2 px-2 py-1.5',
           placement === 'header'
-            ? (open ? 'bg-black/[0.06] text-ink' : 'text-muted hover:bg-black/[0.05] hover:text-ink')
+            ? (open ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white')
             : (open ? 'bg-white/[0.1] text-white' : 'text-sidebar-muted hover:bg-white/[0.04] hover:text-white')
         )}
       >
@@ -127,7 +127,8 @@ export function NotificationBell({ collapsed, placement = 'footer' }: Props) {
         {!iconOnly && <span className="text-sm">Notifications</span>}
         {count > 0 && (
           <span className={cn(
-            'flex items-center justify-center rounded-full bg-[#8fbba8] text-sidebar font-semibold',
+            'flex items-center justify-center rounded-full font-semibold',
+            placement === 'header' ? 'bg-[#c9a96e] text-[#1c3e30]' : 'bg-[#8fbba8] text-sidebar',
             iconOnly
               ? 'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 text-[10px]'
               : 'min-w-5 h-5 px-1.5 text-xs ml-auto'

@@ -9,6 +9,10 @@ interface StatCardProps {
   icon: React.ReactNode;
   iconBg?: string;
   valueColor?: string;
+  /** 0-100: renders a thin progress bar under the value. */
+  progress?: number;
+  /** 0-100: renders a donut ring beside the value instead of a plain figure. */
+  ring?: number;
   onClick?: () => void;
   className?: string;
 }
@@ -20,9 +24,12 @@ export function StatCard({
   icon,
   iconBg = 'bg-primary-soft text-primary',
   valueColor = 'text-ink',
+  progress,
+  ring,
   onClick,
   className,
 }: StatCardProps) {
+  const clamp = (n: number) => Math.max(0, Math.min(100, n));
   return (
     <div
       className={cn(
@@ -50,12 +57,33 @@ export function StatCard({
             {icon}
           </span>
         </div>
-        <div className="mt-2 flex items-end gap-2">
-          <span className={cn('font-display text-[28px] leading-none font-semibold tnum', valueColor)}>
-            {value}
-          </span>
-        </div>
-        {subtitle && <p className="mt-2 text-[12px] text-muted leading-tight">{subtitle}</p>}
+        {typeof ring === 'number' ? (
+          <div className="mt-2 flex items-center gap-3.5">
+            <div
+              className="relative w-16 h-16 rounded-full grid place-items-center flex-shrink-0"
+              style={{ background: `conic-gradient(var(--color-primary) ${clamp(ring)}%, var(--color-line) ${clamp(ring)}%)` }}
+            >
+              <div className="w-[46px] h-[46px] rounded-full bg-surface grid place-items-center">
+                <span className={cn('font-display text-[14px] leading-none font-semibold tnum', valueColor)}>{value}</span>
+              </div>
+            </div>
+            {subtitle && <p className="text-[12px] text-muted leading-tight">{subtitle}</p>}
+          </div>
+        ) : (
+          <>
+            <div className="mt-2 flex items-end gap-2">
+              <span className={cn('font-display text-[28px] leading-none font-semibold tnum', valueColor)}>
+                {value}
+              </span>
+            </div>
+            {subtitle && <p className="mt-2 text-[12px] text-muted leading-tight">{subtitle}</p>}
+            {typeof progress === 'number' && (
+              <div className="mt-3 h-1.5 rounded-full bg-canvas overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-positive to-primary" style={{ width: `${clamp(progress)}%` }} />
+              </div>
+            )}
+          </>
+        )}
       </div>
       <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-primary/20 via-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
     </div>
