@@ -25,6 +25,8 @@ const Rents = lazy(() => import('./pages/Rents').then(m => ({ default: m.Rents }
 const PaymentPlans = lazy(() => import('./pages/PaymentPlans').then(m => ({ default: m.PaymentPlans })));
 const Reminders = lazy(() => import('./pages/Reminders').then(m => ({ default: m.Reminders })));
 const EmailTemplates = lazy(() => import('./pages/EmailTemplates').then(m => ({ default: m.EmailTemplates })));
+const EmailCampaigns = lazy(() => import('./pages/EmailCampaigns').then(m => ({ default: m.EmailCampaigns })));
+const EmailCampaignEditor = lazy(() => import('./pages/EmailCampaignEditor').then(m => ({ default: m.EmailCampaignEditor })));
 const Maintenance = lazy(() => import('./pages/Maintenance').then(m => ({ default: m.Maintenance })));
 const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const Expenses = lazy(() => import('./pages/Expenses').then(m => ({ default: m.Expenses })));
@@ -330,6 +332,22 @@ function AppRoutes() {
       <Route path="/email/templates" element={
         <ProtectedRoute requiredPermission="announcements_send">
           <Layout><EmailTemplates /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/email/campaigns" element={
+        <ProtectedRoute requiredPermission="announcements_send">
+          <Layout><EmailCampaigns /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/email/campaigns/new" element={
+        <ProtectedRoute requiredPermission="announcements_send">
+          <Layout><EmailCampaignEditor /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/email/campaigns/:id" element={
+        <ProtectedRoute requiredPermission="announcements_send">
+          <Layout><EmailCampaignEditor /></Layout>
         </ProtectedRoute>
       } />
 

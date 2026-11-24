@@ -1978,6 +1978,54 @@ export const emailTemplatesApi = {
     apiRequest(`/email/templates/${id}/duplicate`, { method: 'POST' }),
 };
 
+export interface RecipientFilter {
+  scope?: 'all_active' | 'by_property';
+  propertyIds?: string[];
+  lease?: 'any' | 'expiring_30' | 'expiring_60' | 'expiring_90' | 'month_to_month';
+  includeTenantIds?: string[];
+  excludeTenantIds?: string[];
+  manualEmails?: string[];
+}
+
+export interface ResolvedRecipient { tenantId?: string; name: string; email: string; }
+
+export interface EmailCampaign {
+  id: string;
+  name: string;
+  category: string;
+  subject: string;
+  previewText?: string;
+  bodyHtml: string;
+  templateId?: string;
+  recipientFilter?: RecipientFilter;
+  status: string;
+  scheduledAt?: string;
+  recipientCount: number;
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+type CampaignInput = {
+  name: string; category: string; subject: string; previewText?: string;
+  bodyHtml: string; templateId?: string | null; recipientFilter?: RecipientFilter; recipientCount?: number;
+};
+
+export const emailCampaignsApi = {
+  list: (): Promise<EmailCampaign[]> => apiRequest('/email/campaigns'),
+  get: (id: string): Promise<EmailCampaign> => apiRequest(`/email/campaigns/${id}`),
+  create: (input: CampaignInput): Promise<EmailCampaign> =>
+    apiRequest('/email/campaigns', { method: 'POST', body: JSON.stringify(input) }),
+  update: (id: string, input: CampaignInput): Promise<EmailCampaign> =>
+    apiRequest(`/email/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  remove: (id: string): Promise<{ success: boolean }> =>
+    apiRequest(`/email/campaigns/${id}`, { method: 'DELETE' }),
+  resolve: (filter: RecipientFilter): Promise<{ count: number; recipients: ResolvedRecipient[] }> =>
+    apiRequest('/email/campaigns/resolve', { method: 'POST', body: JSON.stringify(filter) }),
+  sendTest: (input: { subject: string; bodyHtml: string; to?: string }): Promise<{ sentTo: string }> =>
+    apiRequest('/email/campaigns/test', { method: 'POST', body: JSON.stringify(input) }),
+};
+
 export const paymentPlansApi = {
   list: (filters?: { tenantId?: string; leaseId?: string; status?: string }): Promise<PaymentPlan[]> => {
     const params = new URLSearchParams();

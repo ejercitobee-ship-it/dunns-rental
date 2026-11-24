@@ -473,6 +473,29 @@ export function serializeEmailTemplate(r: Row) {
   };
 }
 
+export function serializeEmailCampaign(r: Row) {
+  let recipientFilter: unknown = undefined;
+  if (typeof r.recipient_filter === 'string' && r.recipient_filter) {
+    try { recipientFilter = JSON.parse(r.recipient_filter); } catch { recipientFilter = undefined; }
+  }
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    subject: r.subject ?? '',
+    previewText: r.preview_text ?? undefined,
+    bodyHtml: r.body_html ?? '',
+    templateId: r.template_id ?? undefined,
+    recipientFilter,
+    status: r.status ?? 'draft',
+    scheduledAt: r.scheduled_at ?? undefined,
+    recipientCount: r.recipient_count ?? 0,
+    createdBy: r.created_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
 export function serializeIncome(r: Row) {
   return {
     id: r.id,
