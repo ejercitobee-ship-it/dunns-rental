@@ -35,13 +35,11 @@ function timeAgo(unixTs: number): string {
 }
 
 interface Props {
-  collapsed?: boolean;
-  /** 'footer' (dark sidebar, dropdown opens upward) | 'header' (light top bar, dropdown opens downward). */
-  placement?: 'footer' | 'header';
+  /** 'onLight' = paper page header (muted icon, evergreen badge); 'onDark' = evergreen hero (white icon, gold badge). */
+  tone?: 'onLight' | 'onDark';
 }
 
-export function NotificationBell({ collapsed, placement = 'footer' }: Props) {
-  const iconOnly = collapsed || placement === 'header';
+export function NotificationBell({ tone = 'onLight' }: Props) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(0);
@@ -116,22 +114,17 @@ export function NotificationBell({ collapsed, placement = 'footer' }: Props) {
         title="Notifications"
         aria-label={count > 0 ? `${count} unread notifications` : 'Notifications'}
         className={cn(
-          'relative flex items-center justify-center rounded-lg transition-colors',
-          iconOnly ? 'p-2' : 'gap-2 px-2 py-1.5',
-          placement === 'header'
-            ? (open ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white')
-            : (open ? 'bg-white/[0.1] text-white' : 'text-sidebar-muted hover:bg-white/[0.04] hover:text-white')
+          'relative flex items-center justify-center rounded-lg p-2 transition-colors',
+          tone === 'onDark'
+            ? (open ? 'bg-white/15 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white')
+            : (open ? 'bg-black/[0.07] text-ink' : 'text-muted hover:bg-black/[0.05] hover:text-ink')
         )}
       >
         <Bell className="h-[18px] w-[18px]" />
-        {!iconOnly && <span className="text-sm">Notifications</span>}
         {count > 0 && (
           <span className={cn(
-            'flex items-center justify-center rounded-full font-semibold',
-            placement === 'header' ? 'bg-[#c9a96e] text-[#1c3e30]' : 'bg-[#8fbba8] text-sidebar',
-            iconOnly
-              ? 'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 text-[10px]'
-              : 'min-w-5 h-5 px-1.5 text-xs ml-auto'
+            'flex items-center justify-center rounded-full font-semibold absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 text-[10px]',
+            tone === 'onDark' ? 'bg-[#c9a96e] text-[#1c3e30]' : 'bg-primary text-white'
           )}>
             {count > 99 ? '99+' : count}
           </span>
@@ -140,14 +133,7 @@ export function NotificationBell({ collapsed, placement = 'footer' }: Props) {
 
       {/* Dropdown panel */}
       {open && (
-        <div className={cn(
-          'absolute z-50 bg-surface border border-line rounded-xl shadow-[0_16px_48px_-8px_rgba(27,26,23,0.25)] overflow-hidden w-[360px] max-w-[calc(100vw-2rem)]',
-          placement === 'header'
-            ? 'right-0 top-full mt-2'
-            : collapsed
-              ? 'left-full ml-2 top-0'
-              : 'left-0 bottom-full mb-2'
-        )}>
+        <div className="absolute z-50 right-0 top-full mt-2 bg-surface border border-line rounded-xl shadow-[0_16px_48px_-8px_rgba(27,26,23,0.25)] overflow-hidden w-[360px] max-w-[calc(100vw-2rem)]">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-line">
             <h3 className="text-sm font-semibold text-ink">Notifications</h3>

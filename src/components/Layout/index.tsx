@@ -41,7 +41,6 @@ import { ProfileModal } from '../ProfileModal';
 import { BackToTop } from '../BackToTop';
 import { CommandPalette } from '../CommandPalette';
 import { PageTransition } from '../PageTransition';
-import { NotificationBell } from '../NotificationBell';
 
 // Three-tier navigation model:
 //   Section  → a labeled, optionally collapsible group (Workspace, Property
@@ -140,9 +139,6 @@ export function Layout({ children }: LayoutProps) {
   // On desktop, labels hide when collapsed.
   const showLabels = !collapsed || sidebarOpen;
 
-  // Time-based greeting for the desktop top bar.
-  const greetingHour = new Date().getHours();
-  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
 
   const toggleCollapse = () => {
     setCollapsed(prev => {
@@ -640,33 +636,6 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <main className={cn('min-h-screen transition-[margin-left] duration-200 ease-in-out', collapsed ? 'lg:ml-16' : 'lg:ml-64')}>
-        {/* Desktop top bar — premium evergreen header matching the tenant/user
-            portal: the deep gradient from the portal hero, a gilt hairline edge,
-            a champagne-gold eyebrow with the name in Fraunces, a quiet "today"
-            date with a mint live-dot, and the bell. Shadow deepens on scroll. */}
-        <header
-          className={cn('hidden lg:flex h-[68px] items-center justify-between px-6 lg:px-8 gap-4 sticky top-0 z-30 border-b border-[#c9a96e]/15 transition-shadow duration-200', scrolled && 'shadow-[0_6px_24px_rgba(16,51,42,0.35)]')}
-          style={{ background: 'radial-gradient(120% 160% at 100% 0%, #2f6350 0%, transparent 55%), linear-gradient(158deg, #24503f 0%, #16332a 100%)' }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-2 h-2 rounded-full bg-[#c9a96e] ring-4 ring-[#c9a96e]/15 flex-shrink-0" />
-            <div className="min-w-0 leading-tight">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#c9a96e]">{greeting}</p>
-              <p className="font-display text-[18px] font-semibold text-white truncate leading-snug">
-                {user?.firstName ? `${user.firstName} ${user.lastName ?? ''}`.trim() : 'MH Dunn Property'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden xl:flex items-center gap-2 text-[13px] text-white/70">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#a9e0c3] flex-shrink-0" />
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-            </div>
-            <span className="hidden xl:block w-px h-6 bg-white/10" />
-            <NotificationBell placement="header" />
-          </div>
-        </header>
-
         {/* Mobile header */}
         <header className={cn('lg:hidden h-16 bg-surface/90 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-30 sticky-header', scrolled && 'scrolled')}>
           <Link to="/" className="flex items-center">
