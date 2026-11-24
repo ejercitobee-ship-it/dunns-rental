@@ -1950,6 +1950,34 @@ export const remindersApi = {
     apiRequest('/tenants/reminder-blast', { method: 'POST', body: JSON.stringify({ subject, message }) }),
 };
 
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  category: string;
+  subject: string;
+  previewText?: string;
+  bodyHtml: string;
+  isSystem: boolean;
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+type EmailTemplateInput = { name: string; category: string; subject: string; previewText?: string; bodyHtml: string };
+
+export const emailTemplatesApi = {
+  list: (): Promise<EmailTemplate[]> => apiRequest('/email/templates'),
+  get: (id: string): Promise<EmailTemplate> => apiRequest(`/email/templates/${id}`),
+  create: (input: EmailTemplateInput): Promise<EmailTemplate> =>
+    apiRequest('/email/templates', { method: 'POST', body: JSON.stringify(input) }),
+  update: (id: string, input: EmailTemplateInput): Promise<EmailTemplate> =>
+    apiRequest(`/email/templates/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  remove: (id: string): Promise<{ success: boolean }> =>
+    apiRequest(`/email/templates/${id}`, { method: 'DELETE' }),
+  duplicate: (id: string): Promise<EmailTemplate> =>
+    apiRequest(`/email/templates/${id}/duplicate`, { method: 'POST' }),
+};
+
 export const paymentPlansApi = {
   list: (filters?: { tenantId?: string; leaseId?: string; status?: string }): Promise<PaymentPlan[]> => {
     const params = new URLSearchParams();

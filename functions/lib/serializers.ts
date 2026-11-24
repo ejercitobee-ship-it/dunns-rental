@@ -458,6 +458,21 @@ export function serializeDocumentTemplate(r: Row) {
   };
 }
 
+export function serializeEmailTemplate(r: Row) {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    subject: r.subject ?? '',
+    previewText: r.preview_text ?? undefined,
+    bodyHtml: r.body_html ?? '',
+    isSystem: !!r.is_system,
+    createdBy: r.created_by ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
 export function serializeIncome(r: Row) {
   return {
     id: r.id,
