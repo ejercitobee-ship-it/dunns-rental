@@ -140,6 +140,10 @@ export function Layout({ children }: LayoutProps) {
   // On desktop, labels hide when collapsed.
   const showLabels = !collapsed || sidebarOpen;
 
+  // Time-based greeting for the desktop top bar.
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
+
   const toggleCollapse = () => {
     setCollapsed(prev => {
       const next = !prev;
@@ -637,8 +641,15 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <main className={cn('min-h-screen transition-[margin-left] duration-200 ease-in-out', collapsed ? 'lg:ml-16' : 'lg:ml-64')}>
-        {/* Desktop top bar — hosts the notification bell */}
-        <header className={cn('hidden lg:flex h-14 bg-surface/90 backdrop-blur-md items-center justify-end px-6 gap-2 sticky top-0 z-30 border-b border-line sticky-header', scrolled && 'scrolled')}>
+        {/* Desktop top bar — greeting + notification bell, styled to match the dashboard */}
+        <header className={cn('hidden lg:flex h-14 bg-surface/90 backdrop-blur-md items-center justify-between px-6 gap-4 sticky top-0 z-30 border-b border-line sticky-header', scrolled && 'scrolled')}>
+          <div className="flex items-center gap-2 min-w-0 text-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-positive flex-shrink-0" />
+            <span className="text-muted truncate">
+              {greeting}
+              {user?.firstName && <>, <span className="font-display font-semibold text-ink">{user.firstName}</span></>}
+            </span>
+          </div>
           <NotificationBell placement="header" />
         </header>
 
