@@ -43,7 +43,14 @@ import { CommandPalette } from '../CommandPalette';
 import { PageTransition } from '../PageTransition';
 import { NotificationBell } from '../NotificationBell';
 
+// Three-tier navigation model:
+//   Section  → a labeled, optionally collapsible group (Workspace, Property
+//              Management, Financial Management, Communication, Administration)
+//   SubGroup → a nested collapsible submenu inside a section (Finances,
+//              Email & Reminders)
+//   NavItem  → a single route link
 interface NavItem {
+  kind: 'item';
   name: string;
   path: string;
   icon: LucideIcon;
@@ -51,20 +58,23 @@ interface NavItem {
   badge: number;
 }
 
-interface NavGroup {
+interface SubGroup {
+  kind: 'group';
   label: string;
   icon: LucideIcon;
   show: boolean;
   children: NavItem[];
 }
 
-type NavEntry = NavItem | NavGroup;
-
-function isGroup(entry: NavEntry): entry is NavGroup {
-  return 'children' in entry;
+interface Section {
+  kind: 'section';
+  label: string;
+  collapsible: boolean;
+  show: boolean;
+  children: (NavItem | SubGroup)[];
 }
 
-/** Persist which sidebar groups are open so collapsing survives navigation. */
+/** Persist which sidebar sections/sub-groups are open so it survives navigation. */
 const STORAGE_KEY = 'sidebar-open-groups';
 function loadOpenGroups(): Record<string, boolean> {
   try {
@@ -147,9 +157,11 @@ export function Layout({ children }: LayoutProps) {
     flyoutTimeout.current = window.setTimeout(() => setFlyoutGroup(null), 200);
   };
 
-  const toggleGroup = (label: string) => {
+  // Toggle takes the current effective open state so defaults (sections open,
+  // sub-groups closed) flip correctly on the first click.
+  const toggleGroup = (label: string, current: boolean) => {
     setOpenGroups(prev => {
-      const next = { ...prev, [label]: !prev[label] };
+      const next = { ...prev, [label]: !current };
       saveOpenGroups(next);
       return next;
     });
@@ -184,66 +196,115 @@ export function Layout({ children }: LayoutProps) {
     };
   }, [canSeeMessages, location.pathname]);
 
-  // Build navigation with groups.
-  const navigation: NavEntry[] = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true, badge: 0 },
-    { name: 'AI Assistant', path: '/ai-assistant', icon: Bot, show: hasPermission('ai_assistant_use'), badge: 0 },
-    { name: 'Properties', path: '/properties', icon: Building2, show: hasModuleAccess('properties'), badge: 0 },
-    { name: 'Tenants', path: '/tenants', icon: Users, show: hasModuleAccess('tenants'), badge: 0 },
-    { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },
-    { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
-    { name: 'Reminders', path: '/reminders', icon: Bell, show: hasPermission('announcements_send'), badge: 0 },
-    { name: 'Campaigns', path: '/email/campaigns', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
-    { name: 'Email Templates', path: '/email/templates', icon: Mail, show: hasPermission('announcements_send'), badge: 0 },
-    { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
-    { name: 'Payment Plans', path: '/payment-plans', icon: CalendarDays, show: hasModuleAccess('rents'), badge: 0 },
-    { name: 'Maintenance', path: '/maintenance', icon: Wrench, show: hasModuleAccess('properties'), badge: 0 },
-    { name: 'Tasks', path: '/tasks', icon: ListChecks, show: hasModuleAccess('tasks'), badge: 0 },
-    { name: 'Calendar', path: '/calendar', icon: CalendarDays, show: hasModuleAccess('finances'), badge: 0 },
-    // Finances group
+  // Build the grouped navigation. `show` expressions are the existing
+  // permission gates — unchanged — so visibility matches the backend exactly.
+  const item = (name: string, path: string, icon: LucideIcon, show: boolean, badge = 0): NavItem =>
+    ({ kind: 'item', name, path, icon, show, badge });
+
+  const financesGroup: SubGroup = {
+    kind: 'group', label: 'Finances', icon: Receipt, show: false,
+    children: [
+      item('Expenses & Income', '/finances', Receipt, hasModuleAccess('finances')),
+      item('Capital Projects', '/capital-projects', FolderKanban, hasPermission('finances_capital_projects')),
+      item('Reports', '/reports', ClipboardList, hasModuleAccess('finances')),
+      item('Tax Report', '/tax-report', FileText, hasModuleAccess('finances')),
+      item('Expense Imports', '/expense-imports', FileSpreadsheet, hasPermission('finances_import')),
+    ],
+  };
+
+  const emailGroup: SubGroup = {
+    kind: 'group', label: 'Email & Reminders', icon: Mail, show: false,
+    children: [
+      item('Reminders', '/reminders', Bell, hasPermission('announcements_send')),
+      item('Campaigns', '/email/campaigns', Megaphone, hasPermission('announcements_send')),
+      item('Email Templates', '/email/templates', Mail, hasPermission('announcements_send')),
+    ],
+  };
+
+  const sections: Section[] = [
     {
-      label: 'Finances',
-      icon: Receipt,
-      show: hasModuleAccess('finances'),
+      kind: 'section', label: 'Workspace', collapsible: false, show: false,
       children: [
-        { name: 'Expenses & Income', path: '/finances', icon: Receipt, show: hasModuleAccess('finances'), badge: 0 },
-        { name: 'Capital Projects', path: '/capital-projects', icon: FolderKanban, show: hasPermission('finances_capital_projects'), badge: 0 },
-        { name: 'Reports', path: '/reports', icon: ClipboardList, show: hasModuleAccess('finances'), badge: 0 },
-        { name: 'Tax Report', path: '/tax-report', icon: FileText, show: hasModuleAccess('finances'), badge: 0 },
-        { name: 'Expense Imports', path: '/expense-imports', icon: FileSpreadsheet, show: hasPermission('finances_import'), badge: 0 },
+        item('Dashboard', '/', LayoutDashboard, true),
+        item('AI Assistant', '/ai-assistant', Bot, hasPermission('ai_assistant_use')),
       ],
     },
-    // Administration group
     {
-      label: 'Administration',
-      icon: Settings,
-      show: hasModuleAccess('settings') || hasModuleAccess('users') || hasPermission('activity_view'),
+      kind: 'section', label: 'Property Management', collapsible: true, show: false,
       children: [
-        { name: 'Settings', path: '/settings', icon: Settings, show: hasModuleAccess('settings'), badge: 0 },
-        { name: 'Users', path: '/users', icon: Shield, show: hasModuleAccess('users'), badge: 0 },
-        { name: 'Data Migration', path: '/data-migration', icon: Upload, show: hasModuleAccess('settings'), badge: 0 },
-        { name: 'Activity', path: '/activity', icon: ScrollText, show: hasPermission('activity_view'), badge: 0 },
+        item('Properties', '/properties', Building2, hasModuleAccess('properties')),
+        item('Tenants', '/tenants', Users, hasModuleAccess('tenants')),
+        item('Maintenance', '/maintenance', Wrench, hasModuleAccess('properties')),
+        item('Tasks', '/tasks', ListChecks, hasModuleAccess('tasks')),
+        item('Calendar', '/calendar', CalendarDays, hasModuleAccess('finances')),
+      ],
+    },
+    {
+      kind: 'section', label: 'Financial Management', collapsible: true, show: false,
+      children: [
+        item('Rent Management', '/rents', DollarSign, hasModuleAccess('rents')),
+        financesGroup,
+        item('Payment Plans', '/payment-plans', CalendarDays, hasModuleAccess('rents')),
+      ],
+    },
+    {
+      kind: 'section', label: 'Communication', collapsible: true, show: false,
+      children: [
+        item('Messages', '/messages', MessageSquare, hasModuleAccess('tenants'), unreadMessages),
+        item('Announcements', '/announcements', Megaphone, hasPermission('announcements_send')),
+        emailGroup,
+      ],
+    },
+    {
+      kind: 'section', label: 'Administration', collapsible: true, show: false,
+      children: [
+        item('Settings', '/settings', Settings, hasModuleAccess('settings')),
+        item('Users', '/users', Shield, hasModuleAccess('users')),
+        item('Data Migration', '/data-migration', Upload, hasModuleAccess('settings')),
+        item('Activity Logs', '/activity', ScrollText, hasPermission('activity_view')),
       ],
     },
   ];
+  // A sub-group shows if any child shows; a section shows if any child shows.
+  for (const section of sections) {
+    for (const child of section.children) {
+      if (child.kind === 'group') child.show = child.children.some(c => c.show);
+    }
+    section.show = section.children.some(c => c.show);
+  }
 
-  // Auto-expand a group if the current page is inside it.
+  // Auto-expand the section (and any sub-group) that contains the active route.
   useEffect(() => {
-    for (const entry of navigation) {
-      if (isGroup(entry) && entry.children.some(c => c.show && location.pathname === c.path)) {
-        if (!openGroups[entry.label]) {
-          setOpenGroups(prev => {
-            const next = { ...prev, [entry.label]: true };
-            saveOpenGroups(next);
-            return next;
-          });
+    const toOpen: string[] = [];
+    for (const section of sections) {
+      if (!section.show) continue;
+      let sectionActive = false;
+      for (const child of section.children) {
+        if (child.kind === 'group') {
+          if (child.show && child.children.some(c => c.show && c.path === location.pathname)) {
+            toOpen.push(child.label);
+            sectionActive = true;
+          }
+        } else if (child.path === location.pathname) {
+          sectionActive = true;
         }
       }
+      if (sectionActive && section.collapsible) toOpen.push(section.label);
+    }
+    if (toOpen.length) {
+      setOpenGroups(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const k of toOpen) if (!next[k]) { next[k] = true; changed = true; }
+        if (!changed) return prev;
+        saveOpenGroups(next);
+        return next;
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // Render a single nav link.
+  // Render a single nav link. `indent` is for sub-group children (2 levels deep).
   const renderLink = (item: NavItem, indent = false) => {
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
@@ -286,11 +347,11 @@ export function Layout({ children }: LayoutProps) {
     );
   };
 
-  // Render a collapsible group.
-  const renderGroup = (group: NavGroup) => {
+  // Render a collapsible sub-group (Finances, Email & Reminders).
+  const renderGroup = (group: SubGroup) => {
     const visibleChildren = group.children.filter(c => c.show);
     if (visibleChildren.length === 0) return null;
-    const isOpen = !!openGroups[group.label];
+    const isOpen = !!openGroups[group.label]; // sub-groups default closed
     const hasActivePage = visibleChildren.some(c => location.pathname === c.path);
     const Icon = group.icon;
 
@@ -352,11 +413,11 @@ export function Layout({ children }: LayoutProps) {
       );
     }
 
-    // Expanded mode: collapsible group
+    // Expanded mode: collapsible sub-group
     return (
       <div key={group.label}>
         <button
-          onClick={() => toggleGroup(group.label)}
+          onClick={() => toggleGroup(group.label, isOpen)}
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 group',
             hasActivePage
@@ -382,6 +443,59 @@ export function Layout({ children }: LayoutProps) {
       </div>
     );
   };
+
+  const renderChildren = (section: Section) =>
+    section.children
+      .filter(c => c.show)
+      .map(child => (child.kind === 'group' ? renderGroup(child) : renderLink(child)));
+
+  // Render one section. Collapsed mode: a divider + icons (no label). Expanded
+  // mode: an uppercase label (a toggle button when collapsible) + children.
+  const renderSection = (section: Section, visibleIdx: number) => {
+    if (!showLabels) {
+      return (
+        <div key={section.label}>
+          {visibleIdx > 0 && <div className="my-2 border-t border-sidebar-line" />}
+          <div className="space-y-0.5">{renderChildren(section)}</div>
+        </div>
+      );
+    }
+
+    if (!section.collapsible) {
+      return (
+        <div key={section.label} className="space-y-0.5">
+          <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted/70">
+            {section.label}
+          </p>
+          {renderChildren(section)}
+        </div>
+      );
+    }
+
+    const isOpen = openGroups[section.label] ?? true; // sections default open
+    const hasActive = section.children.some(c =>
+      c.kind === 'group'
+        ? c.children.some(ch => ch.show && ch.path === location.pathname)
+        : c.path === location.pathname
+    );
+    return (
+      <div key={section.label} className="space-y-0.5">
+        <button
+          onClick={() => toggleGroup(section.label, isOpen)}
+          className="w-full flex items-center gap-2 px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted/70 hover:text-sidebar-muted transition-colors"
+        >
+          <span className="flex-1 text-left">{section.label}</span>
+          <ChevronDown className={cn(
+            'h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200',
+            isOpen ? 'rotate-180' : (hasActive ? 'text-[#8fbba8]' : '')
+          )} />
+        </button>
+        {isOpen && <div className="space-y-0.5">{renderChildren(section)}</div>}
+      </div>
+    );
+  };
+
+  const visibleSections = sections.filter(s => s.show);
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -447,22 +561,8 @@ export function Layout({ children }: LayoutProps) {
         )}
 
         {/* Navigation — flex-1 fills remaining space, scrolls independently */}
-        <nav className={cn('flex-1 overflow-y-auto py-2 space-y-0.5 sidebar-scroll', showLabels ? 'px-3' : 'px-1.5')}>
-          {navigation.map((entry, idx) => {
-            if (!('show' in entry) || !entry.show) return null;
-            // Insert a thin separator before first group (Finances)
-            if (isGroup(entry)) {
-              const prevEntry = navigation.slice(0, idx).reverse().find(e => ('show' in e) && e.show);
-              const needsSep = prevEntry && !isGroup(prevEntry);
-              return (
-                <div key={entry.label}>
-                  {needsSep && <div className="my-2 border-t border-sidebar-line" />}
-                  {renderGroup(entry)}
-                </div>
-              );
-            }
-            return renderLink(entry);
-          })}
+        <nav className={cn('flex-1 overflow-y-auto py-2 space-y-1 sidebar-scroll', showLabels ? 'px-3' : 'px-1.5')}>
+          {visibleSections.map((section, idx) => renderSection(section, idx))}
         </nav>
 
         {/* Collapse toggle — desktop only */}
@@ -477,11 +577,6 @@ export function Layout({ children }: LayoutProps) {
               : <><ChevronLeft className="h-4 w-4" /><span>Collapse</span></>
             }
           </button>
-        </div>
-
-        {/* Notifications — above user footer */}
-        <div className={cn('flex-shrink-0 border-t border-sidebar-line', showLabels ? 'px-3 pt-2' : 'px-1.5 pt-2')}>
-          <NotificationBell collapsed={!showLabels} />
         </div>
 
         {/* User footer — flex-shrink-0, always visible */}
@@ -542,6 +637,11 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <main className={cn('min-h-screen transition-[margin-left] duration-200 ease-in-out', collapsed ? 'lg:ml-16' : 'lg:ml-64')}>
+        {/* Desktop top bar — hosts the notification bell */}
+        <header className={cn('hidden lg:flex h-14 bg-surface/90 backdrop-blur-md items-center justify-end px-6 gap-2 sticky top-0 z-30 border-b border-line sticky-header', scrolled && 'scrolled')}>
+          <NotificationBell placement="header" />
+        </header>
+
         {/* Mobile header */}
         <header className={cn('lg:hidden h-16 bg-surface/90 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-30 sticky-header', scrolled && 'scrolled')}>
           <Link to="/" className="flex items-center">
