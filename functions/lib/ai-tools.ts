@@ -17,6 +17,7 @@
  *  - paused months (from lease_pauses) are not billed
  */
 import type { D1Database } from '@cloudflare/workers-types';
+import { lookupHelp, helpTopicList } from './app-help';
 
 const RENT_TRACKING_START_YEAR = 2026;
 const RENT_TRACKING_START_MONTH = 1;
@@ -215,6 +216,20 @@ export const AI_TOOLS: ToolDefinition[] = [
       required: ['leaseId'],
     },
   },
+  {
+    name: 'getAppHelp',
+    description:
+      'Look up how to USE the MH Dunn Property app itself: step-by-step how-tos, where a feature lives, and training/onboarding guidance (e.g. "how do I record a rent payment", "where do I send a campaign", "how do leases work", "how do I add a tenant"). Use this for any question about using the software or training staff, as opposed to questions about specific tenant/property DATA (those use the data tools). Pass the user question or a topic as `topic`; omit `topic` to list the available help topics.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'The how-to question or feature/topic to look up. Omit to list all available help topics.',
+        },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -248,6 +263,8 @@ export async function executeTool(
         return await getRecentActivity(db, input);
       case 'getLeaseDetails':
         return await getLeaseDetails(db, input);
+      case 'getAppHelp':
+        return getAppHelp(input);
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     }
@@ -255,6 +272,16 @@ export async function executeTool(
     console.error(`AI tool ${toolName} failed:`, err);
     return JSON.stringify({ error: `Tool execution failed: ${(err as Error).message}` });
   }
+}
+
+/**
+ * App how-to / training lookup. Not a data query — returns static guidance
+ * about using the app from functions/lib/app-help.ts. Omitting `topic` lists
+ * the available help topics.
+ */
+function getAppHelp(input: ToolInput): string {
+  const topic = typeof input.topic === 'string' ? input.topic.trim() : '';
+  return topic ? lookupHelp(topic) : helpTopicList();
 }
 
 // ---------------------------------------------------------------------------
