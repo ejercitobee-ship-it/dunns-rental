@@ -193,6 +193,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Messages', path: '/messages', icon: MessageSquare, show: hasModuleAccess('tenants'), badge: unreadMessages },
     { name: 'Announcements', path: '/announcements', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Reminders', path: '/reminders', icon: Bell, show: hasPermission('announcements_send'), badge: 0 },
+    { name: 'Campaigns', path: '/email/campaigns', icon: Megaphone, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Email Templates', path: '/email/templates', icon: Mail, show: hasPermission('announcements_send'), badge: 0 },
     { name: 'Rent Management', path: '/rents', icon: DollarSign, show: hasModuleAccess('rents'), badge: 0 },
     { name: 'Payment Plans', path: '/payment-plans', icon: CalendarDays, show: hasModuleAccess('rents'), badge: 0 },
