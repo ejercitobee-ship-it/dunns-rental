@@ -52,6 +52,8 @@ export function EmailCampaignEditor() {
   const [scope, setScope] = useState<'all_active' | 'by_property'>('all_active');
   const [propertyIds, setPropertyIds] = useState<string[]>([]);
   const [lease, setLease] = useState<NonNullable<RecipientFilter['lease']>>('any');
+  const [financial, setFinancial] = useState<NonNullable<RecipientFilter['financial']>>('any');
+  const [maintenance, setMaintenance] = useState<NonNullable<RecipientFilter['maintenance']>>('any');
   const [manualEmails, setManualEmails] = useState('');
 
   const [properties, setProperties] = useState<Property[]>([]);
@@ -69,8 +71,10 @@ export function EmailCampaignEditor() {
     scope,
     propertyIds: scope === 'by_property' ? propertyIds : undefined,
     lease,
+    financial,
+    maintenance,
     manualEmails: manualEmails.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean),
-  }), [scope, propertyIds, lease, manualEmails]);
+  }), [scope, propertyIds, lease, financial, maintenance, manualEmails]);
 
   useEffect(() => {
     (async () => {
@@ -88,6 +92,8 @@ export function EmailCampaignEditor() {
           setScope(f.scope === 'by_property' ? 'by_property' : 'all_active');
           setPropertyIds(f.propertyIds || []);
           setLease((f.lease as NonNullable<RecipientFilter['lease']>) || 'any');
+          setFinancial((f.financial as NonNullable<RecipientFilter['financial']>) || 'any');
+          setMaintenance((f.maintenance as NonNullable<RecipientFilter['maintenance']>) || 'any');
           setManualEmails((f.manualEmails || []).join('\n'));
         } catch (err) { showToast((err as Error).message || 'Failed to load campaign', 'error'); }
       }
@@ -205,6 +211,17 @@ export function EmailCampaignEditor() {
             {LEASE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </SelectInput>
         </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SelectInput label="Balance" value={financial} onChange={(e) => { setFinancial(e.target.value as NonNullable<RecipientFilter['financial']>); setPreview(null); }}>
+            <option value="any">Any balance</option>
+            <option value="has_balance">Has an unpaid balance this month</option>
+            <option value="overdue">Overdue (past the due day, still owes)</option>
+          </SelectInput>
+          <SelectInput label="Maintenance" value={maintenance} onChange={(e) => { setMaintenance(e.target.value as NonNullable<RecipientFilter['maintenance']>); setPreview(null); }}>
+            <option value="any">Any</option>
+            <option value="open_request">Has an open maintenance request</option>
+          </SelectInput>
+        </div>
         {scope === 'by_property' && (
           <div className="flex flex-wrap gap-1.5">
             {properties.map((p) => (
@@ -231,7 +248,7 @@ export function EmailCampaignEditor() {
             {preview.count > 50 && <div className="text-faint mt-1">…and {preview.count - 50} more</div>}
           </div>
         )}
-        <p className="text-[11px] text-faint">Financial (balance / overdue) and maintenance segments are coming next and will use your real rent-status data.</p>
+        <p className="text-[11px] text-faint">Filters combine: a recipient must match every condition you set. Balance and overdue read this month's rent status, the same figures Rent Management shows.</p>
       </CardContent></Card>
 
       {/* Step 3: Content */}
