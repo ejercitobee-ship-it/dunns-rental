@@ -6,6 +6,7 @@ import { ArrowLeft, Send, Users, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { TextInput, SelectInput, TextareaInput } from '../components/ui/FormField';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import {
   emailCampaignsApi, emailTemplatesApi, propertiesApi,
@@ -60,6 +61,8 @@ export function EmailCampaignEditor() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState('');
+  const [sending, setSending] = useState(false);
+  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
   const quillRef = useRef<ReactQuill>(null);
 
   const buildFilter = useCallback((): RecipientFilter => ({
@@ -122,20 +125,43 @@ export function EmailCampaignEditor() {
     finally { setResolving(false); }
   }
 
+  async function persist(): Promise<string> {
+    const input = {
+      name: name.trim(), category, subject: subject.trim(), previewText: previewText.trim(),
+      bodyHtml, templateId, recipientFilter: buildFilter(), recipientCount: preview?.count ?? 0,
+    };
+    if (isEdit && id) { await emailCampaignsApi.update(id, input); return id; }
+    const created = await emailCampaignsApi.create(input);
+    return created.id;
+  }
+
   async function save(goBack: boolean) {
     if (!name.trim()) { showToast('A campaign name is required', 'error'); return; }
     setSaving(true);
     try {
-      const input = {
-        name: name.trim(), category, subject: subject.trim(), previewText: previewText.trim(),
-        bodyHtml, templateId, recipientFilter: buildFilter(), recipientCount: preview?.count ?? 0,
-      };
-      if (isEdit && id) await emailCampaignsApi.update(id, input);
-      else await emailCampaignsApi.create(input);
+      await persist();
       showToast('Campaign saved as draft', 'success');
       if (goBack) navigate('/email/campaigns');
     } catch (err) { showToast((err as Error).message || 'Failed to save campaign', 'error'); }
     finally { setSaving(false); }
+  }
+
+  async function openSendConfirm() {
+    if (!name.trim()) { showToast('Give the campaign a name first', 'error'); return; }
+    if (!preview) await resolvePreview();
+    setConfirmSendOpen(true);
+  }
+
+  async function doSend() {
+    setConfirmSendOpen(false);
+    setSending(true);
+    try {
+      const cid = await persist();
+      const res = await emailCampaignsApi.send(cid);
+      showToast(`Sending to ${res.recipientCount} recipient${res.recipientCount === 1 ? '' : 's'}…`, 'success');
+      navigate('/email/campaigns');
+    } catch (err) { showToast((err as Error).message || 'Failed to send campaign', 'error'); }
+    finally { setSending(false); }
   }
 
   async function sendTest() {
@@ -239,9 +265,19 @@ export function EmailCampaignEditor() {
         <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-3">
           <input className="flex-1 min-w-[180px] px-3 py-2 rounded-lg border border-line bg-surface text-sm" placeholder="Test email (defaults to you)" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
           <Button variant="outline" onClick={sendTest} disabled={testing}><Send className="w-4 h-4 mr-1.5" />{testing ? 'Sending…' : 'Send test'}</Button>
-          <Button onClick={() => save(true)} disabled={saving}>{saving ? 'Saving…' : 'Save draft'}</Button>
+          <Button variant="outline" onClick={() => save(true)} disabled={saving}>{saving ? 'Saving…' : 'Save draft'}</Button>
+          <Button onClick={openSendConfirm} disabled={sending || saving}><Send className="w-4 h-4 mr-1.5" />{sending ? 'Sending…' : 'Send now'}</Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmSendOpen}
+        onClose={() => setConfirmSendOpen(false)}
+        onConfirm={doSend}
+        title="Send this campaign?"
+        message={`This emails ${preview ? preview.count : 'all matching'} tenant recipient${preview && preview.count === 1 ? '' : 's'} right now. This cannot be undone.`}
+        confirmText="Send now"
+      />
     </div>
   );
 }

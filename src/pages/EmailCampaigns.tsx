@@ -97,9 +97,16 @@ export function EmailCampaigns() {
                 </div>
                 <div className="text-xs text-muted mt-0.5 truncate">
                   {categoryLabel(c.category)} &middot; {c.subject || 'No subject'} &middot; {c.recipientCount} recipient{c.recipientCount === 1 ? '' : 's'}
+                  {c.sentAt ? (
+                    <> &middot; <span className="text-success">{c.sentCount} sent</span>{c.failedCount ? <>, <span className="text-danger">{c.failedCount} failed</span></> : null}</>
+                  ) : null}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate(`/email/campaigns/${c.id}`)}><Pencil className="w-3.5 h-3.5 mr-1" /> Edit</Button>
+              {c.status === 'draft' || c.status === 'scheduled' ? (
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/email/campaigns/${c.id}`)}><Pencil className="w-3.5 h-3.5 mr-1" /> Edit</Button>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/email/campaigns/${c.id}`)}>View</Button>
+              )}
               <Button variant="ghost" size="sm" className="text-danger" onClick={() => setToDelete(c)}><Trash2 className="w-3.5 h-3.5" /></Button>
             </div>
           ))}

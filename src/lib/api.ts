@@ -2001,6 +2001,9 @@ export interface EmailCampaign {
   status: string;
   scheduledAt?: string;
   recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  sentAt?: number;
   createdBy?: string;
   createdAt: number;
   updatedAt: number;
@@ -2024,6 +2027,8 @@ export const emailCampaignsApi = {
     apiRequest('/email/campaigns/resolve', { method: 'POST', body: JSON.stringify(filter) }),
   sendTest: (input: { subject: string; bodyHtml: string; to?: string }): Promise<{ sentTo: string }> =>
     apiRequest('/email/campaigns/test', { method: 'POST', body: JSON.stringify(input) }),
+  send: (id: string): Promise<{ status: string; recipientCount: number }> =>
+    apiRequest(`/email/campaigns/${id}/send`, { method: 'POST' }),
 };
 
 export const paymentPlansApi = {
