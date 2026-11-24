@@ -217,9 +217,8 @@ export function Layout({ children }: LayoutProps) {
   };
 
   const emailGroup: SubGroup = {
-    kind: 'group', label: 'Email & Reminders', icon: Mail, show: false,
+    kind: 'group', label: 'Email', icon: Mail, show: false,
     children: [
-      item('Reminders', '/reminders', Bell, hasPermission('announcements_send')),
       item('Campaigns', '/email/campaigns', Megaphone, hasPermission('announcements_send')),
       item('Email Templates', '/email/templates', Mail, hasPermission('announcements_send')),
     ],

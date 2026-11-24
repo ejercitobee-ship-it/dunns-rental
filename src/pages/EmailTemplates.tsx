@@ -109,7 +109,7 @@ export function EmailTemplates() {
 
   return (
     <div className="max-w-5xl">
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Email & Reminders</div>
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Email</div>
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
           <h1 className="text-3xl font-bold text-ink mb-1">Email Templates</h1>
