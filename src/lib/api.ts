@@ -990,6 +990,7 @@ export interface AvailableUnit {
 export interface PortalMaintenanceRequest extends MaintenanceRequest {
   handymanName?: string;
   handymanPhone?: string;
+  handymanCompany?: string;
   tenantName?: string;
   tenantPhone?: string;
   locationLabel?: string;

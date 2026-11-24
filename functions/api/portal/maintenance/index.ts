@@ -23,12 +23,15 @@ async function currentPlacement(env: Env, tenantId: string) {
   return { lease, unit, property };
 }
 
-/** Attach the handyman's name and phone to each request the tenant can see. */
+/** Attach the assigned vendor's company, name, and phone to each request the
+ * tenant can see — the same courtesy the handyman gets the tenant's name and
+ * phone. Nothing else about the vendor is exposed. */
 function serializePortalRequest(row: Record<string, unknown>) {
   return {
     ...serializeMaintenance(row),
     handymanName: row.handyman_name ?? undefined,
     handymanPhone: row.handyman_phone ?? undefined,
+    handymanCompany: row.handyman_company ?? undefined,
   };
 }
 
@@ -46,7 +49,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // Scoped to this tenant's own rows only. The handyman join exposes just the
     // name and phone of whoever is coming, never anything else about them.
     const { results } = await env.DB.prepare(
-      `SELECT m.*, h.name AS handyman_name, h.phone AS handyman_phone
+      `SELECT m.*, h.name AS handyman_name, h.phone AS handyman_phone, h.company_name AS handyman_company
          FROM maintenance_requests m
          LEFT JOIN handymen h ON h.id = m.assigned_handyman_id
         WHERE m.tenant_id = ?

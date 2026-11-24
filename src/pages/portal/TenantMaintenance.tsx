@@ -176,12 +176,23 @@ export function TenantMaintenance() {
                       </p>
                     )}
                     {r.handymanName && (
-                      <p className="text-sm text-muted inline-flex items-center gap-3 flex-wrap">
-                        <span className="inline-flex items-center gap-1.5"><User className="h-4 w-4" />{r.handymanName}</span>
-                        {r.handymanPhone && (
-                          <span className="inline-flex items-center gap-1.5"><Phone className="h-4 w-4" />{r.handymanPhone}</span>
-                        )}
-                      </p>
+                      <div className="rounded-xl bg-primary-soft/50 border border-primary/15 px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-primary mb-1.5">Your assigned vendor</p>
+                        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-sm text-ink">
+                          <span className="inline-flex items-center gap-1.5 font-medium">
+                            <User className="h-4 w-4 text-primary" />
+                            {r.handymanCompany || r.handymanName}
+                          </span>
+                          {r.handymanCompany && r.handymanName && (
+                            <span className="text-muted">{r.handymanName}</span>
+                          )}
+                          {r.handymanPhone && (
+                            <a href={`tel:${r.handymanPhone}`} className="inline-flex items-center gap-1.5 text-primary font-medium hover:underline">
+                              <Phone className="h-4 w-4" />{r.handymanPhone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
