@@ -10,12 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import { StatCard, ContextCard } from '../components/ui/StatCard';
-import { PageHeader } from '../components/ui/PageHeader';
+import { NotificationBell } from '../components/NotificationBell';
 import { CHART_TOOLTIP, CHART_AXIS, CHART_GRID, INCOME_COLOR, EXPENSE_COLOR } from '../components/ui/chartConstants';
 import { formatCurrency, formatDate, getMonthName, yearOf, monthOf, todayLocalDate } from '../lib/utils';
 import { expenseCategoryLabel } from '../lib/financials';
 import { TransactionDrillDown } from '../components/TransactionDrillDown';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { calendarApi, depositReturnsApi } from '../lib/api';
 import { activeLeases, monthlyRevenue, settleMonthWithCredit, leasesOwingMonth, monthsBehind, daysUntilLeaseEnd, vacancyLossForYear, leaseCoversMonth } from '../lib/rent';
 import { usePastDueMonths } from '../lib/usePastDueMonths';
@@ -47,6 +48,9 @@ type AttentionTab = 'pastDue' | 'overdue' | 'expiring' | 'vacant' | 'deposits';
 export function Dashboard() {
   const navigate = useNavigate();
   const { properties, units, leases, rentPayments, expenses, incomes, paymentAllocations, getUnitLease, getLeaseTenants, isLoading, error } = useApp();
+  const { user } = useAuth();
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
   const pastDueMonths = usePastDueMonths();
   const [expenseView, setExpenseView] = useState<'monthly' | 'annual'>('monthly');
   const [drillTitle, setDrillTitle] = useState('');
@@ -392,54 +396,65 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Portfolio overview"
-        title="Dashboard"
-        actions={
-          <div className="flex items-center gap-2 text-[13px] text-muted">
-            <span className="w-1.5 h-1.5 bg-positive rounded-full" />
-            {formatDate(new Date().toISOString())}
-          </div>
-        }
-      />
-
       {/* ================================================================
-          ZONE 1: THIS MONTH SNAPSHOT
+          ZONE 1: EVERGREEN HERO — greeting + this-month KPI cards on the
+          portal gradient (the only green on the admin side; other pages and
+          the rest of the dashboard sit on warm paper).
           ================================================================ */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Collected"
-          value={formatCurrency(stats.monthlyIncome)}
-          subtitle={`of ${formatCurrency(projectedMonthlyRent)} projected`}
-          icon={<DollarSign />}
-          progress={projectedMonthlyRent > 0 ? Math.round((stats.monthlyIncome / projectedMonthlyRent) * 100) : 0}
-          onClick={() => navigate('/rents')}
-        />
-        <StatCard
-          title="Expenses"
-          value={formatCurrency(stats.monthlyExpenses)}
-          subtitle={`${monthlyExpenseCount} transaction${monthlyExpenseCount !== 1 ? 's' : ''}`}
-          icon={<CreditCard />}
-          iconBg="bg-warning-soft text-warning"
-          onClick={() => navigate('/finances')}
-        />
-        <StatCard
-          title="Net cash flow"
-          value={`${stats.netIncome >= 0 ? '+' : ''}${formatCurrency(stats.netIncome)}`}
-          subtitle="Income minus expenses"
-          icon={<TrendingUp />}
-          valueColor={stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}
-          onClick={() => navigate('/finances')}
-        />
-        <StatCard
-          title="Collection rate"
-          value={`${collectionRate}%`}
-          subtitle={`${unitsPaid.paid} of ${unitsPaid.total} units paid`}
-          icon={<Activity />}
-          ring={Number(collectionRate) || 0}
-          onClick={() => navigate('/rents')}
-        />
-      </div>
+      <section
+        className="rounded-2xl px-5 py-5 sm:px-7 sm:py-6 shadow-[0_12px_32px_-14px_rgba(16,51,42,0.5)]"
+        style={{ background: 'radial-gradient(130% 150% at 100% 0%, #2f6350 0%, transparent 55%), linear-gradient(158deg, #24503f 0%, #16332a 100%)' }}
+      >
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c9a96e]">{greeting}</p>
+            <h1 className="font-display text-[26px] sm:text-[32px] font-semibold text-white truncate leading-tight">
+              {user ? `${user.firstName} ${user.lastName ?? ''}`.trim() : 'Dashboard'}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="hidden sm:flex items-center gap-2 text-[13px] text-white/80 bg-white/[0.08] border border-white/[0.14] px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#a9e0c3]" />
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </div>
+            <div className="hidden lg:block"><NotificationBell tone="onDark" /></div>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Collected"
+            value={formatCurrency(stats.monthlyIncome)}
+            subtitle={`of ${formatCurrency(projectedMonthlyRent)} projected`}
+            icon={<DollarSign />}
+            progress={projectedMonthlyRent > 0 ? Math.round((stats.monthlyIncome / projectedMonthlyRent) * 100) : 0}
+            onClick={() => navigate('/rents')}
+          />
+          <StatCard
+            title="Expenses"
+            value={formatCurrency(stats.monthlyExpenses)}
+            subtitle={`${monthlyExpenseCount} transaction${monthlyExpenseCount !== 1 ? 's' : ''}`}
+            icon={<CreditCard />}
+            iconBg="bg-warning-soft text-warning"
+            onClick={() => navigate('/finances')}
+          />
+          <StatCard
+            title="Net cash flow"
+            value={`${stats.netIncome >= 0 ? '+' : ''}${formatCurrency(stats.netIncome)}`}
+            subtitle="Income minus expenses"
+            icon={<TrendingUp />}
+            valueColor={stats.netIncome >= 0 ? 'text-positive' : 'text-danger'}
+            onClick={() => navigate('/finances')}
+          />
+          <StatCard
+            title="Collection rate"
+            value={`${collectionRate}%`}
+            subtitle={`${unitsPaid.paid} of ${unitsPaid.total} units paid`}
+            icon={<Activity />}
+            ring={Number(collectionRate) || 0}
+            onClick={() => navigate('/rents')}
+          />
+        </div>
+      </section>
 
       {/* Context row: portfolio at a glance */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
