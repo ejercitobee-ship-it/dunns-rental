@@ -406,6 +406,7 @@ export function Dashboard() {
           value={formatCurrency(stats.monthlyIncome)}
           subtitle={`of ${formatCurrency(projectedMonthlyRent)} projected`}
           icon={<DollarSign />}
+          progress={projectedMonthlyRent > 0 ? Math.round((stats.monthlyIncome / projectedMonthlyRent) * 100) : 0}
           onClick={() => navigate('/rents')}
         />
         <StatCard
@@ -429,6 +430,7 @@ export function Dashboard() {
           value={`${collectionRate}%`}
           subtitle={`${unitsPaid.paid} of ${unitsPaid.total} units paid`}
           icon={<Activity />}
+          ring={Number(collectionRate) || 0}
           onClick={() => navigate('/rents')}
         />
       </div>
