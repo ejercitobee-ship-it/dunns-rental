@@ -1982,6 +1982,8 @@ export interface RecipientFilter {
   scope?: 'all_active' | 'by_property';
   propertyIds?: string[];
   lease?: 'any' | 'expiring_30' | 'expiring_60' | 'expiring_90' | 'month_to_month';
+  financial?: 'any' | 'has_balance' | 'overdue';
+  maintenance?: 'any' | 'open_request';
   includeTenantIds?: string[];
   excludeTenantIds?: string[];
   manualEmails?: string[];
